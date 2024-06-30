@@ -1,0 +1,90 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "exerpy"
+dynamic = ["version"]
+description = "Exergy analysis for tabular input data"
+readme = "README.md"
+authors = [
+    {name = "Francesco Witte", email = "github@witte.sh"},
+    {name = "Sergio Tomasinelli", email = "s.tomasinelli@tu-berlin.de"},
+    {name = "Robert Müller", email = "robert.mueller.2@tu-berlin.de"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Operating System :: POSIX",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "numpy",
+]
+dependencies = [
+    "pandas",
+    "numpy",
+]
+license = {text = "MIT"}
+
+[project.urls]
+Homepage = "tba"
+Documentation = "https://exerpy.readthedocs.io/"
+Changelog = "tba"
+"Issue Tracker" = "tba"
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "flit",
+    "furo",
+    "pytest"
+]
+
+[tool.pytest.ini_options]
+norecursedirs = [
+    ".git",
+    "dist",
+]
+python_files = [
+    "test_*.py",
+    "*_test.py",
+    "*_tests.py",
+    "tests.py",
+]
+addopts = """
+    -ra
+    --strict-markers
+    --doctest-modules
+    --doctest-glob=\"*.rst\"
+    --tb=short
+    --pyargs
+    --ignore=docs/conf.py
+    --ignore=docs/scripts
+    --ignore=docs/_build
+"""
+testpaths = [
+    "src/",
+    "tests/",
+    "docs/"
+]
+
+[tool.isort]
+force_single_line = true
+line_length = 79
+known_first_party = "exerpy"
+default_section = "THIRDPARTY"
+forced_separate = "test_exerpy"

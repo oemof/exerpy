@@ -24,6 +24,9 @@ from tespy.tools.fluid_properties import single_fluid
 from tespy.tools.global_vars import ERR
 from tespy.tools.global_vars import combustion_gases
 
+import json
+from exerpy.components import component_registry
+
 idx = pd.IndexSlice
 
 
@@ -328,6 +331,16 @@ class ExergyAnalysis:
                 + "exergy analysis."
             )
             raise ValueError(msg)
+
+    @classmethod
+    def from_json(cls, json_path):
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        components = _construct_components(data["components"])
+        # this will later return an instance of the ExergyAnalysis class from the
+        # specified path
+        return
 
     def analyse(self, pamb, Tamb, Chem_Ex=None):
         """Run the exergy analysis.
@@ -892,3 +905,14 @@ class ExergyAnalysis:
             print('##### RESULTS: Functional groups exergy flows #####')
             print(tabulate(
                 df, headers='keys', tablefmt='psql', floatfmt='.3e'))
+
+
+def _construct_components(component_data):
+    components = {}
+    for component_class, components in component_data.items():
+        for component, component_information in components.items():
+            kwargs = component_information
+            kwargs["label"] = component
+            components[component] = component_registry.items()[component_class](**kwargs)
+
+    return components

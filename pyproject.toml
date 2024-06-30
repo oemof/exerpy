@@ -34,10 +34,6 @@ dependencies = [
     "pandas",
     "numpy",
 ]
-dependencies = [
-    "pandas",
-    "numpy",
-]
 license = {text = "MIT"}
 
 [project.urls]
@@ -52,6 +48,15 @@ dev = [
     "flit",
     "furo",
     "pytest"
+]
+tespy = [
+    "tespy"
+]
+ebsilon = [
+
+]
+aspen = [
+
 ]
 
 [tool.pytest.ini_options]

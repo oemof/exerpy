@@ -1,5 +1,3 @@
-
-
 def component_registry(type):
     component_registry.items[type.__name__] = type
     return type

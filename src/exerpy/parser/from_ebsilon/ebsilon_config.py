@@ -252,9 +252,29 @@ composition_params = [
 # Define the component groups via unique labels
 grouped_components = {
     "Turbine": [6, 23, 34, 56, 57, 122],
-    "Heat Exchanger": [5, 10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "HeatExchanger": [5, 10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "CombustionChamber": [21, 22],
     "Valve": [2, 14, 39, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
     "Condenser": [7, 47, 78]
+}
+
+# Connector mapping rules for different component types
+connector_mapping = {
+    22: {  # Combustion Chamber
+        1: 0,
+        2: 0,
+        3: 2,
+        4: 1,
+    },
+    24: {  # Compressor
+        1: 0,
+        2: 0,
+    },
+    23: {  # Turbine
+        1: 0,
+        2: 0,
+    },
+    # Add more mappings for other component types as needed
 }

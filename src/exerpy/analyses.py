@@ -25,7 +25,7 @@ from tespy.tools.global_vars import ERR
 from tespy.tools.global_vars import combustion_gases
 
 import json
-from exerpy.components import component_registry
+from src.exerpy.components import component_registry
 
 idx = pd.IndexSlice
 
@@ -907,12 +907,47 @@ class ExergyAnalysis:
                 df, headers='keys', tablefmt='psql', floatfmt='.3e'))
 
 
-def _construct_components(component_data):
-    components = {}
-    for component_class, components in component_data.items():
-        for component, component_information in components.items():
-            kwargs = component_information
-            kwargs["label"] = component
-            components[component] = component_registry.items()[component_class](**kwargs)
+def _construct_components(data):
+    component_data = data['components']
+    connection_data = data['connections']  # Include connection data to link streams
+    components = {}  # Initialize a dictionary to store created components
 
-    return components
+    # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
+    for component_type, component_instances in component_data.items():
+        for component_name, component_information in component_instances.items():
+            # Fetch the corresponding class from the registry using the component type
+            component_class = component_registry.items.get(component_type)
+
+            if component_class is None:
+                raise ValueError(f"Component type '{component_type}' is not registered.")
+
+            # Instantiate the component with its attributes
+            kwargs = component_information
+            kwargs["label"] = component_name  # Use the component's name as the label
+            component = component_class(**kwargs)
+
+            # Initialize empty dictionaries for inlets and outlets
+            component.inl = {}
+            component.outl = {}
+
+            # Assign streams to the components based on connection data
+            for conn_id, conn_info in connection_data.items():
+                # Assign inlet streams
+                if conn_info['target_component'] == component_name:
+                    target_connector_idx = conn_info['target_connector']  # Use 0-based indexing
+                    component.inl[target_connector_idx] = conn_info  # Assign inlet stream
+                
+                # Assign outlet streams
+                if conn_info['source_component'] == component_name:
+                    source_connector_idx = conn_info['source_connector']  # Use 0-based indexing
+                    component.outl[source_connector_idx] = conn_info  # Assign outlet stream
+
+            # Store the component in the dictionary
+            components[component_name] = component
+
+    return components  # Return the dictionary of created components
+
+
+
+
+

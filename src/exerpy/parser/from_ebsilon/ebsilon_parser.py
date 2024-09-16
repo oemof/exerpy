@@ -18,7 +18,8 @@ from ebsilon_config import (
     non_thermodynamic_unit_operators,
     fluid_type_index,
     composition_params,
-    grouped_components
+    grouped_components,
+    connector_mapping
 )
 
 # Configure logging to display info-level messages
@@ -136,8 +137,10 @@ class EbsilonModelParser:
                     connection_data = {
                         'name': pipe.Name,
                         'source_component': comp0.Name if comp0 else None,
+                        'source_component_type': comp0.TypeIndex if comp0 else None,
                         'source_connector': link0.Index if link0 else None,
                         'target_component': comp1.Name if comp1 else None,
+                        'target_component_type': comp1.TypeIndex if comp1 else None,
                         'target_connector': link1.Index if link1 else None,
                         'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
                         'fluid_properties': {
@@ -156,6 +159,10 @@ class EbsilonModelParser:
                             for param in composition_params
                         }
                     }
+
+                    # Correct the connector numbers in order to adapt to numbering of exergy balance equations
+                    # connection_data['source_connector'] = connector_mapping[connection_data]
+
                     # Store the connection data using the pipe's name as the key
                     self.connections_data[pipe.Name] = connection_data
 
@@ -180,8 +187,9 @@ class EbsilonModelParser:
                 'eta_s': comp_cast.ETAIN.Value if hasattr(comp_cast, 'ETAIN') else None,
                 'eta_mech': comp_cast.ETAMN.Value if hasattr(comp_cast, 'ETAMN') else None,
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,
-                'lambda': comp_cast.ALAMN.Value if hasattr(comp_cast, 'ALAMN') else None,
+                'lamb': comp_cast.ALAMN.Value if hasattr(comp_cast, 'ALAMN') else None,
                 'Q': comp_cast.QT.Value if hasattr(comp_cast, 'QT') else None,
+                'W_shaft': comp_cast.QSHAFT.Value if hasattr(comp_cast, 'QSHAFT') else None,
                 'kA': comp_cast.KA.Value if hasattr(comp_cast, 'KA') else None,
                 'P': comp_cast.P.Value if hasattr(comp_cast, 'P') else None,
             }
@@ -242,12 +250,15 @@ class EbsilonModelParser:
 def run_ebsilon(model_path, output_dir):
     """
     Main function to process the Ebsilon model and write data to a JSON file.
+    
+    Returns:
+        dict: Parsed data in JSON format if everything works correctly, otherwise None.
     """
 
     # Check if the model file exists at the specified path
     if not os.path.exists(model_path):
         logging.error(f"Model file not found at: {model_path}")
-        return
+        return None
 
     # Initialize the Ebsilon model parser with the model file path
     parser = EbsilonModelParser(model_path)
@@ -264,12 +275,15 @@ def run_ebsilon(model_path, output_dir):
     except Exception as e:
         # Log any exceptions that occur during model processing
         logging.error(f"An error occurred during model processing: {e}")
-        return
+        return None
 
     try:
         # Write the parsed data to the JSON file
         parser.write_to_json(output_dir)
+        
+        # Return the parsed data as JSON
+        return parser.get_sorted_data()
     except Exception as e:
         # Log any exceptions that occur during writing the output file
         logging.error(f"An error occurred while writing the output file: {e}")
-        return
+        return None

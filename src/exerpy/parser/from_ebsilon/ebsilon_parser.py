@@ -143,16 +143,14 @@ class EbsilonModelParser:
                         'target_component_type': comp1.TypeIndex if comp1 else None,
                         'target_connector': link1.Index if link1 else None,
                         'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
-                        'fluid_properties': {
-                            'mass_flow': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
-                            'temperature': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
-                            'pressure': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
-                            'enthalpy': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
-                            'entropy': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
-                            'physical_exergy': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                            'vapour_content': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
-                            'energy_flow': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0
-                        },
+                        'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
+                        'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
+                        'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
+                        'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
+                        's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
+                        'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
+                        'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
+                        'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
                         # Collect fluid composition parameters
                         'composition': {
                             param: getattr(pipe_cast, param).Value if hasattr(pipe_cast, param) else 0
@@ -161,10 +159,18 @@ class EbsilonModelParser:
                     }
 
                     # Correct the connector numbers in order to adapt to numbering of exergy balance equations
-                    # connection_data['source_connector'] = connector_mapping[connection_data]
+                    # Check if source component type and connector are in the mapping
+                    if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
+                        connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
+                    
+                    # If source component type is not in the mapping, keep the original connector number
+                    # Similarly, check for the target component
+                    if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
+                        connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
 
                     # Store the connection data using the pipe's name as the key
                     self.connections_data[pipe.Name] = connection_data
+
 
     def parse_component_data(self, obj):
         """
@@ -189,9 +195,8 @@ class EbsilonModelParser:
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,
                 'lamb': comp_cast.ALAMN.Value if hasattr(comp_cast, 'ALAMN') else None,
                 'Q': comp_cast.QT.Value if hasattr(comp_cast, 'QT') else None,
-                'W_shaft': comp_cast.QSHAFT.Value if hasattr(comp_cast, 'QSHAFT') else None,
+                'P': comp_cast.QSHAFT.Value if hasattr(comp_cast, 'QSHAFT') else None,
                 'kA': comp_cast.KA.Value if hasattr(comp_cast, 'KA') else None,
-                'P': comp_cast.P.Value if hasattr(comp_cast, 'P') else None,
             }
 
             # Determine the group for the component based on its type

@@ -29,12 +29,10 @@ else:
     print("Parsed the Ebsilon model and generated JSON data.")
 
 # Construct components from the JSON data
-# components = _construct_components(my_json_data)
-# print(components['GT'].outl[2]['fluid_properties']['physical_exergy'])
+components = _construct_components(my_json_data)
 
-
-'''# Assume T0 (ambient temperature) and p0 (ambient pressure) are defined
-T0 = 288.15  # Example: 15°C in Kelvin
+# Assume T0 (ambient temperature) and p0 (ambient pressure) are defined
+T0 = 15  # Example: 15°C
 p0 = 1.013   # Example: Standard atmospheric pressure in bar
 
 # Perform exergy analysis for the turbine
@@ -46,6 +44,19 @@ if "GT" in components:
     print(f"Exergy Fuel (E_F): {turbine.E_F}")
     print(f"Exergy Product (E_P): {turbine.E_P}")
     print(f"Exergy Destruction (E_D): {turbine.E_D}")
-    print(f"Exergy Efficiency (ε): {turbine.epsilon}")
+    print(f"Exergy Efficiency (epsilon): {turbine.epsilon}")
 else:
-    print("Turbine component not found in the data.")'''
+    print("Turbine component not found in the data.")
+
+# Perform exergy analysis for the compressor
+if "COMP" in components:
+    turbine = components["COMP"]  # Get the turbine component (COMP is the label used in the JSON)
+    turbine.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
+
+    # Print results for the turbine
+    print(f"Exergy Fuel (E_F): {turbine.E_F}")
+    print(f"Exergy Product (E_P): {turbine.E_P}")
+    print(f"Exergy Destruction (E_D): {turbine.E_D}")
+    print(f"Exergy Efficiency (epsilon): {turbine.epsilon}")
+else:
+    print("Compressor component not found in the data.")

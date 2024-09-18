@@ -140,7 +140,7 @@ class CombustionChamber(Component):
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         """
         Calculate exergy balance of a turbine.
-        This method overrides the base class method for the specific behavior of a turbine.
+        This method overrides the base class method for the specific behavior of a combustion chamber.
         """
         pass
 
@@ -153,6 +153,18 @@ class Generator(Component):
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         """
         Calculate exergy balance of a generator.
-        This method overrides the base class method for the specific behavior of a turbine.
+        This method overrides the base class method for the specific behavior of a generator.
+        """
+        pass
+
+@component_registry
+class HeatExchanger(Component):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
+    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+        """
+        Calculate exergy balance of a heat exchanger.
+        This method overrides the base class method for the specific behavior of a heat exchnager.
         """
         pass

@@ -11,9 +11,11 @@ import logging
 from win32com.client import Dispatch
 import json
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
-from ebsilon_config import (
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
+
+
+from .ebsilon_config import (
     ebs_objects,
     non_thermodynamic_unit_operators,
     fluid_type_index,
@@ -116,6 +118,8 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
+        from .ebsilon_properties import calc_eM, calc_eT
+
         # Iterate over all links (connectors) of the component
         for i in range(1, obj.Links.Count + 1):
             link = obj.Links.item(i)
@@ -149,6 +153,8 @@ class EbsilonModelParser:
                         'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
                         's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
                         'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
+                        'e_M': calc_eT(self.app, pipe_cast, 'H', pipe_cast.P.Value),
+                        'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),
                         'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                         'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
                         # Collect fluid composition parameters
@@ -190,6 +196,7 @@ class EbsilonModelParser:
             component_data = {
                 'name': comp_cast.Name,
                 'type': type_name,
+                'type_index': comp_cast.TypeIndex,
                 'eta_s': comp_cast.ETAIN.Value if hasattr(comp_cast, 'ETAIN') else None,
                 'eta_mech': comp_cast.ETAMN.Value if hasattr(comp_cast, 'ETAMN') else None,
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,
@@ -272,14 +279,28 @@ def run_ebsilon(model_path, output_dir):
         # Initialize the Ebsilon model within the parser
         parser.initialize_model()
 
+    except Exception as e:
+        # Log any exceptions that occur during model processing
+        logging.error(f"An error occurred during initializing: {e}")
+        return None
+    
+    try:
+        
         # Simulate the Ebsilon model
         parser.simulate_model()
 
-        # Parse data from the simulated model
-        parser.parse_model()
     except Exception as e:
         # Log any exceptions that occur during model processing
-        logging.error(f"An error occurred during model processing: {e}")
+        logging.error(f"An error occurred during model simulation: {e}")
+        return None
+
+    try:
+        # Parse data from the simulated model
+        parser.parse_model()
+
+    except Exception as e:
+        # Log any exceptions that occur during model processing
+        logging.error(f"An error occurred during model parsing: {e}")
         return None
 
     try:
@@ -288,6 +309,7 @@ def run_ebsilon(model_path, output_dir):
         
         # Return the parsed data as JSON
         return parser.get_sorted_data()
+    
     except Exception as e:
         # Log any exceptions that occur during writing the output file
         logging.error(f"An error occurred while writing the output file: {e}")

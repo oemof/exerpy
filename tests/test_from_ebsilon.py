@@ -17,18 +17,30 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_tes
 # output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results_ccpp_ebsilon.json'))
 output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'results_simple_test_ebsilon.json'))
 
-# Check if the JSON file already exists
-if os.path.exists(output_path):
-    # Load the JSON data from the existing file
-    with open(output_path, 'r') as json_file:
-        my_json_data = json.load(json_file)
-    print("Loaded JSON data from file.")
-else:
-    # If the JSON file doesn't exist, run the Ebsilon parser and generate the JSON file
-    my_json_data = ebsilon_parser.run_ebsilon(model_path, output_path)
-    print("Parsed the Ebsilon model and generated JSON data.")
+try:
+    # Check if the JSON file already exists
+    if os.path.exists(output_path):
+        # Load the JSON data from the existing file
+        with open(output_path, 'r') as json_file:
+            my_json_data = json.load(json_file)
+        print("Loaded JSON data from file successfully.")
+    else:
+        # If the JSON file doesn't exist, run the Ebsilon parser and generate the JSON file
+        my_json_data = ebsilon_parser.run_ebsilon(model_path, output_path)
+        
+        # Check if the JSON file was successfully created before printing the success message
+        if os.path.exists(output_path):
+            print("Parsed the Ebsilon model and generated JSON data successfully.")
+        else:
+            raise Exception("Ebsilon model parsing failed; JSON file not created.")
+except FileNotFoundError as fnf_error:
+    print(f"File not found: {fnf_error}")
+except json.JSONDecodeError as json_error:
+    print(f"Error parsing JSON: {json_error}")
+except Exception as e:
+    print(f"An unexpected error occurred: {e}")
 
-# Construct components from the JSON data
+'''# Construct components from the JSON data
 components = _construct_components(my_json_data)
 
 # Assume T0 (ambient temperature) and p0 (ambient pressure) are defined
@@ -36,8 +48,8 @@ T0 = 15  # Example: 15°C
 p0 = 1.013   # Example: Standard atmospheric pressure in bar
 
 # Perform exergy analysis for the turbine
-if "GT" in components:
-    turbine = components["GT"]  # Get the turbine component (GT is the label used in the JSON)
+if "EXP" in components:
+    turbine = components["EXP"]  # Get the turbine component (EXP is the label used in Ebsilon)
     turbine.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
 
     # Print results for the turbine
@@ -49,8 +61,8 @@ else:
     print("Turbine component not found in the data.")
 
 # Perform exergy analysis for the compressor
-if "COMP" in components:
-    turbine = components["COMP"]  # Get the turbine component (COMP is the label used in the JSON)
+if "AC" in components:
+    turbine = components["AC"]  # Get the turbine component (AC is the label used in Ebsilon)
     turbine.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
 
     # Print results for the turbine
@@ -59,4 +71,4 @@ if "COMP" in components:
     print(f"Exergy Destruction (E_D): {turbine.E_D}")
     print(f"Exergy Efficiency (epsilon): {turbine.epsilon}")
 else:
-    print("Compressor component not found in the data.")
+    print("Compressor component not found in the data.")'''

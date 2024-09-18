@@ -18,9 +18,9 @@ def doSimulate():
     print("Simulation has " + str(calc_errors.Count) + " errors")
 
     # 4. Create variables for components of the model and access their data
-    Compressor = oc.CastToComp24(model.Objects.Item('COMP'))
+    Compressor = oc.CastToComp24(model.Objects.Item('AC'))
     CombustionChamber = oc.CastToComp22(model.Objects.Item('CC'))
-    Turbine = oc.CastToComp23(model.Objects.Item('GT'))
+    Turbine = oc.CastToComp23(model.Objects.Item('EXP'))
     print('m_1 = %.2f kg/s' % (Compressor.M1N.Value))
 
 

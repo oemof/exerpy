@@ -158,9 +158,9 @@ class EbsilonModelParser:
                         # 'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
                         'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                         'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
-                        # Collect fluid composition parameters
+                        # Collect fluid composition parameters, removing "X" prefix
                         'mass_composition': {
-                            param: getattr(pipe_cast, param).Value
+                            param.lstrip('X'): getattr(pipe_cast, param).Value
                             for param in composition_params
                             if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                         }

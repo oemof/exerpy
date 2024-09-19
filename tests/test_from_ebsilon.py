@@ -49,7 +49,7 @@ my_json_data = add_eT_eM_to_stream(app, my_json_data)
 
 from src.exerpy.functions import mass_to_molar_fractions
 
-print(my_json_data['connections']['2']['composition'])
+print(my_json_data['connections']['2']['mass_composition'])
 
 # Construct components from the JSON data
 components = _construct_components(my_json_data)

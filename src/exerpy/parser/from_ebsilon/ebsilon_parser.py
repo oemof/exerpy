@@ -159,10 +159,12 @@ class EbsilonModelParser:
                         'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                         'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
                         # Collect fluid composition parameters
-                        'composition': {
-                            param: getattr(pipe_cast, param).Value if hasattr(pipe_cast, param) else 0
+                        'mass_composition': {
+                            param: getattr(pipe_cast, param).Value
                             for param in composition_params
+                            if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                         }
+
                     }
 
                     # Correct the connector numbers in order to adapt to numbering of exergy balance equations

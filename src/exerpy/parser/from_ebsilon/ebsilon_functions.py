@@ -158,3 +158,11 @@ def add_eT_eM_to_stream(app, json_data):
             print(f"Error processing connection {connection_name}: {e}")
     
     return json_data
+
+'''def calc_chemical_exergy(stream, chem_ex_model):
+    molar_fractions = stream['composition']
+    if molar_fractions['XH2O'] > 0:
+        x_liquid = molar_fractions['XH2O']
+        x_gas = 1 - x_liquid
+    else:
+        pass'''

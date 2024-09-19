@@ -47,6 +47,10 @@ from src.exerpy.parser.from_ebsilon.ebsilon_functions import add_eT_eM_to_stream
 
 my_json_data = add_eT_eM_to_stream(app, my_json_data)
 
+from src.exerpy.functions import mass_to_molar_fractions
+
+print(my_json_data['connections']['2']['composition'])
+
 # Construct components from the JSON data
 components = _construct_components(my_json_data)
 

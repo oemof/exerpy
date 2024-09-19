@@ -40,7 +40,14 @@ except json.JSONDecodeError as json_error:
 except Exception as e:
     print(f"An unexpected error occurred: {e}")
 
-'''# Construct components from the JSON data
+from win32com.client import Dispatch
+app = Dispatch("EbsOpen.Application")
+
+from src.exerpy.parser.from_ebsilon.ebsilon_functions import add_eT_eM_to_stream
+
+my_json_data = add_eT_eM_to_stream(app, my_json_data)
+
+# Construct components from the JSON data
 components = _construct_components(my_json_data)
 
 # Assume T0 (ambient temperature) and p0 (ambient pressure) are defined
@@ -53,22 +60,22 @@ if "EXP" in components:
     turbine.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
 
     # Print results for the turbine
-    print(f"Exergy Fuel (E_F): {turbine.E_F}")
-    print(f"Exergy Product (E_P): {turbine.E_P}")
-    print(f"Exergy Destruction (E_D): {turbine.E_D}")
-    print(f"Exergy Efficiency (epsilon): {turbine.epsilon}")
+    print(f"Exergy Fuel of EXP (E_F): {turbine.E_F}")
+    print(f"Exergy Product of EXP (E_P): {turbine.E_P}")
+    print(f"Exergy Destruction of EXP (E_D): {turbine.E_D}")
+    print(f"Exergy Efficiency of EXP (epsilon): {turbine.epsilon}")
 else:
     print("Turbine component not found in the data.")
 
 # Perform exergy analysis for the compressor
 if "AC" in components:
-    turbine = components["AC"]  # Get the turbine component (AC is the label used in Ebsilon)
-    turbine.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
+    compressor = components["AC"]  # Get the turbine component (AC is the label used in Ebsilon)
+    compressor.calc_exergy_balance(T0, p0)  # Call the exergy balance method with ambient conditions
 
     # Print results for the turbine
-    print(f"Exergy Fuel (E_F): {turbine.E_F}")
-    print(f"Exergy Product (E_P): {turbine.E_P}")
-    print(f"Exergy Destruction (E_D): {turbine.E_D}")
-    print(f"Exergy Efficiency (epsilon): {turbine.epsilon}")
+    print(f"Exergy Fuel of AC (E_F): {compressor.E_F}")
+    print(f"Exergy Product of AC (E_P): {compressor.E_P}")
+    print(f"Exergy Destruction of AC (E_D): {compressor.E_D}")
+    print(f"Exergy Efficiency of AC (epsilon): {compressor.epsilon}")
 else:
-    print("Compressor component not found in the data.")'''
+    print("Compressor component not found in the data.")

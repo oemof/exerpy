@@ -86,7 +86,7 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
     fd = app.NewFluidData()
 
     # Retrieve the fluid type from the stream
-    fd.FluidType = stream.FluidType
+    fd.FluidType = stream['fluid_type_id']
 
     if fd.FluidType == 3:  # steam
         fd.SteamTable = EpSteamTable.epSteamTableIAPWS_IF97      # IF97 steamtable
@@ -102,9 +102,9 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
         # Set up the fluid analysis based on stream composition
         fdAnalysis = app.NewFluidAnalysis()
         
-        # Iterate through the substance_mapping and get the corresponding value from the stream object
+        # Iterate through the substance_mapping and get the corresponding value from the stream JSON
         for substance_key, ep_substance_id in substance_mapping.items():
-            fraction = getattr(stream, substance_key).Value  # Dynamically access the fraction
+            fraction = stream['composition'].get(substance_key, 0)  # Access the fraction from the JSON
             if fraction > 0:  # Only set substances with non-zero fractions
                 fdAnalysis.SetSubstance(ep_substance_id, fraction)
     
@@ -125,11 +125,36 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
 def calc_eT(app, stream, pressure):
     hA = calc_X_from_PT(app, stream, 'H', pressure, 15)
     sA = calc_X_from_PT(app, stream, 'S', pressure, 15)
-    eT = stream.H.Value - hA - (15+273.15) * (stream.S.Value - sA)
+    eT = stream["h"] - hA - (15+273.15) * (stream["s"] - sA)
 
     return eT
 
 def calc_eM(app, stream, pressure):
-    eM = stream.E.Value - calc_eT(app, stream, pressure)
+    eM = stream["e_PH"] - calc_eT(app, stream, pressure)
 
     return eM
+
+def add_eT_eM_to_stream(app, json_data):
+    """
+    Adds e_M and e_T to all connections in the provided JSON data.
+    
+    :param app: The Ebsilon application instance
+    :param json_data: The JSON data containing connections and their properties
+    :return: Updated JSON data with added e_M and e_T properties for each connection
+    """
+    # Loop over all connections in the JSON data
+    for connection_name, connection_data in json_data['connections'].items():
+        try:
+            # Retrieve eT and eM values using the calc_eT and calc_eM functions
+            e_T = calc_eT(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
+            e_M = calc_eM(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
+
+            # Add these values to the connection's data
+            connection_data['e_T'] = e_T
+            connection_data['e_M'] = e_M
+                    
+        except Exception as e:
+            # Log any errors encountered while processing a connection
+            print(f"Error processing connection {connection_name}: {e}")
+    
+    return json_data

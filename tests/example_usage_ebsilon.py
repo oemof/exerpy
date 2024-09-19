@@ -57,23 +57,6 @@ def doSimulate():
     T = 150.0
     s = fd.PropertyS_OF_PT(p,T)
     print ('fluegas: p = %.3f bar, T = %.3f °C, s = %.6f kJ/kg/K' %(p,T,s))
-
-'''    # 8. Get the entire composition of all streams and use it to calculate the entropy at ambient conditions
-    p_0 = 1.013  # Ambient pressure in bar
-    T_0 = 15  # Ambient temperature in °C
-    
-    # Create a list of all streams
-    streams = [stream1, stream2, stream3, stream4, stream5, stream6, stream7, stream8]
-
-    # Loop over all streams and calculate entropy
-    for i, stream in enumerate(streams, start=1):
-        entropy = calc_X_from_PT(app, stream, "S", p_0, T_0)
-        print(f"Stream {i} entropy: s = {entropy:.6f} kJ/kg/K at ambient p = {p_0:.3f} bar and T = {T_0:.3f} °C")
-
-    # Loop over all streams and calculate entropy
-    for i, stream in enumerate(streams, start=1):
-        entropy = calc_X_from_PT(app, stream, "H", p_0, T_0)
-        print(f"Stream {i} enhtalpy: s = {entropy:.6f} kJ/kg at ambient p = {p_0:.3f} bar and T = {T_0:.3f} °C")'''
  
 # Main program
 doSimulate()

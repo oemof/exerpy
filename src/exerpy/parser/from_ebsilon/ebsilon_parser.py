@@ -118,7 +118,7 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_properties import calc_eM, calc_eT
+        # from .ebsilon_properties import calc_eM, calc_eT  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
 
         # Iterate over all links (connectors) of the component
         for i in range(1, obj.Links.Count + 1):
@@ -147,14 +147,15 @@ class EbsilonModelParser:
                         'target_component_type': comp1.TypeIndex if comp1 else None,
                         'target_connector': link1.Index if link1 else None,
                         'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
+                        'fluid_type_id': pipe_cast.FluidType,
                         'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
                         'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
                         'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
                         'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
                         's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
                         'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                        'e_M': calc_eT(self.app, pipe_cast, 'H', pipe_cast.P.Value),
-                        'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),
+                        # 'e_M': calc_eT(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                        # 'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
                         'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                         'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
                         # Collect fluid composition parameters
@@ -259,7 +260,7 @@ class EbsilonModelParser:
             raise
 
 
-def run_ebsilon(model_path, output_dir):
+def run_ebsilon(model_path, output_dir=None):
     """
     Main function to process the Ebsilon model and write data to a JSON file.
     
@@ -303,14 +304,18 @@ def run_ebsilon(model_path, output_dir):
         logging.error(f"An error occurred during model parsing: {e}")
         return None
 
-    try:
-        # Write the parsed data to the JSON file
-        parser.write_to_json(output_dir)
+    if output_dir is not None:
+        try:
+            # Write the parsed data to the JSON file
+            parser.write_to_json(output_dir)
+            
+            # Return the parsed data as JSON
+            return parser.get_sorted_data()
         
-        # Return the parsed data as JSON
-        return parser.get_sorted_data()
-    
-    except Exception as e:
-        # Log any exceptions that occur during writing the output file
-        logging.error(f"An error occurred while writing the output file: {e}")
-        return None
+        except Exception as e:
+            # Log any exceptions that occur during writing the output file
+            logging.error(f"An error occurred while writing the output file: {e}")
+            return None
+        
+    # Return the parsed data as a JSON string without writing it to a file
+    return json.dumps(parser.get_sorted_data(), indent=4) 

@@ -25,7 +25,7 @@ from .ebsilon_config import (
 )
 
 # Configure logging to display info-level messages
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 
 class EbsilonModelParser:
@@ -95,23 +95,15 @@ class EbsilonModelParser:
                 # Check if the object is a component (epObjectKindComp = 10)
                 if obj.IsKindOf(10):
                     self.parse_component(obj)
+                elif obj.IsKindOf(16):
+                # Check if the object is a pipe (epObjectKindPipe = 16)
+                    self.parse_connection(obj)
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
             raise
 
-    def parse_component(self, obj):
-        """
-        Parses an individual component and its connections.
-        
-        Parameters:
-            obj: The Ebsilon component object to parse.
-        """
-        # Parse connections associated with the component
-        self.parse_connections(obj)
-        # Parse the component's own data
-        self.parse_component_data(obj)
 
-    def parse_connections(self, obj):
+    def parse_connection(self, obj):
         """
         Parses the connections (pipes) associated with a component.
         
@@ -120,68 +112,62 @@ class EbsilonModelParser:
         """
         # from .ebsilon_properties import calc_eM, calc_eT  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
 
-        # Iterate over all links (connectors) of the component
-        for i in range(1, obj.Links.Count + 1):
-            link = obj.Links.item(i)
-            # Check if the link has an associated pipe (connection)
-            if link.HasPipe:
-                pipe = link.Pipe
-                # Check if the pipe is connected to components at either end
-                if pipe.HasComp(0) or pipe.HasComp(1):
-                    # Get the components at both ends of the pipe
-                    comp0 = pipe.Comp(0) if pipe.HasComp(0) else None
-                    comp1 = pipe.Comp(1) if pipe.HasComp(1) else None
-                    # Get the connectors (links) at both ends of the pipe
-                    link0 = pipe.Link(0) if pipe.HasComp(0) else None
-                    link1 = pipe.Link(1) if pipe.HasComp(1) else None
-                    # Cast the pipe to the correct type
-                    pipe_cast = self.oc.CastToPipe(pipe)
+        # Check if the pipe is connected to components at either beign or at end
+        if obj.HasComp(0) or obj.HasComp(1):
+            # Get the components at both ends of the pipe
+            comp0 = obj.Comp(0) if obj.HasComp(0) else None
+            comp1 = obj.Comp(1) if obj.HasComp(1) else None
+            # Get the connectors (links) at both ends of the pipe
+            link0 = obj.Link(0) if obj.HasComp(0) else None
+            link1 = obj.Link(1) if obj.HasComp(1) else None
+            # Cast the pipe to the correct type
+            pipe_cast = self.oc.CastToPipe(obj)
 
-                    # Collect connection data
-                    connection_data = {
-                        'name': pipe.Name,
-                        'source_component': comp0.Name if comp0 else None,
-                        'source_component_type': comp0.TypeIndex if comp0 else None,
-                        'source_connector': link0.Index if link0 else None,
-                        'target_component': comp1.Name if comp1 else None,
-                        'target_component_type': comp1.TypeIndex if comp1 else None,
-                        'target_connector': link1.Index if link1 else None,
-                        'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
-                        'fluid_type_id': pipe_cast.FluidType,
-                        'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
-                        'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
-                        'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
-                        'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
-                        's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
-                        'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                        # 'e_M': calc_eT(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
-                        # 'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
-                        'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
-                        'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
-                        # Collect fluid composition parameters, removing "X" prefix
-                        'mass_composition': {
-                            param.lstrip('X'): getattr(pipe_cast, param).Value
-                            for param in composition_params
-                            if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
-                        }
+            # Collect connection data
+            connection_data = {
+                'name': obj.Name,
+                'source_component': comp0.Name if comp0 else None,
+                'source_component_type': comp0.TypeIndex if comp0 else None,
+                'source_connector': link0.Index if link0 else None,
+                'target_component': comp1.Name if comp1 else None,
+                'target_component_type': comp1.TypeIndex if comp1 else None,
+                'target_connector': link1.Index if link1 else None,
+                'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
+                'fluid_type_id': pipe_cast.FluidType,
+                'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
+                'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
+                'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
+                'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
+                's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
+                'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
+                # 'e_M': calc_eT(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                # 'e_T': calc_eM(self.app, pipe_cast, 'H', pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
+                'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
+                # Collect fluid composition parameters, removing "X" prefix
+                'mass_composition': {
+                    param.lstrip('X'): getattr(pipe_cast, param).Value
+                    for param in composition_params
+                    if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+                }
 
-                    }
+            }
 
-                    # Correct the connector numbers in order to adapt to numbering of exergy balance equations
-                    # Check if source component type and connector are in the mapping
-                    if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
-                        connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
-                    
-                    # If source component type is not in the mapping, keep the original connector number
-                    # Similarly, check for the target component
-                    if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
-                        connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
+            # Correct the connector numbers in order to adapt to numbering of exergy balance equations
+            # Check if source component type and connector are in the mapping
+            if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
+                connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
+            
+            # If source component type is not in the mapping, keep the original connector number
+            # Similarly, check for the target component
+            if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
+                connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
 
-                    # Store the connection data using the pipe's name as the key
-                    self.connections_data[pipe.Name] = connection_data
+            # Store the connection data using the pipe's name as the key
+            self.connections_data[obj.Name] = connection_data
 
 
-    def parse_component_data(self, obj):
+    def parse_component(self, obj):
         """
         Parses data from a component, including its type and various properties.
         

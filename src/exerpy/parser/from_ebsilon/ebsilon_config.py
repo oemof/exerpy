@@ -215,21 +215,29 @@ non_thermodynamic_unit_operators = [
 
 # Fluid types of Ebsilon
 fluid_type_index = {
-    -1: "Undefined",      # undefined Value
-    0: "Steam",           # No material composition required
-    1: "Fluegas",         # Fluegas or Air
-    2: "Gas",             # Gas
-    3: "Coal",            # Coal
-    4: "Crudegas",        # Crudegas
-    5: "Oil",             # Oil
-    6: "User",            # User
-    7: "2Phase",          # 2phase
-    8: "Saltwater",       # Saltwater
-    9: "BinaryMixture",   # BinaryMixture
-    10: "UniversalFluid", # UniversalFluid
-    11: "ThermoLiquid",   # ThermoLiquid
-    12: "HumidAir",       # HumidAir
-    13: "NASA"            # NASA
+    0: "None",                  # epFluidTypeNONE
+    1: "Air",                   # epFluidTypeAir
+    2: "Fluegas",               # epFluidTypeFluegas
+    3: "Steam",                 # epFluidTypeSteam
+    4: "Water",                 # epFluidTypeWater
+    5: "Scheduled",             # epFluidTypeScheduled
+    6: "Actual",                # epFluidTypeActual
+    7: "Crudegas",              # epFluidTypeCrudegas
+    8: "Oil",                   # epFluidTypeOil
+    9: "Electric",              # epFluidTypeElectric
+    10: "Shaft",                # epFluidTypeShaft
+    11: "Coal",                 # epFluidTypeCoal
+    12: "Gas",                  # epFluidTypeGas
+    13: "Logic",                # epFluidTypeLogic
+    14: "User",                 # epFluidTypeUser
+    15: "2PhaseLiquid",         # epFluidType2PhaseLiquid
+    16: "2PhaseGaseous",        # epFluidType2PhaseGaseous
+    17: "Saltwater",            # epFluidTypeSaltwater
+    18: "UniversalFluid",       # epFluidTypeUniversalFluid
+    19: "BinaryMixture",        # epFluidTypeBinaryMixture
+    20: "ThermoLiquid",         # epFluidTypeThermoLiquid
+    21: "HumidAir",             # epFluidTypeHumidAir
+    22: "NASA"                  # epFluidTypeNASA
 }
 
 # List of fluid composition materials to include in the JSON file

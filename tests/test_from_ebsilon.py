@@ -51,7 +51,7 @@ from src.exerpy.functions import mass_to_molar_fractions
 
 print(my_json_data['connections']['2']['mass_composition'])
 
-# Construct components from the JSON data
+'''# Construct components from the JSON data
 components = _construct_components(my_json_data)
 
 # Assume T0 (ambient temperature) and p0 (ambient pressure) are defined
@@ -82,4 +82,4 @@ if "AC" in components:
     print(f"Exergy Destruction of AC (E_D): {compressor.E_D}")
     print(f"Exergy Efficiency of AC (epsilon): {compressor.epsilon}")
 else:
-    print("Compressor component not found in the data.")
+    print("Compressor component not found in the data.")'''

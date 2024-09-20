@@ -104,7 +104,7 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
         
         # Iterate through the substance_mapping and get the corresponding value from the stream JSON
         for substance_key, ep_substance_id in substance_mapping.items():
-            fraction = stream['composition'].get(substance_key, 0)  # Access the fraction from the JSON
+            fraction = stream['mass_composition'].get(substance_key, 0)  # Access the fraction from the JSON
             if fraction > 0:  # Only set substances with non-zero fractions
                 fdAnalysis.SetSubstance(ep_substance_id, fraction)
     
@@ -136,23 +136,28 @@ def calc_eM(app, stream, pressure):
 
 def add_eT_eM_to_stream(app, json_data):
     """
-    Adds e_M and e_T to all connections in the provided JSON data.
+    Adds e_M and e_T to all material connections in the provided JSON data.
     
     :param app: The Ebsilon application instance
     :param json_data: The JSON data containing connections and their properties
     :return: Updated JSON data with added e_M and e_T properties for each connection
     """
+    # Define fluid types that are considered non-material
+    non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
+
     # Loop over all connections in the JSON data
     for connection_name, connection_data in json_data['connections'].items():
         try:
-            # Retrieve eT and eM values using the calc_eT and calc_eM functions
-            e_T = calc_eT(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
-            e_M = calc_eM(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
+            # Check if the fluid_type_id is not in the non-material fluids
+            if connection_data['fluid_type_id'] not in non_material_fluids:
+                # Retrieve eT and eM values using the calc_eT and calc_eM functions
+                e_T = calc_eT(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
+                e_M = calc_eM(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
 
-            # Add these values to the connection's data
-            connection_data['e_T'] = e_T
-            connection_data['e_M'] = e_M
-                    
+                # Add these values to the connection's data
+                connection_data['e_T'] = e_T
+                connection_data['e_M'] = e_M
+
         except Exception as e:
             # Log any errors encountered while processing a connection
             print(f"Error processing connection {connection_name}: {e}")

@@ -69,7 +69,7 @@ substance_mapping = {
     "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN
 }
 
-def calc_X_from_PT(app, stream, property, pressure, temperature):
+def calc_X_from_PT(app, pipe, property, pressure, temperature):
     """
     General method to calculate enthalpy or entropy for any stream based on pressure and temperature.
     Automatically handles the composition of the stream.
@@ -86,7 +86,7 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
     fd = app.NewFluidData()
 
     # Retrieve the fluid type from the stream
-    fd.FluidType = stream['fluid_type_id']
+    fd.FluidType = pipe.Kind-1000
 
     if fd.FluidType == 3:  # steam
         fd.SteamTable = EpSteamTable.epSteamTableIAPWS_IF97      # IF97 steamtable
@@ -102,9 +102,9 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
         # Set up the fluid analysis based on stream composition
         fdAnalysis = app.NewFluidAnalysis()
         
-        # Iterate through the substance_mapping and get the corresponding value from the stream JSON
+        # Iterate through the substance_mapping and get the corresponding value from the pipe
         for substance_key, ep_substance_id in substance_mapping.items():
-            fraction = stream['mass_composition'].get(substance_key, 0)  # Access the fraction from the JSON
+            fraction = getattr(pipe, substance_key).Value  # Dynamically access the fraction
             if fraction > 0:  # Only set substances with non-zero fractions
                 fdAnalysis.SetSubstance(ep_substance_id, fraction)
     
@@ -122,15 +122,15 @@ def calc_X_from_PT(app, stream, property, pressure, temperature):
     return res
 
 
-def calc_eT(app, stream, pressure):
-    hA = calc_X_from_PT(app, stream, 'H', pressure, 15)
-    sA = calc_X_from_PT(app, stream, 'S', pressure, 15)
-    eT = stream["h"] - hA - (15+273.15) * (stream["s"] - sA)
+def calc_eT(app, pipe, pressure):
+    hA = calc_X_from_PT(app, pipe, 'H', pressure, 15)
+    sA = calc_X_from_PT(app, pipe, 'S', pressure, 15)
+    eT = pipe.H - hA - (15+273.15) * (pipe.S - sA)
 
     return eT
 
-def calc_eM(app, stream, pressure):
-    eM = stream["e_PH"] - calc_eT(app, stream, pressure)
+def calc_eM(app, pipe, pressure):
+    eM = pipe.E - calc_eT(app, pipe, pressure)
 
     return eM
 

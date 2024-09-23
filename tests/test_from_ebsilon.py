@@ -43,9 +43,9 @@ except Exception as e:
 from win32com.client import Dispatch
 app = Dispatch("EbsOpen.Application")
 
-from src.exerpy.parser.from_ebsilon.ebsilon_functions import add_eT_eM_to_stream
+'''from src.exerpy.parser.from_ebsilon.ebsilon_functions import add_eT_eM_to_stream
 
-my_json_data = add_eT_eM_to_stream(app, my_json_data)
+my_json_data = add_eT_eM_to_stream(app, my_json_data)'''
 
 from src.exerpy.functions import mass_to_molar_fractions
 

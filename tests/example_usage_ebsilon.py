@@ -2,6 +2,9 @@ from win32com.client import Dispatch
 import sys
 import os
 
+sys.path.append(r"C:\Program Files\Ebsilon\EBSILONProfessional 17\Data\Python")
+from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
+
 def doSimulate():
     MODELPATH = 'C:/Users/sergiotomasinelli/Desktop/exerpy/tests/simple_test.ebs'
 
@@ -14,8 +17,8 @@ def doSimulate():
 
     # 3. Perform simulation and collect errors
     calc_errors = model.CalculationErrors
-    model.Simulate(calc_errors)
-    print("Simulation has " + str(calc_errors.Count) + " errors")
+    model.SimulateNew()
+    print("Simulation has " + str(calc_errors.Count) + " warnings or errors.")
 
     # 4. Create variables for components of the model and access their data
     Compressor = oc.CastToComp24(model.Objects.Item('AC'))
@@ -29,11 +32,7 @@ def doSimulate():
     print('T_2 = %.2f °C' % (stream2.T.Value))
 
     # 6. Access the fluid properties for a simple substance
-    # Add now (why?) the directory containing EbsOpen.py to the system path
-    sys.path.append(r"C:\Program Files\Ebsilon\EBSILONProfessional 17\Data\Python")
 
-    # Now you can import the required components from EbsOpen
-    from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance
     
     fd = app.NewFluidData()
     fd.FluidType = EpFluidType.epFluidTypeSteam              # steam

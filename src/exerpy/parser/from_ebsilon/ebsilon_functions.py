@@ -122,55 +122,15 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     return res
 
 
-def calc_eT(app, pipe, pressure):
-    hA = calc_X_from_PT(app, pipe, 'H', pressure, 15)
-    sA = calc_X_from_PT(app, pipe, 'S', pressure, 15)
-    eT = pipe.H.Value - hA - (15+273.15) * (pipe.S.Value - sA)
+def calc_eT(app, pipe, pressure, tamb, pamb):
+    hA = calc_X_from_PT(app, pipe, 'H', pressure, tamb)
+    sA = calc_X_from_PT(app, pipe, 'S', pressure, tamb)
+    eT = pipe.H.Value - hA - (tamb+273.15) * (pipe.S.Value - sA)
 
     return eT
 
-def calc_eM(app, pipe, pressure):
-    eM = pipe.E.Value - calc_eT(app, pipe, pressure)
+def calc_eM(app, pipe, pressure, tamb, pamb):
+    eM = pipe.E.Value - calc_eT(app, pipe, pressure, tamb, pamb)
 
     return eM
 
-'''def add_eT_eM_to_stream(app, json_data):
-    """
-    Adds e_M and e_T to all material connections in the provided JSON data.
-    
-    :param app: The Ebsilon application instance
-    :param json_data: The JSON data containing connections and their properties
-    :return: Updated JSON data with added e_M and e_T properties for each connection
-    """
-    # Define fluid types that are considered non-material
-    non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
-
-    # Loop over all connections in the JSON data
-    for connection_name, connection_data in json_data['connections'].items():
-        try:
-            # Check if the fluid_type_id is not in the non-material fluids
-            if connection_data['fluid_type_id'] not in non_material_fluids:
-                # Retrieve eT and eM values using the calc_eT and calc_eM functions
-                e_T = calc_eT(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
-                e_M = calc_eM(app, connection_data, connection_data['p'])  # Assuming 'p' is available in the connection data
-
-                # Add these values to the connection's data
-                connection_data['e_T'] = e_T
-                connection_data['e_M'] = e_M
-
-        except Exception as e:
-            # Log any errors encountered while processing a connection
-            print(f"Error processing connection {connection_name}: {e}")
-    
-    return json_data'''
-
-'''def calc_chemical_exergy(stream, chem_ex_model):
-    
-    from src.exerpy.functions import mass_to_molar_fractions
-
-    molar_fractions = mass_to_molar_fractions(stream['composition'])
-    if molar_fractions['XH2O'] > 0:
-        x_liquid = molar_fractions['XH2O']
-        x_gas = 1 - x_liquid
-    else:
-        pass'''

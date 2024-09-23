@@ -94,15 +94,19 @@ class EbsilonModelParser:
         try:
             total_objects = self.model.Objects.Count
             logging.info(f"Parsing {total_objects} objects from the model")
-            # Iterate over all objects in the model
+            # Iterate over all objects in the model and select the components
             for j in range(1, total_objects + 1):
                 obj = self.model.Objects.Item(j)
                 # Check if the object is a component (epObjectKindComp = 10)
                 if obj.IsKindOf(10):
                     self.parse_component(obj)
+            # Iterate over all objects in the model and select the connections
+            for j in range(1, total_objects + 1):
+                obj = self.model.Objects.Item(j)
                 # Check if the object is a pipe (epObjectKindPipe = 16)
-                elif obj.IsKindOf(16):
+                if obj.IsKindOf(16):
                     self.parse_connection(obj)
+                # It is important to parse the components first, because tamb and pamb are set there and used later for eM and eT
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
             raise
@@ -153,18 +157,22 @@ class EbsilonModelParser:
                     'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
                     's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
                     'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                    'e_M': calc_eT(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
-                    'e_T': calc_eM(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                    'e_T': calc_eT(self.app, pipe_cast, pipe_cast.P.Value, self.tamb, self.pamb),
+                    'e_M': calc_eM(self.app, pipe_cast, pipe_cast.P.Value, self.tamb, self.pamb),
                     'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                     'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
-                    # Collect fluid composition parameters, removing "X" prefix
-                    'mass_composition': {
+                    # For now, no composition is set here, it's handled separately
+                }
+
+                # Conditional logic for mass_composition
+                if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
+                    connection_data['mass_composition'] = {'H2O': 1}
+                else:
+                    connection_data['mass_composition'] = {
                         param.lstrip('X'): getattr(pipe_cast, param).Value
                         for param in composition_params
                         if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                     }
-
-                }
 
             # Correct the connector numbers in order to adapt to numbering of exergy balance equations
             # Check if source component type and connector are in the mapping
@@ -190,7 +198,9 @@ class EbsilonModelParser:
         # Cast the component to the correct type
         comp_cast = self.oc.CastToComp(obj)
 
+        # Get the component type
         type_index = (comp_cast.Kind-10000)
+
         # Get the human-readable type name of the component
         type_name = ebs_objects.get(type_index, f"Unknown Type {type_index}")
         # Exclude certain types of components that are not thermodynamic unit operators
@@ -225,6 +235,14 @@ class EbsilonModelParser:
                 self.components_data[group] = {}
             # Store the component data using the component's name as the key
             self.components_data[group][comp_cast.Name] = component_data
+
+        elif type_index == 46:  # For the setting of ambient temperature and ambient pressure
+            comp46 = self.oc.CastToComp46(obj)
+            if comp46.FTYP.Value == 26:
+                self.tamb = comp46.MEASM.Value
+            elif comp46.FTYP.Value == 13:
+                self.pamb = comp46.MEASM.Value
+
 
     def get_sorted_data(self):
         """

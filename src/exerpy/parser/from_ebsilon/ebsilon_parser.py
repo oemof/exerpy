@@ -120,45 +120,51 @@ class EbsilonModelParser:
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
 
-        # Check if the pipe is connected to components at either beign or at end
-        if pipe_cast.HasComp(0) or pipe_cast.HasComp(1):
-            # Get the components at both ends of the pipe
-            comp0 = pipe_cast.Comp(0) if pipe_cast.HasComp(0) else None
-            comp1 = pipe_cast.Comp(1) if pipe_cast.HasComp(1) else None
-            # Get the connectors (links) at both ends of the pipe
-            link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
-            link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
-            
+        # Define fluid types that are considered non-material
+        non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
 
-            # Collect connection data
-            connection_data = {
-                'name': pipe_cast.Name,
-                'source_component': comp0.Name if comp0 else None,
-                'source_component_type': comp0.Kind-10000 if comp0 else None,
-                'source_connector': link0.Index if link0 else None,
-                'target_component': comp1.Name if comp1 else None,
-                'target_component_type': comp1.Kind-10000 if comp1 else None,
-                'target_connector': link1.Index if link1 else None,
-                'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
-                'fluid_type_id': pipe_cast.FluidType,
-                'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
-                'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
-                'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
-                'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
-                's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
-                # 'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                # 'e_M': calc_eT(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
-                'e_T': calc_eM(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
-                'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
-                'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
-                # Collect fluid composition parameters, removing "X" prefix
-                'mass_composition': {
-                    param.lstrip('X'): getattr(pipe_cast, param).Value
-                    for param in composition_params
-                    if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+        # Check if the connection is a material stream
+        if (pipe_cast.Kind-1000) not in non_material_fluids:
+
+            # Check if the pipe is connected to components at either beign or at end
+            if pipe_cast.HasComp(0) or pipe_cast.HasComp(1):
+                # Get the components at both ends of the pipe
+                comp0 = pipe_cast.Comp(0) if pipe_cast.HasComp(0) else None
+                comp1 = pipe_cast.Comp(1) if pipe_cast.HasComp(1) else None
+                # Get the connectors (links) at both ends of the pipe
+                link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
+                link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
+                
+
+                # Collect connection data
+                connection_data = {
+                    'name': pipe_cast.Name,
+                    'source_component': comp0.Name if comp0 else None,
+                    'source_component_type': (comp0.Kind-10000) if comp0 else None,
+                    'source_connector': link0.Index if link0 else None,
+                    'target_component': comp1.Name if comp1 else None,
+                    'target_component_type': (comp1.Kind-10000) if comp1 else None,
+                    'target_connector': link1.Index if link1 else None,
+                    'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
+                    'fluid_type_id': pipe_cast.FluidType,
+                    'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
+                    'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
+                    'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
+                    'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
+                    's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
+                    'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
+                    'e_M': calc_eT(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                    'e_T': calc_eM(self.app, pipe_cast, pipe_cast.P.Value),  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+                    'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
+                    'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
+                    # Collect fluid composition parameters, removing "X" prefix
+                    'mass_composition': {
+                        param.lstrip('X'): getattr(pipe_cast, param).Value
+                        for param in composition_params
+                        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+                    }
+
                 }
-
-            }
 
             # Correct the connector numbers in order to adapt to numbering of exergy balance equations
             # Check if source component type and connector are in the mapping
@@ -184,7 +190,7 @@ class EbsilonModelParser:
         # Cast the component to the correct type
         comp_cast = self.oc.CastToComp(obj)
 
-        type_index = comp_cast.Kind-10000
+        type_index = (comp_cast.Kind-10000)
         # Get the human-readable type name of the component
         type_name = ebs_objects.get(type_index, f"Unknown Type {type_index}")
         # Exclude certain types of components that are not thermodynamic unit operators
@@ -194,7 +200,7 @@ class EbsilonModelParser:
             component_data = {
                 'name': comp_cast.Name,
                 'type': type_name,
-                'type_index': comp_cast.Kind-10000,
+                'type_index': (comp_cast.Kind-10000),
                 'eta_s': comp_cast.ETAIN.Value if hasattr(comp_cast, 'ETAIN') else None,
                 'eta_mech': comp_cast.ETAMN.Value if hasattr(comp_cast, 'ETAMN') else None,
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,

@@ -86,7 +86,7 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     fd = app.NewFluidData()
 
     # Retrieve the fluid type from the stream
-    fd.FluidType = pipe.Kind-1000
+    fd.FluidType = (pipe.Kind-1000)
 
     if fd.FluidType == 3:  # steam
         fd.SteamTable = EpSteamTable.epSteamTableIAPWS_IF97      # IF97 steamtable
@@ -125,16 +125,16 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
 def calc_eT(app, pipe, pressure):
     hA = calc_X_from_PT(app, pipe, 'H', pressure, 15)
     sA = calc_X_from_PT(app, pipe, 'S', pressure, 15)
-    eT = pipe.H - hA - (15+273.15) * (pipe.S - sA)
+    eT = pipe.H.Value - hA - (15+273.15) * (pipe.S.Value - sA)
 
     return eT
 
 def calc_eM(app, pipe, pressure):
-    eM = pipe.E - calc_eT(app, pipe, pressure)
+    eM = pipe.E.Value - calc_eT(app, pipe, pressure)
 
     return eM
 
-def add_eT_eM_to_stream(app, json_data):
+'''def add_eT_eM_to_stream(app, json_data):
     """
     Adds e_M and e_T to all material connections in the provided JSON data.
     
@@ -162,7 +162,7 @@ def add_eT_eM_to_stream(app, json_data):
             # Log any errors encountered while processing a connection
             print(f"Error processing connection {connection_name}: {e}")
     
-    return json_data
+    return json_data'''
 
 '''def calc_chemical_exergy(stream, chem_ex_model):
     

@@ -195,22 +195,31 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object to parse.
         """
-        # Cast the component to the correct type
+        # Cast the component to get its type index
         comp_cast = self.oc.CastToComp(obj)
+        type_index = (comp_cast.Kind - 10000)
 
-        # Get the component type
-        type_index = (comp_cast.Kind-10000)
+        # Dynamically call the specific CastToCompX method based on type_index
+        cast_method_name = f"CastToComp{type_index}"
+        
+        # Check if the method exists and call it, otherwise fallback to general casting
+        if hasattr(self.oc, cast_method_name):
+            comp_cast = getattr(self.oc, cast_method_name)(obj)
+            logging.info(f"Using method {cast_method_name} to cast the component.")
+        else:
+            logging.warning(f"No specific cast method for type_index {type_index}, using generic CastToComp.")
+            comp_cast = self.oc.CastToComp(obj)
 
         # Get the human-readable type name of the component
         type_name = ebs_objects.get(type_index, f"Unknown Type {type_index}")
-        # Exclude certain types of components that are not thermodynamic unit operators
+        
+        # Exclude non-thermodynamic unit operators
         if type_index not in non_thermodynamic_unit_operators:
-
             # Collect component data
             component_data = {
                 'name': comp_cast.Name,
                 'type': type_name,
-                'type_index': (comp_cast.Kind-10000),
+                'type_index': type_index,
                 'eta_s': comp_cast.ETAIN.Value if hasattr(comp_cast, 'ETAIN') else None,
                 'eta_mech': comp_cast.ETAMN.Value if hasattr(comp_cast, 'ETAMN') else None,
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,
@@ -226,6 +235,7 @@ class EbsilonModelParser:
                 if type_index in type_list:
                     group = group_name
                     break
+            
             # If the component type doesn't belong to any predefined group, use its type name
             if not group:
                 group = type_name
@@ -233,10 +243,12 @@ class EbsilonModelParser:
             # Initialize the group in the components_data dictionary if not already present
             if group not in self.components_data:
                 self.components_data[group] = {}
+
             # Store the component data using the component's name as the key
             self.components_data[group][comp_cast.Name] = component_data
 
-        elif type_index == 46:  # For the setting of ambient temperature and ambient pressure
+        # For components of type 46, set ambient temperature and pressure
+        elif type_index == 46:
             comp46 = self.oc.CastToComp46(obj)
             if comp46.FTYP.Value == 26:
                 self.tamb = comp46.MEASM.Value

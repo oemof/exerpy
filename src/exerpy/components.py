@@ -46,11 +46,15 @@ class Turbine(Component):
         T0 (float): Ambient temperature in Kelvin.
         p0 (float): Ambient pressure in Pascal.
         """
+        # Get power flow in case it wasn't read during the parsing
+        if self.P is None:
+            self.P = self.outl[0]['m'] * (self.inl[0]['h'] - self.outl[0]['h'])
+            # TODO in case of more outlet change the code
 
         # Calculate exergy destruction based on the inlet and outlet temperatures
         if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
             # Case 1: Both inlet and outlet temperatures are greater than ambient temperature
-            self.E_P = abs(self.P)  # Assuming P is already stored as power or a similar attribute
+            self.E_P = abs(self.P)  # Assuming P is already stored as power
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         elif self.inl[0]['T'] > T0 and self.outl[0]['T'] <= T0:
             # Case 2: Inlet temperature is greater than ambient, but outlet is less than or equal to ambient
@@ -139,10 +143,36 @@ class CombustionChamber(Component):
     
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         """
-        Calculate exergy balance of a turbine.
-        This method overrides the base class method for the specific behavior of a combustion chamber.
+        Calculate exergy balance of a combustion chamber.
+
+        Parameters:
+        T0 (float): Ambient temperature in Kelvin.
+        p0 (float): Ambient pressure in Pascal.
         """
-        pass
+        # Check for necessary inlet and outlet data
+        if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 2 or len(self.outl) < 1:
+            msg = "Combustion chamber requires two inlets (fuel and air) and one outlet (exhaust)."
+            logging.error(msg)
+            raise ValueError(msg)
+        
+        # Exergy product (physical exergy difference between outlet and inlets)
+        self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] - (self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'])
+
+        # Exergy fuel (chemical exergy of fuel and air minus exhaust exergy)
+        self.E_F = (self.inl[0]['m'] * self.inl[0]['e_CH'] + self.inl[1]['m'] * self.inl[1]['e_CH']) - self.outl[0]['m'] * self.outl[0]['e_CH']
+
+        # Exergy destruction (difference between exergy fuel and exergy product)
+        self.E_D = self.E_F - self.E_P
+
+        # Exergy efficiency (epsilon)
+        self.epsilon = self._calc_epsilon()
+
+        # Log the results
+        logging.info(f"Combustion Chamber Exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+
+        # Assume no additional bus exergy terms (e.g., massless or chemical exergy)
+        self.E_bus = {"chemical": 0, "physical": self.E_P, "massless": 0}
+
 
 
 @component_registry

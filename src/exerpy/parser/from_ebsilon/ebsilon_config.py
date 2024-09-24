@@ -271,10 +271,10 @@ grouped_components = {
 # Connector mapping rules for different component types
 connector_mapping = {
     22: {  # Combustion Chamber of Gas Turbine
-        1: 0,
-        2: 0,
-        3: 2,
-        4: 1,
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+        3: 2,  # Connector 3 in Ebsilon is inlet(2)
+        4: 1,  # Connector 1 in Ebsilon is inlet(1)
     },
     24: {  # Compressor / Fan
         1: 0,

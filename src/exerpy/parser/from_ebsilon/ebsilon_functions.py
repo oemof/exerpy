@@ -122,15 +122,15 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     return res
 
 
-def calc_eT(app, pipe, pressure, tamb, pamb):
-    hA = calc_X_from_PT(app, pipe, 'H', pressure, tamb)
-    sA = calc_X_from_PT(app, pipe, 'S', pressure, tamb)
-    eT = pipe.H.Value - hA - (tamb+273.15) * (pipe.S.Value - sA)
+def calc_eT(app, pipe, pressure, Tamb, pamb):
+    hA = calc_X_from_PT(app, pipe, 'H', pressure, Tamb)
+    sA = calc_X_from_PT(app, pipe, 'S', pressure, Tamb)
+    eT = pipe.H.Value - hA - (Tamb+273.15) * (pipe.S.Value - sA)
 
     return eT
 
-def calc_eM(app, pipe, pressure, tamb, pamb):
-    eM = pipe.E.Value - calc_eT(app, pipe, pressure, tamb, pamb)
+def calc_eM(app, pipe, pressure, Tamb, pamb):
+    eM = pipe.E.Value - calc_eT(app, pipe, pressure, Tamb, pamb)
 
     return eM
 

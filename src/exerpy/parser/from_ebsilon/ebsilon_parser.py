@@ -119,38 +119,52 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_functions import calc_eM, calc_eT  #  IT DOES WORK (CONFLICT WITH EBSOPEN)
+        from .ebsilon_functions import calc_eM, calc_eT
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
 
-        # Define fluid types that are considered non-material
+        # Define fluid types that are considered non-material or non-energetic
         non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
+        non_energetic_fluids = {5, 6, 13}  # Scheduled, Actual, Logic
 
-        # Check if the connection is a material stream
-        if (pipe_cast.Kind-1000) not in non_material_fluids:
+        # Initialize connection data with the common fields
+        connection_data = {
+            'name': pipe_cast.Name,
+            'source_component': None,
+            'source_component_type': None,
+            'source_connector': None,
+            'target_component': None,
+            'target_component_type': None,
+            'target_connector': None,
+            'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
+            'fluid_type_id': pipe_cast.FluidType,
+            'energy_flow': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
+            # For now, no composition is set here, it's handled separately
+        }
 
-            # Check if the pipe is connected to components at either beign or at end
-            if pipe_cast.HasComp(0) or pipe_cast.HasComp(1):
-                # Get the components at both ends of the pipe
-                comp0 = pipe_cast.Comp(0) if pipe_cast.HasComp(0) else None
-                comp1 = pipe_cast.Comp(1) if pipe_cast.HasComp(1) else None
-                # Get the connectors (links) at both ends of the pipe
-                link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
-                link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
-                
+        # Check if the connection is a material stream (not non-energetic fluids)
+        if (pipe_cast.Kind - 1000) not in non_energetic_fluids:
+            # Get the components at both ends of the pipe
+            comp0 = pipe_cast.Comp(0) if pipe_cast.HasComp(0) else None
+            comp1 = pipe_cast.Comp(1) if pipe_cast.HasComp(1) else None
+            # Get the connectors (links) at both ends of the pipe
+            link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
+            link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
 
-                # Collect connection data
-                connection_data = {
-                    'name': pipe_cast.Name,
-                    'source_component': comp0.Name if comp0 else None,
-                    'source_component_type': (comp0.Kind-10000) if comp0 else None,
-                    'source_connector': link0.Index if link0 else None,
-                    'target_component': comp1.Name if comp1 else None,
-                    'target_component_type': (comp1.Kind-10000) if comp1 else None,
-                    'target_connector': link1.Index if link1 else None,
-                    'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
-                    'fluid_type_id': pipe_cast.FluidType,
+            # Add component and connector information
+            connection_data.update({
+                'source_component': comp0.Name if comp0 else None,
+                'source_component_type': (comp0.Kind - 10000) if comp0 else None,
+                'source_connector': link0.Index if link0 else None,
+                'target_component': comp1.Name if comp1 else None,
+                'target_component_type': (comp1.Kind - 10000) if comp1 else None,
+                'target_connector': link1.Index if link1 else None,
+            })
+
+            # Add physical properties only if the connection is not in non-material fluids
+            if (pipe_cast.Kind - 1000) not in non_material_fluids:
+                connection_data.update({
                     'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
                     'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
                     'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
@@ -161,31 +175,30 @@ class EbsilonModelParser:
                     'e_M': calc_eM(self.app, pipe_cast, pipe_cast.P.Value, self.tamb, self.pamb),
                     'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
                     'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
-                    # For now, no composition is set here, it's handled separately
+                })
+
+            # Handle mass composition logic for fluids
+            if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
+                connection_data['mass_composition'] = {'H2O': 1}
+            else:
+                connection_data['mass_composition'] = {
+                    param.lstrip('X'): getattr(pipe_cast, param).Value
+                    for param in composition_params
+                    if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                 }
 
-                # Conditional logic for mass_composition
-                if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
-                    connection_data['mass_composition'] = {'H2O': 1}
-                else:
-                    connection_data['mass_composition'] = {
-                        param.lstrip('X'): getattr(pipe_cast, param).Value
-                        for param in composition_params
-                        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
-                    }
-
-            # Correct the connector numbers in order to adapt to numbering of exergy balance equations
-            # Check if source component type and connector are in the mapping
+            # Correct the connector numbers based on mappings
             if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
                 connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
             
-            # If source component type is not in the mapping, keep the original connector number
-            # Similarly, check for the target component
             if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
                 connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
 
-            # Store the connection data using the pipe's name as the key
+            # Store the connection data
             self.connections_data[obj.Name] = connection_data
+
+        else:
+            logging.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
 
 
     def parse_component(self, obj):
@@ -295,10 +308,15 @@ class EbsilonModelParser:
 
 def run_ebsilon(model_path, output_dir=None):
     """
-    Main function to process the Ebsilon model and write data to a JSON file.
+    Main function to process the Ebsilon model and return parsed data. 
+    Optionally writes the parsed data to a JSON file.
+    
+    Parameters:
+        model_path (str): Path to the Ebsilon model file.
+        output_dir (str): Optional path where the parsed data should be saved as a JSON file.
     
     Returns:
-        dict: Parsed data in JSON format if everything works correctly, otherwise None.
+        dict: Parsed data in dictionary format.
     """
 
     # Check if the model file exists at the specified path
@@ -319,7 +337,6 @@ def run_ebsilon(model_path, output_dir=None):
         return None
     
     try:
-        
         # Simulate the Ebsilon model
         parser.simulate_model()
 
@@ -337,18 +354,18 @@ def run_ebsilon(model_path, output_dir=None):
         logging.error(f"An error occurred during model parsing: {e}")
         return None
 
+    # Get the parsed and sorted data
+    parsed_data = parser.get_sorted_data()
+
     if output_dir is not None:
         try:
             # Write the parsed data to the JSON file
             parser.write_to_json(output_dir)
-            
-            # Return the parsed data as JSON
-            return parser.get_sorted_data()
-        
+            logging.info(f"Data successfully written to {output_dir}")
         except Exception as e:
             # Log any exceptions that occur during writing the output file
             logging.error(f"An error occurred while writing the output file: {e}")
             return None
         
-    # Return the parsed data as a JSON string without writing it to a file
-    return json.dumps(parser.get_sorted_data(), indent=4) 
+    # Return the parsed data as a dictionary (not as a JSON string)
+    return parsed_data

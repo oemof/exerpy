@@ -44,7 +44,7 @@ def mass_to_molar_fractions(mass_fractions):
     return molar_fractions
 
 
-def calc_chemical_exergy(stream, tamb, pamb):
+def calc_chemical_exergy(stream, Tamb, pamb):
     """
     Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
     - Case A: Handle pure substance.
@@ -53,13 +53,13 @@ def calc_chemical_exergy(stream, tamb, pamb):
     
     Parameters:
     - stream: Dictionary containing 'mass_composition' of the stream.
-    - tamb: Ambient temperature in Celsius.
+    - Tamb: Ambient temperature in Celsius.
     - pamb: Ambient pressure in bar.
     
     Returns:
     - eCH: Chemical exergy in kJ/kg.
     """
-    logging.info(f"Starting chemical exergy calculation with tamb={tamb}, pamb={pamb}")
+    logging.info(f"Starting chemical exergy calculation with Tamb={Tamb}, pamb={pamb}")
     
     try:
         molar_fractions = mass_to_molar_fractions(stream['mass_composition'])
@@ -80,7 +80,7 @@ def calc_chemical_exergy(stream, tamb, pamb):
             logging.info("Loaded Ahrendts data successfully.")
 
         R = 8.314  # Universal gas constant in kJ/(kmolK)
-        T0 = tamb + 273.15  # Reference temperature in K
+        T0 = Tamb + 273.15  # Reference temperature in K
         aliases_water = CP.get_aliases('H2O')
 
         # Handle pure substance (Case A)
@@ -202,27 +202,34 @@ def calc_chemical_exergy(stream, tamb, pamb):
         raise
 
 
-def add_chemical_exergy(my_json, tamb, pamb):
+def add_chemical_exergy(my_json, Tamb, pamb):
     """
-    Adds the chemical exergy to each connection in the JSON data.
+    Adds the chemical exergy to each connection in the JSON data, excluding Shaft and Electric connections.
     
     Parameters:
     - my_json: The JSON object containing the components and connections.
-    - tamb: Ambient temperature in Celsius.
+    - Tamb: Ambient temperature in Celsius.
     - pamb: Ambient pressure in bar.
     
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
     """
+    # Define non-material fluid types (e.g., Shaft and Electric) to exclude from chemical exergy calculation
+    non_material_fluids = {"Shaft", "Electric"}
+
     # Iterate over each connection
     for conn_name, conn_data in my_json['connections'].items():
-        try:
-            # Calculate the chemical exergy for each connection using the provided mass_composition
-            mass_composition = conn_data['mass_composition']
-            stream_data = {'mass_composition': mass_composition}
-            conn_data['e_CH'] = calc_chemical_exergy(stream_data, tamb, pamb)  # Add the chemical exergy value
-            logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
-        except Exception as e:
-            logging.error(f"Error calculating chemical exergy for connection {conn_name}: {e}")
+        # Check if the connection's fluid type is not in the non-material fluids list
+        if conn_data['fluid_type'] not in non_material_fluids:
+            try:
+                # Calculate the chemical exergy for each connection using the provided mass_composition
+                mass_composition = conn_data.get('mass_composition', {})
+                stream_data = {'mass_composition': mass_composition}
+                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb)  # Add the chemical exergy value
+                logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
+            except Exception as e:
+                logging.error(f"Error calculating chemical exergy for connection {conn_name}: {e}")
+        else:
+            logging.info(f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['fluid_type']})")
     
     return my_json

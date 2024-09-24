@@ -291,5 +291,16 @@ connector_mapping = {
         4: 1,
         5: 3,
     },
+    11: {  # Generator
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    55: {  # Universal Heat Exchanger
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet hot stream (if present)
+    },
     # Add more mappings for other component types as needed
 }

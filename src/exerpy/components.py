@@ -129,9 +129,6 @@ class Compressor(Component):
         # Exergy destruction is the difference between the fuel and the useful product
         self.E_D = self.E_F - self.E_P
 
-        # Assume no chemical exergy (chemical = 0) and massless exergy is based on power (self.P)
-        self.E_bus = {"chemical": 0, "physical": 0, "massless": abs(self.P)}
-
         # Exergy efficiency (epsilon) calculation
         self.epsilon = self._calc_epsilon()
 
@@ -170,11 +167,6 @@ class CombustionChamber(Component):
         # Log the results
         logging.info(f"Combustion Chamber Exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
 
-        # Assume no additional bus exergy terms (e.g., massless or chemical exergy)
-        self.E_bus = {"chemical": 0, "physical": self.E_P, "massless": 0}
-
-
-
 @component_registry
 class Generator(Component):
     def __init__(self, **kwargs):
@@ -185,16 +177,87 @@ class Generator(Component):
         Calculate exergy balance of a generator.
         This method overrides the base class method for the specific behavior of a generator.
         """
-        pass
+        # Exergy product (physical exergy difference between outlet and inlets)
+        self.E_P = self.outl[0]['energy_flow']
+
+        # Exergy fuel (chemical exergy of fuel and air minus exhaust exergy)
+        self.E_F = self.inl[0]['energy_flow']
+
+        # Exergy destruction (difference between exergy fuel and exergy product)
+        self.E_D = self.E_F - self.E_P
+
+        # Exergy efficiency (epsilon)
+        self.epsilon = self._calc_epsilon()
+
+        # Log the results
+        logging.info(f"Generator balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+
 
 @component_registry
 class HeatExchanger(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         """
         Calculate exergy balance of a heat exchanger.
-        This method overrides the base class method for the specific behavior of a heat exchnager.
+        
+        Parameters:
+        T0 (float): Ambient temperature in Kelvin.
+        p0 (float): Ambient pressure in Pascal.
         """
-        pass
+        # Ensure that the component has both inlet and outlet streams
+        if len(self.inl) != 2 or len(self.outl) != 2:
+            raise ValueError("Heat exchanger requires two inlets and two outlets.")
+
+        # Access the streams via .values() to iterate over the actual stream data
+        all_streams = list(self.inl.values()) + list(self.outl.values())
+
+        # Case 1: All streams are above the ambient temperature
+        if all([stream['T'] > T0 for stream in all_streams]):
+            self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+
+        # Case 2: All streams are below or equal to the ambient temperature
+        elif all([stream['T'] <= T0 for stream in all_streams]):
+            self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] - self.inl[0]['m'] * self.inl[0]['e_T']
+            self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'] + (
+                self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
+
+        # Case 3: Some streams are above and others below ambient temperature
+        elif (self.inl[0]['T'] > T0 and self.outl[1]['T'] > T0 and
+              self.outl[0]['T'] <= T0 and self.inl[1]['T'] <= T0):
+            self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[1]['m'] * self.outl[1]['e_T']
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
+                self.outl[0]['m'] * self.outl[0]['e_M'] + self.outl[1]['m'] * self.outl[1]['e_M'])
+
+        # Case 4: First inlet is above ambient, others below or equal
+        elif (self.inl[0]['T'] > T0 and self.inl[1]['T'] <= T0 and
+              self.outl[0]['T'] <= T0 and self.outl[1]['T'] <= T0):
+            self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
+                self.outl[1]['m'] * self.outl[1]['e_PH'] + self.outl[0]['m'] * self.outl[0]['e_M'])
+
+        # Case 5: Inlets are higher but outlets are below or equal to ambient
+        elif (self.inl[0]['T'] > T0 and self.outl[0]['T'] > T0 and
+              self.inl[1]['T'] <= T0 and self.outl[1]['T'] <= T0):
+            self.E_P = np.nan
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
+
+        # Case 6: One outlet is above ambient, others lower
+        else:
+            self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+
+        # Calculate exergy destruction and efficiency
+        self.E_bus = {"chemical": np.nan, "physical": np.nan, "massless": np.nan}
+        if np.isnan(self.E_P):
+            self.E_D = self.E_F
+        else:
+            self.E_D = self.E_F - self.E_P
+        self.epsilon = self._calc_epsilon()
+
+        logging.info(f"Heat Exchanger exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")

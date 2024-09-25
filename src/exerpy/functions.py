@@ -3,6 +3,7 @@ import math
 import json
 import os
 import logging
+from exerpy import __datapath__
 
 def mass_to_molar_fractions(mass_fractions):
     """
@@ -65,7 +66,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
         molar_fractions = mass_to_molar_fractions(stream['mass_composition'])
         logging.info(f"Molar fractions: {molar_fractions}")
         
-        ahrendts = 'src\\data\\Ahrendts.json'
+        ahrendts = os.path.join(__datapath__, 'Ahrendts.json')
     
         # Check if file exists and is not empty
         if not os.path.exists(ahrendts):

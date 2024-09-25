@@ -6,11 +6,8 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Add the parent directory to the system path to import modules from the project
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 # Import the necessary modules and functions from exerpy
-from src.exerpy.analyses_new import ExergyAnalysis
+from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_test.ebs'))

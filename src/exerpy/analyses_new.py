@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import json
-from src.exerpy.components import component_registry
-import src.exerpy.parser.from_ebsilon.ebsilon_parser as ebs_parser
-from src.exerpy.functions import add_chemical_exergy
+from .components import component_registry
+from .parser.from_ebsilon import ebsilon_parser as ebs_parser
+from .functions import add_chemical_exergy
 import os
 import logging
 

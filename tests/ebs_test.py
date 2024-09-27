@@ -4,7 +4,7 @@ import json
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
 from exerpy import ExergyAnalysis
@@ -13,10 +13,10 @@ from exerpy import ExergyAnalysis
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_test.ebs'))
 
 # Perform the exergy analysis with the new ExergyAnalysis class
-T0 = 15      # Ambient temperature in °C
-p0 = 1.013   # Ambient pressure in bar
+Tamb = 15+273.15  # Ambient temperature in K
+pamb = 1.013e5    # Ambient pressure in Pa
 
 # Initialize the exergy analysis with the simulation path
 ean = ExergyAnalysis(model_path)
-ean.analyse(T0, p0)
+ean.analyse(Tamb, pamb)
 ean.exergy_results()

@@ -1,73 +1,14 @@
 import sys 
+import logging
 
 sys.path.append(r"C:/Program Files/Ebsilon/EBSILONProfessional 17/Data/Python")
 
 # Now you can import the required components from EbsOpen
-from EbsOpen import EpSteamTable, EpGasTable, EpSubstance
+from EbsOpen import EpSteamTable, EpGasTable
 
-# Dictionary mapping stream substance names to EpSubstance identifiers
-substance_mapping = {
-    "XN2": EpSubstance.epSubstanceN2,
-    "XO2": EpSubstance.epSubstanceO2,
-    "XCO2": EpSubstance.epSubstanceCO2,
-    "XH2O": EpSubstance.epSubstanceH2O,
-    "XAR": EpSubstance.epSubstanceAR,
-    "XSO2": EpSubstance.epSubstanceSO2,
-    "XCO": EpSubstance.epSubstanceCO,
-    "XCH4": EpSubstance.epSubstanceCH4,
-    "XH2S": EpSubstance.epSubstanceH2S,
-    "XH2": EpSubstance.epSubstanceH2,
-    "XNH3": EpSubstance.epSubstanceNH3,
-    "XNO": EpSubstance.epSubstanceNO,
-    "XNO2": EpSubstance.epSubstanceNO2,
-    "XC": EpSubstance.epSubstanceC,
-    "XS": EpSubstance.epSubstanceS,
-    "XCL": EpSubstance.epSubstanceCL,
-    "XASH": EpSubstance.epSubstanceASH,
-    "XLIME": EpSubstance.epSubstanceLIME,
-    "XCA": EpSubstance.epSubstanceCA,
-    "XCAO": EpSubstance.epSubstanceCAO,
-    "XCACO3": EpSubstance.epSubstanceCACO3,
-    "XCASO4": EpSubstance.epSubstanceCASO4,
-    "XMG": EpSubstance.epSubstanceMG,
-    "XMGO": EpSubstance.epSubstanceMGO,
-    "XMGCO3": EpSubstance.epSubstanceMGCO3,
-    "XHCL": EpSubstance.epSubstanceHCL,
-    "XHCN": EpSubstance.epSubstanceHCN,
-    "XCS2": EpSubstance.epSubstanceCS2,
-    "XH2OB": EpSubstance.epSubstanceH2OB,
-    "XN2O": EpSubstance.epSubstanceN2O,
-    "XHE": EpSubstance.epSubstanceHE,
-    "XNE": EpSubstance.epSubstanceNE,
-    "XKR": EpSubstance.epSubstanceKR,
-    "XXE": EpSubstance.epSubstanceXE,
-    "XASHG": EpSubstance.epSubstanceASHG,
-    "XACET": EpSubstance.epSubstanceACET,
-    "XBENZ": EpSubstance.epSubstanceBENZ,
-    "XC2BUTEN": EpSubstance.epSubstanceC2BUTEN,
-    "XCYCPENT": EpSubstance.epSubstanceCYCPENT,
-    "XDEC": EpSubstance.epSubstanceDEC,
-    "XEBENZ": EpSubstance.epSubstanceEBENZ,
-    "XETH": EpSubstance.epSubstanceETH,
-    "XETHL": EpSubstance.epSubstanceETHL,
-    "XH": EpSubstance.epSubstanceH,
-    "XO": EpSubstance.epSubstanceO,
-    "XMETHL": EpSubstance.epSubstanceMETHL,
-    "XNEOPENT": EpSubstance.epSubstanceNEOPENT,
-    "XTOLUEN": EpSubstance.epSubstanceTOLUEN,
-    "XIBUT": EpSubstance.epSubstanceIBUT,
-    "XIPENT": EpSubstance.epSubstanceIPENT,
-    "XIBUTEN": EpSubstance.epSubstanceIBUTEN,
-    "X1BUTEN": EpSubstance.epSubstance1BUTEN,
-    "X3MPENT": EpSubstance.epSubstance3MPENT,
-    "XPROP": EpSubstance.epSubstancePROP,
-    "XPROPEN": EpSubstance.epSubstancePROPEN,
-    "XHEX": EpSubstance.epSubstanceHEX,
-    "XHEPT": EpSubstance.epSubstanceHEPT,
-    "XOXYLEN": EpSubstance.epSubstanceOXYLEN,
-    "XTDECALIN": EpSubstance.epSubstanceTDECALIN,
-    "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN
-}
+from exerpy.functions import convert_to_SI
+from .ebsilon_config import unit_id_to_string, substance_mapping
+
 
 def calc_X_from_PT(app, pipe, property, pressure, temperature):
     """
@@ -111,26 +52,39 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     # Set the analysis in the FluidData object
     fd.SetAnalysis(fdAnalysis)
     
-    # Calculate property at the given pressure and temperature
-    if property == 'S':
-        res = fd.PropertyS_OF_PT(pressure, temperature)
-    elif property == 'H':
-        res = fd.PropertyH_OF_PT(pressure, temperature)
-    else:
-        print('Wrong property. You can choose between "H" (enthalpy) and "S" (entropy)')
-        res = None
-    return res
+    # Validate property input
+    if property not in ['S', 'H']:
+        logging.error('Invalid property selected. You can choose between "H" (enthalpy) and "S" (entropy).')
+        return None
+    
+    try:
+        # Calculate the property based on the input property type
+        if property == 'S':  # Entropy
+            res = fd.PropertyS_OF_PT(pressure * 1e-5, temperature - 273.15)  # Ebsilon works with °C and bar
+            res_SI = res * 1e3  # Convert kJ/kgK to J/kgK
+        elif property == 'H':  # Enthalpy
+            res = fd.PropertyH_OF_PT(pressure * 1e-5, temperature - 273.15)  # Ebsilon works with °C and bar
+            res_SI = res * 1e3  # Convert kJ/kg to J/kg
+        
+        return res_SI
+
+    except Exception as e:
+        logging.error(f"An error occurred during property calculation: {e}")
+        return None
+
 
 
 def calc_eT(app, pipe, pressure, Tamb, pamb):
-    hA = calc_X_from_PT(app, pipe, 'H', pressure, Tamb)
-    sA = calc_X_from_PT(app, pipe, 'S', pressure, Tamb)
-    eT = pipe.H.Value - hA - (Tamb+273.15) * (pipe.S.Value - sA)
+    h_i = convert_to_SI('h', pipe.H.Value, unit_id_to_string.get(pipe.H.Dimension, "Unknown"))  # in SI unit [J / kg]
+    s_i = convert_to_SI('s', pipe.S.Value, unit_id_to_string.get(pipe.S.Dimension, "Unknown"))  # in SI unit [J / kgK]
+    h_A = calc_X_from_PT(app, pipe, 'H', pressure, Tamb)  # in SI unit [J / kg]
+    s_A = calc_X_from_PT(app, pipe, 'S', pressure, Tamb)  # in SI unit [J / kgK]
+    eT = h_i - h_A - Tamb * (s_i - s_A)  # in SI unit [J / kg]
 
     return eT
 
 def calc_eM(app, pipe, pressure, Tamb, pamb):
-    eM = pipe.E.Value - calc_eT(app, pipe, pressure, Tamb, pamb)
+    eM = convert_to_SI('e', pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(app, pipe, pressure, Tamb, pamb)
 
     return eM
 

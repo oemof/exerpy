@@ -80,8 +80,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
             ahrendts_data = json.load(file)  # data in J/kmol
             logging.info("Loaded Ahrendts data successfully.")
 
-        R = 8.314  # Universal gas constant in kJ/(kmolK)
-        T0 = Tamb + 273.15  # Reference temperature in K
+        R = 8.314  # Universal gas constant in J/(molK)
         aliases_water = CP.get_aliases('H2O')
 
         # Handle pure substance (Case A)
@@ -91,13 +90,13 @@ def calc_chemical_exergy(stream, Tamb, pamb):
             aliases = CP.get_aliases(substance)
 
             if set(aliases) & set(aliases_water):
-                eCH = ahrendts_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in kJ/kg
-                logging.info(f"Pure water detected. Chemical exergy: {eCH} kJ/kg")
+                eCH = ahrendts_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in J/kg
+                logging.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
             else:
                 for alias in aliases:
                     if alias.upper() in ahrendts_data:
-                        eCH = ahrendts_data[alias.upper()][3] / CP.PropsSI('M', substance)
-                        logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} kJ/kg")
+                        eCH = ahrendts_data[alias.upper()][3] / CP.PropsSI('M', substance)  # in J/kg
+                        logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
                         break
                 else:
                     logging.error(f"No matching alias found for {substance}")
@@ -122,7 +121,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
 
             if water_present:
                 water_alias = next(alias for alias in aliases_water if alias in molar_fractions.keys())
-                pH2O_sat = CP.PropsSI('P', 'T', T0, 'Q', 1, 'Water') * 1e-5  # Saturation pressure of water in bar
+                pH2O_sat = CP.PropsSI('P', 'T', Tamb, 'Q', 1, 'Water')  # Saturation pressure of water in bar
                 pH2O = molar_fractions[water_alias] * pamb  # Partial pressure of water
 
                 if pH2O > pH2O_sat:  # Case B: Water condenses
@@ -132,7 +131,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
                     x_H2O_liquid = molar_fractions[water_alias] - x_H2O_gas  # Liquid water fraction
                     x_total_gas = 1 - x_H2O_liquid  # Total gas phase fraction
 
-                    eCH_liquid_mol = x_H2O_liquid * (ahrendts_data['WATER'][2])  # Liquid phase contribution
+                    eCH_liquid_mol = x_H2O_liquid * (ahrendts_data['WATER'][2])  # Liquid phase contribution, in J/mol
 
                     for substance, fraction in molar_fractions.items():
                         if substance == water_alias:
@@ -144,7 +143,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
                         aliases = CP.get_aliases(substance)
                         for alias in aliases:
                             if alias.upper() in ahrendts_data:
-                                eCH_gas_mol += fraction * (ahrendts_data[alias.upper()][3])  # Exergy is in J/kmol
+                                eCH_gas_mol += fraction * (ahrendts_data[alias.upper()][3]) # Exergy is in J/mol
                                 break
                         else:
                             logging.error(f"No matching alias found for {substance}")
@@ -153,7 +152,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
                         if fraction > 0:  # Avoid log(0)
                             entropy_mixing += fraction * math.log(fraction)
 
-                    eCH_gas_mol += R * T0 * 1e-3 * entropy_mixing
+                    eCH_gas_mol += R * Tamb * entropy_mixing
                     eCH_mol = eCH_gas_mol + eCH_liquid_mol
                     logging.info(f"Condensed phase chemical exergy: {eCH_mol} J/kmol")
 
@@ -173,7 +172,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
                         if fraction > 0:  # Avoid log(0)
                             entropy_mixing += fraction * math.log(fraction)
 
-                    eCH_mol += R * T0 * 1e-3 * entropy_mixing
+                    eCH_mol += R * Tamb * entropy_mixing
 
             else:  # Case C: No water present
                 logging.info(f"No water present in the mixture.")
@@ -191,10 +190,10 @@ def calc_chemical_exergy(stream, Tamb, pamb):
                     if fraction > 0:  # Avoid log(0)
                         entropy_mixing += fraction * math.log(fraction)
 
-                eCH_mol += R * T0 * 1e-3 * entropy_mixing
+                eCH_mol += R * Tamb * entropy_mixing
 
             eCH = eCH_mol / total_molar_mass  # Divide molar exergy by molar mass of mixture
-            logging.info(f"Final chemical exergy: {eCH} kJ/kg")
+            logging.info(f"Chemical exergy: {eCH} kJ/kg")
 
         return eCH
     
@@ -234,3 +233,163 @@ def add_chemical_exergy(my_json, Tamb, pamb):
             logging.info(f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['fluid_type']})")
     
     return my_json
+
+
+def convert_to_SI(property, value, unit):
+    r"""
+    Convert a value to its SI value.
+
+    Parameters
+    ----------
+    property : str
+        Fluid property to convert.
+
+    value : float
+        Value to convert.
+
+    unit : str
+        Unit of the value.
+
+    Returns
+    -------
+    SI_value : float
+        Specified fluid property in SI value.
+
+    Raises
+    ------
+    ValueError: If the property or unit is invalid or conversion is not possible.
+    """
+    # Check if the property is valid and exists in fluid_property_data
+    if property not in fluid_property_data:
+        logging.warning(f"Unrecognized property '{property}'.")
+        return value
+    
+    else:
+        try:
+            # Handle temperature conversions
+            if property == 'T':
+                if unit not in fluid_property_data['T']['units']:
+                    raise ValueError(f"Invalid unit '{unit}' for temperature. Unit not found.")
+                converters = fluid_property_data['T']['units'][unit]
+                return (value + converters[0]) * converters[1]
+            
+            # Handle all other properties
+            else:
+                if unit not in fluid_property_data[property]['units']:
+                    raise ValueError(f"Invalid unit '{unit}' for property '{property}'. Unit not found.")
+                conversion_factor = fluid_property_data[property]['units'][unit]
+                return value * conversion_factor
+
+        except KeyError as e:
+            raise ValueError(f"Conversion error: {e}")
+        except Exception as e:
+            raise ValueError(f"An error occurred during the unit conversion: {e}")
+
+
+
+fluid_property_data = {
+    'm': {
+        'text': 'mass flow',
+        'SI_unit': 'kg / s',
+        'units': {
+            'kg / s': 1, 'kg / min': 1 / 60, 'kg / h': 1 / 3.6e3,
+            't / h': 1 / 3.6, 'g / s': 1 / 1e3
+        },
+        'latex_eq': r'0 = \dot{m} - \dot{m}_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'v': {
+        'text': 'volumetric flow',
+        'SI_unit': 'm3 / s',
+        'units': {
+            'm3 / s': 1, 'm3 / min': 1 / 60, 'm3 / h': 1 / 3.6e3,
+            'l / s': 1 / 1e3, 'l / min': 1 / 60e3, 'l / h': 1 / 3.6e6
+        },
+        'latex_eq': (
+            r'0 = \dot{m} \cdot v \left(p,h\right)- \dot{V}_\mathrm{spec}'),
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'p': {
+        'text': 'pressure',
+        'SI_unit': 'Pa',
+        'units': {
+            'Pa': 1, 'kPa': 1e3, 'psi': 6.8948e3,
+            'bar': 1e5, 'atm': 1.01325e5, 'MPa': 1e6
+        },
+        'latex_eq': r'0 = p - p_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'h': {
+        'text': 'enthalpy',
+        'SI_unit': 'J / kg',
+        'units': {
+            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6,
+            'cal / kg': 4.184, 'kcal / kg': 4.184e3,
+            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6
+        },
+        'latex_eq': r'0 = h - h_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'e': {
+        'text': 'exergy',
+        'SI_unit': 'J / kg',
+        'units': {
+            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6,
+            'cal / kg': 4.184, 'kcal / kg': 4.184e3,
+            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6
+        },
+        'latex_eq': r'0 = h - h_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'T': {
+        'text': 'temperature',
+        'SI_unit': 'K',
+        'units': {
+            'K': [0, 1], 'R': [0, 5 / 9],
+            'C': [273.15, 1], 'F': [459.67, 5 / 9]
+        },
+        'latex_eq': r'0 = T \left(p, h \right) - T_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.1f}'}
+    },
+    'Td_bp': {
+        'text': 'temperature difference to boiling point',
+        'SI_unit': 'K',
+        'units': {
+            'K': 1, 'R': 5 / 9, 'C': 1, 'F': 5 / 9
+        },
+        'latex_eq': r'0 = \Delta T_\mathrm{spec}- T_\mathrm{sat}\left(p\right)',
+        'documentation': {'float_fmt': '{:,.1f}'}
+    },
+    'vol': {
+        'text': 'specific volume',
+        'SI_unit': 'm3 / kg',
+        'units': {'m3 / kg': 1, 'l / kg': 1e-3},
+        'latex_eq': (
+            r'0 = v\left(p,h\right) \cdot \dot{m} - \dot{V}_\mathrm{spec}'),
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'x': {
+        'text': 'vapor mass fraction',
+        'SI_unit': '-',
+        'units': {'1': 1, '-': 1, '%': 1e-2, 'ppm': 1e-6},
+        'latex_eq': r'0 = h - h\left(p, x_\mathrm{spec}\right)',
+        'documentation': {'float_fmt': '{:,.2f}'}
+    },
+    's': {
+        'text': 'entropy',
+        'SI_unit': 'J / kgK',
+        'units': {'J / kgK': 1, 'kJ / kgK': 1e3, 'MJ / kgK': 1e6},
+        'latex_eq': r'0 = s_\mathrm{spec} - s\left(p, h \right)',
+        'documentation': {'float_fmt': '{:,.2f}'}
+    },
+    'power': {
+        'text': 'power',
+        'SI_unit': 'W',
+        'units': {'W': 1, 'kW': 1e3, 'MW': 1e6},
+    },
+    'heat': {
+        'text': 'heat',
+        'SI_unit': 'W',
+        'units': {'W': 1, 'kW': 1e3, 'MW': 1e6},
+    }
+}

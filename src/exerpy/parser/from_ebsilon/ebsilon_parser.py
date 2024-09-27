@@ -11,12 +11,10 @@ import logging
 from win32com.client import Dispatch
 import json
 
+from exerpy.functions import convert_to_SI, fluid_property_data
+
 sys.path.append(r"C:\Program Files\Ebsilon\EBSILONProfessional 17\Data\Python")
 from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
-
-
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
-
 
 from .ebsilon_config import (
     ebs_objects,
@@ -24,7 +22,8 @@ from .ebsilon_config import (
     fluid_type_index,
     composition_params,
     grouped_components,
-    connector_mapping
+    connector_mapping,
+    unit_id_to_string
 )
 
 # Configure logging to display info-level messages
@@ -140,6 +139,7 @@ class EbsilonModelParser:
             'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
             'fluid_type_id': pipe_cast.FluidType,
             'energy_flow': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
+            'energy_flow_unit': unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown") if hasattr(pipe_cast, 'Q') else "Unknown",
             # For now, no composition is set here, it's handled separately
         }
 
@@ -164,30 +164,46 @@ class EbsilonModelParser:
 
             # Add physical properties only if the connection is not in non-material fluids
             if (pipe_cast.Kind - 1000) not in non_material_fluids:
+                # Retrieve all data and convert them in SI units
                 connection_data.update({
-                    'm': pipe_cast.M.Value if hasattr(pipe_cast, 'M') else 0,
-                    'T': pipe_cast.T.Value if hasattr(pipe_cast, 'T') else 0,
-                    'p': pipe_cast.P.Value if hasattr(pipe_cast, 'P') else 0,
-                    'h': pipe_cast.H.Value if hasattr(pipe_cast, 'H') else 0,
-                    's': pipe_cast.S.Value if hasattr(pipe_cast, 'S') else 0,
-                    'e_PH': pipe_cast.E.Value if hasattr(pipe_cast, 'E') else 0,
-                    'e_T': calc_eT(self.app, pipe_cast, pipe_cast.P.Value, self.tamb, self.pamb),
-                    'e_M': calc_eM(self.app, pipe_cast, pipe_cast.P.Value, self.tamb, self.pamb),
-                    'x': pipe_cast.X.Value if hasattr(pipe_cast, 'X') else 0,
-                    'H': pipe_cast.Q.Value if hasattr(pipe_cast, 'Q') else 0,
+                    'm': convert_to_SI('m', pipe_cast.M.Value, unit_id_to_string.get(pipe_cast.M.Dimension, "Unknown")) if hasattr(pipe_cast, 'M') else 0,
+                    'm_unit': fluid_property_data['m']['SI_unit'],
+                    'T': convert_to_SI('T', pipe_cast.T.Value, unit_id_to_string.get(pipe_cast.T.Dimension, "Unknown")) if hasattr(pipe_cast, 'T') else 0,
+                    'T_unit': fluid_property_data['T']['SI_unit'],
+                    'p': convert_to_SI('p', pipe_cast.P.Value, unit_id_to_string.get(pipe_cast.P.Dimension, "Unknown")) if hasattr(pipe_cast, 'P') else 0,
+                    'p_unit': fluid_property_data['p']['SI_unit'],
+                    'h': convert_to_SI('h', pipe_cast.H.Value, unit_id_to_string.get(pipe_cast.H.Dimension, "Unknown")) if hasattr(pipe_cast, 'H') else 0,
+                    'h_unit': fluid_property_data['h']['SI_unit'],
+                    's': convert_to_SI('s', pipe_cast.S.Value, unit_id_to_string.get(pipe_cast.S.Dimension, "Unknown")) if hasattr(pipe_cast, 'S') else 0,
+                    's_unit': fluid_property_data['s']['SI_unit'],
+                    'e_PH': convert_to_SI('e', pipe_cast.E.Value, unit_id_to_string.get(pipe_cast.E.Dimension, "Unknown")) if hasattr(pipe_cast, 'E') else 0,
+                    'e_PH_unit': fluid_property_data['e']['SI_unit'],
+                    'x': convert_to_SI('x', pipe_cast.X.Value, unit_id_to_string.get(pipe_cast.X.Dimension, "Unknown")) if hasattr(pipe_cast, 'X') else 0,
+                    'x_unit': fluid_property_data['x']['SI_unit'],
                 })
 
-            # Handle mass composition logic for fluids
-            if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
-                connection_data['mass_composition'] = {'H2O': 1}
-            else:
-                connection_data['mass_composition'] = {
-                    param.lstrip('X'): getattr(pipe_cast, param).Value
-                    for param in composition_params
-                    if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
-                }
+                # Add the mechanical and thermal specific exergies
+                e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.tamb, self.pamb)
+                e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.tamb, self.pamb)
 
-            # Correct the connector numbers based on mappings
+                connection_data.update({
+                    'e_T': e_T_value,
+                    'e_T_unit': fluid_property_data['e']['SI_unit'],
+                    'e_M': e_M_value,
+                    'e_M_unit': fluid_property_data['e']['SI_unit']
+                })
+
+                # Handle mass composition logic for fluids
+                if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
+                    connection_data['mass_composition'] = {'H2O': 1}
+                else:
+                    connection_data['mass_composition'] = {
+                        param.lstrip('X'): getattr(pipe_cast, param).Value
+                        for param in composition_params
+                        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+                    }
+
+            # Convert the connector numbers to selected standard values for each component
             if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
                 connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
             
@@ -237,9 +253,12 @@ class EbsilonModelParser:
                 'eta_mech': comp_cast.ETAMN.Value if hasattr(comp_cast, 'ETAMN') else None,
                 'eta_cc': comp_cast.ETAB.Value if hasattr(comp_cast, 'ETAB') else None,
                 'lamb': comp_cast.ALAMN.Value if hasattr(comp_cast, 'ALAMN') else None,
-                'Q': comp_cast.QT.Value if hasattr(comp_cast, 'QT') else None,
-                'P': comp_cast.QSHAFT.Value if hasattr(comp_cast, 'QSHAFT') else None,
+                'Q': convert_to_SI('heat', comp_cast.QT.Value, unit_id_to_string.get(comp_cast.QT.Dimension, "Unknown")) if hasattr(comp_cast, 'QT') else None,
+                'Q_unit': fluid_property_data['heat']['SI_unit'],
+                'P': convert_to_SI('power', comp_cast.QSHAFT.Value, unit_id_to_string.get(comp_cast.QSHAFT.Dimension, "Unknown")) if hasattr(comp_cast, 'QSHAFT') else None,
+                'P_unit': fluid_property_data['power']['SI_unit'],
                 'kA': comp_cast.KA.Value if hasattr(comp_cast, 'KA') else None,
+                'kA_unit': unit_id_to_string.get(comp_cast.KA.Dimension, "Unknown") if hasattr(comp_cast, 'KA') else "Unknown",
             }
 
             # Determine the group for the component based on its type
@@ -264,9 +283,9 @@ class EbsilonModelParser:
         elif type_index == 46:
             comp46 = self.oc.CastToComp46(obj)
             if comp46.FTYP.Value == 26:
-                self.tamb = comp46.MEASM.Value
+                self.tamb = convert_to_SI('T', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
             elif comp46.FTYP.Value == 13:
-                self.pamb = comp46.MEASM.Value
+                self.pamb = convert_to_SI('p', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
 
 
     def get_sorted_data(self):
@@ -317,12 +336,17 @@ def run_ebsilon(model_path, output_dir=None):
     
     Returns:
         dict: Parsed data in dictionary format.
+    
+    Raises:
+        FileNotFoundError: If the model file is not found at the specified path.
+        RuntimeError: For any error during model initialization, simulation, parsing, or writing.
     """
 
     # Check if the model file exists at the specified path
     if not os.path.exists(model_path):
-        logging.error(f"Model file not found at: {model_path}")
-        return None
+        error_msg = f"Model file not found at: {model_path}"
+        logging.error(error_msg)
+        raise FileNotFoundError(error_msg)
 
     # Initialize the Ebsilon model parser with the model file path
     parser = EbsilonModelParser(model_path)
@@ -330,29 +354,29 @@ def run_ebsilon(model_path, output_dir=None):
     try:
         # Initialize the Ebsilon model within the parser
         parser.initialize_model()
-
     except Exception as e:
-        # Log any exceptions that occur during model processing
-        logging.error(f"An error occurred during initializing: {e}")
-        return None
+        # Log and raise an error if something goes wrong during initialization
+        error_msg = f"An error occurred during initializing: {e}"
+        logging.error(error_msg)
+        raise RuntimeError(error_msg)
     
     try:
         # Simulate the Ebsilon model
         parser.simulate_model()
-
     except Exception as e:
-        # Log any exceptions that occur during model processing
-        logging.error(f"An error occurred during model simulation: {e}")
-        return None
+        # Log and raise an error if something goes wrong during simulation
+        error_msg = f"An error occurred during model simulation: {e}"
+        logging.error(error_msg)
+        raise RuntimeError(error_msg)
 
     try:
         # Parse data from the simulated model
         parser.parse_model()
-
     except Exception as e:
-        # Log any exceptions that occur during model processing
-        logging.error(f"An error occurred during model parsing: {e}")
-        return None
+        # Log and raise an error if something goes wrong during parsing
+        error_msg = f"An error occurred during model parsing: {e}"
+        logging.error(error_msg)
+        raise RuntimeError(error_msg)
 
     # Get the parsed and sorted data
     parsed_data = parser.get_sorted_data()
@@ -363,9 +387,11 @@ def run_ebsilon(model_path, output_dir=None):
             parser.write_to_json(output_dir)
             logging.info(f"Data successfully written to {output_dir}")
         except Exception as e:
-            # Log any exceptions that occur during writing the output file
-            logging.error(f"An error occurred while writing the output file: {e}")
-            return None
-        
+            # Log and raise an error if something goes wrong while writing the output file
+            error_msg = f"An error occurred while writing the output file: {e}"
+            logging.error(error_msg)
+            raise RuntimeError(error_msg)
+
     # Return the parsed data as a dictionary (not as a JSON string)
     return parsed_data
+

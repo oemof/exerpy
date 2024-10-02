@@ -25,38 +25,32 @@ class ExergyAnalysis:
         # Detect file type and parse the simulation
         self.simulation_data = self._parse_simulation_file(path_of_simulation)
 
+        # Extract ambient conditions if available
+        self.Tamb = self.simulation_data.get('Tamb')
+        self.pamb = self.simulation_data.get('pamb')
+
         # Convert the parsed data into components
         self.components = _construct_components(self.simulation_data)
 
     def _parse_simulation_file(self, path_of_simulation):
-        """
-        Parses the simulation file based on its format (currently supports .ebs for Ebsilon).
-        
-        Parameters
-        ----------
-        path_of_simulation : str
-            Path to the simulation file (e.g., .ebs).
-        
-        Returns
-        -------
-        dict
-            Parsed simulation data as a dictionary.
-        """
         _, file_extension = os.path.splitext(path_of_simulation)
 
-        # PARSING FROM EBSILON
-        # TODO general function and if condition for simulation type in the parser functions?
         if file_extension == '.ebs':
             output_path = path_of_simulation.replace('.ebs', '_parsed.json')
+            force_parse = False
+
             if os.path.exists(output_path):
-                try:
-                    with open(output_path, 'r') as json_file:
-                        json_data = json.load(json_file)
-                        return json_data
-                except json.JSONDecodeError as e:
-                    logging.error(f"JSON decoding error: {e}")
-                    raise e  # Raise an error if the JSON format is invalid
-            else:
+                # Load existing JSON data
+                with open(output_path, 'r') as json_file:
+                    json_data = json.load(json_file)
+                # Check if 'Tamb' and 'pamb' are present
+                if 'Tamb' in json_data and 'pamb' in json_data:
+                    return json_data
+                else:
+                    logging.info("Existing JSON data lacks Tamb or pamb. Re-parsing the model.")
+                    force_parse = True
+
+            if not os.path.exists(output_path) or force_parse:
                 logging.info("Parsing the Ebsilon model and generating JSON data.")
                 json_data = ebs_parser.run_ebsilon(path_of_simulation)
 
@@ -70,29 +64,82 @@ class ExergyAnalysis:
                 else:
                     logging.error("Ebsilon model parsing failed; JSON file not created.")
                     raise Exception("Ebsilon model parsing failed; JSON file not created.")
-                
         else:
             raise ValueError(f"This format file has not implemented yet. Try with: {file_extension}")
         
-    def analyse(self, Tamb, pamb):
+    def analyse(self, Tamb=None, pamb=None):
         """Run the exergy analysis.
 
         Parameters
         ----------
-        pamb : float
-            Ambient pressure value for analysis, provide value in network's
-            pressure unit.
+        Tamb : float, optional
+            Ambient temperature for analysis. If not provided, uses the value from the simulation data.
 
-        Tamb : float
-            Ambient temperature value for analysis, provide value in network's
-            temperature unit.
+        pamb : float, optional
+            Ambient pressure for analysis. If not provided, uses the value from the simulation data.
         """
 
+        # Helper function to compare floating-point numbers
+        def are_values_close(a, b, rel_tol=1e-6):
+            return abs(a - b) <= rel_tol * max(abs(a), abs(b))
+
+        # Determine which values are available
+        parsed_Tamb_exists = self.Tamb is not None
+        parsed_pamb_exists = self.pamb is not None
+
+        user_Tamb_provided = Tamb is not None
+        user_pamb_provided = pamb is not None
+
+        # Handle Tamb
+        if parsed_Tamb_exists:
+            if user_Tamb_provided:
+                if are_values_close(Tamb, self.Tamb):
+                    logging.info(
+                        "Ambient temperature (Tamb) provided matches the parsed value. Setting Tamb is not necessary."
+                    )
+                else:
+                    logging.warning(
+                        f"Ambient temperature (Tamb) provided ({Tamb}) is different from the parsed value ({self.Tamb}). Using the parsed value."
+                    )
+            Tamb = self.Tamb
+        else:
+            if user_Tamb_provided:
+                logging.info("Using user-provided ambient temperature (Tamb).")
+                # Tamb remains as provided
+            else:
+                raise ValueError(
+                    "Ambient temperature (Tamb) is not available from the simulation data and was not provided."
+                )
+
+        # Handle pamb
+        if parsed_pamb_exists:
+            if user_pamb_provided:
+                if are_values_close(pamb, self.pamb):
+                    logging.info(
+                        "Ambient pressure (pamb) provided matches the parsed value. Setting pamb is not necessary."
+                    )
+                else:
+                    logging.warning(
+                        f"Ambient pressure (pamb) provided ({pamb}) is different from the parsed value ({self.pamb}). Using the parsed value."
+                    )
+            pamb = self.pamb
+        else:
+            if user_pamb_provided:
+                logging.info("Using user-provided ambient pressure (pamb).")
+                # pamb remains as provided
+            else:
+                raise ValueError(
+                    "Ambient pressure (pamb) is not available from the simulation data and was not provided."
+                )
+
+        # Proceed with analysis using Tamb and pamb
         self.simulation_data = add_chemical_exergy(self.simulation_data, Tamb, pamb)
 
         # Perform exergy balance for each component
         for component_name, component in self.components.items():
             component.calc_exergy_balance(Tamb, pamb)
+
+
 
     def exergy_results(self, provide_csv=False):
         """

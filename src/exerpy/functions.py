@@ -259,31 +259,40 @@ def convert_to_SI(property, value, unit):
     ------
     ValueError: If the property or unit is invalid or conversion is not possible.
     """
+    # Check if value is None
+    if value is None:
+        logging.warning(f"Value is None for property '{property}', cannot convert.")
+        return None
+
     # Check if the property is valid and exists in fluid_property_data
     if property not in fluid_property_data:
-        logging.warning(f"Unrecognized property '{property}'.")
+        logging.warning(f"Unrecognized property: '{property}'. Returning original value.")
         return value
-    
-    else:
-        try:
-            # Handle temperature conversions
-            if property == 'T':
-                if unit not in fluid_property_data['T']['units']:
-                    raise ValueError(f"Invalid unit '{unit}' for temperature. Unit not found.")
-                converters = fluid_property_data['T']['units'][unit]
-                return (value + converters[0]) * converters[1]
-            
-            # Handle all other properties
-            else:
-                if unit not in fluid_property_data[property]['units']:
-                    raise ValueError(f"Invalid unit '{unit}' for property '{property}'. Unit not found.")
-                conversion_factor = fluid_property_data[property]['units'][unit]
-                return value * conversion_factor
 
-        except KeyError as e:
-            raise ValueError(f"Conversion error: {e}")
-        except Exception as e:
-            raise ValueError(f"An error occurred during the unit conversion: {e}")
+    # Check if the unit is valid
+    if unit == 'Unknown':
+        logging.warning(f"Unrecognized unit for property '{property}'. Returning original value.")
+        return value
+
+    try:
+        # Handle temperature conversions separately
+        if property == 'T':
+            if unit not in fluid_property_data['T']['units']:
+                raise ValueError(f"Invalid unit '{unit}' for temperature. Unit not found.")
+            converters = fluid_property_data['T']['units'][unit]
+            return (value + converters[0]) * converters[1]
+
+        # Handle all other property conversions
+        else:
+            if unit not in fluid_property_data[property]['units']:
+                raise ValueError(f"Invalid unit '{unit}' for property '{property}'. Unit not found.")
+            conversion_factor = fluid_property_data[property]['units'][unit]
+            return value * conversion_factor
+
+    except KeyError as e:
+        raise ValueError(f"Conversion error: {e}")
+    except Exception as e:
+        raise ValueError(f"An error occurred during the unit conversion: {e}")
 
 
 

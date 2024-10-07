@@ -42,14 +42,16 @@ class Turbine(Component):
         """
         Calculate exergy balance of a turbine.
 
-        Parameters:
-        T0 (float): Ambient temperature in Kelvin.
-        p0 (float): Ambient pressure in Pascal.
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in Kelvin.
+        p0 : float
+            Ambient pressure in Pascal.
         """
         # Get power flow in case it wasn't read during the parsing
         if self.P is None:
-            self.P = self.outl[0]['m'] * (self.inl[0]['h'] - self.outl[0]['h'])
-            # TODO in case of more outlet change the code
+            self.P = self._total_outlet('m') * (self.inl[0]['h'] - self.outl[0]['h'])
 
         # Calculate exergy destruction based on the inlet and outlet temperatures
         if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
@@ -58,19 +60,19 @@ class Turbine(Component):
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         elif self.inl[0]['T'] > T0 and self.outl[0]['T'] <= T0:
             # Case 2: Inlet temperature is greater than ambient, but outlet is less than or equal to ambient
-            self.E_P = -self.P + self.outl[0]['h']
+            self.E_P = -self.P + self._total_outlet('m') * self.outl[0]['h']
             self.E_F = (self.inl[0]['h'] +
                         (self.inl[0]['e_PH'] - self.outl[0]['e_PH']))
         elif self.inl[0]['T'] <= T0 and self.outl[0]['T'] <= T0:
             # Case 3: Both inlet and outlet temperatures are less than or equal to ambient temperature
             self.E_P = (-self.P +
-                        (self.outl[0]['h'] - self.inl[0]['h']))
-            self.E_F = (self.inl[0]['e_PH'] -
-                        self.outl[0]['e_PH'])
+                        (+ self._total_outlet('m') * self.outl[0]['h'] - self.inl[0]['h'] * self.inl[0]['m']))
+            self.E_F = (self.inl[0]['e_PH'] * self.inl[0]['m'] -
+                        self.outl[0]['e_PH'] * self.outl[0]['m'])
         else:
             # Invalid case: if outlet temperature is larger than inlet temperature
             msg = ('Exergy balance of a turbine where outlet temperature is '
-                'larger than inlet temperature is not implemented.')
+                   'larger than inlet temperature is not implemented.')
             logging.warning(msg)
             self.E_P = np.nan
             self.E_F = np.nan
@@ -80,9 +82,81 @@ class Turbine(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self._calc_epsilon()
 
+    def _total_outlet(self, property_name: str) -> float:
+        """
+        Sum the specified property for all defined outlets.
+
+        Parameters
+        ----------
+        property_name : str
+            The property to be summed (e.g., 'h', 'e_PH', 'T').
+
+        Returns
+        -------
+        float
+            Sum of the specified property for all outlets, or 0 if no outlets are defined.
+        """
+        total_value = 0.0
+        for outlet in self.outl.values():
+            if outlet and property_name in outlet:
+                total_value += outlet[property_name]
+        return total_value
+
+
 
 @component_registry
 class Compressor(Component):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
+    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+        """
+        Calculate exergy balance of a turbine.
+        This method overrides the base class method for the specific behavior of a turbine.
+        """
+        # Get power flow in case it wasn't read during the parsing
+        if self.P is None:
+            self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])
+        
+        # Case 1: Both inlet and outlet temperatures are greater than ambient temperature
+        if round(self.inl[0]['T'],5) >= T0 and round(self.outl[0]['T'],5) > T0:
+            # Exergy product (useful exergy output, here it's mechanical work)
+            self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+            # Exergy fuel (input to the process), based on the physical exergy difference
+            self.E_F = abs(self.P)
+
+        # Case 2: Inlet temperature is less than ambient, but outlet is greater than ambient temperature
+        elif round(self.inl[0]['T'],5) < T0 and round(self.outl[0]['T'],5) > T0:
+            # Exergy product (mechanical work + thermal exergy change)
+            self.E_P = abs(self.P) + (self.outl[0]['e_PH'] - self.inl[0]['e_M'])
+            # Exergy fuel includes mechanical and thermal exergy at the inlet
+            self.E_F = (self.inl[0]['e_M'] + self.inl[0]['e_PH'])
+
+        # Case 3: Both inlet and outlet temperatures are less than or equal to ambient temperature
+        elif round(self.inl[0]['T'],5) < T0 and round(self.outl[0]['T'],5) <= T0:
+            # Exergy product (mechanical work only, assuming no useful thermal exergy)
+            self.E_P = self.outl[0]['e_M'] - self.inl[0]['e_M']
+            # Exergy fuel is primarily the mechanical exergy difference and thermal exergy at the inlet
+            self.E_F = (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+
+        # Invalid case: if outlet temperature is smaller than inlet temperature, this condition is not supported
+        else:
+            msg = ('Exergy balance of a compressor where outlet temperature '
+                'is smaller than inlet temperature is not implemented.')
+            logging.warning(msg)
+            self.E_P = np.nan
+            self.E_F = np.nan
+
+        # Calculate exergy destruction and efficiency
+        # Exergy destruction is the difference between the fuel and the useful product
+        self.E_D = self.E_F - self.E_P
+
+        # Exergy efficiency (epsilon) calculation
+        self.epsilon = self._calc_epsilon()
+
+
+@component_registry
+class Pump(Component):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     
@@ -166,6 +240,7 @@ class CombustionChamber(Component):
         # Log the results
         logging.info(f"Combustion Chamber Exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
 
+
 @component_registry
 class Generator(Component):
     def __init__(self, **kwargs):
@@ -190,6 +265,32 @@ class Generator(Component):
 
         # Log the results
         logging.info(f"Generator balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+
+
+@component_registry
+class Motor(Component):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
+    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+        """
+        Calculate exergy balance of a motor.
+        This method overrides the base class method for the specific behavior of a motor.
+        """
+        # Exergy product (physical exergy difference between outlet and inlets)
+        self.E_P = self.inl[0]['energy_flow']
+
+        # Exergy fuel (chemical exergy of fuel and air minus exhaust exergy)
+        self.E_F = self.outl[0]['energy_flow']
+
+        # Exergy destruction (difference between exergy fuel and exergy product)
+        self.E_D = self.E_F - self.E_P
+
+        # Exergy efficiency (epsilon)
+        self.epsilon = self._calc_epsilon()
+
+        # Log the results
+        logging.info(f"Motor balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
 
 
 @component_registry

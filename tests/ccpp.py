@@ -10,9 +10,26 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_test.ebs'))
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ccpp.ebs'))
 
 # Initialize the exergy analysis with the simulation path
-ean = ExergyAnalysis.from_ebsilon(model_path, simulate=False)
-ean.analyse()
+ean = ExergyAnalysis.from_ebsilon(model_path)
+
+fuel = {
+    "inputs": ['1', '3'],
+    "outputs": []
+}
+
+
+product = {
+    "inputs": ['E1', 'E3'],
+    "outputs": ['E2', 'E4']
+}
+
+loss = {
+    "inputs": ['8'],
+    "outputs": []
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()

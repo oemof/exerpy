@@ -4,7 +4,7 @@ import json
 from tabulate import tabulate
 from .components import component_registry
 from .parser.from_ebsilon import ebsilon_parser as ebs_parser
-from .functions import add_chemical_exergy
+from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
 
@@ -20,9 +20,18 @@ class ExergyAnalysis:
             Path to the simulation file (e.g., "my_simulation.ebs" for Ebsilon models).
         """
 
-        self.E_F = []
-        self.E_P = []
-        self.E_L = []
+        self.E_F = {
+            'inputs': [],
+            'outputs': []
+        }
+        self.E_P = {
+            'inputs': [],
+            'outputs': []
+        }
+        self.E_L = {
+            'inputs': [],
+            'outputs': []
+        }
 
         self.Tamb = Tamb
         self.pamb = pamb
@@ -32,21 +41,82 @@ class ExergyAnalysis:
         self.connections = connection_data
         
 
-    def analyse(self) -> None:
-        """Run the exergy analysis.
+    def analyse(self, E_F, E_P, E_L={}) -> None:
+        """
+        Run the exergy analysis for the entire system and calculate overall exergy efficiency.
 
         Parameters
         ----------
-        Tamb : float, optional
-            Ambient temperature for analysis. If not provided, uses the value from the simulation data.
-
-        pamb : float, optional
-            Ambient pressure for analysis. If not provided, uses the value from the simulation data.
+        E_F : dict
+            Dictionary containing input connections for fuel exergy (e.g., {"inputs": ["1", "2"]}).
+        E_P : dict
+            Dictionary containing input and output connections for product exergy (e.g., {"inputs": ["E1"], "outputs": ["T1", "T2"]}).
+        E_L : dict, optional
+            Dictionary containing input and output connections for loss exergy (default is {}).
         """
+        # Initialize class attributes for the exergy value of the total system
+        self.E_F = 0.0
+        self.E_P = 0.0
+        self.E_L = 0.0
 
-        # Perform exergy balance for each component
+        # Calculate total fuel exergy (E_F) by summing up all specified input connections
+        if "inputs" in E_F:
+            self.E_F = sum(
+                self.connections[conn]['E']
+                for conn in E_F["inputs"]
+                if conn in self.connections and self.connections[conn]['E'] is not None
+            )
+
+        # Calculate total product exergy (E_P) by summing up all specified input and output connections
+        if "inputs" in E_P:
+            self.E_P += sum(
+                self.connections[conn]['E']
+                for conn in E_P["inputs"]
+                if conn in self.connections and self.connections[conn]['E'] is not None
+            )
+        if "outputs" in E_P:
+            self.E_P -= sum(
+                self.connections[conn]['E']
+                for conn in E_P["outputs"]
+                if conn in self.connections and self.connections[conn]['E'] is not None
+            )
+
+        # Calculate total loss exergy (E_L) by summing up all specified input and output connections
+        if "inputs" in E_L:
+            self.E_L += sum(
+                self.connections[conn]['E']
+                for conn in E_L["inputs"]
+                if conn in self.connections and self.connections[conn]['E'] is not None
+            )
+        if "outputs" in E_L:
+            self.E_L -= sum(
+                self.connections[conn]['E']
+                for conn in E_L["outputs"]
+                if conn in self.connections and self.connections[conn]['E'] is not None
+            )
+
+        # Calculate overall exergy efficiency epsilon = E_P / E_F
+        self.epsilon = self.E_P / self.E_F if self.E_F != 0 else None
+
+        # The rest is counted as total exergy destruction with all components of the system
+        self.E_D = self.E_F - self.E_P - self.E_L
+
+        logging.info(f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, Efficiency = {self.epsilon:.2%}")
+
+        # Perform exergy balance for each individual component in the system
+        total_component_E_D = 0.0
         for component_name, component in self.components.items():
             component.calc_exergy_balance(self.Tamb, self.pamb)
+            if component.E_D is not None:
+                total_component_E_D += component.E_D
+
+        # Check if the sum of all component exergy destructions matches the overall system exergy destruction
+        if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
+            logging.warning(f"Sum of component exergy destructions ({total_component_E_D:.2f} kW) "
+                            f"does not match overall system exergy destruction ({self.E_D:.2f} kW).")
+        else:
+            logging.info(f"Exergy destruction check passed: Sum of component E_D matches overall E_D.")
+
 
     
     @classmethod
@@ -62,7 +132,7 @@ class ExergyAnalysis:
 
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, simulate=True):
+    def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -127,6 +197,14 @@ class ExergyAnalysis:
             logging.error(f"Failed to add chemical exergy values: {e}")
             raise
 
+        # Calculate the total exergy flow of each component
+        try:
+            ebsilon_data = add_total_exergy_flow(ebsilon_data)
+            logging.info("Total exergy flows successfully added to the Ebsilon data.")
+        except Exception as e:
+            logging.error(f"Failed to add total exergy flows: {e}")
+            raise
+
         # Save the generated JSON data
         try:
             with open(output_path, 'w') as json_file:
@@ -148,7 +226,7 @@ class ExergyAnalysis:
         return cls(component_data, connection_data, Tamb, pamb)
 
 
-    def exergy_results(self, provide_csv=False):
+    def exergy_results(self):
         """
         Displays a table of exergy analysis results with columns for E_F, E_P, E_D, and epsilon for each component,
         and additional information for material and non-material connections.
@@ -178,6 +256,14 @@ class ExergyAnalysis:
 
         # Convert the component dictionary into a pandas DataFrame
         df_component_results = pd.DataFrame(component_results)
+
+        # Add the overall results to the components as dummy component "TOT"
+        df_component_results.loc["TOT", "E_F [kW]"] = self.E_F * 1e-3
+        df_component_results.loc["TOT", "Component"] = 'TOT'
+        df_component_results.loc["TOT", "E_L [kW]"] = self.E_L * 1e-3
+        df_component_results.loc["TOT", "E_P [kW]"] = self.E_P * 1e-3
+        df_component_results.loc["TOT", "E_D [kW]"] = self.E_D * 1e-3
+        df_component_results.loc["TOT", "ε [%]"] = self.epsilon * 1e2
         
         # Create a dictionary to store results for material connections
         material_connection_results = {
@@ -187,6 +273,7 @@ class ExergyAnalysis:
             "p [Pa]": [],
             "h [J/kg]": [],
             "s [J/kgK]": [],
+            "E [kW]": [],
             "e^PH [J/kg]": [],
             "e^T [J/kg]": [],
             "e^M [J/kg]": [],
@@ -196,7 +283,9 @@ class ExergyAnalysis:
         # Create a dictionary to store results for non-material connections (e.g., electric, shaft)
         non_material_connection_results = {
             "Connection": [],
-            "Energy Flow [kW]": []
+            "Type": [],
+            "Energy Flow [kW]": [],
+            "Exergy Flow [kW]": []
         }
 
         # Populate the dictionaries with exergy analysis data for each connection
@@ -208,7 +297,9 @@ class ExergyAnalysis:
             if fluid_type in [9, 10]:  # Assuming 9 is Electric, 10 is Shaft
                 # Non-material connections: only record energy flow, converted to kW
                 non_material_connection_results["Connection"].append(conn_name)
+                non_material_connection_results["Type"].append(conn_data.get("fluid_type", None))
                 non_material_connection_results["Energy Flow [kW]"].append(conn_data.get("energy_flow", 0) / 1000)
+                non_material_connection_results["Exergy Flow [kW]"].append(conn_data.get("E", 0) / 1000)
             else:
                 # Material connections: record full data
                 material_connection_results["Connection"].append(conn_name)
@@ -216,19 +307,17 @@ class ExergyAnalysis:
                 material_connection_results["T [K]"].append(conn_data.get('T'))
                 material_connection_results["p [Pa]"].append(conn_data.get('p'))
                 material_connection_results["h [J/kg]"].append(conn_data.get('h'))
+                material_connection_results["E [kW]"].append(conn_data.get("E", 0) / 1000)
                 material_connection_results["s [J/kgK]"].append(conn_data.get('s'))
                 material_connection_results["e^PH [J/kg]"].append(conn_data.get('e_PH'))
                 material_connection_results["e^T [J/kg]"].append(conn_data.get('e_T'))
                 material_connection_results["e^M [J/kg]"].append(conn_data.get('e_M'))
                 material_connection_results["e^CH [J/kg]"].append(conn_data.get('e_CH'))
 
+
         # Convert the material and non-material connection dictionaries into DataFrames
         df_material_connection_results = pd.DataFrame(material_connection_results)
         df_non_material_connection_results = pd.DataFrame(non_material_connection_results)
-
-        # Print the component results DataFrame in the console in a table format
-        print("\nComponent Exergy Analysis Results:")
-        print(tabulate(df_component_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
 
         # Print the material connection results DataFrame in the console in a table format
         print("\nMaterial Connection Exergy Analysis Results:")
@@ -237,13 +326,12 @@ class ExergyAnalysis:
         # Print the non-material connection results DataFrame in the console in a table format
         print("\nNon-Material Connection Exergy Analysis Results:")
         print(tabulate(df_non_material_connection_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
+        
+        # Print the component results DataFrame in the console in a table format
+        print("\nComponent Exergy Analysis Results:")
+        print(tabulate(df_component_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
 
-        # Optionally, save all DataFrames to CSV files if requested
-        if provide_csv:
-            df_component_results.to_csv('exergy_analysis_component_results.csv', index=False)
-            df_material_connection_results.to_csv('exergy_analysis_material_connection_results.csv', index=False)
-            df_non_material_connection_results.to_csv('exergy_analysis_non_material_connection_results.csv', index=False)
-
+        return df_component_results, df_material_connection_results, df_non_material_connection_results
 
 
 def _construct_components(component_data, connection_data):

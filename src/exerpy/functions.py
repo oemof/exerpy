@@ -235,6 +235,40 @@ def add_chemical_exergy(my_json, Tamb, pamb):
     return my_json
 
 
+def add_total_exergy_flow(my_json):
+    """
+    Adds the total exergy flow to each connection in the JSON data based on its kind.
+    
+    Parameters:
+    - my_json: The JSON object containing the components and connections.
+    
+    Returns:
+    - The modified JSON object with added total exergy flow for each connection.
+    """
+    # Iterate over each connection in the JSON data
+    for conn_name, conn_data in my_json['connections'].items():
+        try:
+            # Calculate total exergy flow based on the connection kind
+            if conn_data['kind'] == 'material':
+                # For material connections: E = m * (e^PH + e^CH)
+                conn_data['E'] = conn_data['m'] * (conn_data['e_PH'] + conn_data['e_CH'])
+            elif conn_data['kind'] in 'power':
+                # For power and heat connections, use the energy flow value directly
+                conn_data['E'] = conn_data['energy_flow']
+            elif conn_data['kind'] in 'heat':
+                logging.warning(f"Connection {conn_name} is a heat flow. Heat flows have not been considered yet. For now, their exergy value is set to equal to their energy value.")
+                conn_data['E'] = conn_data['energy_flow']
+            else:
+                logging.warning(f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation.")
+                conn_data['E'] = None
+
+        except Exception as e:
+            logging.error(f"Error calculating total exergy flow for connection {conn_name}: {e}")
+            conn_data['E'] = None
+
+    return my_json
+
+
 def convert_to_SI(property, value, unit):
     r"""
     Convert a value to its SI value.

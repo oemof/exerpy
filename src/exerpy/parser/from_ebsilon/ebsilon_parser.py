@@ -23,7 +23,8 @@ from .ebsilon_config import (
     composition_params,
     grouped_components,
     connector_mapping,
-    unit_id_to_string
+    unit_id_to_string,
+    connection_kinds
 )
 
 # Configure logging to display info-level messages
@@ -137,10 +138,12 @@ class EbsilonModelParser:
         # Define fluid types that are considered non-material or non-energetic
         non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
         non_energetic_fluids = {5, 6, 13}  # Scheduled, Actual, Logic
+        # TODO: Solve the problem with the heat flows in Ebsilon counted as Logic (for example extracting the values from the Heat Consumer)
 
         # Initialize connection data with the common fields
         connection_data = {
             'name': pipe_cast.Name,
+            'kind': None,
             'source_component': None,
             'source_component_type': None,
             'source_connector': None,
@@ -165,6 +168,7 @@ class EbsilonModelParser:
 
             # Add component and connector information
             connection_data.update({
+                'kind': connection_kinds.get(connection_data['fluid_type'], "Unknown"),
                 'source_component': comp0.Name if comp0 else None,
                 'source_component_type': (comp0.Kind - 10000) if comp0 else None,
                 'source_connector': link0.Index if link0 else None,

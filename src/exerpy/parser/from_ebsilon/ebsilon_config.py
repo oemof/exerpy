@@ -244,6 +244,28 @@ fluid_type_index = {
     22: "NASA"                  # epFluidTypeNASA
 }
 
+# Mapping fluid types to categories
+connection_kinds = {
+    "Air": "material",
+    "Fluegas": "material",
+    "Steam": "material",
+    "Water": "material",
+    "Crudegas": "material",
+    "Oil": "material",
+    "Coal": "material",
+    "Gas": "material",
+    "2PhaseLiquid": "material",
+    "2PhaseGaseous": "material",
+    "Saltwater": "material",
+    "UniversalFluid": "material",
+    "BinaryMixture": "material",
+    "ThermoLiquid": "material",
+    "HumidAir": "material",
+    "Electric": "power",
+    "Shaft": "power",
+    "Logic": "heat"
+}
+
 # Dictionary mapping stream substance names to EpSubstance identifiers
 substance_mapping = {
     "XN2": EpSubstance.epSubstanceN2,
@@ -483,21 +505,28 @@ connector_mapping = {
         4: 1,  # Connector 1 in Ebsilon is inlet(1)
     },
     24: {  # Compressor / Fan
-        1: 0,
-        2: 0,
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    8: {  # Pump
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
     },
     23: {  # Gas turbine (Turbine only)
-        1: 0,
-        2: 0,
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
     },
-    55: {  # Universal Heat Exchanger
-        1: 0,
-        3: 1,
-        2: 0,
-        4: 1,
-        5: 3,
+    6: {  # Steam turbine
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+        3: 1,  # Connector 3 in Ebsilon is outlet(1): 1st extraction
+        4: 2,  # Connector 4 in Ebsilon is outlet(2): 2nd extraction
     },
     11: {  # Generator
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    29: {  # Motor
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
     },
@@ -508,5 +537,9 @@ connector_mapping = {
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet hot stream (if present)
     },
+    # ...
+    # ...
     # Add more mappings for other component types as needed
+    # ...
+    # ...
 }

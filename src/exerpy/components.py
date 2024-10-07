@@ -81,7 +81,6 @@ class Turbine(Component):
         self.epsilon = self._calc_epsilon()
 
 
-
 @component_registry
 class Compressor(Component):
     def __init__(self, **kwargs):

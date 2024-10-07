@@ -13,6 +13,6 @@ from exerpy import ExergyAnalysis
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_test.ebs'))
 
 # Initialize the exergy analysis with the simulation path
-ean = ExergyAnalysis(model_path)
+ean = ExergyAnalysis.from_ebsilon(model_path, simulate=False)
 ean.analyse()
 ean.exergy_results()

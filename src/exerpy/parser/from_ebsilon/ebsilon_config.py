@@ -493,7 +493,10 @@ grouped_components = {
     "Valve": [2, 14, 39, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
-    "Condenser": [7, 47, 78]
+    "Condenser": [7, 47, 78],
+    "Deaerator": [9, 63],
+    "HeatConsumer": [35],
+    "Mixer": [3, 37, 38, 49, 60, 102, 141, 161]
 }
 
 # Connector mapping rules for different component types
@@ -536,6 +539,43 @@ connector_mapping = {
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet hot stream (if present)
+    },
+    7: {  # Condenser
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet hot stream (if present)
+    },
+    9: {  # Feed Water Container / De Aerator
+        1: 0,  # Inlet boiling water
+        2: 0,  # Outlet condensate stream
+        3: 1,  # Inlet steam
+        4: 2,  # Inlet secondary condensate
+        5: 1,  # Outlet steam losses (if present)
+    },
+    35: {  # Heat Consumer
+        1: 0,  # Inlet (hot) stream
+        2: 0,  # Outlet (cold) stream
+        3: 1,  # Outlet heat flow
+    },
+    37: {  # Simple Mixer
+        1: 0,  # Inlet 1
+        2: 0,  # Outlet
+        3: 1,  # Inlet 2
+    },
+    70: {  # Evaporator
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet cold stream (if present)
+    },
+    26: {  # Economizer / Superheater
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
     },
     # ...
     # ...

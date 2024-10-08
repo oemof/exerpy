@@ -242,17 +242,34 @@ class ExergyAnalysis:
             "E_F [kW]": [],
             "E_P [kW]": [],
             "E_D [kW]": [],
-            "ε [%]": []
+            "E_L [kW]": [],
+            "ε [%]": [],
+            "y [%]": [],
+            "y* [%]": []
         }
 
         # Populate the dictionary with exergy analysis data from each component
         for component_name, component in self.components.items():
             component_results["Component"].append(component_name)
             # Convert E_F, E_P, E_D from W to kW and epsilon to percentage
-            component_results["E_F [kW]"].append(component.E_F / 1000 if component.E_F is not None else None)
-            component_results["E_P [kW]"].append(component.E_P / 1000 if component.E_P is not None else None)
-            component_results["E_D [kW]"].append(component.E_D / 1000 if component.E_D is not None else None)
-            component_results["ε [%]"].append(component.epsilon * 100 if component.epsilon is not None else None)
+            E_F_kW = component.E_F / 1000 if component.E_F is not None else None
+            E_P_kW = component.E_P / 1000 if component.E_P is not None else None
+            E_D_kW = component.E_D / 1000 if component.E_D is not None else None
+            E_L_kW = component.E_L / 1000 if getattr(component, 'E_L', None) is not None else 0
+            epsilon_percent = component.epsilon * 100 if component.epsilon is not None else None
+
+            component_results["E_F [kW]"].append(E_F_kW)
+            component_results["E_P [kW]"].append(E_P_kW)
+            component_results["E_D [kW]"].append(E_D_kW)
+            component_results["E_L [kW]"].append(E_L_kW)
+            component_results["ε [%]"].append(epsilon_percent)
+
+            # Calculate y [%] and y* [%]
+            y_percent = (E_D_kW / (self.E_F * 1e-3)) * 100 if E_D_kW is not None else None
+            y_star_percent = (E_D_kW / (self.E_D * 1e-3)) * 100 if E_D_kW is not None else None
+
+            component_results["y [%]"].append(y_percent)
+            component_results["y* [%]"].append(y_star_percent)
 
         # Convert the component dictionary into a pandas DataFrame
         df_component_results = pd.DataFrame(component_results)
@@ -264,6 +281,9 @@ class ExergyAnalysis:
         df_component_results.loc["TOT", "E_P [kW]"] = self.E_P * 1e-3
         df_component_results.loc["TOT", "E_D [kW]"] = self.E_D * 1e-3
         df_component_results.loc["TOT", "ε [%]"] = self.epsilon * 1e2
+        # Calculate the total y [%] and y* [%] as the sum of the values for all components
+        df_component_results.loc["TOT", "y [%]"] = df_component_results["y [%]"].sum()
+        df_component_results.loc["TOT", "y* [%]"] = df_component_results["y* [%]"].sum()
         
         # Create a dictionary to store results for material connections
         material_connection_results = {
@@ -321,15 +341,15 @@ class ExergyAnalysis:
 
         # Print the material connection results DataFrame in the console in a table format
         print("\nMaterial Connection Exergy Analysis Results:")
-        print(tabulate(df_material_connection_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
+        print(tabulate(df_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
         # Print the non-material connection results DataFrame in the console in a table format
         print("\nNon-Material Connection Exergy Analysis Results:")
-        print(tabulate(df_non_material_connection_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
+        print(tabulate(df_non_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
         
         # Print the component results DataFrame in the console in a table format
         print("\nComponent Exergy Analysis Results:")
-        print(tabulate(df_component_results, headers='keys', tablefmt='psql', floatfmt='.3e'))
+        print(tabulate(df_component_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 

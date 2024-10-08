@@ -106,7 +106,7 @@ class EbsilonModelParser:
                 error_msg = (
                     "Ambient temperature (Tamb) and/or ambient pressure (pamb) have not been set.\n"
                     "Please ensure that your Ebsilon model includes component(s) of type 46 (Measuring Point) "
-                    "with FTYP set to 26 (Ambient Temperature) and 13 (Ambient Pressure) respectively."
+                    "with a setting for the Ambient Temperature and the Ambient Pressure in MEASM."
                 )
                 logging.error(error_msg)
                 raise ValueError(error_msg)
@@ -352,6 +352,30 @@ class EbsilonModelParser:
                     unit_id_to_string.get(comp_cast.KA.Dimension, "Unknown")
                     if hasattr(comp_cast, 'KA') and comp_cast.KA.Dimension is not None else "Unknown"
                 ),
+                'mass_flow_1': (
+                    convert_to_SI(
+                        'm',
+                        comp_cast.M1N.Value,
+                        unit_id_to_string.get(comp_cast.M1N.Dimension, "Unknown")
+                    ) if hasattr(comp_cast, 'M1N') and comp_cast.M1N.Value is not None else None
+                ),
+                'mass_flow_1_unit': fluid_property_data['m']['SI_unit'],
+                'mass_flow_3': (
+                    convert_to_SI(
+                        'm',
+                        comp_cast.M3N.Value,
+                        unit_id_to_string.get(comp_cast.M3N.Dimension, "Unknown")
+                    ) if hasattr(comp_cast, 'M3N') and comp_cast.M3N.Value is not None else None
+                ),
+                'mass_flow_3_unit': fluid_property_data['m']['SI_unit'],
+                'energy_flow_1': (
+                    convert_to_SI(
+                        'heat',
+                        comp_cast.Q1N.Value,
+                        unit_id_to_string.get(comp_cast.Q1N.Dimension, "Unknown")
+                    ) if hasattr(comp_cast, 'Q1N') and comp_cast.Q1N.Value is not None else None
+                ),
+                'mass_flow_1_unit': fluid_property_data['heat']['SI_unit'],
             }
 
             # Determine the group for the component based on its type

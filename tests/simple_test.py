@@ -4,7 +4,7 @@ import json
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
 from exerpy import ExergyAnalysis
@@ -16,18 +16,18 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_tes
 ean = ExergyAnalysis.from_ebsilon(model_path)
 
 fuel = {
-    "inputs": ['1', '3'],
+    "inputs": ['1', '3', '7'],
     "outputs": []
 }
 
 
 product = {
-    "inputs": ['E1', 'E2'],
-    "outputs": []
+    "inputs": ['E1', 'E3'],
+    "outputs": ['E2']
 }
 
 loss = {
-    "inputs": ['6'],
+    "inputs": ['6', '10', '11'],
     "outputs": []
 }
 

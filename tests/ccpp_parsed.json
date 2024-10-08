@@ -14,7 +14,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 637.5912050842181,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Compressor": {
@@ -31,7 +36,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 637.5912050842181,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Condenser": {
@@ -48,10 +58,15 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": 6290.936977669638,
-                "kA_unit": "kW / K"
+                "kA_unit": "kW / K",
+                "mass_flow_1": 1180.149514717512,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 30.079510565984396,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
-        "Feed Water Container / De Aerator": {
+        "Deaerator": {
             "DEA": {
                 "name": "DEA",
                 "type": "Feed Water Container / De Aerator",
@@ -65,7 +80,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 8.783689211882495,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Generator": {
@@ -82,7 +102,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": 251718150.2617567
             },
             "GEN2": {
                 "name": "GEN2",
@@ -97,10 +122,15 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": 53205018.98421642
             }
         },
-        "Heat Consumer": {
+        "HeatConsumer": {
             "HC": {
                 "name": "HC",
                 "type": "Heat Consumer",
@@ -114,7 +144,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 41.86460235393518,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "HeatExchanger": {
@@ -131,7 +166,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": 936.9416940367595,
-                "kA_unit": "kW / K"
+                "kA_unit": "kW / K",
+                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 649.95687133395,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             },
             "EVA": {
                 "name": "EVA",
@@ -146,7 +186,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": 2155.7371745029527,
-                "kA_unit": "kW / K"
+                "kA_unit": "kW / K",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 649.95687133395,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             },
             "SH": {
                 "name": "SH",
@@ -161,7 +206,34 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": 635.1981409552254,
-                "kA_unit": "kW / K"
+                "kA_unit": "kW / K",
+                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 649.95687133395,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
+            }
+        },
+        "Mixer": {
+            "MIX": {
+                "name": "MIX",
+                "type": "Simple Mixer",
+                "type_index": 37,
+                "eta_s": null,
+                "eta_mech": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": null,
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Motor": {
@@ -178,7 +250,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": 38174.92584145151
             },
             "MOT2": {
                 "name": "MOT2",
@@ -193,7 +270,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": 462196.9126158856
             }
         },
         "Pump": {
@@ -210,7 +292,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 30.079510565984343,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             },
             "PUMP2": {
                 "name": "PUMP2",
@@ -225,24 +312,12 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
-            }
-        },
-        "Simple Mixer": {
-            "MIX": {
-                "name": "MIX",
-                "type": "Simple Mixer",
-                "type_index": 37,
-                "eta_s": null,
-                "eta_mech": null,
-                "eta_cc": null,
-                "lamb": null,
-                "Q": null,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 80.72780213180164,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Turbine": {
@@ -259,7 +334,12 @@
                 "P": 493594965.59499115,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 649.95687133395,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             },
             "ST1": {
                 "name": "ST1",
@@ -274,7 +354,12 @@
                 "P": 27456428.158560835,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             },
             "ST2": {
                 "name": "ST2",
@@ -289,7 +374,12 @@
                 "P": 25748604.022349734,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown"
+                "kA_unit": "Unknown",
+                "mass_flow_1": 30.07951056598423,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         }
     },
@@ -334,17 +424,19 @@
                 "O2": 0.22993402235463978
             },
             "e_CH": 1149.2696774822346,
-            "E": 732764.2026666212
+            "e_CH_unit": "J / kg",
+            "E": 732764.2026666212,
+            "E_unit": "W"
         },
         "10": {
             "name": "10",
             "kind": "material",
             "source_component": "ST1",
             "source_component_type": 6,
-            "source_connector": 3,
+            "source_connector": 1,
             "target_component": "DEA",
             "target_component_type": 9,
-            "target_connector": 3,
+            "target_connector": 1,
             "fluid_type": "Steam",
             "fluid_type_id": 3,
             "energy_flow": 27295082.201120373,
@@ -371,17 +463,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 9519117.806088207
+            "e_CH_unit": "J / kg",
+            "E": 9519117.806088207,
+            "E_unit": "W"
         },
         "11": {
             "name": "11",
             "kind": "material",
             "source_component": "ST1",
             "source_component_type": 6,
-            "source_connector": 4,
+            "source_connector": 2,
             "target_component": "HC",
             "target_component_type": 35,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Steam",
             "fluid_type_id": 3,
             "energy_flow": 130093120.64808515,
@@ -408,17 +502,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 45369775.11501825
+            "e_CH_unit": "J / kg",
+            "E": 45369775.11501825,
+            "E_unit": "W"
         },
         "12": {
             "name": "12",
             "kind": "material",
             "source_component": "ST1",
             "source_component_type": 6,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "ST2",
             "target_component_type": 6,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Steam",
             "fluid_type_id": 3,
             "energy_flow": 93471292.60863584,
@@ -445,17 +541,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 32597969.087355398
+            "e_CH_unit": "J / kg",
+            "E": 32597969.087355398,
+            "E_unit": "W"
         },
         "13": {
             "name": "13",
             "kind": "material",
             "source_component": "ST2",
             "source_component_type": 6,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "COND",
             "target_component_type": 7,
-            "target_connector": 3,
+            "target_connector": 0,
             "fluid_type": "Steam",
             "fluid_type_id": 3,
             "energy_flow": 67722688.58628036,
@@ -482,7 +580,9 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 3852820.8900754857
+            "e_CH_unit": "J / kg",
+            "E": 3852820.8900754857,
+            "E_unit": "W"
         },
         "14": {
             "name": "14",
@@ -519,14 +619,16 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 2947874.1497105365
+            "e_CH_unit": "J / kg",
+            "E": 2947874.1497105365,
+            "E_unit": "W"
         },
         "15": {
             "name": "15",
             "kind": "material",
             "source_component": "COND",
             "source_component_type": 7,
-            "source_connector": 2,
+            "source_connector": 1,
             "target_component": null,
             "target_component_type": null,
             "target_connector": null,
@@ -556,17 +658,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 4326935.935179751
+            "e_CH_unit": "J / kg",
+            "E": 4326935.935179751,
+            "E_unit": "W"
         },
         "16": {
             "name": "16",
             "kind": "material",
             "source_component": "COND",
             "source_component_type": 7,
-            "source_connector": 4,
+            "source_connector": 0,
             "target_component": "PUMP1",
             "target_component_type": 8,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Water",
             "fluid_type_id": 4,
             "energy_flow": 4143908.3189262403,
@@ -593,17 +697,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 139221.00458975602
+            "e_CH_unit": "J / kg",
+            "E": 139221.00458975602,
+            "E_unit": "W"
         },
         "17": {
             "name": "17",
             "kind": "material",
             "source_component": "PUMP1",
             "source_component_type": 8,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "MIX",
             "target_component_type": 37,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Water",
             "fluid_type_id": 4,
             "energy_flow": 4181510.631265551,
@@ -630,17 +736,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 169743.385872346
+            "e_CH_unit": "J / kg",
+            "E": 169743.385872346,
+            "E_unit": "W"
         },
         "18": {
             "name": "18",
             "kind": "material",
             "source_component": "HC",
             "source_component_type": 35,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "MIX",
             "target_component_type": 37,
-            "target_connector": 3,
+            "target_connector": 1,
             "fluid_type": "Water",
             "fluid_type_id": 4,
             "energy_flow": 30093121.39668576,
@@ -667,17 +775,19 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 5649110.567258475
+            "e_CH_unit": "J / kg",
+            "E": 5649110.567258475,
+            "E_unit": "W"
         },
         "19": {
             "name": "19",
             "kind": "material",
             "source_component": "MIX",
             "source_component_type": 37,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "DEA",
             "target_component_type": 9,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Water",
             "fluid_type_id": 4,
             "energy_flow": 34274632.02795886,
@@ -704,7 +814,9 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 4397560.032913566
+            "e_CH_unit": "J / kg",
+            "E": 4397560.032913566,
+            "E_unit": "W"
         },
         "2": {
             "name": "2",
@@ -746,17 +858,19 @@
                 "O2": 0.22993402235463978
             },
             "e_CH": 1149.2696774822346,
-            "E": 231668825.8554393
+            "e_CH_unit": "J / kg",
+            "E": 231668825.8554393,
+            "E_unit": "W"
         },
         "20": {
             "name": "20",
             "kind": "material",
             "source_component": "DEA",
             "source_component_type": 9,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "PUMP2",
             "target_component_type": 8,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Water",
             "fluid_type_id": 4,
             "energy_flow": 61569714.559019476,
@@ -783,14 +897,16 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 12156775.899962604
+            "e_CH_unit": "J / kg",
+            "E": 12156775.899962604,
+            "E_unit": "W"
         },
         "21": {
             "name": "21",
             "kind": "material",
             "source_component": "PUMP2",
             "source_component_type": 8,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "ECO",
             "target_component_type": 26,
             "target_connector": 1,
@@ -820,14 +936,16 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 12554214.77538684
+            "e_CH_unit": "J / kg",
+            "E": 12554214.77538684,
+            "E_unit": "W"
         },
         "22": {
             "name": "22",
             "kind": "material",
             "source_component": "ECO",
             "source_component_type": 26,
-            "source_connector": 2,
+            "source_connector": 1,
             "target_component": "EVA",
             "target_component_type": 70,
             "target_connector": 1,
@@ -857,14 +975,16 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 24488373.228675876
+            "e_CH_unit": "J / kg",
+            "E": 24488373.228675876,
+            "E_unit": "W"
         },
         "23": {
             "name": "23",
             "kind": "material",
             "source_component": "EVA",
             "source_component_type": 70,
-            "source_connector": 2,
+            "source_connector": 1,
             "target_component": "SH",
             "target_component_type": 26,
             "target_connector": 1,
@@ -894,7 +1014,9 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 86950836.45902507
+            "e_CH_unit": "J / kg",
+            "E": 86950836.45902507,
+            "E_unit": "W"
         },
         "3": {
             "name": "3",
@@ -931,7 +1053,9 @@
                 "CH4": 1.0
             },
             "e_CH": 51384297.00551026,
-            "E": 640439927.3200524
+            "e_CH_unit": "J / kg",
+            "E": 640439927.3200524,
+            "E_unit": "W"
         },
         "4": {
             "name": "4",
@@ -973,7 +1097,9 @@
                 "O2": 0.149662247654473
             },
             "e_CH": 6428.4528462828885,
-            "E": 676427370.2706102
+            "e_CH_unit": "J / kg",
+            "E": 676427370.2706102,
+            "E_unit": "W"
         },
         "5": {
             "name": "5",
@@ -983,7 +1109,7 @@
             "source_connector": 0,
             "target_component": "SH",
             "target_component_type": 26,
-            "target_connector": 3,
+            "target_connector": 0,
             "fluid_type": "Fluegas",
             "fluid_type_id": 2,
             "energy_flow": 376818200.7387284,
@@ -1015,17 +1141,19 @@
                 "O2": 0.14966224451626856
             },
             "e_CH": 6428.45325149502,
-            "E": 166869805.13720232
+            "e_CH_unit": "J / kg",
+            "E": 166869805.13720232,
+            "E_unit": "W"
         },
         "6": {
             "name": "6",
             "kind": "material",
             "source_component": "SH",
             "source_component_type": 26,
-            "source_connector": 4,
+            "source_connector": 0,
             "target_component": "EVA",
             "target_component_type": 70,
-            "target_connector": 3,
+            "target_connector": 0,
             "fluid_type": "Fluegas",
             "fluid_type_id": 2,
             "energy_flow": 324070744.8212996,
@@ -1057,17 +1185,19 @@
                 "O2": 0.14966224451626856
             },
             "e_CH": 6428.45325149502,
-            "E": 133540228.78342292
+            "e_CH_unit": "J / kg",
+            "E": 133540228.78342292,
+            "E_unit": "W"
         },
         "7": {
             "name": "7",
             "kind": "material",
             "source_component": "EVA",
             "source_component_type": 70,
-            "source_connector": 4,
+            "source_connector": 0,
             "target_component": "ECO",
             "target_component_type": 26,
-            "target_connector": 3,
+            "target_connector": 0,
             "fluid_type": "Fluegas",
             "fluid_type_id": 2,
             "energy_flow": 189314891.87584847,
@@ -1099,14 +1229,16 @@
                 "O2": 0.14966224451626856
             },
             "e_CH": 6428.45325149502,
-            "E": 59432844.972717024
+            "e_CH_unit": "J / kg",
+            "E": 59432844.972717024,
+            "E_unit": "W"
         },
         "8": {
             "name": "8",
             "kind": "material",
             "source_component": "ECO",
             "source_component_type": 26,
-            "source_connector": 4,
+            "source_connector": 0,
             "target_component": null,
             "target_component_type": null,
             "target_connector": null,
@@ -1141,17 +1273,19 @@
                 "O2": 0.14966224451626856
             },
             "e_CH": 6428.45325149502,
-            "E": 46024146.04976431
+            "e_CH_unit": "J / kg",
+            "E": 46024146.04976431,
+            "E_unit": "W"
         },
         "9": {
             "name": "9",
             "kind": "material",
             "source_component": "SH",
             "source_component_type": 26,
-            "source_connector": 2,
+            "source_connector": 1,
             "target_component": "ST1",
             "target_component_type": 6,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Steam",
             "fluid_type_id": 3,
             "energy_flow": 278315923.6164024,
@@ -1178,7 +1312,9 @@
                 "H2O": 1
             },
             "e_CH": 2497.8812416223836,
-            "E": 115937727.1339983
+            "e_CH_unit": "J / kg",
+            "E": 115937727.1339983,
+            "E_unit": "W"
         },
         "E1": {
             "name": "E1",
@@ -1193,7 +1329,8 @@
             "fluid_type_id": 9,
             "energy_flow": 248093431.25702745,
             "energy_flow_unit": "W",
-            "E": 248093431.25702745
+            "E": 248093431.25702745,
+            "E_unit": "W"
         },
         "E2": {
             "name": "E2",
@@ -1208,7 +1345,8 @@
             "fluid_type_id": 9,
             "energy_flow": 52406956.69819361,
             "energy_flow_unit": "W",
-            "E": 52406956.69819361
+            "E": 52406956.69819361,
+            "E_unit": "W"
         },
         "E3": {
             "name": "E3",
@@ -1218,12 +1356,13 @@
             "source_connector": null,
             "target_component": "MOT1",
             "target_component_type": 29,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
             "energy_flow": 38174.940476883276,
             "energy_flow_unit": "W",
-            "E": 38174.940476883276
+            "E": 38174.940476883276,
+            "E_unit": "W"
         },
         "E4": {
             "name": "E4",
@@ -1233,12 +1372,13 @@
             "source_connector": null,
             "target_component": "MOT2",
             "target_component_type": 29,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
             "energy_flow": 462196.9834193593,
             "energy_flow_unit": "W",
-            "E": 462196.9834193593
+            "E": 462196.9834193593,
+            "E_unit": "W"
         },
         "W1": {
             "name": "W1",
@@ -1253,7 +1393,8 @@
             "fluid_type_id": 10,
             "energy_flow": 241876792.64752015,
             "energy_flow_unit": "W",
-            "E": 241876792.64752015
+            "E": 241876792.64752015,
+            "E_unit": "W"
         },
         "W2": {
             "name": "W2",
@@ -1268,7 +1409,8 @@
             "fluid_type_id": 10,
             "energy_flow": 251718172.947471,
             "energy_flow_unit": "W",
-            "E": 251718172.947471
+            "E": 251718172.947471,
+            "E_unit": "W"
         },
         "W3": {
             "name": "W3",
@@ -1283,7 +1425,8 @@
             "fluid_type_id": 10,
             "energy_flow": 27456428.158560835,
             "energy_flow_unit": "W",
-            "E": 27456428.158560835
+            "E": 27456428.158560835,
+            "E_unit": "W"
         },
         "W4": {
             "name": "W4",
@@ -1298,14 +1441,15 @@
             "fluid_type_id": 10,
             "energy_flow": 53205032.180910565,
             "energy_flow_unit": "W",
-            "E": 53205032.180910565
+            "E": 53205032.180910565,
+            "E_unit": "W"
         },
         "W5": {
             "name": "W5",
             "kind": "power",
             "source_component": "MOT1",
             "source_component_type": 29,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "PUMP1",
             "target_component_type": 8,
             "target_connector": 3,
@@ -1313,14 +1457,15 @@
             "fluid_type_id": 10,
             "energy_flow": 37602.31636973003,
             "energy_flow_unit": "W",
-            "E": 37602.31636973003
+            "E": 37602.31636973003,
+            "E_unit": "W"
         },
         "W6": {
             "name": "W6",
             "kind": "power",
             "source_component": "MOT2",
             "source_component_type": 29,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "PUMP2",
             "target_component_type": 8,
             "target_connector": 3,
@@ -1328,7 +1473,8 @@
             "fluid_type_id": 10,
             "energy_flow": 455264.02866806893,
             "energy_flow_unit": "W",
-            "E": 455264.02866806893
+            "E": 455264.02866806893,
+            "E_unit": "W"
         }
     },
     "Tamb": 288.15,

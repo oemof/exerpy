@@ -226,6 +226,7 @@ def add_chemical_exergy(my_json, Tamb, pamb):
                 mass_composition = conn_data.get('mass_composition', {})
                 stream_data = {'mass_composition': mass_composition}
                 conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb)  # Add the chemical exergy value
+                conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
                 logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
             except Exception as e:
                 logging.error(f"Error calculating chemical exergy for connection {conn_name}: {e}")
@@ -261,6 +262,8 @@ def add_total_exergy_flow(my_json):
             else:
                 logging.warning(f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation.")
                 conn_data['E'] = None
+            
+            conn_data['E_unit'] = fluid_property_data['power']['SI_unit']
 
         except Exception as e:
             logging.error(f"Error calculating total exergy flow for connection {conn_name}: {e}")

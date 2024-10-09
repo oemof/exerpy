@@ -99,7 +99,6 @@ class Turbine(Component):
             self.E_F = np.nan
 
         # Calculate exergy destruction and efficiency
-        self.E_bus = {"chemical": 0, "physical": 0, "massless": abs(self.P)}  # Adjust as needed
         self.E_D = self.E_F - self.E_P
         self.epsilon = self._calc_epsilon()
 
@@ -512,7 +511,6 @@ class HeatExchanger(Component):
                 self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])
 
         # Calculate exergy destruction and efficiency
-        self.E_bus = {"chemical": np.nan, "physical": np.nan, "massless": np.nan}
         if np.isnan(self.E_P):
             self.E_D = self.E_F
         else:
@@ -638,7 +636,6 @@ class Deaerator(Component):
                 else:
                     self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
 
-        self.E_bus = {"chemical": np.nan, "physical": np.nan, "massless": np.nan}
         self.E_D = self.E_F - self.E_P
         self.epsilon = self._calc_epsilon()
 
@@ -647,57 +644,90 @@ class Deaerator(Component):
 
 
 @component_registry
-class HeatConsumer(Component):
+class SimpleHeatExchanger(Component):
     """
-    Heat consumer component class.
+    SimpleHeatExchanger component class.
 
-    This class represents a heat consumer component in the system and is responsible for
-    calculating the exergy balance specific to a heat consumer.
+    This class represents a simple heat exchanger component in the system and is responsible for
+    calculating the exergy balance specific to a simple heat exchanger.
 
     Attributes:
         E_P (float): Exergy product (physical exergy difference between outlet and inlets).
-        E_F (float): Exergy fuel (chemical exergy of fuel and air minus exhaust exergy).
+        E_F (float): Exergy fuel (physical and thermal exergy differences).
         E_D (float): Exergy destruction (difference between exergy fuel and exergy product).
         epsilon (float): Exergy efficiency.
     """
 
     def __init__(self, **kwargs):
         """
-        Initialize the Heat consumer component.
+        Initialize the SimpleHeatExchanger component.
 
         Args:
             **kwargs: Arbitrary keyword arguments passed to the base class initializer.
         """
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         """
-        Calculate exergy balance of a deaerator.
+        Calculate exergy balance of a simple heat exchanger.
 
-        This method overrides the base class method for the specific behavior of a heat consumer.
+        This method overrides the base class method for the specific behavior of a simple heat exchanger.
 
         Args:
             T0 (float): Reference temperature.
             p0 (float): Reference pressure.
         """
-        # Ensure that the component has both inlet and outlet streams
-        if len(self.inl) < 1 or len(self.outl) < 1:
-            raise ValueError("Heat consumer requires one inlet and one outlet.")
+        # Calculate heat transfer `Q` using only the single inlet and single outlet
+        Q = self.outl[0]['m'] * self.outl[0]['h'] - self.inl[0]['m'] * self.inl[0]['h']
 
-        self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+        # Case: Heat is released (Q < 0)
+        if Q < 0:
+            if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
+                self.E_P = np.nan if getattr(self, 'dissipative', False) else self.inl[0]['m'] * (self.inl[0]['e_T'] - self.outl[0]['e_T'])
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+            
+            elif self.inl[0]['T'] >= T0 and self.outl[0]['T'] < T0:
+                self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
+                self.E_F = self.inl[0]['m'] * self.inl[0]['e_T'] + self.outl[0]['m'] * self.outl[0]['e_T'] + \
+                           (self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
 
-        Q_out = self.inl[0]['m'] * (self.inl[0]['h'] - self.outl[0]['h'])
+            elif self.inl[0]['T'] <= T0 and self.outl[0]['T'] <= T0:
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
+                self.E_F = self.E_P + self.inl[0]['m'] * (self.inl[0]['e_M'] - self.outl[0]['e_M'])
 
-        T_boundary = (self.outl[0]['h'] - self.inl[0]['h']) / (self.outl[0]['s'] - self.inl[0]['s'])  # TODO: consider the pressure drops (integrate)!
+            else:
+                logging.warning("Exergy balance of simple heat exchangers, where outlet temperature is higher than inlet temperature with heat extracted is not implemented.")
+                self.E_P = np.nan
+                self.E_F = np.nan
 
-        self.E_P = Q_out * (1 - T0 / T_boundary)
+        # Case: Heat is added (Q > 0)
+        elif Q > 0:
+            if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+                self.E_F = self.outl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
+            
+            elif self.inl[0]['T'] < T0 and self.outl[0]['T'] > T0:
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_T'] + self.inl[0]['e_T'])
+                self.E_F = self.inl[0]['m'] * self.inl[0]['e_T'] + (self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
+            
+            elif self.inl[0]['T'] < T0 and self.outl[0]['T'] < T0:
+                self.E_P = np.nan if getattr(self, 'dissipative', False) else \
+                    self.inl[0]['m'] * (self.inl[0]['e_T'] - self.outl[0]['e_T']) + \
+                    (self.outl[0]['m'] * self.outl[0]['e_M'] - self.inl[0]['m'] * self.inl[0]['e_M'])
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] - self.outl[0]['e_T'])
 
-        self.E_D = self.E_F - self.E_P
+            else:
+                logging.warning("Exergy balance of simple heat exchangers, where inlet temperature is higher than outlet temperature with heat injected is not implemented.")
+                self.E_P = np.nan
+                self.E_F = np.nan
 
+        else:  # Fully dissipative
+            self.E_P = np.nan
+            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+
+        # Calculate exergy destruction and efficiency
+        self.E_D = self.E_F if np.isnan(self.E_P) else self.E_F - self.E_P
         self.epsilon = self._calc_epsilon()
-
-        # Log the results
-        logging.info(f"Deaerator exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
 
 
 @component_registry
@@ -768,8 +798,6 @@ class Mixer(Component):
                 else:
                     self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
 
-
-        self.E_bus = {"chemical": np.nan, "physical": np.nan, "massless": np.nan}
         self.E_D = self.E_F - self.E_P
         self.epsilon = self._calc_epsilon()
 

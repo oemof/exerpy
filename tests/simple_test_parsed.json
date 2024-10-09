@@ -83,7 +83,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 204689910.5747536
+                "energy_flow_1": 21185437.951212015
             }
         },
         "HeatExchanger": {

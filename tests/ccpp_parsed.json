@@ -8,14 +8,14 @@
                 "eta_s": null,
                 "eta_mech": null,
                 "eta_cc": 1.0,
-                "lamb": 2.971907659567688,
+                "lamb": 2.9719074716484637,
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 637.5912050842181,
+                "mass_flow_1": 637.5911737895376,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -37,7 +37,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 637.5912050842181,
+                "mass_flow_1": 637.5911737895376,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -59,9 +59,9 @@
                 "P_unit": "W",
                 "kA": 6290.936977669638,
                 "kA_unit": "kW / K",
-                "mass_flow_1": 1180.149514717512,
+                "mass_flow_1": 1180.1498408290543,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 30.079510565984396,
+                "mass_flow_3": 30.07951758296221,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             }
@@ -83,7 +83,7 @@
                 "kA_unit": "Unknown",
                 "mass_flow_1": null,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 8.783689211882495,
+                "mass_flow_3": 8.783690500939914,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             }
@@ -107,7 +107,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 251718150.2617567
+                "energy_flow_1": 251718172.947471
             },
             "GEN2": {
                 "name": "GEN2",
@@ -127,29 +127,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 53205018.98421642
-            }
-        },
-        "HeatConsumer": {
-            "HC": {
-                "name": "HC",
-                "type": "Heat Consumer",
-                "type_index": 35,
-                "eta_s": null,
-                "eta_mech": null,
-                "eta_cc": null,
-                "lamb": null,
-                "Q": null,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "kA": null,
-                "kA_unit": "Unknown",
-                "mass_flow_1": 41.86460235393518,
-                "mass_flow_1_unit": "W",
-                "mass_flow_3": null,
-                "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": 53205032.180910565
             }
         },
         "HeatExchanger": {
@@ -167,9 +145,9 @@
                 "P_unit": "W",
                 "kA": 936.9416940367595,
                 "kA_unit": "kW / K",
-                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1": 80.72780844137466,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 649.95687133395,
+                "mass_flow_3": 649.9568402142331,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             },
@@ -189,7 +167,7 @@
                 "kA_unit": "kW / K",
                 "mass_flow_1": null,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 649.95687133395,
+                "mass_flow_3": 649.9568402142331,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             },
@@ -207,9 +185,9 @@
                 "P_unit": "W",
                 "kA": 635.1981409552254,
                 "kA_unit": "kW / K",
-                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1": 80.72780844137475,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 649.95687133395,
+                "mass_flow_3": 649.9568402142331,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             }
@@ -255,7 +233,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 38174.92584145151
+                "energy_flow_1": 38174.940476883276
             },
             "MOT2": {
                 "name": "MOT2",
@@ -275,7 +253,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 462196.9126158856
+                "energy_flow_1": 462196.9834193593
             }
         },
         "Pump": {
@@ -293,7 +271,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 30.079510565984343,
+                "mass_flow_1": 30.07951758295829,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -313,7 +291,29 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 80.72780213180164,
+                "mass_flow_1": 80.72780844137458,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
+            }
+        },
+        "SimpleHeatExchanger": {
+            "HC": {
+                "name": "HC",
+                "type": "Heat Consumer",
+                "type_index": 35,
+                "eta_s": null,
+                "eta_mech": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": null,
+                "kA_unit": "Unknown",
+                "mass_flow_1": 41.86460035747068,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -335,7 +335,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 649.95687133395,
+                "mass_flow_1": 649.9568402142331,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -355,7 +355,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 80.72780213180162,
+                "mass_flow_1": 80.72780844137472,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -375,7 +375,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "Unknown",
-                "mass_flow_1": 30.07951056598423,
+                "mass_flow_1": 30.079517582964066,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",

@@ -274,6 +274,9 @@ class ExergyAnalysis:
         # Convert the component dictionary into a pandas DataFrame
         df_component_results = pd.DataFrame(component_results)
 
+        # Sort the DataFrame by the "Component" column
+        df_component_results = df_component_results.sort_values(by="Component")
+
         # Add the overall results to the components as dummy component "TOT"
         df_component_results.loc["TOT", "E_F [kW]"] = self.E_F * 1e-3
         df_component_results.loc["TOT", "Component"] = 'TOT'
@@ -338,6 +341,10 @@ class ExergyAnalysis:
         # Convert the material and non-material connection dictionaries into DataFrames
         df_material_connection_results = pd.DataFrame(material_connection_results)
         df_non_material_connection_results = pd.DataFrame(non_material_connection_results)
+
+        # Sort the DataFrame by the "Connection" column
+        df_material_connection_results = df_material_connection_results.sort_values(by="Connection")
+        df_non_material_connection_results = df_non_material_connection_results.sort_values(by="Connection")
 
         # Print the material connection results DataFrame in the console in a table format
         print("\nMaterial Connection Exergy Analysis Results:")

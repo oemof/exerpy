@@ -4,7 +4,7 @@ import win32com.client as win32
 
 # Initialize Aspen Plus
 aspen = win32.Dispatch('Apwn.Document')
-aspen.InitFromArchive2(os.path.abspath(r'.\simulation\3-cgam\cgam.bkp'))
+aspen.InitFromArchive2(os.path.abspath(r'.\simulation\1-simple_test\simple_test.bkp'))
 
 # Get the connection (stream) nodes and their actual names
 stream_nodes = aspen.Tree.FindNode(r'\Data\Streams').Elements
@@ -27,7 +27,7 @@ for stream_name in stream_names:
         stream_type[stream_name] = "WORK"
         
         busses_data[stream_name] = {
-            "name": stream_node.Name,
+            "name": stream_name,
             "type": stream_type[stream_name],
             "source_component": None,
             "target_component": None,
@@ -53,7 +53,7 @@ for stream_name in stream_names:
         stream_type[stream_name] = "HEAT"
         
         busses_data[stream_name] = {
-            "name": stream_node.Name,
+            "name": stream_name,
             "type": stream_type[stream_name],
             "source_component": None,
             "target_component": None,
@@ -78,7 +78,7 @@ for stream_name in stream_names:
         stream_type[stream_name] = "MATERIAL"
         
         connections_data[stream_name] = {
-            "name": stream_node.Name,
+            "name": stream_name,
             "source_component": None,
             "source_connector": 0,  # Default value
             "target_component": None,
@@ -99,9 +99,9 @@ for stream_name in stream_names:
         connections_data[stream_name]["parameters"] = {
             "temp": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TEMP_OUT\MIXED').Value,
             "pres": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\PRES_OUT\MIXED').Value,
-            "enthalpy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX\MIXED').Value,#kJ/kmol
-            "entropy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX\MIXED').Value,#kJ/kmolK
-            "exergy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYML\MIXED\TOTAL').Value,#kJ/kmol
+            "enthalpy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX\MIXED').Value, # kJ/kmol
+            "entropy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX\MIXED').Value, # kJ/kmolK
+            "exergy": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYML\MIXED\TOTAL').Value, # kJ/kmol
             "mass_flow": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED').Value,
             "mole_flow": aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TOT_FLOW').Value,
             "mole_flow_comp": {},
@@ -129,7 +129,7 @@ for block_name in block_names:
         block_type[block_name] = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "Compressor",
             "power": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
         }
@@ -138,7 +138,7 @@ for block_name in block_names:
         block_type[block_name] = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "Turbine",
             "power": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
         }
@@ -147,16 +147,26 @@ for block_name in block_names:
         block_type[block_name] = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\PUMP_TYPE').Value
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "Pump",
             "power": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
         }
+        
+        if aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\DEFF').Value < 1:
+        
+            block_name_motor = block_name + "-MOTOR"
+        
+            components_data[block_name_motor] = {
+                "name": block_name_motor,
+                "type": "Motor",
+                "power": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\WNET').Value,
+            }
         
     elif aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\PUMP_TYPE') is not None and aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\PUMP_TYPE').Value == "TURBINE":
         block_type[block_name] = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\PUMP_TYPE').Value
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "LiquidTurbine",
             "power": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
         }
@@ -165,7 +175,7 @@ for block_name in block_names:
         block_type[block_name] = "HeatX"
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "HeatExchanger"
         }
         
@@ -187,13 +197,41 @@ for block_name in block_names:
         if cold_out in connections_data:
             connections_data[cold_out]["target_connector"] = 1
             
-    elif aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\COMBUSTION') is not None and aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\COMBUSTION').Value == "YES":
-        block_type[block_name] = "RSTOIC"
+    elif aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\COMBUSTION') is not None:
+        block_type[block_name] = "RStoic"
         
         components_data[block_name] = {
-            "name": stream_node.Name,
+            "name": block_name,
             "type": "CombustionChamber",
             "temperature": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\B_TEMP').Value,
+        }
+        
+    elif aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR') is not None:
+        block_type[block_name] = "Mult"
+        
+        # Get the name of the stream from the block's port WS(OUT)
+        power_out = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(OUT)').Elements(0).Name
+
+        # Check if the stream name exists in busses_data and retrieve the "power" value
+        if power_out in busses_data and "power" in busses_data[power_out]["parameters"]:
+            power_value = busses_data[power_out]["parameters"]["power"]
+        else:
+            power_value = None  # Handle the case where the power data is missing
+                
+        # Insert the retrieved "power" value into components_data
+        components_data[block_name] = {
+            "name": block_name,
+            "type": "Generator",
+            "power": power_value,  # Insert the power value retrieved from busses_data
+        }
+        
+    elif aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\VALVE_DIA') is not None:
+        block_type[block_name] = "Valve"
+        
+        components_data[block_name] = {
+            "name": block_name,
+            "type": "Valve",
+            "output pressure": aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\P_OUT_OUT').Value,
         }
 
 # Write data to JSON file

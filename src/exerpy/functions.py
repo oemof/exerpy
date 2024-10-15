@@ -249,13 +249,44 @@ def add_total_exergy_flow(my_json):
             if conn_data['kind'] == 'material':
                 # For material connections: E = m * (e^PH + e^CH)
                 conn_data['E'] = conn_data['m'] * (conn_data['e_PH'] + conn_data['e_CH'])
-            elif conn_data['kind'] in 'power':
+            elif conn_data['kind'] == 'power':
                 # For power and heat connections, use the energy flow value directly
                 conn_data['E'] = conn_data['energy_flow']
-            elif conn_data['kind'] in 'heat':
-                logging.warning(f"Connection {conn_name} is a heat flow. Heat flows have not been considered yet. For now, their exergy value is set to equal to their energy value.")
-                conn_data['E'] = conn_data['energy_flow']
-            elif conn_data['kind'] in 'other':
+            elif conn_data['kind'] == 'heat':
+                # For heat connections, calculate exergy flow based on connected components
+                component_name = conn_data['source_component'] if conn_data['source_component'] else conn_data['target_component']
+                if component_name:
+                    # Find the material connections for this component
+                    material_connections = [
+                        conn for conn in my_json['connections'].values() 
+                        if (conn['source_component'] == component_name or conn['target_component'] == component_name)
+                        and conn['kind'] == 'material'
+                    ]
+                    # Ensure at least two material connections are present for the calculation
+                    if len(material_connections) >= 2:
+                        source_conn = material_connections[0]  # First material connection
+                        target_conn = material_connections[1]  # Second material connection
+                        # Get enthalpy and entropy for source and target
+                        h_source = source_conn.get('h', None)
+                        s_source = source_conn.get('s', None)
+                        h_target = target_conn.get('h', None)
+                        s_target = target_conn.get('s', None)
+                        # Ensure enthalpy and entropy values are available
+                        if h_source and s_source and h_target and s_target:
+                            # Calculate boundary temperature t_b
+                            T_b = (h_source - h_target) / (s_source - s_target)
+                            # Calculate exergy flow for heat: E = energy_flow * (1 - Tamb / t_b)
+                            conn_data['E'] = conn_data['energy_flow'] * (1 - my_json['Tamb'] / T_b)
+                        else:
+                            conn_data['E'] = None
+                            logging.warning(f"Missing enthalpy or entropy for connection {conn_name}.")
+                    else:
+                        conn_data['E'] = None
+                        logging.warning(f"Not enough material connections for component {component_name}.")
+                else:
+                    conn_data['E'] = None
+                    logging.warning(f"Missing connected component for heat connection {conn_name}.")
+            elif conn_data['kind'] == 'other':
                 pass
             else:
                 logging.warning(f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation.")

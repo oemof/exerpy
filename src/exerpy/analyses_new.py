@@ -117,8 +117,8 @@ class ExergyAnalysis:
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logging.warning(f"Sum of component exergy destructions ({total_component_E_D:.2f} kW) "
-                            f"does not match overall system exergy destruction ({self.E_D:.2f} kW).")
+            logging.warning(f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
+                            f"does not match overall system exergy destruction ({self.E_D:.2f} W).")
         else:
             logging.info(f"Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 

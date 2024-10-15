@@ -274,20 +274,26 @@ class EbsilonModelParser:
                         'kind': "heat",
                         'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
                         'energy_flow_unit': fluid_property_data['heat']['SI_unit'],
+                        'E': None,
+                        'E_unit': fluid_property_data['power']['SI_unit'],
                     })
-                if (comp0 is not None and comp0.Kind - 10000 in power_components):
+                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in power_components):
                     connection_data.update({
                         'kind': "power",
                         'energy_flow': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
                         'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                        'E': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                        'E_unit': fluid_property_data['power']['SI_unit'],
                     })
 
-            # HEAT AND POWER CONNECTIONS from power "fluids"
+            # POWER CONNECTIONS from power "fluids"
             if (pipe_cast.Kind - 1000) in power_fluids:
                 connection_data.update({
                     'kind': "power",
-                    'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                    'energy_flow': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
                     'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                    'E': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                    'E_unit': fluid_property_data['power']['SI_unit'],
                     })
 
             # Convert the connector numbers to selected standard values for each component

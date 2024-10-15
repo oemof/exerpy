@@ -214,13 +214,9 @@ def add_chemical_exergy(my_json, Tamb, pamb):
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
     """
-    # Define non-material fluid types (e.g., Shaft and Electric) to exclude from chemical exergy calculation
-    non_material_fluids = {"Shaft", "Electric"}
-
-    # Iterate over each connection
+    # Iterate over each material connection with kind == 'material'
     for conn_name, conn_data in my_json['connections'].items():
-        # Check if the connection's fluid type is not in the non-material fluids list
-        if conn_data['fluid_type'] not in non_material_fluids:
+        if conn_data['kind'] == 'material':
             try:
                 # Calculate the chemical exergy for each connection using the provided mass_composition
                 mass_composition = conn_data.get('mass_composition', {})
@@ -259,6 +255,8 @@ def add_total_exergy_flow(my_json):
             elif conn_data['kind'] in 'heat':
                 logging.warning(f"Connection {conn_name} is a heat flow. Heat flows have not been considered yet. For now, their exergy value is set to equal to their energy value.")
                 conn_data['E'] = conn_data['energy_flow']
+            elif conn_data['kind'] in 'other':
+                pass
             else:
                 logging.warning(f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation.")
                 conn_data['E'] = None

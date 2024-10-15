@@ -137,13 +137,17 @@ class EbsilonModelParser:
 
         # Define fluid types that are considered non-material or non-energetic
         non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
-        non_energetic_fluids = {5, 6, 13}  # Scheduled, Actual, Logic
-        # TODO: Solve the problem with the heat flows in Ebsilon counted as Logic (for example extracting the values from the Heat Consumer)
+        non_energetic_fluids = {5, 6}  # Scheduled, Actual
+        power_fluids = {9, 10}  # Electric, Shaft
+        logic_fluids = 13  # Logic "fluids" for heat and power flows
+        heat_components = {15, 16, 35}  # Components that handle with heat flows as input or output
+        power_components = {31}  # Power-summerized with power flows ONLY as output
 
+        # ALL EBSILON CONNECTIONS
         # Initialize connection data with the common fields
         connection_data = {
             'name': pipe_cast.Name,
-            'kind': None,
+            'kind': "other",  # it will be changed later ("material", "heat", "power") according to the fluid type
             'source_component': None,
             'source_component_type': None,
             'source_connector': None,
@@ -152,12 +156,9 @@ class EbsilonModelParser:
             'target_connector': None,
             'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
             'fluid_type_id': pipe_cast.FluidType,
-            'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-            'energy_flow_unit': fluid_property_data['heat']['SI_unit'],
-            # For now, no composition is set here, it's handled separately
         }
 
-        # Check if the connection is a material stream (not non-energetic fluids)
+        # Check if the connection is is not in non-energetic fluids
         if (pipe_cast.Kind - 1000) not in non_energetic_fluids:
             # Get the components at both ends of the pipe
             comp0 = pipe_cast.Comp(0) if pipe_cast.HasComp(0) else None
@@ -165,10 +166,9 @@ class EbsilonModelParser:
             # Get the connectors (links) at both ends of the pipe
             link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
             link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
-
-            # Add component and connector information
+        
+            # GENERAL INFORMATION
             connection_data.update({
-                'kind': connection_kinds.get(connection_data['fluid_type'], "Unknown"),
                 'source_component': comp0.Name if comp0 else None,
                 'source_component_type': (comp0.Kind - 10000) if comp0 else None,
                 'source_connector': link0.Index if link0 else None,
@@ -177,10 +177,11 @@ class EbsilonModelParser:
                 'target_connector': link1.Index if link1 else None,
             })
 
-            # Add physical properties only if the connection is not in non-material fluids
+            # MATERIAL CONNECTIONS
             if (pipe_cast.Kind - 1000) not in non_material_fluids:
                 # Retrieve all data and convert them in SI units
                 connection_data.update({
+                    'kind': 'material',
                     'm': (
                         convert_to_SI(
                             'm',
@@ -265,6 +266,29 @@ class EbsilonModelParser:
                         for param in composition_params
                         if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                     }
+
+            # HEAT AND POWER CONNECTIONS from Logic "fluids"
+            if (pipe_cast.Kind - 1000) == logic_fluids:
+                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in heat_components) or (comp1 is not None and comp1.Kind is not None and comp1.Kind - 10000 in heat_components):
+                    connection_data.update({
+                        'kind': "heat",
+                        'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                        'energy_flow_unit': fluid_property_data['heat']['SI_unit'],
+                    })
+                if (comp0 is not None and comp0.Kind - 10000 in power_components):
+                    connection_data.update({
+                        'kind': "power",
+                        'energy_flow': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                        'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                    })
+
+            # HEAT AND POWER CONNECTIONS from power "fluids"
+            if (pipe_cast.Kind - 1000) in power_fluids:
+                connection_data.update({
+                    'kind': "power",
+                    'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
+                    'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                    })
 
             # Convert the connector numbers to selected standard values for each component
             if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:

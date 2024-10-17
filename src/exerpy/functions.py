@@ -45,6 +45,46 @@ def mass_to_molar_fractions(mass_fractions):
     return molar_fractions
 
 
+def molar_to_mass_fractions(molar_fractions):
+    """
+    Convert molar fractions to mass fractions.
+    
+    Parameters:
+    - molar_fractions: Dictionary with component names as keys and molar fractions as values.
+    
+    Returns:
+    - mass_fractions: Dictionary with component names as keys and mass fractions as values.
+    """
+    molar_masses = {}
+    mass_fractions = {}
+    
+    # Step 1: Get the molar masses for each component
+    for fraction in molar_fractions.keys():
+        try:
+            molar_masses[fraction] = CP.PropsSI('M', fraction)
+        except Exception as e:
+            # print(f"Warning: Could not retrieve molar mass for {fraction} ({fraction}). Error: {e}")
+            continue  # Skip this fraction if there's an issue
+
+    # Step 2: Check if we have valid molar masses
+    if not molar_masses:
+        raise ValueError("No valid molar masses were retrieved. Exiting...")
+
+    # Step 3: Calculate total mass in the mixture
+    total_mass = sum(molar_fractions[comp] * molar_masses[comp] for comp in molar_masses)
+
+    # Step 4: Calculate mass fractions
+    for component in molar_masses.keys():
+        mass_fractions[component] = (molar_fractions[component] * molar_masses[component]) / total_mass
+
+    # Step 5: Check if mass fractions sum to approximately 1
+    mass_sum = sum(mass_fractions.values())
+    if abs(mass_sum - 1.0) > 1e-6:
+        raise ValueError(f"Error: Mass fractions do not sum to 1. Sum is {mass_sum}")
+
+    return mass_fractions
+
+
 def calc_chemical_exergy(stream, Tamb, pamb):
     """
     Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
@@ -63,20 +103,18 @@ def calc_chemical_exergy(stream, Tamb, pamb):
     logging.info(f"Starting chemical exergy calculation with Tamb={Tamb}, pamb={pamb}")
     
     try:
-        molar_fractions = mass_to_molar_fractions(stream['mass_composition'])
-        logging.info(f"Molar fractions: {molar_fractions}")
+        # Check if molar fractions already exist
+        if 'molar_composition' in stream:
+            molar_fractions = stream['molar_composition']
+            logging.info("Molar fractions found in stream.")
+        else:
+            # If not, convert mass composition to molar fractions
+            molar_fractions = mass_to_molar_fractions(stream['mass_composition'])
+            logging.info(f"Converted mass composition to molar fractions: {molar_fractions}")
         
-        ahrendts = os.path.join(__datapath__, 'Ahrendts.json')
-    
-        # Check if file exists and is not empty
-        if not os.path.exists(ahrendts):
-            logging.error(f"The file {ahrendts} does not exist.")
-            raise FileNotFoundError(f"The file {ahrendts} does not exist.")
-        if os.path.getsize(ahrendts) == 0:
-            logging.error(f"The file {ahrendts} is empty.")
-            raise ValueError(f"The file {ahrendts} is empty.")
-        
-        with open(ahrendts, 'r') as file:
+        # Load chemical exergy data
+        ahrendts_file = os.path.join(__datapath__, 'Ahrendts.json')        
+        with open(ahrendts_file, 'r') as file:
             ahrendts_data = json.load(file)  # data in J/kmol
             logging.info("Loaded Ahrendts data successfully.")
 

@@ -13,7 +13,12 @@ import json
 
 from exerpy.functions import convert_to_SI, fluid_property_data
 
-sys.path.append(r"C:\Program Files\Ebsilon\EBSILONProfessional 17\Data\Python")
+ebs_path = os.getenv("EBS")
+if not ebs_path:
+    logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
+    sys.exit(1)
+
+sys.path.append(ebs_path)
 from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
 
 from .ebsilon_config import (

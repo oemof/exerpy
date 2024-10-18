@@ -137,6 +137,10 @@ class ExergyAnalysis:
 
 
     @classmethod
+    def from_aspen():
+        pass
+
+    @classmethod
     def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.

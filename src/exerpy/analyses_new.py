@@ -4,6 +4,7 @@ import json
 from tabulate import tabulate
 from .components import component_registry
 from .parser.from_ebsilon import ebsilon_parser as ebs_parser
+from .parser.from_aspen import aspen_parser_new
 from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
@@ -137,8 +138,99 @@ class ExergyAnalysis:
 
 
     @classmethod
-    def from_aspen():
-        pass
+    def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None):
+        """
+        Create an instance of the ExergyAnalysis class from an Aspen model file.
+
+        Parameters
+        ----------
+        path : str
+            Path to the Aspen file (.bkp format).
+        Tamb : float, optional
+            Ambient temperature for analysis, default is None.
+        pamb : float, optional
+            Ambient pressure for analysis, default is None.
+        simulate : bool, optional
+            If True, run the simulation. If False, load existing data from '_parsed.json' file, default is True.
+
+        Returns
+        -------
+        ExergyAnalysis
+            An instance of the ExergyAnalysis class with parsed Aspen data.
+        """
+        # Check if the file is an Aspen file
+        _, file_extension = os.path.splitext(path)
+        if file_extension == '.bkp':
+            output_path = path.replace('.bkp', '_parsed.json')
+
+            # If simulate is set to False, try to load the existing JSON data
+            if not simulate:
+                try:
+                    if os.path.exists(output_path):
+                        # Load the previously saved parsed JSON data
+                        with open(output_path, 'r') as json_file:
+                            aspen_data = json.load(json_file)
+                            logging.info(f"Successfully loaded existing Aspen data from {output_path}.")
+                    else:
+                        logging.error(
+                            'Skipping the simulation requires a pre-existing file with the ending "_parsed.json". '
+                            f'File not found at {output_path}.'
+                        )
+                        raise FileNotFoundError(f'File not found: {output_path}')
+                except (FileNotFoundError, json.JSONDecodeError) as e:
+                    logging.error(f"Failed to load or decode existing JSON file: {e}")
+                    raise
+
+            # If simulation is requested, run the Aspen parser
+            else:
+                logging.info("Running Aspen simulation and generating JSON data.")
+                aspen_data = aspen_parser_new.run_aspen(path)
+                logging.info("Simulation completed successfully.")
+
+        else:
+            # If the file format is not supported
+            raise ValueError(f"Unsupported file format: {file_extension}. Please provide an Aspen (.bkp) file.")
+
+        # Retrieve the ambient conditions from the simulation or use provided values
+        Tamb = aspen_data.get('Tamb', Tamb)
+        pamb = aspen_data.get('pamb', pamb)
+
+        # Add chemical exergy values
+        try:
+            aspen_data = add_chemical_exergy(aspen_data, Tamb, pamb)
+            logging.info("Chemical exergy values successfully added to the Aspen data.")
+        except Exception as e:
+            logging.error(f"Failed to add chemical exergy values: {e}")
+            raise
+
+        # Calculate the total exergy flow of each component
+        try:
+            aspen_data = add_total_exergy_flow(aspen_data)
+            logging.info("Total exergy flows successfully added to the Aspen data.")
+        except Exception as e:
+            logging.error(f"Failed to add total exergy flows: {e}")
+            raise
+
+        # Save the generated JSON data
+        try:
+            with open(output_path, 'w') as json_file:
+                json.dump(aspen_data, json_file, indent=4)
+                logging.info(f"Parsed Aspen model and saved JSON data to {output_path}.")
+        except Exception as e:
+            logging.error(f"Failed to save parsed JSON data: {e}")
+            raise
+
+        # Extract component and connection data
+        component_data = aspen_data.get("components", {})
+        connection_data = aspen_data.get("connections", {})
+
+        # Validate that required data is present
+        if not component_data or not connection_data:
+            logging.error("Component or connection data is missing or improperly formatted.")
+            raise ValueError("Parsed Aspen data is missing required components or connections.")
+
+        return cls(component_data, connection_data, Tamb, pamb)
+
 
     @classmethod
     def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None):

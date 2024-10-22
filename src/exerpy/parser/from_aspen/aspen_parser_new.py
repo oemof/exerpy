@@ -3,6 +3,8 @@ import logging
 import win32com.client as win32
 import json
 
+from exerpy.functions import convert_to_SI, fluid_property_data
+
 class AspenModelParser:
     """
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
@@ -56,36 +58,18 @@ class AspenModelParser:
         stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
         stream_names = [stream_node.Name for stream_node in stream_nodes]
         
-        # Process each stream
+        # ALL ASPEN CONNECTIONS
+        # Initialize connection data with the common fields
         for stream_name in stream_names:
             stream_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}')
             connection_data = {
                 'name': stream_name,
-                'kind': "material",  # Default kind is material unless power/heat is found
+                'kind': None,
                 'source_component': None,
                 'source_connector': None,
                 'target_component': None,
                 'target_connector': None,
-                'fluid_type': None,
-                'parameters': {}
             }
-
-            # Check if the stream is a power or heat stream
-            if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\WORK') is not None:
-                connection_data['kind'] = 'power'
-                connection_data['parameters']['power'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value
-            elif self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\HEAT') is not None:
-                connection_data['kind'] = 'heat'
-                connection_data['parameters']['heat'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value
-            else:
-                # Assume it's a material stream and retrieve additional properties
-                connection_data['parameters'].update({
-                    'temp': self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TEMP_OUT\MIXED').Value,
-                    'pres': self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\PRES_OUT\MIXED').Value,
-                    'enthalpy': self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX\MIXED').Value,
-                    'entropy': self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX\MIXED').Value,
-                    'mass_flow': self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED').Value,
-                })
 
             # Find the source and target components
             source_port_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Ports\SOURCE')
@@ -95,6 +79,90 @@ class AspenModelParser:
             destination_port_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Ports\DEST')
             if destination_port_node is not None and destination_port_node.Elements.Count > 0:
                 connection_data["target_component"] = destination_port_node.Elements(0).Name
+
+            # HEAT AND POWER STREAMS
+            if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\WORK') is not None:
+                connection_data['kind'] = 'power'
+                connection_data['energy_flow'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value
+            elif self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\HEAT') is not None:
+                connection_data['kind'] = 'heat'
+                connection_data['energy_flow'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value
+            
+            # MATERIAL STREAMS
+            else:
+                # Assume it's a material stream and retrieve additional properties
+                connection_data.update({
+                    'kind': 'material',
+                    'T': (
+                        convert_to_SI(
+                            'T',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TEMP_OUT\MIXED').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TEMP_OUT\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TEMP_OUT\MIXED') is not None else None
+                    ),
+                    'T_unit': fluid_property_data['T']['SI_unit'],
+                    'p': (
+                        convert_to_SI(
+                            'p',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\PRES_OUT\MIXED').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\PRES_OUT\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\PRES_OUT\MIXED') is not None else None
+                    ),
+                    'p_unit': fluid_property_data['p']['SI_unit'],
+                    'h': (
+                        convert_to_SI(
+                            'h',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_MASS\MIXED').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_MASS\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_MASS\MIXED') is not None else None
+                    ),
+                    'h_unit': fluid_property_data['h']['SI_unit'],
+                    's': (
+                        convert_to_SI(
+                            's',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED') is not None else None
+                    ),
+                    's_unit': fluid_property_data['s']['SI_unit'],
+                    'm': (
+                        convert_to_SI(
+                            'm',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED') is not None else None
+                    ),
+                    'm_unit': fluid_property_data['m']['SI_unit'],
+                    'e_PH': (
+                        convert_to_SI(
+                            'e',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL') is not None else None
+                    ),
+                    'e_PH_unit': fluid_property_data['e']['SI_unit'],
+                    'n': (
+                        convert_to_SI(
+                            'n',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TOT_FLOW').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TOT_FLOW').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\TOT_FLOW') is not None else None
+                    ),
+                    'n_unit': fluid_property_data['n']['SI_unit'],
+                    'mass_composition': {},
+                    'molar_composition': {},
+                })
+                
+                # Retrieve the fluid names for the stream
+                fluid_names = [fluid.Name for fluid in self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED').Elements]
+                
+                # Retrieve the molar composition for each fluid
+                for fluid_name in fluid_names:
+                    connection_data["molar_composition"][fluid_name] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
+
+                # Retrieve the mass composition for each fluid
+                for fluid_name in fluid_names:
+                    connection_data["mass_composition"][fluid_name] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED\{fluid_name}').Value
 
             # Store connection data
             self.connections_data[stream_name] = connection_data

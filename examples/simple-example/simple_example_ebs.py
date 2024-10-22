@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s -
 from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_test.ebs'))
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_example.ebs'))
 
 # Initialize the exergy analysis with the simulation path
 ean = ExergyAnalysis.from_ebsilon(model_path)

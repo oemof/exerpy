@@ -405,10 +405,23 @@ fluid_property_data = {
         'text': 'mass flow',
         'SI_unit': 'kg / s',
         'units': {
-            'kg / s': 1, 'kg / min': 1 / 60, 'kg / h': 1 / 3.6e3,
-            't / h': 1 / 3.6, 'g / s': 1 / 1e3
+            'kg / s': 1, 'kg / min': 1 / 60, 'kg / h': 1 / 3.6e3, 'kg/s': 1, 'kg/min': 1 / 60, 'kg/h': 1 / 3.6e3,
+            'kg / sec': 1, 'kg/sec': 1,
+            't / h': 1 / 3.6, 'g / s': 1e-3, 't/h': 1 / 3.6, 'g/s': 1e-3,
+            'g / sec': 1e-3, 'g/sec': 1e-3,
         },
         'latex_eq': r'0 = \dot{m} - \dot{m}_\mathrm{spec}',
+        'documentation': {'float_fmt': '{:,.3f}'}
+    },
+    'n': {
+        'text': 'molar flow',
+        'SI_unit': 'mol / s',
+        'units': {
+            'mol / s': 1, 'mol / min': 1 / 60, 'mol / h': 1 / 3.6e3, 'mol/s': 1, 'mol/min': 1 / 60, 'mol/h': 1 / 3.6e3,
+            'kmol / s': 1e3, 'kmol / min': 1 / 60e3, 'kmol / h': 1 / 3.6e6, 'kmol/s': 1e3, 'kmol/min': 1 / 60e3, 'kmol/h': 1 / 3.6e6,
+            'mol / sec': 1, 'mol/sec': 1, 'kmol / sec': 1e3, 'kmol/sec': 1e3,
+        },
+        'latex_eq': r'0 = \dot{n} - \dot{n}_\mathrm{spec}',
         'documentation': {'float_fmt': '{:,.3f}'}
     },
     'v': {
@@ -435,10 +448,13 @@ fluid_property_data = {
     'h': {
         'text': 'enthalpy',
         'SI_unit': 'J / kg',
+        'SI_unit_molar:': 'J / mol',
         'units': {
-            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6,
-            'cal / kg': 4.184, 'kcal / kg': 4.184e3,
-            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6
+            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6, 'J/kg': 1, 'kJ/kg': 1e3, 'MJ/kg': 1e6,
+            'cal / kg': 4.184, 'kcal / kg': 4.184e3, 'cal/kg': 4.184, 'kcal/kg': 4.184e3,
+            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6, 'Wh/kg': 3.6e3, 'kWh kg': 3.6e6,
+            'J / mol': 1, 'kJ / mol': 1e3, 'MJ / mol': 1e6, 'J/mol': 1, 'kJ/mol': 1e3, 'MJ/mol': 1e6,
+            'J / kmol': 1e-3, 'kJ / kmol': 1, 'MJ / kmol': 1e3, 'J/kmol': 1e-3, 'kJ/kmol': 1, 'MJ/kmol': 1e3
         },
         'latex_eq': r'0 = h - h_\mathrm{spec}',
         'documentation': {'float_fmt': '{:,.3f}'}
@@ -446,10 +462,13 @@ fluid_property_data = {
     'e': {
         'text': 'exergy',
         'SI_unit': 'J / kg',
+        'SI_unit_molar:': 'J / mol',
         'units': {
-            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6,
-            'cal / kg': 4.184, 'kcal / kg': 4.184e3,
-            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6
+            'J / kg': 1, 'kJ / kg': 1e3, 'MJ / kg': 1e6, 'J/kg': 1, 'kJ/kg': 1e3, 'MJ/kg': 1e6,
+            'cal / kg': 4.184, 'kcal / kg': 4.184e3, 'cal/kg': 4.184, 'kcal/kg': 4.184e3,
+            'Wh / kg': 3.6e3, 'kWh / kg': 3.6e6, 'Wh/kg': 3.6e3, 'kWh kg': 3.6e6,
+            'J / mol': 1, 'kJ / mol': 1e3, 'MJ / mol': 1e6, 'J/mol': 1, 'kJ/mol': 1e3, 'MJ/mol': 1e6,
+            'J / kmol': 1e-3, 'kJ / kmol': 1, 'MJ / kmol': 1e3, 'J/kmol': 1e-3, 'kJ/kmol': 1, 'MJ/kmol': 1e3
         },
         'latex_eq': r'0 = h - h_\mathrm{spec}',
         'documentation': {'float_fmt': '{:,.3f}'}
@@ -491,7 +510,15 @@ fluid_property_data = {
     's': {
         'text': 'entropy',
         'SI_unit': 'J / kgK',
-        'units': {'J / kgK': 1, 'kJ / kgK': 1e3, 'MJ / kgK': 1e6},
+        'SI_unit_molar:': 'J / molK',
+        'units': {
+            'J / kgK': 1, 'kJ / kgK': 1e3, 'MJ / kgK': 1e6, 'J/kgK': 1, 'kJ/kgK': 1e3, 'MJ/kgK': 1e6,
+            'J / kg-K': 1, 'kJ / kg-K': 1e3, 'MJ / kg-K': 1e6, 'J/kg-K': 1, 'kJ/kg-K': 1e3, 'MJ/kg-K': 1e6,
+            'J / molK': 1, 'kJ / molK': 1e3, 'MJ / molK': 1e6, 'J/molK': 1, 'kJ/molK': 1e3, 'MJ/molK': 1e6,
+            'J / mol-K': 1, 'kJ / mol-K': 1e3, 'MJ / mol-K': 1e6, 'J/mol-K': 1, 'kJ/mol-K': 1e3, 'MJ/mol-K': 1e6,
+            'J / kmolK': 1e-3, 'kJ / kmolK': 1, 'MJ / kmolK': 1e3, 'J/kmolK': 1e-3, 'kJ/kmolK': 1, 'MJ/kmolK': 1e3,
+            'J / kmol-K': 1e-3, 'kJ / kmol-K': 1, 'MJ / kmol-K': 1e3, 'J/kmol-K': 1e-3, 'kJ/kmol-K': 1, 'MJ/kmol-K': 1e3
+            },
         'latex_eq': r'0 = s_\mathrm{spec} - s\left(p, h \right)',
         'documentation': {'float_fmt': '{:,.2f}'}
     },

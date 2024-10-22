@@ -192,8 +192,8 @@ class ExergyAnalysis:
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide an Aspen (.bkp) file.")
 
         # Retrieve the ambient conditions from the simulation or use provided values
-        Tamb = aspen_data.get('Tamb', Tamb)
-        pamb = aspen_data.get('pamb', pamb)
+        Tamb = aspen_data['ambient_conditions'].get('Tamb', Tamb)
+        pamb = aspen_data['ambient_conditions'].get('pamb', pamb)
 
         # Add chemical exergy values
         try:
@@ -287,8 +287,8 @@ class ExergyAnalysis:
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide an Ebsilon (.ebs) file.")
 
         # Retrieve the ambient conditions from the simulation or use provided values
-        Tamb = ebsilon_data.get('Tamb', Tamb)
-        pamb = ebsilon_data.get('pamb', pamb)
+        Tamb = ebsilon_data['ambient_conditions'].get('Tamb', Tamb)
+        pamb = ebsilon_data['ambient_conditions'].get('pamb', pamb)
 
         # Add chemical exergy values
         try:

@@ -46,6 +46,9 @@ class AspenModelParser:
             # Parse blocks (components)
             self.parse_blocks()
 
+            # Parse Tamb and pamb
+            self.parse_ambient_conditions()	
+
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
             raise
@@ -158,14 +161,19 @@ class AspenModelParser:
                 
                 # Retrieve the molar composition for each fluid
                 for fluid_name in fluid_names:
-                    connection_data["molar_composition"][fluid_name] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
+                    mole_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
+                    if mole_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
+                        connection_data["molar_composition"][fluid_name] = mole_frac
 
                 # Retrieve the mass composition for each fluid
                 for fluid_name in fluid_names:
-                    connection_data["mass_composition"][fluid_name] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED\{fluid_name}').Value
+                    mass_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED\{fluid_name}').Value
+                    if mass_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
+                        connection_data["mass_composition"][fluid_name] = mass_frac
 
             # Store connection data
             self.connections_data[stream_name] = connection_data
+
 
     def parse_blocks(self):
         """
@@ -179,11 +187,46 @@ class AspenModelParser:
             block_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
             component_data = {
                 'name': block_name,
-                'type': None,
-                'parameters': {}
+                'type': self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6),
+                'model_type': (
+                    self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
+                    if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE') is not None else None
+                ),
+                'eta_s': (
+                    self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN').Value
+                    if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN') is not None else None
+                ),
+                'eta_mech': (
+                    self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_MECH').Value
+                    if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_MECH') is not None else None
+                ),
+                'Q': (
+                    convert_to_SI(
+                        'heat',
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET').Value,
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET').UnitString,
+                    ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET') is not None else None
+                ),
+                'Q': (
+                    convert_to_SI(
+                        'heat',
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY').Value,
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY').UnitString,
+                    ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY') is not None 
+                    and self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET') is None else None
+                ),
+                'Q_unit': fluid_property_data['heat']['SI_unit'],
+                'P': (
+                    convert_to_SI(
+                        'power',
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').UnitString,
+                    ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER') is not None else None
+                ),
+                'P_unit': fluid_property_data['power']['SI_unit'],
             }
 
-            # Check for different block types and store relevant parameters
+            '''# Check for different block types and store relevant parameters
             if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE') is not None:
                 model_type = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
                 if model_type == "COMPRESSOR":
@@ -195,10 +238,44 @@ class AspenModelParser:
                 elif model_type == "PUMP":
                     component_data['type'] = "Pump"
                     component_data['parameters']['power'] = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value
-                # Add handling for additional block types as needed
+                # Add handling for additional block types as needed'''
 
             # Store component data
             self.components_data[block_name] = component_data
+
+
+    def parse_ambient_conditions(self):
+        """
+        Parses the ambient conditions from the Aspen model and stores them as class attributes.
+        Raises an error if Tamb or pamb are not found or are set to None.
+        """
+        try:
+            # Parse ambient temperature (Tamb)
+            self.Tamb = convert_to_SI(
+                'T',
+                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP").Value,
+                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP").UnitString
+                ) if self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP") is not None else None            
+            
+            if self.Tamb is None:
+                raise ValueError("Ambient temperature (Tamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
+
+            # Parse ambient pressure (pamb)
+            self.pamb = convert_to_SI(
+                'p',
+                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES").Value,
+                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES").UnitString
+                ) if self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES") is not None else None            
+            
+            if self.pamb is None:
+                raise ValueError("Ambient pressure (pamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
+
+            logging.info(f"Parsed ambient conditions: Tamb = {self.Tamb} K, pamb = {self.pamb} Pa")
+
+        except Exception as e:
+            logging.error(f"Error parsing ambient conditions: {e}")
+            raise
+
 
     def get_sorted_data(self):
         """
@@ -209,7 +286,14 @@ class AspenModelParser:
         """
         sorted_components = {comp_name: self.components_data[comp_name] for comp_name in sorted(self.components_data)}
         sorted_connections = {conn_name: self.connections_data[conn_name] for conn_name in sorted(self.connections_data)}
-        return {'components': sorted_components, 'connections': sorted_connections}
+        ambient_conditions = {
+            'Tamb': self.Tamb,
+            'Tamb_unit': fluid_property_data['T']['SI_unit'],
+            'pamb': self.pamb,
+            'pamb_unit': fluid_property_data['p']['SI_unit']
+        }
+        return {'components': sorted_components, 'connections': sorted_connections, 'ambient_conditions': ambient_conditions}
+
 
     def write_to_json(self, output_path):
         """
@@ -219,6 +303,7 @@ class AspenModelParser:
             output_path (str): Path where the JSON file will be saved.
         """
         data = self.get_sorted_data()
+        
         try:
             with open(output_path, 'w') as json_file:
                 json.dump(data, json_file, indent=4)
@@ -226,6 +311,7 @@ class AspenModelParser:
         except Exception as e:
             logging.error(f"Failed to write data to JSON: {e}")
             raise
+
 
 def run_aspen(model_path, output_dir=None):
     """

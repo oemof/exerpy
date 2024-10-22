@@ -53,7 +53,7 @@ class EbsilonModelParser:
         self.oc = None  # ObjectCaster for type casting
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
-        self.tamb = None  # Ambient temperature
+        self.Tamb = None  # Ambient temperature
         self.pamb = None  # Ambient pressure
 
     def initialize_model(self):
@@ -107,7 +107,7 @@ class EbsilonModelParser:
                     self.parse_component(obj)
             
             # After parsing all components, check if Tamb and pamb have been set
-            if self.tamb is None or self.pamb is None:
+            if self.Tamb is None or self.pamb is None:
                 error_msg = (
                     "Ambient temperature (Tamb) and/or ambient pressure (pamb) have not been set.\n"
                     "Please ensure that your Ebsilon model includes component(s) of type 46 (Measuring Point) "
@@ -252,8 +252,8 @@ class EbsilonModelParser:
                 })
 
                 # Add the mechanical and thermal specific exergies
-                e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.tamb, self.pamb)
-                e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.tamb, self.pamb)
+                e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
+                e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
 
                 connection_data.update({
                     'e_T': e_T_value,
@@ -383,10 +383,7 @@ class EbsilonModelParser:
                     comp_cast.KA.Value
                     if hasattr(comp_cast, 'KA') and comp_cast.KA.Value is not None else None
                 ),
-                'kA_unit': (
-                    unit_id_to_string.get(comp_cast.KA.Dimension, "Unknown")
-                    if hasattr(comp_cast, 'KA') and comp_cast.KA.Dimension is not None else "Unknown"
-                ),
+                'kA_unit': fluid_property_data['kA']['SI_unit'],
                 'mass_flow_1': (
                     convert_to_SI(
                         'm',
@@ -435,8 +432,8 @@ class EbsilonModelParser:
         elif type_index == 46:
             comp46 = self.oc.CastToComp46(obj)
             if comp46.FTYP.Value == 26:
-                self.tamb = convert_to_SI('T', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
-                logging.info(f"Set ambient temperature (Tamb) to {self.tamb} K from component {comp_cast.Name}")
+                self.Tamb = convert_to_SI('T', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
+                logging.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
             elif comp46.FTYP.Value == 13:
                 self.pamb = convert_to_SI('p', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
                 logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
@@ -460,8 +457,12 @@ class EbsilonModelParser:
         return {
             'components': sorted_components,
             'connections': sorted_connections,
-            'Tamb': self.tamb,
-            'pamb': self.pamb
+            'ambient_conditions': {
+                'Tamb': self.Tamb,
+                'Tamb_unit': fluid_property_data['T']['SI_unit'],
+                'pamb': self.pamb,
+                'pamb_unit': fluid_property_data['p']['SI_unit']
+            }
         }
 
 

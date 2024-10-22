@@ -85,7 +85,7 @@ def molar_to_mass_fractions(molar_fractions):
     return mass_fractions
 
 
-def calc_chemical_exergy(stream, Tamb, pamb):
+def calc_chemical_exergy(stream_data, Tamb, pamb):
     """
     Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
     - Case A: Handle pure substance.
@@ -93,7 +93,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
     - Case C: If water doesn't condense or if water is not present, handle the mixture using the standard approach (ideal mixture).
     
     Parameters:
-    - stream: Dictionary containing 'mass_composition' of the stream.
+    - stream_data: Dictionary containing 'mass_composition' of the stream.
     - Tamb: Ambient temperature in Celsius.
     - pamb: Ambient pressure in bar.
     
@@ -104,12 +104,12 @@ def calc_chemical_exergy(stream, Tamb, pamb):
     
     try:
         # Check if molar fractions already exist
-        if 'molar_composition' in stream:
-            molar_fractions = stream['molar_composition']
+        if 'molar_composition' in stream_data:
+            molar_fractions = stream_data['molar_composition']
             logging.info("Molar fractions found in stream.")
         else:
             # If not, convert mass composition to molar fractions
-            molar_fractions = mass_to_molar_fractions(stream['mass_composition'])
+            molar_fractions = mass_to_molar_fractions(stream_data['mass_composition'])
             logging.info(f"Converted mass composition to molar fractions: {molar_fractions}")
         
         # Load chemical exergy data
@@ -242,7 +242,7 @@ def calc_chemical_exergy(stream, Tamb, pamb):
 
 def add_chemical_exergy(my_json, Tamb, pamb):
     """
-    Adds the chemical exergy to each connection in the JSON data, excluding Shaft and Electric connections.
+    Adds the chemical exergy to each connection in the JSON data, prioritizing molar composition if available.
     
     Parameters:
     - my_json: The JSON object containing the components and connections.
@@ -252,21 +252,37 @@ def add_chemical_exergy(my_json, Tamb, pamb):
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
     """
+    # Check if Tamb and pamb are provided and not None
+    if Tamb is None or pamb is None:
+        raise ValueError("Ambient temperature (Tamb) and pressure (pamb) are required for chemical exergy calculation. "
+                         "Please ensure they are included in the JSON or passed as arguments.")
+
     # Iterate over each material connection with kind == 'material'
     for conn_name, conn_data in my_json['connections'].items():
         if conn_data['kind'] == 'material':
             try:
-                # Calculate the chemical exergy for each connection using the provided mass_composition
+                # Prefer molar composition if available, otherwise use mass composition
+                molar_composition = conn_data.get('molar_composition', {})
                 mass_composition = conn_data.get('mass_composition', {})
-                stream_data = {'mass_composition': mass_composition}
-                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb)  # Add the chemical exergy value
+
+                # Prepare stream data for exergy calculation, prioritizing molar composition
+                if molar_composition:
+                    stream_data = {'molar_composition': molar_composition}
+                    logging.info(f"Using molar composition for connection {conn_name}")
+                else:
+                    stream_data = {'mass_composition': mass_composition}
+                    logging.info(f"Using mass composition for connection {conn_name}")
+                
+                # Add the chemical exergy value
+                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb)
                 conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
                 logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
+
             except Exception as e:
                 logging.error(f"Error calculating chemical exergy for connection {conn_name}: {e}")
         else:
-            logging.info(f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['fluid_type']})")
-    
+            logging.info(f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['kind']})")
+
     return my_json
 
 
@@ -314,7 +330,7 @@ def add_total_exergy_flow(my_json):
                             # Calculate boundary temperature t_b
                             T_b = (h_source - h_target) / (s_source - s_target)
                             # Calculate exergy flow for heat: E = energy_flow * (1 - Tamb / t_b)
-                            conn_data['E'] = conn_data['energy_flow'] * (1 - my_json['Tamb'] / T_b)
+                            conn_data['E'] = conn_data['energy_flow'] * (1 - my_json['ambient_conditions']['Tamb'] / T_b)
                         else:
                             conn_data['E'] = None
                             logging.warning(f"Missing enthalpy or entropy for connection {conn_name}.")
@@ -531,5 +547,12 @@ fluid_property_data = {
         'text': 'heat',
         'SI_unit': 'W',
         'units': {'W': 1, 'kW': 1e3, 'MW': 1e6},
+    },
+    'kA': {
+        'text': 'kA',
+        'SI_unit': 'W / K',
+        'units': {
+            'W / K': 1, 'kW / K': 1e3, 'MW / K': 1e6,
+            'W/K': 1, 'kW/K': 1e3, 'MW/K': 1e6},
     }
 }

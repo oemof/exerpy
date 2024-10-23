@@ -1,191 +1,212 @@
 {
     "components": {
-        "CC": {
-            "name": "CC",
-            "type": "RStoic",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "CombustionChamber": {
+            "CC": {
+                "name": "CC",
+                "type": "RStoic",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": 0.0,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
         },
-        "COMP": {
-            "name": "COMP",
-            "type": "Compr",
-            "model_type": "COMPRESSOR",
-            "eta_s": 0.9,
-            "eta_mech": 1.0,
-            "Q": null,
-            "Q_unit": "W",
-            "P": 241955451.0,
-            "P_unit": "W"
+        "Compressor": {
+            "COMP": {
+                "name": "COMP",
+                "type": "Compressor",
+                "eta_s": 0.9,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 241955451.0,
+                "P_unit": "W"
+            }
         },
-        "COND": {
-            "name": "COND",
-            "type": "HeatX",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": 63604386.400000006,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "Generator": {
+            "GEN1": {
+                "name": "GEN1",
+                "type": "Generator",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "eta_el": 0.986
+            },
+            "GEN2": {
+                "name": "GEN2",
+                "type": "Generator",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "eta_el": 0.986
+            }
         },
-        "DEA": {
-            "name": "DEA",
-            "type": "Mixer",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "HeatExchanger": {
+            "COND": {
+                "name": "COND",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            },
+            "ECO": {
+                "name": "ECO",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            },
+            "EVA": {
+                "name": "EVA",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            },
+            "SH": {
+                "name": "SH",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
         },
-        "ECO": {
-            "name": "ECO",
-            "type": "HeatX",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": 28862539.700000003,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "Mixer": {
+            "DEA": {
+                "name": "DEA",
+                "type": "Mixer",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            },
+            "MIX": {
+                "name": "MIX",
+                "type": "Mixer",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
         },
-        "EVA": {
-            "name": "EVA",
-            "type": "HeatX",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": 134757577.0,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "Motor": {
+            "PUMP1-MOTOR": {
+                "name": "PUMP1-MOTOR",
+                "type": "Motor",
+                "P_el": 38182.7021,
+                "P_mech": 37609.961599999995,
+                "P_unit": "W",
+                "eta_el": 0.985
+            },
+            "PUMP2-MOTOR": {
+                "name": "PUMP2-MOTOR",
+                "type": "Motor",
+                "P_el": 375832.098,
+                "P_mech": 370194.61699999997,
+                "P_unit": "W",
+                "eta_el": 0.985
+            }
         },
-        "GEN1": {
-            "name": "GEN1",
-            "type": "Mult",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "Pump": {
+            "PUMP1": {
+                "name": "PUMP1",
+                "type": "Pump",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 37609.961599999995,
+                "P_unit": "W"
+            },
+            "PUMP2": {
+                "name": "PUMP2",
+                "type": "Pump",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 370194.61699999997,
+                "P_unit": "W"
+            }
         },
-        "GEN2": {
-            "name": "GEN2",
-            "type": "Mult",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
+        "SimpleHeatExchanger": {
+            "HC": {
+                "name": "HC",
+                "type": "Heater",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": -100055998.0,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
         },
-        "GT": {
-            "name": "GT",
-            "type": "Compr",
-            "model_type": "TURBINE",
-            "eta_s": 0.92,
-            "eta_mech": 1.0,
-            "Q": null,
-            "Q_unit": "W",
-            "P": -493935206.0,
-            "P_unit": "W"
+        "Splitter": {
+            "ST-SPLIT": {
+                "name": "ST-SPLIT",
+                "type": "FSplit",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
         },
-        "HC": {
-            "name": "HC",
-            "type": "Heater",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
-        },
-        "MIX": {
-            "name": "MIX",
-            "type": "Mixer",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
-        },
-        "PUMP1": {
-            "name": "PUMP1",
-            "type": "Pump",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": 37609.961599999995,
-            "P_unit": "W"
-        },
-        "PUMP2": {
-            "name": "PUMP2",
-            "type": "Pump",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": 370194.61699999997,
-            "P_unit": "W"
-        },
-        "SH": {
-            "name": "SH",
-            "type": "HeatX",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": 52886008.0,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
-        },
-        "ST-SPLIT": {
-            "name": "ST-SPLIT",
-            "type": "FSplit",
-            "model_type": null,
-            "eta_s": null,
-            "eta_mech": null,
-            "Q": null,
-            "Q_unit": "W",
-            "P": null,
-            "P_unit": "W"
-        },
-        "ST1": {
-            "name": "ST1",
-            "type": "Compr",
-            "model_type": "TURBINE",
-            "eta_s": 0.93,
-            "eta_mech": 1.0,
-            "Q": null,
-            "Q_unit": "W",
-            "P": -27487192.299999997,
-            "P_unit": "W"
-        },
-        "ST2": {
-            "name": "ST2",
-            "type": "Compr",
-            "model_type": "TURBINE",
-            "eta_s": 0.89,
-            "eta_mech": 1.0,
-            "Q": null,
-            "Q_unit": "W",
-            "P": -25766353.0,
-            "P_unit": "W"
+        "Turbine": {
+            "GT": {
+                "name": "GT",
+                "type": "Turbine",
+                "eta_s": 0.92,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": -493935206.0,
+                "P_unit": "W"
+            },
+            "ST1": {
+                "name": "ST1",
+                "type": "Turbine",
+                "eta_s": 0.93,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": -27487192.299999997,
+                "P_unit": "W"
+            },
+            "ST2": {
+                "name": "ST2",
+                "type": "Turbine",
+                "eta_s": 0.89,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": -25766353.0,
+                "P_unit": "W"
+            }
         }
     },
     "connections": {

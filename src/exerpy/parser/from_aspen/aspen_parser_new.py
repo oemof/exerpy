@@ -5,6 +5,10 @@ import json
 
 from exerpy.functions import convert_to_SI, fluid_property_data
 
+from .aspen_config import (
+    grouped_components,
+)
+
 class AspenModelParser:
     """
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
@@ -177,21 +181,17 @@ class AspenModelParser:
 
     def parse_blocks(self):
         """
-        Parses the blocks (components) in the Aspen model.
+        Parses the blocks (components) in the Aspen model and ensures that all components, including motors created from pumps, are properly grouped.
         """
         block_nodes = self.aspen.Tree.FindNode(r'\Data\Blocks').Elements
         block_names = [block_node.Name for block_node in block_nodes]
 
         # Process each block
         for block_name in block_names:
-            block_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
+            model_type = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE')
             component_data = {
                 'name': block_name,
                 'type': self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6),
-                'model_type': (
-                    self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
-                    if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE') is not None else None
-                ),
                 'eta_s': (
                     self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN').Value
                     if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN') is not None else None
@@ -207,14 +207,6 @@ class AspenModelParser:
                         self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET').UnitString,
                     ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET') is not None else None
                 ),
-                'Q': (
-                    convert_to_SI(
-                        'heat',
-                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY').Value,
-                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY').UnitString,
-                    ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\HX_DUTY') is not None 
-                    and self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\QNET') is None else None
-                ),
                 'Q_unit': fluid_property_data['heat']['SI_unit'],
                 'P': (
                     convert_to_SI(
@@ -226,22 +218,84 @@ class AspenModelParser:
                 'P_unit': fluid_property_data['power']['SI_unit'],
             }
 
-            '''# Check for different block types and store relevant parameters
-            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE') is not None:
-                model_type = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE').Value
-                if model_type == "COMPRESSOR":
+            # Compressors and turbines are both handled as "Compr": check whether the block is a compressor or turbine
+            if model_type is not None:
+                if model_type.Value == "COMPRESSOR":
                     component_data['type'] = "Compressor"
-                    component_data['parameters']['power'] = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value
-                elif model_type == "TURBINE":
+                elif model_type.Value == "TURBINE":
                     component_data['type'] = "Turbine"
-                    component_data['parameters']['power'] = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value
-                elif model_type == "PUMP":
-                    component_data['type'] = "Pump"
-                    component_data['parameters']['power'] = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value
-                # Add handling for additional block types as needed'''
 
-            # Store component data
-            self.components_data[block_name] = component_data
+            # Generators are handled as multiplier blocks
+            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6) == 'Mult':
+                if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').Value == 'WORK':
+                    component_data.update({
+                        'eta_el': (
+                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR').Value
+                            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR') is not None else None
+                        ),
+                        'type': 'Generator'
+                    })
+
+            # Group other components such as pumps, compressors, turbines, and generators
+            self._group_component(component_data, block_name)
+
+            # Handle pumps and their associated motors
+            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6) == 'Pump':
+                # Create a corresponding Motor component
+                motor_name = f"{block_name}-MOTOR"
+                motor_data = {
+                    'name': motor_name,
+                    'type': 'Motor',
+                    'P_el': (
+                        convert_to_SI(
+                            'power',
+                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER') is not None else None
+                    ),
+                    'P_el_unit': fluid_property_data['power']['SI_unit'],
+                    'P_mech': (
+                        convert_to_SI(
+                            'power',
+                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER') is not None else None
+                    ),
+                    'P_mech_unit': fluid_property_data['power']['SI_unit'],
+                    'eta_el': (
+                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_DRIV').Value
+                        if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_DRIV') is not None else None
+                    ),
+                }
+
+                # Group the motor using the same method
+                self._group_component(motor_data, motor_name)
+
+    def _group_component(self, component_data, component_name):
+        """
+        Group the component based on its type into the correct group within components_data.
+
+        Parameters:
+        - component_data: The dictionary of component attributes.
+        - component_name: The name of the component.
+        """
+        # Determine the group for the component based on its type
+        group = None
+        for group_name, type_list in grouped_components.items():
+            if component_data['type'] in type_list:
+                group = group_name
+                break
+
+        # If the component doesn't belong to any predefined group, use its type name
+        if not group:
+            group = component_data['type']
+
+        # Initialize the group in the components_data dictionary if not already present
+        if group not in self.components_data:
+            self.components_data[group] = {}
+
+        # Store the component data in the appropriate group
+        self.components_data[group][component_name] = component_data
 
 
     def parse_ambient_conditions(self):

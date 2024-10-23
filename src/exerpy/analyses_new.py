@@ -462,6 +462,11 @@ def _construct_components(component_data, connection_data):
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
     for component_type, component_instances in component_data.items():
         for component_name, component_information in component_instances.items():
+            # Skip components of type 'Splitter'
+            if component_type == "Splitter" or component_information.get('type') == "Splitter":
+                logging.info(f"Skipping 'Splitter' component: {component_name}")
+                continue  # Skip this component
+
             # Fetch the corresponding class from the registry using the component type
             component_class = component_registry.items.get(component_type)
 

@@ -26,8 +26,8 @@ product = {
 }
 
 loss = {
-    "inputs": ['8'],
-    "outputs": []
+    "inputs": ['8', '15'],
+    "outputs": ['14']
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)

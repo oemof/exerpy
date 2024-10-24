@@ -7,6 +7,7 @@ from exerpy.functions import convert_to_SI, fluid_property_data
 
 from .aspen_config import (
     grouped_components,
+    connector_mappings,
 )
 
 class AspenModelParser:
@@ -24,6 +25,15 @@ class AspenModelParser:
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
+        
+        # Dictionary to map component types to specific connector assignment functions
+        self.connector_assignment_functions = {
+            'Mixer': self.assign_mixer_connectors,
+            'RStoic': self.assign_combustion_chamber_connectors,
+            'FSplit': self.assign_splitter_connectors,
+            # Add other specific component functions here
+        }
+
 
     def initialize_model(self):
         """
@@ -56,6 +66,7 @@ class AspenModelParser:
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
             raise
+
 
     def parse_streams(self):
         """
@@ -90,10 +101,10 @@ class AspenModelParser:
             # HEAT AND POWER STREAMS
             if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\WORK') is not None:
                 connection_data['kind'] = 'power'
-                connection_data['energy_flow'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value
+                connection_data['energy_flow'] = abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value)
             elif self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\HEAT') is not None:
                 connection_data['kind'] = 'heat'
-                connection_data['energy_flow'] = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value
+                connection_data['energy_flow'] = abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value)
             
             # MATERIAL STREAMS
             else:
@@ -140,6 +151,14 @@ class AspenModelParser:
                         ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFLMX\MIXED') is not None else None
                     ),
                     'm_unit': fluid_property_data['m']['SI_unit'],
+                    'energy_flow': (
+                        convert_to_SI(
+                            'power',
+                            abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_FLOW\MIXED').Value),
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_FLOW\MIXED').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\HMX_FLOW\MIXED') is not None else None
+                    ),
+                    'energy_flow_unit': fluid_property_data['power']['SI_unit'],
                     'e_PH': (
                         convert_to_SI(
                             'e',
@@ -161,19 +180,23 @@ class AspenModelParser:
                 })
                 
                 # Retrieve the fluid names for the stream
-                fluid_names = [fluid.Name for fluid in self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED').Elements]
-                
-                # Retrieve the molar composition for each fluid
-                for fluid_name in fluid_names:
-                    mole_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
-                    if mole_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
-                        connection_data["molar_composition"][fluid_name] = mole_frac
+                mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
+                if mole_frac_node is not None:
+                    fluid_names = [fluid.Name for fluid in mole_frac_node.Elements]
+                    
+                    # Retrieve the molar composition for each fluid
+                    for fluid_name in fluid_names:
+                        mole_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
+                        if mole_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
+                            connection_data["molar_composition"][fluid_name] = mole_frac
 
-                # Retrieve the mass composition for each fluid
-                for fluid_name in fluid_names:
-                    mass_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED\{fluid_name}').Value
-                    if mass_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
-                        connection_data["mass_composition"][fluid_name] = mass_frac
+                mass_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED')
+                if mass_frac_node is not None:
+                    # Retrieve the mass composition for each fluid
+                    for fluid_name in [fluid.Name for fluid in mass_frac_node.Elements]:
+                        mass_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MASSFRAC\MIXED\{fluid_name}').Value
+                        if mass_frac not in [0, None]:  # Skip fluids with 0 or None as the fraction
+                            connection_data["mass_composition"][fluid_name] = mass_frac
 
             # Store connection data
             self.connections_data[stream_name] = connection_data
@@ -188,10 +211,15 @@ class AspenModelParser:
 
         # Process each block
         for block_name in block_names:
-            model_type = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE')
+            model_type_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\MODEL_TYPE')
+            model_type = model_type_node.Value if model_type_node is not None else None
+
+            component_type_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
+            component_type = component_type_node.AttributeValue(6) if component_type_node is not None else None
+
             component_data = {
                 'name': block_name,
-                'type': self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6),
+                'type': component_type,
                 'eta_s': (
                     self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN').Value
                     if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_ISEN') is not None else None
@@ -211,67 +239,275 @@ class AspenModelParser:
                 'P': (
                     convert_to_SI(
                         'power',
-                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
+                        abs(self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value),
                         self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').UnitString,
                     ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER') is not None else None
                 ),
                 'P_unit': fluid_property_data['power']['SI_unit'],
             }
 
-            # Compressors and turbines are both handled as "Compr": check whether the block is a compressor or turbine
+            # Override component type based on model_type
             if model_type is not None:
-                if model_type.Value == "COMPRESSOR":
+                if model_type == "COMPRESSOR":
                     component_data['type'] = "Compressor"
-                elif model_type.Value == "TURBINE":
+                elif model_type == "TURBINE":
                     component_data['type'] = "Turbine"
 
-            # Generators are handled as multiplier blocks
-            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6) == 'Mult':
-                if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').Value == 'WORK':
+            # Handle Generators as multiplier blocks
+            if component_type == 'Mult':
+                mult_value_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
+                mult_value = mult_value_node.Value if mult_value_node is not None else None
+                if mult_value == 'WORK':
+                    factor_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR')
+                    factor = factor_node.Value if factor_node is not None else None
                     component_data.update({
                         'eta_el': (
-                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR').Value
-                            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR') is not None else None
+                            factor
+                            if factor is not None else None
                         ),
                         'type': 'Generator'
                     })
 
-            # Group other components such as pumps, compressors, turbines, and generators
-            self._group_component(component_data, block_name)
+            # Group the component
+            self.group_component(component_data, block_name)
 
-            # Handle pumps and their associated motors
-            if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}').AttributeValue(6) == 'Pump':
-                # Create a corresponding Motor component
+            # Handle Pumps and their associated Motors
+            if component_type == 'Pump':
                 motor_name = f"{block_name}-MOTOR"
+                elec_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER')
+                elec_power = abs(convert_to_SI('power', elec_power_node.Value, elec_power_node.UnitString,)) if elec_power_node is not None else None
+                brake_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER')
+                brake_power = abs(convert_to_SI('power', brake_power_node.Value, brake_power_node.UnitString,)) if brake_power_node is not None else None
+                eff_driv_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_DRIV')
+                eff_driv = eff_driv_node.Value if eff_driv_node is not None else None
+
                 motor_data = {
                     'name': motor_name,
                     'type': 'Motor',
                     'P_el': (
                         convert_to_SI(
                             'power',
-                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\ELEC_POWER') is not None else None
+                            elec_power,
+                            elec_power_node.UnitString
+                        ) if elec_power_node is not None else None
                     ),
                     'P_el_unit': fluid_property_data['power']['SI_unit'],
                     'P_mech': (
                         convert_to_SI(
                             'power',
-                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\BRAKE_POWER') is not None else None
+                            brake_power,
+                            brake_power_node.UnitString
+                        ) if brake_power_node is not None else None
                     ),
                     'P_mech_unit': fluid_property_data['power']['SI_unit'],
                     'eta_el': (
-                        self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_DRIV').Value
-                        if self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Output\EFF_DRIV') is not None else None
+                        eff_driv
+                        if eff_driv is not None else None
                     ),
                 }
 
-                # Group the motor using the same method
-                self._group_component(motor_data, motor_name)
+                # Group the motor
+                self.group_component(motor_data, motor_name)
 
-    def _group_component(self, component_data, component_name):
+                # Create a new connection for the motor
+                if elec_power is not None:
+                    electr_connection_name = f"{block_name}_ELEC"
+                    electr_connection_data = {
+                        'name': electr_connection_name,
+                        'kind': 'power',
+                        'source_component': None,  # Electrical power usually leaves the system
+                        'source_connector': None,  # Electrical power usually leaves the system
+                        'target_component': motor_name,
+                        'target_connector': 0,
+                        'energy_flow': motor_data['P_el'],
+                        'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                    }
+
+                    mech_connection_name = f"{block_name}_MECH"
+                    mech_connection_data = {
+                        'name': mech_connection_name,
+                        'kind': 'power',
+                        'source_component': motor_name,
+                        'source_connector': 0,
+                        'target_component': block_name,
+                        'target_connector': 1,
+                        'energy_flow': motor_data['P_mech'],
+                        'energy_flow_unit': fluid_property_data['power']['SI_unit'],
+                    }
+
+                    # Store the motor connection
+                    self.connections_data[electr_connection_name] = electr_connection_data
+                    self.connections_data[mech_connection_name] = mech_connection_data
+
+            # Assign connectors
+            self.assign_connectors(component_data, block_name)
+
+
+    def assign_connectors(self, component_data, block_name):
+        """
+        Assigns connectors to streams for each component based on its type.
+        """
+        component_type = component_data['type']
+
+        # Check if there is a specific assignment function for this component type
+        if component_type in self.connector_assignment_functions:
+            # Call the specific function for the component type
+            self.connector_assignment_functions[component_type](block_name, self.aspen, self.connections_data)
+        else:
+            # Fall back to the generic connector assignment logic
+            self.assign_generic_connectors(block_name, component_type, self.aspen, self.connections_data, connector_mappings)
+
+
+    def assign_mixer_connectors(self, block_name, aspen, connections_data):
+        """
+        Assign connectors for a Mixer by examining connected streams and their source/target components.
+        """
+        ports_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports')
+        if ports_node is None:
+            logging.warning(f"No Ports node found for Mixer block: {block_name}")
+            return
+
+        inlet_streams = []
+        outlet_streams = []
+
+        for port in ports_node.Elements:
+            port_label = port.Name
+            port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
+            if port_node is not None and port_node.Elements.Count > 0:
+                for element in port_node.Elements:
+                    stream_name = element.Name
+                    if stream_name in connections_data:
+                        stream_data = connections_data[stream_name]
+                        if stream_data.get('target_component') == block_name:
+                            inlet_streams.append((port_label, stream_name))
+                        elif stream_data.get('source_component') == block_name:
+                            outlet_streams.append((port_label, stream_name))
+                        else:
+                            logging.warning(f"Stream {stream_name} connected to {block_name} but source/target components do not match.")
+
+        # Assign connectors to inlet streams
+        for idx, (port_label, stream_name) in enumerate(inlet_streams):
+            connections_data[stream_name]['target_connector'] = idx
+            logging.debug(f"Assigned connector {idx} to inlet stream: {stream_name}")
+
+        # Assign connector to outlet stream
+        if outlet_streams:
+            for idx, (port_label, stream_name) in enumerate(outlet_streams):
+                connections_data[stream_name]['source_connector'] = 0  # Assuming single outlet for mixer
+                logging.debug(f"Assigned connector 0 to outlet stream: {stream_name}")
+                
+
+    def assign_splitter_connectors(self, block_name, aspen, connections_data):
+        """
+        Assign connectors for a Splitter (FSplit) by examining connected streams and their source/target components.
+        The inlet stream is assigned 'target_connector' = 0.
+        The outlet streams are assigned 'source_connector' numbers starting from 0.
+        """
+        ports_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports')
+        if ports_node is None:
+            logging.warning(f"No Ports node found for Splitter block: {block_name}")
+            return
+
+        inlet_streams = []
+        outlet_streams = []
+
+        # Iterate over all ports connected to the splitter
+        for port in ports_node.Elements:
+            port_label = port.Name
+            port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
+            if port_node is not None and port_node.Elements.Count > 0:
+                for element in port_node.Elements:
+                    stream_name = element.Name
+                    if stream_name in connections_data:
+                        stream_data = connections_data[stream_name]
+                        # Determine if the stream is an inlet or outlet based on source and target components
+                        if stream_data.get('target_component') == block_name:
+                            inlet_streams.append((port_label, stream_name))
+                        elif stream_data.get('source_component') == block_name:
+                            outlet_streams.append((port_label, stream_name))
+                        else:
+                            logging.warning(f"Stream {stream_name} connected to {block_name} but source/target components do not match.")
+
+        # Assign connector to inlet stream(s)
+        for idx, (port_label, stream_name) in enumerate(inlet_streams):
+            connections_data[stream_name]['target_connector'] = 0  # Assuming single inlet for splitter
+            logging.debug(f"Assigned connector 0 to inlet stream: {stream_name}")
+
+        # Assign connectors to outlet streams
+        for idx, (port_label, stream_name) in enumerate(outlet_streams):
+            connections_data[stream_name]['source_connector'] = idx
+            logging.debug(f"Assigned connector {idx} to outlet stream: {stream_name}")
+
+
+    def assign_combustion_chamber_connectors(self, block_name, aspen, connections_data):
+        """
+        Assign connectors for a combustion chamber (RStoic), based on stream types (air, fuel, etc.).
+        """
+        ports_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports')
+        if ports_node is None:
+            logging.warning(f"No Ports node found for combustion chamber block: {block_name}")
+            return
+
+        # Iterate over all ports and assign connectors based on port labels
+        for port in ports_node.Elements:
+            port_label = port.Name
+
+            # Handle inlet ports
+            if '(IN)' in port_label:
+                port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
+                if port_node is not None and port_node.Elements.Count > 0:
+                    for element in port_node.Elements:
+                        stream_name = element.Name
+                        if stream_name in connections_data:
+                            molar_composition = connections_data[stream_name].get('molar_composition', {})
+                            if molar_composition.get('O2', 0) > 0.15:
+                                connections_data[stream_name]['target_connector'] = 0  # Air inlet
+                                logging.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
+                            elif molar_composition.get('CH4', 0) > 0.15:
+                                connections_data[stream_name]['target_connector'] = 1  # Fuel inlet
+                                logging.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
+                            else:
+                                logging.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
+
+            # Handle outlet ports
+            elif '(OUT)' in port_label:
+                port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
+                if port_node is not None and port_node.Elements.Count > 0:
+                    for element in port_node.Elements:
+                        stream_name = element.Name
+                        if stream_name in connections_data:
+                            connections_data[stream_name]['source_connector'] = 0  # Outlet stream
+                            logging.info(f"Assigned connector 0 to outlet stream: {stream_name}")
+
+
+    def assign_generic_connectors(self, block_name, component_type, aspen, connections_data, connector_mappings):
+        """
+        Generic function for components with predefined connector mappings.
+        """
+        if component_type in connector_mappings:
+            mapping = connector_mappings[component_type]
+            
+            # Access the ports of the component to find the connected streams
+            for port_label, connector_num in mapping.items():
+                port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
+                if port_node is not None and port_node.Elements.Count > 0:
+                    for element in port_node.Elements:
+                        stream_name = element.Name
+                        # Assign the connector number to the appropriate stream in the connection data
+                        if stream_name in connections_data:
+                            if 'source_component' in connections_data[stream_name] and \
+                                    connections_data[stream_name]['source_component'] == block_name:
+                                connections_data[stream_name]['source_connector'] = connector_num
+                                logging.debug(f"Assigned connector {connector_num} to source stream: {stream_name}")
+                            elif 'target_component' in connections_data[stream_name] and \
+                                    connections_data[stream_name]['target_component'] == block_name:
+                                connections_data[stream_name]['target_connector'] = connector_num
+                                logging.debug(f"Assigned connector {connector_num} to target stream: {stream_name}")
+        else:
+            logging.warning(f"No connector mapping defined for component type {component_type}.")
+
+
+    def group_component(self, component_data, component_name):
         """
         Group the component based on its type into the correct group within components_data.
 
@@ -305,22 +541,24 @@ class AspenModelParser:
         """
         try:
             # Parse ambient temperature (Tamb)
+            temp_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_TEMP")
             self.Tamb = convert_to_SI(
                 'T',
-                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP").Value,
-                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP").UnitString
-                ) if self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_TEMP") is not None else None            
-            
+                temp_node.Value,
+                temp_node.UnitString
+            ) if temp_node is not None else None            
+        
             if self.Tamb is None:
                 raise ValueError("Ambient temperature (Tamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
             # Parse ambient pressure (pamb)
+            pres_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_PRES")
             self.pamb = convert_to_SI(
                 'p',
-                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES").Value,
-                self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES").UnitString
-                ) if self.aspen.Tree.FindNode("\Data\Setup\Sim-Options\Input\REF_PRES") is not None else None            
-            
+                pres_node.Value,
+                pres_node.UnitString
+            ) if pres_node is not None else None            
+        
             if self.pamb is None:
                 raise ValueError("Ambient pressure (pamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
@@ -329,7 +567,6 @@ class AspenModelParser:
         except Exception as e:
             logging.error(f"Error parsing ambient conditions: {e}")
             raise
-
 
     def get_sorted_data(self):
         """

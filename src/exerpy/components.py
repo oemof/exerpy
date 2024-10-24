@@ -472,10 +472,15 @@ class HeatExchanger(Component):
         all_streams = list(self.inl.values()) + list(self.outl.values())
 
         # Case 1: All streams are above the ambient temperature
-        if all([stream['T'] > T0 for stream in all_streams]):
-            self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
+        if all([stream['T'] >= T0 for stream in all_streams]):
+            # TODO: Check the correct definition of E_P and E_F
+            # correct definition:
+            '''self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
             self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])'''
+            # definiton used for now:
+            self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH'] - self.inl[1]['m'] * self.inl[1]['e_PH']
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH']
 
         # Case 2: All streams are below or equal to the ambient temperature
         elif all([stream['T'] <= T0 for stream in all_streams]):
@@ -683,7 +688,11 @@ class SimpleHeatExchanger(Component):
         # Case: Heat is released (Q < 0)
         if Q < 0:
             if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
-                self.E_P = np.nan if getattr(self, 'dissipative', False) else self.inl[0]['m'] * (self.inl[0]['e_T'] - self.outl[0]['e_T'])
+                # TODO: Check the correct definition of E_P and E_F
+                # correct definition:
+                '''self.E_P = np.nan if getattr(self, 'dissipative', False) else self.inl[0]['m'] * (self.inl[0]['e_T'] - self.outl[0]['e_T'])
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])'''
+                self.E_P = np.nan if getattr(self, 'dissipative', False) else self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
                 self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
             
             elif self.inl[0]['T'] >= T0 and self.outl[0]['T'] < T0:

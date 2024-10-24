@@ -337,6 +337,9 @@ class ExergyAnalysis:
         provide_csv : bool, optional
             If True, saves the results as CSV files, default is False.
         """
+        # Define the lambda function for safe multiplication
+        convert = lambda x, factor: x * factor if x is not None else None
+
         # COMPONENTS
         component_results = {
             "Component": [],
@@ -352,20 +355,20 @@ class ExergyAnalysis:
         # Populate the dictionary with exergy analysis data from each component
         for component_name, component in self.components.items():
             component_results["Component"].append(component_name)
-            # Convert E_F, E_P, E_D from W to kW and epsilon to percentage
-            E_F_kW = component.E_F / 1000 if component.E_F is not None else None
-            E_P_kW = component.E_P / 1000 if component.E_P is not None else None
-            E_D_kW = component.E_D / 1000 if component.E_D is not None else None
-            E_L_kW = component.E_L / 1000 if getattr(component, 'E_L', None) is not None else 0
-            epsilon_percent = component.epsilon * 100 if component.epsilon is not None else None
+            # Convert E_F, E_P, E_D, E_L from W to kW and epsilon to percentage using the lambda
+            E_F_kW = convert(component.E_F, 1e-3)
+            E_P_kW = convert(component.E_P, 1e-3)
+            E_D_kW = convert(component.E_D, 1e-3)
+            E_L_kW = convert(getattr(component, 'E_L', None), 1e-3) if getattr(component, 'E_L', None) is not None else 0
+            epsilon_percent = convert(component.epsilon, 1e2)
 
             component_results["E_F [kW]"].append(E_F_kW)
             component_results["E_P [kW]"].append(E_P_kW)
             component_results["E_D [kW]"].append(E_D_kW)
             component_results["E_L [kW]"].append(E_L_kW)
             component_results["ε [%]"].append(epsilon_percent)
-            component_results["y [%]"].append(component.y * 1e2)
-            component_results["y* [%]"].append(component.y_star * 1e2)
+            component_results["y [%]"].append(convert(component.y, 1e2))
+            component_results["y* [%]"].append(convert(component.y_star, 1e2))
 
         # Convert the component dictionary into a pandas DataFrame
         df_component_results = pd.DataFrame(component_results)
@@ -374,12 +377,12 @@ class ExergyAnalysis:
         df_component_results = df_component_results.sort_values(by="Component")
 
         # Add the overall results to the components as dummy component "TOT"
-        df_component_results.loc["TOT", "E_F [kW]"] = self.E_F * 1e-3
+        df_component_results.loc["TOT", "E_F [kW]"] = convert(self.E_F, 1e-3)
         df_component_results.loc["TOT", "Component"] = 'TOT'
-        df_component_results.loc["TOT", "E_L [kW]"] = self.E_L * 1e-3
-        df_component_results.loc["TOT", "E_P [kW]"] = self.E_P * 1e-3
-        df_component_results.loc["TOT", "E_D [kW]"] = self.E_D * 1e-3
-        df_component_results.loc["TOT", "ε [%]"] = self.epsilon * 1e2
+        df_component_results.loc["TOT", "E_L [kW]"] = convert(self.E_L, 1e-3)
+        df_component_results.loc["TOT", "E_P [kW]"] = convert(self.E_P, 1e-3)
+        df_component_results.loc["TOT", "E_D [kW]"] = convert(self.E_D, 1e-3)
+        df_component_results.loc["TOT", "ε [%]"] = convert(self.epsilon, 1e2)
         # Calculate the total y [%] and y* [%] as the sum of the values for all components
         df_component_results.loc["TOT", "y [%]"] = df_component_results["y [%]"].sum()
         df_component_results.loc["TOT", "y* [%]"] = df_component_results["y* [%]"].sum()
@@ -414,24 +417,24 @@ class ExergyAnalysis:
             
             # Check if the connection is a non-material energy flow type
             if kind in {'power', 'heat'}:
-                # Non-material connections: only record energy flow, converted to kW
+                # Non-material connections: only record energy flow, converted to kW using lambda
                 non_material_connection_results["Connection"].append(conn_name)
-                non_material_connection_results["Kind"].append(conn_data.get("kind", None))
-                non_material_connection_results["Energy Flow [kW]"].append(conn_data.get("energy_flow", 0) / 1000)
-                non_material_connection_results["Exergy Flow [kW]"].append(conn_data.get("E", 0) / 1000)
+                non_material_connection_results["Kind"].append(kind)
+                non_material_connection_results["Energy Flow [kW]"].append(convert(conn_data.get("energy_flow"), 1e-3))
+                non_material_connection_results["Exergy Flow [kW]"].append(convert(conn_data.get("E"), 1e-3))
             elif kind == 'material':
-                # Material connections: record full data
+                # Material connections: record full data with conversions using lambda
                 material_connection_results["Connection"].append(conn_name)
                 material_connection_results["m [kg/s]"].append(conn_data.get('m', None))
                 material_connection_results["T [K]"].append(conn_data.get('T', None))
-                material_connection_results["p [bar]"].append(conn_data.get('p', None) * 1e-5)  # Convert bar to bar
-                material_connection_results["h [kJ/kg]"].append(conn_data.get('h', None) * 1e-3)  # Convert to kJ/kg
+                material_connection_results["p [bar]"].append(convert(conn_data.get('p'), 1e-5))  # Convert bar to bar
+                material_connection_results["h [kJ/kg]"].append(convert(conn_data.get('h'), 1e-3))  # Convert to kJ/kg
                 material_connection_results["s [J/kgK]"].append(conn_data.get('s', None))
-                material_connection_results["e^PH [kJ/kg]"].append(conn_data.get('e_PH', None) * 1e-3)  # Convert to kJ/kg
-                material_connection_results["e^T [kJ/kg]"].append(conn_data.get('e_T', None) * 1e-3)  # Convert to kJ/kg
-                material_connection_results["e^M [kJ/kg]"].append(conn_data.get('e_M', None) * 1e-3)  # Convert to kJ/kg
-                material_connection_results["e^CH [kJ/kg]"].append(conn_data.get('e_CH', None) * 1e-3)  # Convert to kJ/kg
-                material_connection_results["E [kW]"].append(conn_data.get("E", None) * 1e-3)  # Convert to kW
+                material_connection_results["e^PH [kJ/kg]"].append(convert(conn_data.get('e_PH'), 1e-3))  # Convert to kJ/kg
+                material_connection_results["e^T [kJ/kg]"].append(convert(conn_data.get('e_T'), 1e-3))    # Convert to kJ/kg
+                material_connection_results["e^M [kJ/kg]"].append(convert(conn_data.get('e_M'), 1e-3))    # Convert to kJ/kg
+                material_connection_results["e^CH [kJ/kg]"].append(convert(conn_data.get('e_CH'), 1e-3))  # Convert to kJ/kg
+                material_connection_results["E [kW]"].append(convert(conn_data.get("E"), 1e-3))          # Convert to kW
 
         # Convert the material and non-material connection dictionaries into DataFrames
         df_material_connection_results = pd.DataFrame(material_connection_results)

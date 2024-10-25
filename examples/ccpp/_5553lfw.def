@@ -1,0 +1,10 @@
+SLAVE:
+INPUT: _5553lfw.inm
+MODNAME: apmain
+RUNID: _5553lfw
+NEW_RUNID: _5553lfw
+OLD_RUNID: _5553lfw
+PDF: _5553lfw.appdf
+USERNAME: sergiotomasinelli
+XMOD: C:\Program Files\AspenTech\Aspen Plus V12.1\Engine\xeq\apmain
+SPONLY:

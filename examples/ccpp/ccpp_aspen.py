@@ -21,8 +21,8 @@ fuel = {
 }
 
 product = {
-    "inputs": ['E1', 'E2', '11'],
-    "outputs": ['PUMP1_ELEC', 'PUMP2_ELEC', '18']
+    "inputs": ['E1', 'E3', 'HC_HEAT'],
+    "outputs": ['PUMP1_ELEC', 'PUMP2_ELEC']
 }
 
 loss = {

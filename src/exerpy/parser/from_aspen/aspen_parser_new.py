@@ -101,10 +101,18 @@ class AspenModelParser:
             # HEAT AND POWER STREAMS
             if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\WORK') is not None:
                 connection_data['kind'] = 'power'
-                connection_data['energy_flow'] = abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value)
+                connection_data['energy_flow'] = convert_to_SI(
+                    'power',
+                    abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').Value),
+                    self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT').UnitString
+                    ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\POWER_OUT') is not None else None
             elif self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Input\HEAT') is not None:
                 connection_data['kind'] = 'heat'
-                connection_data['energy_flow'] = abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value)
+                connection_data['energy_flow'] = convert_to_SI(
+                    'power',
+                    abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value),
+                    self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').UnitString
+                    ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC') is not None else None
             
             # MATERIAL STREAMS
             else:
@@ -267,6 +275,23 @@ class AspenModelParser:
                         ),
                         'type': 'Generator'
                     })
+
+            # Create a connection for the heat flows of the SimpleHeatExchanger blocks
+            if component_type == 'Heater':
+                heat_connection_name = f"{block_name}_HEAT"
+                heat_connection_data = {
+                    'name': heat_connection_name,
+                    'kind': 'heat',
+                    'source_component': block_name,
+                    'source_connector': 1,  # 00 is reserved for the fluid streams
+                    'target_component': None,  # Heat assumed to leave the system (not relevant for exergy analysis)
+                    'target_connector': None,  # Heat assumed to leave the system (not relevant for exergy analysis)
+                    'energy_flow': abs(component_data['Q']),  # the user defines in the balances if the heat flow is positive or negative
+                    'energy_flow_unit': fluid_property_data['heat']['SI_unit'],
+                }
+
+                # Store the heat connection
+                self.connections_data[heat_connection_name] = heat_connection_data
 
             # Group the component
             self.group_component(component_data, block_name)

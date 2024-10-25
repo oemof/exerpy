@@ -1091,8 +1091,8 @@
             "source_connector": 0,
             "target_component": null,
             "target_connector": null,
-            "energy_flow": 248452.038,
-            "E": 248452.038,
+            "energy_flow": 248452038.0,
+            "E": 248452038.0,
             "E_unit": "W"
         },
         "E3": {
@@ -1102,8 +1102,20 @@
             "source_connector": 0,
             "target_component": null,
             "target_connector": null,
-            "energy_flow": 52507.9957,
-            "E": 52507.9957,
+            "energy_flow": 52507995.7,
+            "E": 52507995.7,
+            "E_unit": "W"
+        },
+        "HC_HEAT": {
+            "name": "HC_HEAT",
+            "kind": "heat",
+            "source_component": "HC",
+            "source_connector": 1,
+            "target_component": null,
+            "target_connector": null,
+            "energy_flow": 100055998.0,
+            "energy_flow_unit": "W",
+            "E": 39749966.6848184,
             "E_unit": "W"
         },
         "PUMP1_ELEC": {
@@ -1161,8 +1173,8 @@
             "source_connector": 1,
             "target_component": "GT",
             "target_connector": 1,
-            "energy_flow": 241955.451,
-            "E": 241955.451,
+            "energy_flow": 241955451.0,
+            "E": 241955451.0,
             "E_unit": "W"
         },
         "W2": {
@@ -1172,8 +1184,8 @@
             "source_connector": 1,
             "target_component": "GEN1",
             "target_connector": 0,
-            "energy_flow": 251979.755,
-            "E": 251979.755,
+            "energy_flow": 251979755.0,
+            "E": 251979755.0,
             "E_unit": "W"
         },
         "W3": {
@@ -1183,8 +1195,8 @@
             "source_connector": 1,
             "target_component": "ST2",
             "target_connector": 1,
-            "energy_flow": 27487.1923,
-            "E": 27487.1923,
+            "energy_flow": 27487192.299999997,
+            "E": 27487192.299999997,
             "E_unit": "W"
         },
         "W4": {
@@ -1194,8 +1206,8 @@
             "source_connector": 1,
             "target_component": "GEN2",
             "target_connector": 0,
-            "energy_flow": 53253.5453,
-            "E": 53253.5453,
+            "energy_flow": 53253545.3,
+            "E": 53253545.3,
             "E_unit": "W"
         }
     },

@@ -44,7 +44,7 @@ version = exerpy.__version__.split(' ')[0]
 release = exerpy.__version__
 
 # The suffix of source filenames.
-source_suffix = '.md'
+source_suffix = '.rst'
 # folder for templates
 templates_path = ['_templates']
 

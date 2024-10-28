@@ -59,7 +59,7 @@ tespy = [
     "tespy"
 ]
 ebsilon = [
-
+    "pywin32"
 ]
 aspen = [
 

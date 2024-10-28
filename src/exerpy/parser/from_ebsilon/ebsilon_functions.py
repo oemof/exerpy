@@ -1,14 +1,14 @@
-import sys 
+import sys
 import os
 import logging
 
 ebs_path = os.getenv("EBS")
 if not ebs_path:
     logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
-    sys.exit(1)
 
-sys.path.append(ebs_path)
-from EbsOpen import EpSteamTable, EpGasTable
+else:
+    sys.path.append(ebs_path)
+    from EbsOpen import EpSteamTable, EpGasTable
 
 from exerpy.functions import convert_to_SI
 from .ebsilon_config import unit_id_to_string, substance_mapping
@@ -46,21 +46,21 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
 
         # Set up the fluid analysis based on stream composition
         fdAnalysis = app.NewFluidAnalysis()
-        
+
         # Iterate through the substance_mapping and get the corresponding value from the pipe
         for substance_key, ep_substance_id in substance_mapping.items():
             fraction = getattr(pipe, substance_key).Value  # Dynamically access the fraction
             if fraction > 0:  # Only set substances with non-zero fractions
                 fdAnalysis.SetSubstance(ep_substance_id, fraction)
-    
+
     # Set the analysis in the FluidData object
     fd.SetAnalysis(fdAnalysis)
-    
+
     # Validate property input
     if property not in ['S', 'H']:
         logging.error('Invalid property selected. You can choose between "H" (enthalpy) and "S" (entropy).')
         return None
-    
+
     try:
         # Calculate the property based on the input property type
         if property == 'S':  # Entropy
@@ -69,7 +69,7 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
         elif property == 'H':  # Enthalpy
             res = fd.PropertyH_OF_PT(pressure * 1e-5, temperature - 273.15)  # Ebsilon works with °C and bar
             res_SI = res * 1e3  # Convert kJ/kg to J/kg
-        
+
         return res_SI
 
     except Exception as e:
@@ -91,4 +91,3 @@ def calc_eM(app, pipe, pressure, Tamb, pamb):
     eM = convert_to_SI('e', pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(app, pipe, pressure, Tamb, pamb)
 
     return eM
-

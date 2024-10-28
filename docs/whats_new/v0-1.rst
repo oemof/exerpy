@@ -1,0 +1,7 @@
+v0.1 under development
+++++++++++++++++++++++
+
+Initial release of :code:`ExerPy`
+
+Contributors
+############

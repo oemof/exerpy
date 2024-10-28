@@ -47,7 +47,13 @@ dev = [
     "build",
     "flit",
     "furo",
-    "pytest"
+    "pytest",
+    "sphinx>=7.2.2",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinxcontrib.bibtex",
+    "tespy",
+    "tox",
 ]
 tespy = [
     "tespy"

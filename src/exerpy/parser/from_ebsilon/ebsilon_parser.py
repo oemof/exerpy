@@ -16,10 +16,10 @@ from exerpy.functions import convert_to_SI, fluid_property_data
 ebs_path = os.getenv("EBS")
 if not ebs_path:
     logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
-    sys.exit(1)
 
-sys.path.append(ebs_path)
-from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
+else:
+    sys.path.append(ebs_path)
+    from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
 
 from .ebsilon_config import (
     ebs_objects,
@@ -43,7 +43,7 @@ class EbsilonModelParser:
     def __init__(self, model_path):
         """
         Initializes the parser with the given model path.
-        
+
         Parameters:
             model_path (str): Path to the Ebsilon model file.
         """
@@ -105,7 +105,7 @@ class EbsilonModelParser:
                 # Check if the object is a component (epObjectKindComp = 10)
                 if obj.IsKindOf(10):
                     self.parse_component(obj)
-            
+
             # After parsing all components, check if Tamb and pamb have been set
             if self.Tamb is None or self.pamb is None:
                 error_msg = (
@@ -115,7 +115,7 @@ class EbsilonModelParser:
                 )
                 logging.error(error_msg)
                 raise ValueError(error_msg)
-            
+
             # Iterate over all objects in the model and select the connections
             for j in range(1, total_objects + 1):
                 obj = self.model.Objects.Item(j)
@@ -131,7 +131,7 @@ class EbsilonModelParser:
     def parse_connection(self, obj):
         """
         Parses the connections (pipes) associated with a component.
-        
+
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
@@ -171,7 +171,7 @@ class EbsilonModelParser:
             # Get the connectors (links) at both ends of the pipe
             link0 = pipe_cast.Link(0) if pipe_cast.HasComp(0) else None
             link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
-        
+
             # GENERAL INFORMATION
             connection_data.update({
                 'source_component': comp0.Name if comp0 else None,
@@ -304,7 +304,7 @@ class EbsilonModelParser:
             # Convert the connector numbers to selected standard values for each component
             if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
                 connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
-            
+
             if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
                 connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
 
@@ -318,7 +318,7 @@ class EbsilonModelParser:
     def parse_component(self, obj):
         """
         Parses data from a component, including its type and various properties.
-        
+
         Parameters:
             obj: The Ebsilon component object to parse.
         """
@@ -328,7 +328,7 @@ class EbsilonModelParser:
 
         # Dynamically call the specific CastToCompX method based on type_index
         cast_method_name = f"CastToComp{type_index}"
-        
+
         # Check if the method exists and call it, otherwise fallback to general casting
         if hasattr(self.oc, cast_method_name):
             comp_cast = getattr(self.oc, cast_method_name)(obj)
@@ -339,7 +339,7 @@ class EbsilonModelParser:
 
         # Get the human-readable type name of the component
         type_name = ebs_objects.get(type_index, f"Unknown Type {type_index}")
-        
+
         # Exclude non-thermodynamic unit operators
         if type_index not in non_thermodynamic_unit_operators:
             # Collect component data
@@ -416,7 +416,7 @@ class EbsilonModelParser:
                 if type_index in type_list:
                     group = group_name
                     break
-            
+
             # If the component type doesn't belong to any predefined group, use its type name
             if not group:
                 group = type_name
@@ -469,7 +469,7 @@ class EbsilonModelParser:
     def write_to_json(self, output_path):
         """
         Writes the parsed and sorted data to a JSON file.
-        
+
         Parameters:
             output_path (str): Path where the JSON file will be saved.
         """
@@ -486,16 +486,16 @@ class EbsilonModelParser:
 
 def run_ebsilon(model_path, output_dir=None):
     """
-    Main function to process the Ebsilon model and return parsed data. 
+    Main function to process the Ebsilon model and return parsed data.
     Optionally writes the parsed data to a JSON file.
-    
+
     Parameters:
         model_path (str): Path to the Ebsilon model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
-    
+
     Returns:
         dict: Parsed data in dictionary format.
-    
+
     Raises:
         FileNotFoundError: If the model file is not found at the specified path.
         RuntimeError: For any error during model initialization, simulation, parsing, or writing.
@@ -518,7 +518,7 @@ def run_ebsilon(model_path, output_dir=None):
         error_msg = f"An error occurred during initializing: {e}"
         logging.error(error_msg)
         raise RuntimeError(error_msg)
-    
+
     try:
         # Simulate the Ebsilon model
         parser.simulate_model()
@@ -553,4 +553,3 @@ def run_ebsilon(model_path, output_dir=None):
 
     # Return the parsed data as a dictionary (not as a JSON string)
     return parsed_data
-

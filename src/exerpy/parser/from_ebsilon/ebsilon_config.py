@@ -1,22 +1,23 @@
 """
 Ebsilon Configuration Data
 
-This script contains the configuration data used by the Ebsilon model parser, 
-including lists of component types, fluid types, fluid composition parameters, 
+This script contains the configuration data used by the Ebsilon model parser,
+including lists of component types, fluid types, fluid composition parameters,
 and groups for sorting components into functional categories.
 """
 
-import sys 
-import os 
+import sys
+import os
 import logging
 
 ebs_path = os.getenv("EBS")
 if not ebs_path:
     logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
-    sys.exit(1)
+    EpSubstance = None
 
-sys.path.append(ebs_path)
-from EbsOpen import EpSubstance
+else:
+    sys.path.append(ebs_path)
+    from EbsOpen import EpSubstance
 
 # Dictionary mapping Ebsilon component numbers to their label
 ebs_objects = {
@@ -275,68 +276,69 @@ connection_kinds = {
 }
 
 # Dictionary mapping stream substance names to EpSubstance identifiers
-substance_mapping = {
-    "XN2": EpSubstance.epSubstanceN2,
-    "XO2": EpSubstance.epSubstanceO2,
-    "XCO2": EpSubstance.epSubstanceCO2,
-    "XH2O": EpSubstance.epSubstanceH2O,
-    "XAR": EpSubstance.epSubstanceAR,
-    "XSO2": EpSubstance.epSubstanceSO2,
-    "XCO": EpSubstance.epSubstanceCO,
-    "XCH4": EpSubstance.epSubstanceCH4,
-    "XH2S": EpSubstance.epSubstanceH2S,
-    "XH2": EpSubstance.epSubstanceH2,
-    "XNH3": EpSubstance.epSubstanceNH3,
-    "XNO": EpSubstance.epSubstanceNO,
-    "XNO2": EpSubstance.epSubstanceNO2,
-    "XC": EpSubstance.epSubstanceC,
-    "XS": EpSubstance.epSubstanceS,
-    "XCL": EpSubstance.epSubstanceCL,
-    "XASH": EpSubstance.epSubstanceASH,
-    "XLIME": EpSubstance.epSubstanceLIME,
-    "XCA": EpSubstance.epSubstanceCA,
-    "XCAO": EpSubstance.epSubstanceCAO,
-    "XCACO3": EpSubstance.epSubstanceCACO3,
-    "XCASO4": EpSubstance.epSubstanceCASO4,
-    "XMG": EpSubstance.epSubstanceMG,
-    "XMGO": EpSubstance.epSubstanceMGO,
-    "XMGCO3": EpSubstance.epSubstanceMGCO3,
-    "XHCL": EpSubstance.epSubstanceHCL,
-    "XHCN": EpSubstance.epSubstanceHCN,
-    "XCS2": EpSubstance.epSubstanceCS2,
-    "XH2OB": EpSubstance.epSubstanceH2OB,
-    "XN2O": EpSubstance.epSubstanceN2O,
-    "XHE": EpSubstance.epSubstanceHE,
-    "XNE": EpSubstance.epSubstanceNE,
-    "XKR": EpSubstance.epSubstanceKR,
-    "XXE": EpSubstance.epSubstanceXE,
-    "XASHG": EpSubstance.epSubstanceASHG,
-    "XACET": EpSubstance.epSubstanceACET,
-    "XBENZ": EpSubstance.epSubstanceBENZ,
-    "XC2BUTEN": EpSubstance.epSubstanceC2BUTEN,
-    "XCYCPENT": EpSubstance.epSubstanceCYCPENT,
-    "XDEC": EpSubstance.epSubstanceDEC,
-    "XEBENZ": EpSubstance.epSubstanceEBENZ,
-    "XETH": EpSubstance.epSubstanceETH,
-    "XETHL": EpSubstance.epSubstanceETHL,
-    "XH": EpSubstance.epSubstanceH,
-    "XO": EpSubstance.epSubstanceO,
-    "XMETHL": EpSubstance.epSubstanceMETHL,
-    "XNEOPENT": EpSubstance.epSubstanceNEOPENT,
-    "XTOLUEN": EpSubstance.epSubstanceTOLUEN,
-    "XIBUT": EpSubstance.epSubstanceIBUT,
-    "XIPENT": EpSubstance.epSubstanceIPENT,
-    "XIBUTEN": EpSubstance.epSubstanceIBUTEN,
-    "X1BUTEN": EpSubstance.epSubstance1BUTEN,
-    "X3MPENT": EpSubstance.epSubstance3MPENT,
-    "XPROP": EpSubstance.epSubstancePROP,
-    "XPROPEN": EpSubstance.epSubstancePROPEN,
-    "XHEX": EpSubstance.epSubstanceHEX,
-    "XHEPT": EpSubstance.epSubstanceHEPT,
-    "XOXYLEN": EpSubstance.epSubstanceOXYLEN,
-    "XTDECALIN": EpSubstance.epSubstanceTDECALIN,
-    "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN
-}
+if EpSubstance is not None:
+    substance_mapping = {
+        "XN2": EpSubstance.epSubstanceN2,
+        "XO2": EpSubstance.epSubstanceO2,
+        "XCO2": EpSubstance.epSubstanceCO2,
+        "XH2O": EpSubstance.epSubstanceH2O,
+        "XAR": EpSubstance.epSubstanceAR,
+        "XSO2": EpSubstance.epSubstanceSO2,
+        "XCO": EpSubstance.epSubstanceCO,
+        "XCH4": EpSubstance.epSubstanceCH4,
+        "XH2S": EpSubstance.epSubstanceH2S,
+        "XH2": EpSubstance.epSubstanceH2,
+        "XNH3": EpSubstance.epSubstanceNH3,
+        "XNO": EpSubstance.epSubstanceNO,
+        "XNO2": EpSubstance.epSubstanceNO2,
+        "XC": EpSubstance.epSubstanceC,
+        "XS": EpSubstance.epSubstanceS,
+        "XCL": EpSubstance.epSubstanceCL,
+        "XASH": EpSubstance.epSubstanceASH,
+        "XLIME": EpSubstance.epSubstanceLIME,
+        "XCA": EpSubstance.epSubstanceCA,
+        "XCAO": EpSubstance.epSubstanceCAO,
+        "XCACO3": EpSubstance.epSubstanceCACO3,
+        "XCASO4": EpSubstance.epSubstanceCASO4,
+        "XMG": EpSubstance.epSubstanceMG,
+        "XMGO": EpSubstance.epSubstanceMGO,
+        "XMGCO3": EpSubstance.epSubstanceMGCO3,
+        "XHCL": EpSubstance.epSubstanceHCL,
+        "XHCN": EpSubstance.epSubstanceHCN,
+        "XCS2": EpSubstance.epSubstanceCS2,
+        "XH2OB": EpSubstance.epSubstanceH2OB,
+        "XN2O": EpSubstance.epSubstanceN2O,
+        "XHE": EpSubstance.epSubstanceHE,
+        "XNE": EpSubstance.epSubstanceNE,
+        "XKR": EpSubstance.epSubstanceKR,
+        "XXE": EpSubstance.epSubstanceXE,
+        "XASHG": EpSubstance.epSubstanceASHG,
+        "XACET": EpSubstance.epSubstanceACET,
+        "XBENZ": EpSubstance.epSubstanceBENZ,
+        "XC2BUTEN": EpSubstance.epSubstanceC2BUTEN,
+        "XCYCPENT": EpSubstance.epSubstanceCYCPENT,
+        "XDEC": EpSubstance.epSubstanceDEC,
+        "XEBENZ": EpSubstance.epSubstanceEBENZ,
+        "XETH": EpSubstance.epSubstanceETH,
+        "XETHL": EpSubstance.epSubstanceETHL,
+        "XH": EpSubstance.epSubstanceH,
+        "XO": EpSubstance.epSubstanceO,
+        "XMETHL": EpSubstance.epSubstanceMETHL,
+        "XNEOPENT": EpSubstance.epSubstanceNEOPENT,
+        "XTOLUEN": EpSubstance.epSubstanceTOLUEN,
+        "XIBUT": EpSubstance.epSubstanceIBUT,
+        "XIPENT": EpSubstance.epSubstanceIPENT,
+        "XIBUTEN": EpSubstance.epSubstanceIBUTEN,
+        "X1BUTEN": EpSubstance.epSubstance1BUTEN,
+        "X3MPENT": EpSubstance.epSubstance3MPENT,
+        "XPROP": EpSubstance.epSubstancePROP,
+        "XPROPEN": EpSubstance.epSubstancePROPEN,
+        "XHEX": EpSubstance.epSubstanceHEX,
+        "XHEPT": EpSubstance.epSubstanceHEPT,
+        "XOXYLEN": EpSubstance.epSubstanceOXYLEN,
+        "XTDECALIN": EpSubstance.epSubstanceTDECALIN,
+        "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN
+    }
 
 
 unit_id_to_string = {

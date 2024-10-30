@@ -14,7 +14,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": 515.6141284440314,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -36,7 +36,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": 515.6141284440314,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -58,7 +58,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": null,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -78,7 +78,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": null,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -100,7 +100,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": 2053.464676471483,
-                "kA_unit": "kW / K",
+                "kA_unit": "W / K",
                 "mass_flow_1": 50.0,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 525.6141284440314,
@@ -122,7 +122,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": null,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -144,7 +144,7 @@
                 "P": null,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": 50.0,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -166,7 +166,7 @@
                 "P": 400293452.0895175,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": 525.6141284440314,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -186,7 +186,7 @@
                 "P": 21185437.951212015,
                 "P_unit": "W",
                 "kA": null,
-                "kA_unit": "Unknown",
+                "kA_unit": "W / K",
                 "mass_flow_1": 50.0,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
@@ -263,9 +263,9 @@
             "e_PH_unit": "J / kg",
             "x": 1.0,
             "x_unit": "-",
-            "e_T": 712181.9059434584,
+            "e_T": 710583.9446430607,
             "e_T_unit": "J / kg",
-            "e_M": 1.0818359442055225e-05,
+            "e_M": 1597.9613112161169,
             "e_M_unit": "J / kg",
             "mass_composition": {
                 "H2O": 1
@@ -300,9 +300,9 @@
             "e_PH_unit": "J / kg",
             "x": 1.0,
             "x_unit": "-",
-            "e_T": 712181.9059439795,
+            "e_T": 710583.9446435818,
             "e_T_unit": "J / kg",
-            "e_M": 1.0818825103342533e-05,
+            "e_M": 1597.9613112165825,
             "e_M_unit": "J / kg",
             "mass_composition": {
                 "H2O": 1
@@ -616,9 +616,9 @@
             "e_PH_unit": "J / kg",
             "x": 1.0,
             "x_unit": "-",
-            "e_T": 1166097.9623512146,
+            "e_T": 1164897.0212067864,
             "e_T_unit": "J / kg",
-            "e_M": 397.0201667882502,
+            "e_M": 1597.9613112164661,
             "e_M_unit": "J / kg",
             "mass_composition": {
                 "H2O": 1
@@ -754,6 +754,10 @@
             "E_unit": "W"
         }
     },
-    "Tamb": 288.15,
-    "pamb": 101299.99999999999
+    "ambient_conditions": {
+        "Tamb": 288.15,
+        "Tamb_unit": "K",
+        "pamb": 101299.99999999999,
+        "pamb_unit": "Pa"
+    }
 }

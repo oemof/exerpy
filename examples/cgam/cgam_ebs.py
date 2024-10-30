@@ -16,13 +16,13 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cgam.ebs')
 ean = ExergyAnalysis.from_ebsilon(model_path)
 
 fuel = {
-    "inputs": ['1', '12'],
+    "inputs": ['1', '10'],
     "outputs": []
 }
 
 
 product = {
-    "inputs": ['11', '9'],
+    "inputs": ['E1', '9'],
     "outputs": ['8']
 }
 

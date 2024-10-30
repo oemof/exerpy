@@ -16,15 +16,35 @@ from .ebsilon_config import unit_id_to_string, substance_mapping
 
 def calc_X_from_PT(app, pipe, property, pressure, temperature):
     """
-    General method to calculate enthalpy or entropy for any stream based on pressure and temperature.
-    Automatically handles the composition of the stream.
+    Calculate a thermodynamic property (enthalpy or entropy) for a given stream based on pressure and temperature.
 
-    :param app: The Ebsilon application instance
-    :param stream: The stream object
-    :param property: The name of the property that is calculated
-    :param pressure: Pressure (in bar)
-    :param temperature: Temperature (in °C)
-    :return: The value of the calculated property
+    This method takes pressure and temperature values and calculates the specified property for any fluid stream. 
+    It automatically handles the composition of the stream by setting up appropriate fluid properties and analysis
+    parameters based on the stream's fluid type and composition.
+
+    Parameters
+    ----------
+    app : Ebsilon application instance
+        The Ebsilon application used for creating fluid and analysis objects.
+    pipe : Stream object
+        The stream object containing fluid and composition information.
+    property : str
+        The thermodynamic property to calculate, either 'H' for enthalpy or 'S' for entropy.
+    pressure : float
+        The pressure value (in bar).
+    temperature : float
+        The temperature value (in °C).
+
+    Returns
+    -------
+    float
+        The calculated value of the specified property (in J/kg for enthalpy, J/kgK for entropy).
+        Returns None if an invalid property is specified or an error occurs during calculation.
+
+    Raises
+    ------
+    Exception
+        Logs an error and returns None if any exception occurs during property calculation.
     """
 
     # Create a new FluidData object
@@ -34,15 +54,22 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     fd.FluidType = (pipe.Kind-1000)
 
     if fd.FluidType == 3:  # steam
-        fd.SteamTable = EpSteamTable.epSteamTableIAPWS_IF97      # IF97 steamtable
+        fd.SteamTable = EpSteamTable.epSteamTableFromSuperiorModel
         fdAnalysis = app.NewFluidAnalysis()
 
     elif fd.FluidType == 4:  # water
         fdAnalysis = app.NewFluidAnalysis()
 
+    elif fd.FluidType == 15:  # 2PhaseLiquid
+        fd.Medium = pipe.FMED.Value
+        fdAnalysis = app.NewFluidAnalysis()
+
+    elif fd.FluidType == 16:  # 2PhaseGaseous
+        fd.Medium = pipe.FMED.Value
+        fdAnalysis = app.NewFluidAnalysis()
+
     else:  # flue gas, air etc.
-        # Get the data for flue gases from FDBR gas table
-        fd.GasTable = EpGasTable.epGasTableFDBR
+        fd.GasTable = EpGasTable.epGasTableFromSuperiorModel
 
         # Set up the fluid analysis based on stream composition
         fdAnalysis = app.NewFluidAnalysis()

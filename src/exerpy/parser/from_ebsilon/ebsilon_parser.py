@@ -29,7 +29,8 @@ from .ebsilon_config import (
     grouped_components,
     connector_mapping,
     unit_id_to_string,
-    connection_kinds
+    connection_kinds,
+    two_phase_fluids_mapping
 )
 
 # Configure logging to display info-level messages
@@ -265,6 +266,14 @@ class EbsilonModelParser:
                 # Handle mass composition logic for fluids
                 if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
                     connection_data['mass_composition'] = {'H2O': 1}
+                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['2PhaseLiquid', '2PhaseGaseous']:
+                    # Get the FMED value to determine the substance
+                    fmed_value = pipe_cast.FMED.Value if hasattr(pipe_cast, 'FMED') else None
+                    if fmed_value in two_phase_fluids_mapping.keys():
+                        connection_data['mass_composition'] = two_phase_fluids_mapping[fmed_value]
+                    else:
+                        connection_data['mass_composition'] = {}  # Default if no mapping found
+                        logging.warning(f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it.")
                 else:
                     connection_data['mass_composition'] = {
                         param.lstrip('X'): getattr(pipe_cast, param).Value

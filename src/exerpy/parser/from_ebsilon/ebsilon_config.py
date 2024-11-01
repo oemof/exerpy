@@ -836,63 +836,40 @@ composition_params = [
 # Define the component groups via unique labels
 grouped_components = {
     "Turbine": [6, 23, 34, 56, 57, 122],
-    "HeatExchanger": [5, 10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
-    "CombustionChamber": [21, 22, 90],
+    "HeatExchanger": [10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "CombustionChamber": [22, 90],
     "Valve": [2, 14, 39, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
     "Condenser": [7, 47, 78],
     "Deaerator": [9, 63],
-    "SimpleHeatExchanger": [35],
-    "Mixer": [3, 37, 38, 49, 60, 102, 141, 161]
+    "SimpleHeatExchanger": [15, 16, 35],
+    "Mixer": [3, 37, 38, 49, 60, 102, 141, 161],
+    "Splitter": [4, 17, 18, 52, 109, 140, 157],
+    "Separator": [19, 99],
 }
 
 # Connector mapping rules for different component types
 connector_mapping = {
-    22: {  # Combustion Chamber of Gas Turbine
-        1: 0,  # Inlet air
-        2: 0,  # Outlet combustion gas
-        3: 2,  # Inlet secondary air
-        4: 1,  # Inlet fuel gas
+    2: {  # Throttle
+        1: 0,  # Input
+        2: 0,  # Output
     },
-    24: {  # Compressor / Fan
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    3: {  # Mixer
+        1: 0,  # Input 1
+        2: 0,  # Output
+        3: 1,  # Input 2
     },
-    8: {  # Pump
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
-    },
-    23: {  # Gas turbine (Turbine only)
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    4: {  # Splitter
+        1: 0,  # Input
+        2: 0,  # Output 1
+        3: 1,  # Output 2
     },
     6: {  # Steam turbine
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
         3: 1,  # Connector 3 in Ebsilon is outlet(1): 1st extraction
         4: 2,  # Connector 4 in Ebsilon is outlet(2): 2nd extraction
-    },
-    11: {  # Generator
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
-    },
-    29: {  # Motor
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
-    },
-    55: {  # Universal Heat Exchanger
-        1: 1,  # Inlet cold stream
-        2: 1,  # Outlet cold stream
-        3: 0,  # Inlet hot stream
-        4: 0,  # Outlet hot stream
-        5: 2,  # Second outlet hot stream (if present)
-    },
-    25: {  # Air Preheater
-        1: 1,  # Inlet cold stream
-        2: 1,  # Outlet cold stream
-        3: 0,  # Inlet hot stream
-        4: 0,  # Outlet hot stream
     },
     7: {  # Condenser
         1: 1,  # Inlet cold stream
@@ -901,6 +878,10 @@ connector_mapping = {
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet hot stream (if present)
     },
+    8: {  # Pump
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
     9: {  # Feed Water Container / De Aerator
         1: 0,  # Inlet boiling water
         2: 0,  # Outlet condensate stream
@@ -908,22 +889,60 @@ connector_mapping = {
         4: 2,  # Inlet secondary condensate
         5: 1,  # Outlet steam losses (if present)
     },
-    35: {  # Heat Consumer / Simple Heat Exchanger
-        1: 0,  # Inlet (hot) stream
-        2: 0,  # Outlet (cold) stream
-        3: 1,  # Outlet heat flow
-    },
-    37: {  # Simple Mixer
-        1: 0,  # Inlet 1
-        2: 0,  # Outlet
-        3: 1,  # Inlet 2
-    },
-    70: {  # Evaporator
+    10: {  # Feed Water Preheater / Heating Condenser
         1: 1,  # Inlet cold stream
         2: 1,  # Outlet cold stream
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
-        5: 2,  # Second outlet cold stream (if present)
+        5: 2,  # Second inlet cold stream (if present)
+    },
+    11: {  # Generator
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    14: {  # Control valve
+        1: 0,  # Inlet
+        2: 0,  # Outlet
+    },
+    15: {  # Heat Extraction
+        1: 0,  # Inlet (hot) stream
+        2: 0,  # Outlet (cold) stream
+        3: 1,  # Outlet heat flow
+    },
+    16: {  # Heat Injection
+        1: 0,  # Inlet (cold) stream
+        2: 0,  # Outlet (hot) stream
+        3: 1,  # Inlet heat flow
+    },
+    17: {  # Splitter with characteristic
+        1: 0,  # Input
+        2: 0,  # Output 1
+        3: 1,  # Output 2
+    },
+    18: {  # Splitter with ratio specification
+        1: 0,  # Input
+        2: 0,  # Output 1
+        3: 1,  # Output 2
+    },
+    22: {  # Combustion Chamber of Gas Turbine
+        1: 0,  # Inlet air
+        2: 0,  # Outlet combustion gas
+        3: 2,  # Inlet secondary air
+        4: 1,  # Inlet fuel gas
+    },
+    23: {  # Gas turbine (Turbine only)
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    24: {  # Compressor / Fan
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    25: {  # Air Preheater
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
     },
     26: {  # Economizer / Superheater
         1: 1,  # Inlet cold stream
@@ -937,6 +956,34 @@ connector_mapping = {
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
     },
+    29: {  # Motor
+        1: 0,  # Connector 1 in Ebsilon is inlet(0)
+        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    35: {  # Heat Consumer / Simple Heat Exchanger
+        1: 0,  # Inlet (hot) stream
+        2: 0,  # Outlet (cold) stream
+        3: 1,  # Outlet heat flow
+    },
+    37: {  # Simple Mixer
+        1: 0,  # Inlet 1
+        2: 0,  # Outlet
+        3: 1,  # Inlet 2
+    },
+    55: {  # Universal Heat Exchanger
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet hot stream (if present)
+    },
+    70: {  # Evaporator
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet cold stream (if present)
+    },
     90: {  # Reaction Zone of Steam Generator
         1: 2,  # Inlet secondary flue gas
         2: 0,  # Outlet combustion gas
@@ -948,13 +995,5 @@ connector_mapping = {
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
     },
-    14: {  # Control valve
-        1: 0,  # Inlet
-        2: 0,  # Outlet
-    },
-    # ...
-    # ...
-    # Add more mappings for other component types as needed
-    # ...
-    # ...
 }
+

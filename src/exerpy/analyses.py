@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import json
 from tabulate import tabulate
-from .components import component_registry
+from .components.component import component_registry
 from .parser.from_ebsilon import ebsilon_parser as ebs_parser
 from .parser.from_aspen import aspen_parser
 from .functions import add_chemical_exergy, add_total_exergy_flow

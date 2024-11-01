@@ -5,4 +5,4 @@ import os
 
 __datapath__ = os.path.join(importlib.resources.files("exerpy"), "data")
 
-from .analyses_new import ExergyAnalysis
+from .analyses import ExergyAnalysis

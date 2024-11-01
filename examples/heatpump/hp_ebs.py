@@ -10,25 +10,24 @@ logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s -
 from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'simple_example.ebs'))
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'hp.ebs'))
 
 # Initialize the exergy analysis with the simulation path
 ean = ExergyAnalysis.from_ebsilon(model_path)
 
 fuel = {
-    "inputs": ['1', '3', '7'],
+    "inputs": ['E1', 'E2', 'E3'],
     "outputs": []
 }
 
-
 product = {
-    "inputs": ['E1', 'E3'],
-    "outputs": ['E2']
+    "inputs": ['23'],
+    "outputs": ['21']
 }
 
 loss = {
-    "inputs": ['6', '10', '11'],
-    "outputs": []
+    "inputs": ['13'],
+    "outputs": ['11']
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)

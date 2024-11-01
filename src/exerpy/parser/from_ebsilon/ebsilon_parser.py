@@ -364,6 +364,10 @@ class EbsilonModelParser:
                     comp_cast.ETAMN.Value
                     if hasattr(comp_cast, 'ETAMN') and comp_cast.ETAMN.Value is not None else None
                 ),
+                'eta_el': (
+                    comp_cast.ETAEN.Value
+                    if hasattr(comp_cast, 'ETAEN') and comp_cast.ETAEN.Value is not None else None
+                ),
                 'eta_cc': (
                     comp_cast.ETAB.Value
                     if hasattr(comp_cast, 'ETAB') and comp_cast.ETAB.Value is not None else None

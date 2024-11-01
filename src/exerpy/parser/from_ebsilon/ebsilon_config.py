@@ -931,6 +931,12 @@ connector_mapping = {
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
     },
+    27: {  # Aftercooler / Superheater
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+    },
     90: {  # Reaction Zone of Steam Generator
         1: 2,  # Inlet secondary flue gas
         2: 0,  # Outlet combustion gas
@@ -941,7 +947,11 @@ connector_mapping = {
         7: 4,  # Irradation losses below
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
-    }
+    },
+    14: {  # Control valve
+        1: 0,  # Inlet
+        2: 0,  # Outlet
+    },
     # ...
     # ...
     # Add more mappings for other component types as needed

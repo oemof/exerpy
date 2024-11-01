@@ -171,17 +171,17 @@ class Compressor(Component):
 
         # Case 2: Inlet temperature is less than ambient, but outlet is greater than ambient temperature
         elif round(self.inl[0]['T'],5) < T0 and round(self.outl[0]['T'],5) > T0:
-            # Exergy product (mechanical work + thermal exergy change)
-            self.E_P = abs(self.P) + (self.outl[0]['e_PH'] - self.inl[0]['e_M'])
-            # Exergy fuel includes mechanical and thermal exergy at the inlet
-            self.E_F = (self.inl[0]['e_M'] + self.inl[0]['e_PH'])
+            # Exergy product (thermal exergy at the outlet + mechanical exergy change)
+            self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
+            # Exergy fuel includes power input and thermal exergy at the inlet
+            self.E_F = abs(self.P) + self.inl[0]['m'] + self.inl[0]['e_T']
 
         # Case 3: Both inlet and outlet temperatures are less than or equal to ambient temperature
         elif round(self.inl[0]['T'],5) < T0 and round(self.outl[0]['T'],5) <= T0:
-            # Exergy product (mechanical work only, assuming no useful thermal exergy)
-            self.E_P = self.outl[0]['e_M'] - self.inl[0]['e_M']
-            # Exergy fuel is primarily the mechanical exergy difference and thermal exergy at the inlet
-            self.E_F = (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+            # Exergy product (thermal exergy at the outlet + mechanical exergy change)
+            self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
+            # Exergy fuel includes power input and thermal exergy at the inlet
+            self.E_F = abs(self.P) + self.inl[0]['m'] + (self.inl[0]['e_T'] - self.outl[0]['e_T'])
 
         # Invalid case: if outlet temperature is smaller than inlet temperature, this condition is not supported
         else:
@@ -812,3 +812,70 @@ class Mixer(Component):
 
         # Log the results
         logging.info(f"Mixer exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+
+
+@component_registry
+class Valve(Component):
+    """
+    Valve component class.
+
+    This class represents a valve component in the system and is responsible for
+    calculating the exergy balance specific to a valve.
+
+    Attributes:
+        E_P (float): Exergy product.
+        E_F (float): Exergy fuel.
+        E_D (float): Exergy destruction (difference between exergy fuel and exergy product).
+        epsilon (float): Exergy efficiency.
+    """
+
+    def __init__(self, **kwargs):
+        """
+        Initialize the Valve component.
+
+        Args:
+            **kwargs: Arbitrary keyword arguments passed to the base class initializer.
+        """
+        super().__init__(**kwargs)
+    
+    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+        """
+        Calculate exergy balance of a valve.
+
+        This method overrides the base class method for the specific behavior of a valve.
+
+        Args:
+            T0 (float): Reference temperature.
+        """
+        # Ensure that the component has both inlet and outlet streams
+        if len(self.inl) < 1 or len(self.outl) < 1:
+            raise ValueError("Valve requires at least one inlet and one outlet.")
+
+        T_in = self.inl[0]['T']
+        T_out = self.outl[0]['T']
+        
+        # Calculate Exergy Product (E_P) and Exergy Fuel (E_F)
+        if T_in > T0 and T_out > T0:
+            self.E_P = np.nan
+            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+        elif T_out <= T0 and T_in > T0:
+            self.E_P = self.inl[0]['m'] * self.outl[0]['e_T']
+            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] + self.inl[0]['e_M'] - self.outl[0]['e_M'])
+        elif T_in <= T0 and T_out <= T0:
+            self.E_P = self.inl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
+            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_M'] - self.outl[0]['e_M'])
+        else:
+            logging.warning("Exergy balance of a valve, where outlet temperature is larger than inlet temperature, is not implemented.")
+            self.E_P = np.nan
+            self.E_F = np.nan
+
+        # Calculate Exergy Destruction (E_D) and Exergy Efficiency (epsilon)
+        if np.isnan(self.E_P):
+            self.E_D = self.E_F
+        else:
+            self.E_D = self.E_F - self.E_P
+        
+        self.epsilon = self._calc_epsilon()
+
+        # Log the results
+        logging.info(f"Valve exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")

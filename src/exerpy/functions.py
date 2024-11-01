@@ -2,6 +2,7 @@ import CoolProp.CoolProp as CP
 import math
 import json
 import os
+import sys
 import logging
 from exerpy import __datapath__
 
@@ -85,7 +86,7 @@ def molar_to_mass_fractions(molar_fractions):
     return mass_fractions
 
 
-def calc_chemical_exergy(stream_data, Tamb, pamb):
+def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
     """
     Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
     - Case A: Handle pure substance.
@@ -112,11 +113,16 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
             molar_fractions = mass_to_molar_fractions(stream_data['mass_composition'])
             logging.info(f"Converted mass composition to molar fractions: {molar_fractions}")
         
-        # Load chemical exergy data
-        ahrendts_file = os.path.join(__datapath__, 'Ahrendts.json')        
-        with open(ahrendts_file, 'r') as file:
-            ahrendts_data = json.load(file)  # data in J/kmol
-            logging.info("Loaded Ahrendts data successfully.")
+        try:
+            # Load chemical exergy data
+            chem_ex_file = os.path.join(__datapath__, f'{chemExLib}.json')
+            with open(chem_ex_file, 'r') as file:
+                chem_ex_data = json.load(file)  # data in J/kmol
+                logging.info("Chemical exergy data loaded successfully.")
+        except FileNotFoundError:
+            logging.error(f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'.")
+            sys.exit(1)
+            
 
         R = 8.314  # Universal gas constant in J/(molK)
         aliases_water = CP.get_aliases('H2O')
@@ -128,12 +134,12 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
             aliases = CP.get_aliases(substance)
 
             if set(aliases) & set(aliases_water):
-                eCH = ahrendts_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in J/kg
+                eCH = chem_ex_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in J/kg
                 logging.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
             else:
                 for alias in aliases:
-                    if alias.upper() in ahrendts_data:
-                        eCH = ahrendts_data[alias.upper()][3] / CP.PropsSI('M', substance)  # in J/kg
+                    if alias.upper() in chem_ex_data:
+                        eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI('M', substance)  # in J/kg
                         logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
                         break
                 else:
@@ -169,7 +175,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
                     x_H2O_liquid = molar_fractions[water_alias] - x_H2O_gas  # Liquid water fraction
                     x_total_gas = 1 - x_H2O_liquid  # Total gas phase fraction
 
-                    eCH_liquid_mol = x_H2O_liquid * (ahrendts_data['WATER'][2])  # Liquid phase contribution, in J/mol
+                    eCH_liquid_mol = x_H2O_liquid * (chem_ex_data['WATER'][2])  # Liquid phase contribution, in J/mol
 
                     for substance, fraction in molar_fractions.items():
                         if substance == water_alias:
@@ -180,8 +186,8 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
                     for substance, fraction in molar_fractions_gas.items():
                         aliases = CP.get_aliases(substance)
                         for alias in aliases:
-                            if alias.upper() in ahrendts_data:
-                                eCH_gas_mol += fraction * (ahrendts_data[alias.upper()][3]) # Exergy is in J/mol
+                            if alias.upper() in chem_ex_data:
+                                eCH_gas_mol += fraction * (chem_ex_data[alias.upper()][3]) # Exergy is in J/mol
                                 break
                         else:
                             logging.error(f"No matching alias found for {substance}")
@@ -200,8 +206,8 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
                     for substance, fraction in molar_fractions.items():
                         aliases = CP.get_aliases(substance)
                         for alias in aliases:
-                            if alias.upper() in ahrendts_data:
-                                eCH_mol += fraction * (ahrendts_data[alias.upper()][3])  # Exergy in J/kmol
+                            if alias.upper() in chem_ex_data:
+                                eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
                                 break
                         else:
                             logging.error(f"No matching alias found for {substance}")
@@ -218,8 +224,8 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
                 for substance, fraction in molar_fractions.items():
                     aliases = CP.get_aliases(substance)
                     for alias in aliases:
-                        if alias.upper() in ahrendts_data:
-                            eCH_mol += fraction * (ahrendts_data[alias.upper()][3])  # Exergy in J/kmol
+                        if alias.upper() in chem_ex_data:
+                            eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
                             break
                     else:
                         logging.error(f"No matching alias found for {substance}")
@@ -240,7 +246,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb):
         raise
 
 
-def add_chemical_exergy(my_json, Tamb, pamb):
+def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
     """
     Adds the chemical exergy to each connection in the JSON data, prioritizing molar composition if available.
     
@@ -274,7 +280,7 @@ def add_chemical_exergy(my_json, Tamb, pamb):
                     logging.info(f"Using mass composition for connection {conn_name}")
                 
                 # Add the chemical exergy value
-                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb)
+                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
                 conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
                 logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
 
@@ -302,7 +308,11 @@ def add_total_exergy_flow(my_json):
             # Calculate total exergy flow based on the connection kind
             if conn_data['kind'] == 'material':
                 # For material connections: E = m * (e^PH + e^CH)
-                conn_data['E'] = conn_data['m'] * (conn_data['e_PH'] + conn_data['e_CH'])
+                if conn_data.get('e_CH') is not None:
+                    conn_data['E'] = conn_data['m'] * (conn_data['e_PH'] + conn_data['e_CH'])
+                else:
+                    conn_data['E'] = conn_data['m'] * conn_data['e_PH']
+                    logging.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
             elif conn_data['kind'] == 'power':
                 # For power and heat connections, use the energy flow value directly
                 conn_data['E'] = conn_data['energy_flow']

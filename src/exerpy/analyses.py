@@ -338,6 +338,108 @@ class ExergyAnalysis:
             raise ValueError("Parsed Ebsilon data is missing required components or connections.")
 
         return cls(component_data, connection_data, Tamb, pamb)
+    
+
+    @classmethod
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None):
+        """
+        Create an ExergyAnalysis instance from a JSON file.
+
+        Parameters
+        ----------
+        json_path : str
+            Path to JSON file containing component and connection data.
+        Tamb : float, optional
+            Ambient temperature in K. If None, extracted from JSON.
+        pamb : float, optional
+            Ambient pressure in Pa. If None, extracted from JSON.
+        chemExLib : str, optional
+            Name of chemical exergy library to use. Default is None.
+
+        Returns
+        -------
+        ExergyAnalysis
+            Configured instance with data from JSON file.
+
+        Raises
+        ------
+        FileNotFoundError
+            If JSON file does not exist.
+        ValueError
+            If JSON structure is invalid or missing required data.
+        JSONDecodeError
+            If JSON file is malformed.
+        """
+        try:
+            # Check file existence and extension
+            if not os.path.exists(json_path):
+                raise FileNotFoundError(f"File not found: {json_path}")
+            
+            if not json_path.endswith('.json'):
+                raise ValueError("File must have .json extension")
+
+            # Load and validate JSON
+            with open(json_path, 'r') as file:
+                try:
+                    data = json.load(file)
+                except json.JSONDecodeError as e:
+                    logging.error(f"Invalid JSON format: {e}")
+                    raise
+
+            # Validate required sections
+            required_sections = ['components', 'connections', 'ambient_conditions']
+            missing_sections = [s for s in required_sections if s not in data]
+            if missing_sections:
+                raise ValueError(f"Missing required sections: {missing_sections}")
+
+            # Check for mass_composition in material streams if chemical exergy is requested
+            if chemExLib:
+                for conn_name, conn_data in data['connections'].items():
+                    if conn_data.get('kind') == 'material' and 'mass_composition' not in conn_data:
+                        raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
+
+            # Extract or use provided ambient conditions
+            Tamb = Tamb or data['ambient_conditions'].get('Tamb')
+            pamb = pamb or data['ambient_conditions'].get('pamb')
+
+            if Tamb is None or pamb is None:
+                raise ValueError("Ambient conditions (Tamb, pamb) must be provided either in JSON or as parameters")
+
+            # Validate component data structure
+            if not isinstance(data['components'], dict):
+                raise ValueError("Components section must be a dictionary")
+            
+            for comp_type, components in data['components'].items():
+                if not isinstance(components, dict):
+                    raise ValueError(f"Component type '{comp_type}' must contain dictionary of components")
+                
+                for comp_name, comp_data in components.items():
+                    required_comp_fields = ['name', 'type', 'type_index']
+                    missing_fields = [f for f in required_comp_fields if f not in comp_data]
+                    if missing_fields:
+                        raise ValueError(f"Component '{comp_name}' missing required fields: {missing_fields}")
+
+            # Validate connection data structure
+            for conn_name, conn_data in data['connections'].items():
+                required_conn_fields = ['kind', 'source_component', 'target_component']
+                missing_fields = [f for f in required_conn_fields if f not in conn_data]
+                if missing_fields:
+                    raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
+
+            # Add chemical exergy if library provided
+            if chemExLib:
+                data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
+                logging.info("Added chemical exergy values")
+
+            # Calculate total exergy flows
+            data = add_total_exergy_flow(data)
+            logging.info("Added total exergy flows")
+
+            return cls(data['components'], data['connections'], Tamb, pamb)
+
+        except Exception as e:
+            logging.error(f"Error processing JSON file: {e}")
+            raise
 
 
     def exergy_results(self):

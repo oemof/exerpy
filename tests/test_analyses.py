@@ -36,6 +36,7 @@ def mock_component_data():
             "T1": {
                 "name": "T1",
                 "type": "MockTurbine",
+                "type_index": 23,
                 "eta_s": 0.9
             }
         },
@@ -43,6 +44,7 @@ def mock_component_data():
             "C1": {
                 "name": "C1",
                 "type": "MockCompressor",
+                "type_index": 24,
                 "eta_s": 0.85
             }
         }
@@ -61,7 +63,11 @@ def mock_connection_data():
             "T": 298.15,
             "p": 101325,
             "m": 100,
-            "E": 50000
+            "E": 50000,
+            "mass_composition": {  # Added composition
+                "N2": 0.79,
+                "O2": 0.21
+            }
         },
         "2": {
             "kind": "material",
@@ -72,7 +78,11 @@ def mock_connection_data():
             "T": 500,
             "p": 500000,
             "m": 100,
-            "E": 5000
+            "E": 5000,
+            "mass_composition": {  # Added composition
+                "N2": 0.79,
+                "O2": 0.21
+            }
         },
         "3": {
             "kind": "power",
@@ -202,3 +212,127 @@ def test_ebsilon_invalid_format(tmp_path):
     
     with pytest.raises(ValueError, match="Unsupported file format"):
         ExergyAnalysis.from_ebsilon(str(invalid_file))
+
+@pytest.fixture
+def mock_json_data(mock_component_data, mock_connection_data):
+    """Provide mock JSON data for testing."""
+    return {
+        "components": mock_component_data,
+        "connections": mock_connection_data,
+        "ambient_conditions": {
+            "Tamb": 298.15,
+            "Tamb_unit": "K",
+            "pamb": 101325,
+            "pamb_unit": "Pa"
+        }
+    }
+
+@pytest.fixture
+def json_file(tmp_path, mock_json_data):
+    """Create temporary JSON file with mock data."""
+    json_path = tmp_path / "test.json"
+    with open(json_path, 'w') as f:
+        json.dump(mock_json_data, f)
+    return json_path
+
+def test_from_json_missing_type_index(tmp_path):
+    """Test error handling for missing type_index in components."""
+    invalid_data = {
+        "components": {
+            "MockTurbine": {
+                "T1": {
+                    "name": "T1",
+                    "type": "MockTurbine"
+                }
+            }
+        },
+        "connections": {},
+        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325}
+    }
+    json_path = tmp_path / "invalid.json"
+    with open(json_path, 'w') as f:
+        json.dump(invalid_data, f)
+    
+    with pytest.raises(ValueError, match="missing required fields: \\['type_index'\\]"):
+        ExergyAnalysis.from_json(str(json_path))
+
+def test_from_json_missing_composition(tmp_path):
+    """Test error handling for material streams without composition."""
+    data = {
+        "components": {
+            "MockTurbine": {
+                "T1": {
+                    "name": "T1",
+                    "type": "MockTurbine",
+                    "type_index": 23,
+                    "eta_s": 0.9
+                }
+            }
+        },
+        "connections": {
+            "1": {
+                "kind": "material",
+                "source_component": None,
+                "target_component": "T1",
+                "T": 298.15,
+                "p": 101325
+            }
+        },
+        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325}
+    }
+    json_path = tmp_path / "missing_comp.json"
+    with open(json_path, 'w') as f:
+        json.dump(data, f)
+    
+    with pytest.raises(ValueError, match="Material stream '1' missing mass_composition"):
+        ExergyAnalysis.from_json(str(json_path), chemExLib='Ahrendts')
+
+def test_from_json_basic(json_file):
+    """Test basic JSON file loading."""
+    analysis = ExergyAnalysis.from_json(str(json_file))
+    assert isinstance(analysis, ExergyAnalysis)
+    assert len(analysis.components) == 2
+    assert "T1" in analysis.components
+    assert "C1" in analysis.components
+    assert abs(analysis.Tamb - 298.15) < 1e-5
+    assert abs(analysis.pamb - 101325) < 1e-5
+
+def test_from_json_override_ambient(json_file):
+    """Test overriding ambient conditions."""
+    analysis = ExergyAnalysis.from_json(str(json_file), Tamb=300, pamb=100000)
+    assert abs(analysis.Tamb - 300) < 1e-5
+    assert abs(analysis.pamb - 100000) < 1e-5
+
+def test_from_json_missing_sections(tmp_path):
+    """Test error handling for missing required sections."""
+    incomplete_data = {"components": {}}
+    json_path = tmp_path / "incomplete.json"
+    with open(json_path, 'w') as f:
+        json.dump(incomplete_data, f)
+    
+    with pytest.raises(ValueError, match="Missing required sections"):
+        ExergyAnalysis.from_json(str(json_path))
+
+def test_from_json_invalid_component_structure(tmp_path):
+    """Test error handling for invalid component structure."""
+    invalid_data = {
+        "components": {"InvalidComponent": []},  # Should be dict
+        "connections": {},
+        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325}
+    }
+    json_path = tmp_path / "invalid.json"
+    with open(json_path, 'w') as f:
+        json.dump(invalid_data, f)
+    
+    with pytest.raises(ValueError, match="must contain dictionary"):
+        ExergyAnalysis.from_json(str(json_path))
+
+def test_from_json_with_chemical_exergy(json_file):
+    """Test JSON loading with chemical exergy calculation."""
+    analysis = ExergyAnalysis.from_json(str(json_file), chemExLib='Ahrendts')
+    assert 'e_CH' in next(iter(analysis.connections.values()))
+
+def test_from_json_invalid_file():
+    """Test error handling for non-existent file."""
+    with pytest.raises(FileNotFoundError):
+        ExergyAnalysis.from_json("nonexistent.json")

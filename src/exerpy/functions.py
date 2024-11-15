@@ -120,8 +120,9 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                 chem_ex_data = json.load(file)  # data in J/kmol
                 logging.info("Chemical exergy data loaded successfully.")
         except FileNotFoundError:
-            logging.error(f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'.")
-            sys.exit(1)
+            error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
+            logging.error(error_msg)
+            raise FileNotFoundError(error_msg)
             
 
         R = 8.314  # Universal gas constant in J/(molK)

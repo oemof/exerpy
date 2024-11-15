@@ -16,7 +16,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "W / K",
-                "mass_flow_1": 11.05558203436122,
+                "mass_flow_1": 11.055582072057206,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -37,7 +37,7 @@
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "W / K",
-                "mass_flow_1": 123.18361249038762,
+                "mass_flow_1": 123.1836115232228,
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
@@ -62,7 +62,7 @@
                 "kA_unit": "W / K",
                 "mass_flow_1": 10.0,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 11.055582034313945,
+                "mass_flow_3": 11.055582072030143,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             },
@@ -81,9 +81,9 @@
                 "P_unit": "W",
                 "kA": 687.1536275743621,
                 "kA_unit": "W / K",
-                "mass_flow_1": 11.055582034412502,
+                "mass_flow_1": 11.055582072086544,
                 "mass_flow_1_unit": "W",
-                "mass_flow_3": 123.18361249038755,
+                "mass_flow_3": 123.18361152322277,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null
             }
@@ -108,7 +108,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 349391.158252339
+                "energy_flow_1": 345897.21386936994
             },
             "MOT2": {
                 "name": "MOT2",
@@ -129,7 +129,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 895926.2340262154
+                "energy_flow_1": 895926.2369592563
             },
             "MOT3": {
                 "name": "MOT3",
@@ -150,7 +150,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 64.16525021123817
+                "energy_flow_1": 64.03691971050402
             }
         },
         "Pump": {

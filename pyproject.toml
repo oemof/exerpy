@@ -76,34 +76,6 @@ aspen = [
     "pywin32"
 ]
 
-[tool.pytest.ini_options]
-norecursedirs = [
-    ".git",
-    "dist",
-]
-python_files = [
-    "test_*.py",
-    "*_test.py",
-    "*_tests.py",
-    "tests.py",
-]
-addopts = """
-    -ra
-    --strict-markers
-    --doctest-modules
-    --doctest-glob=\"*.rst\"
-    --tb=short
-    --pyargs
-    --ignore=docs/conf.py
-    --ignore=docs/scripts
-    --ignore=docs/_build
-"""
-testpaths = [
-    "src/",
-    "tests/",
-    "docs/"
-]
-
 [tool.isort]
 force_single_line = true
 line_length = 79

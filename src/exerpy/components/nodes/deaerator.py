@@ -7,102 +7,114 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Deaerator(Component):
-    """
-    Deaerator component class.
+    r"""
+    Class for exergy analysis of deaerators.
 
-    This class represents a deaerator within the system, responsible for calculating
-    the exergy balance specific to a deaerator. It evaluates the thermal and exergy
-    interactions between multiple inlet streams and a single outlet stream to assess
-    the exergy product, exergy fuel, exergy destruction, and exergy efficiency.
+    This class performs exergy analysis calculations for deaerators with multiple 
+    inlet streams and one outlet stream. The exergy product and fuel definitions 
+    vary based on the temperature relationships between inlet streams, outlet 
+    stream, and ambient conditions.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product, calculated based on the difference in physical exergy between
-        the outlet and inlets, depending on whether the outlet temperature is above,
-        below, or equal to the ambient reference temperature (T0).
     E_F : float
-        Exergy fuel, representing the total exergy input required by the deaerator to
-        achieve the desired heating or cooling, determined from the physical exergy of
-        the inlet streams relative to the outlet.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction, representing irreversibilities within the deaerator, calculated
-        as the difference between exergy fuel and exergy product.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency, defined as the ratio of exergy product to exergy fuel, indicating
-        the effectiveness of the deaeration process.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    inl : dict
+        Dictionary containing inlet streams data with temperature, mass flows,
+        and specific exergies.
+    outl : dict
+        Dictionary containing outlet stream data with temperature, mass flows,
+        and specific exergies.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Deaerator component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the deaerator.
+    Notes
+    -----
+    The exergy analysis accounts for physical exergy only. The equations for exergy
+    product and fuel are defined based on temperature relationships:
+
+    .. math::
+
+        \dot{E}_\mathrm{P} =
+        \begin{cases}
+        \begin{cases}
+        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
+        e_{\mathrm{in,}i}^\mathrm{PH})
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} < T_0 \\
+        \end{cases} & T_\mathrm{out} > T_0\\
+        \text{not defined (nan)} & T_\mathrm{out} = T_0\\
+        \begin{cases}
+        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
+        e_{\mathrm{in,}i}^\mathrm{PH})
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} < T_0 \\
+        \end{cases} & T_\mathrm{out} < T_0\\
+        \end{cases}
+
+        \dot{E}_\mathrm{F} =
+        \begin{cases}
+        \begin{cases}
+        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
+        e_\mathrm{out}^\mathrm{PH})
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \\
+        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} < T_0 \\
+        \end{cases} & T_\mathrm{out} > T_0\\
+        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
+        & T_\mathrm{out} = T_0\\
+        \begin{cases}
+        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        T_{\mathrm{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
+        e_\mathrm{out}^\mathrm{PH})
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \\
+        \end{cases} & T_\mathrm{out} < T_0\\
+        \end{cases}
+
+        \forall i \in \text{deaerator inlets}
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Deaerator component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize deaerator component with given parameters."""
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the deaerator.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the inlet and outlet streams, considering
-        different scenarios where the outlet temperature is above, equal to, or below
-        the reference temperature (T0).
+        Performs exergy balance calculations considering the temperature relationships
+        between inlet streams, outlet stream, and ambient conditions.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
+            Ambient pressure in :math:`\text{Pa}`.
 
         Raises
         ------
         ValueError
-            If the deaerator does not have at least two inlets and one outlet.
-
-        Calculation Details
-        -------------------
-        The exergy balance is determined by examining the relationship between
-        the inlet and outlet temperatures relative to T0:
-
-        - **Exergy Product (E_P)**:
-            Derived from the physical exergy difference between inlet and outlet
-            streams, with case-specific adjustments based on whether outlet temperature
-            is greater than, equal to, or less than T0.
-
-        - **Exergy Fuel (E_F)**:
-            Calculated from the energy input necessary to achieve the desired effect
-            in the deaeration process, differing across scenarios based on thermal
-            conditions of the streams.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-            Represents the irreversibilities within the deaerator process.
-
-        - **Exergy Efficiency (\(\epsilon\))**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
-            Indicates the exergy utilization efficiency within the deaerator.
-
-        This method handles cases where the outlet temperature is either above, equal to,
-        or below the reference temperature, with each scenario affecting how E_P and E_F
-        are calculated.
-        """
+            If the required inlet and outlet streams are not properly defined.
+        """      
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 1:
             raise ValueError("Deaerator requires at least two inlets and one outlet.")
@@ -113,36 +125,47 @@ class Deaerator(Component):
         # Case 1: Outlet temperature is greater than T0
         if self.outl[0]['T'] > T0:
             for _, inlet in self.inl.items():
-                if inlet['T'] < self.outl[0]['T']:
-                    if inlet['T'] >= T0:
+                if inlet['T'] < self.outl[0]['T']:  # Tin < Tout
+                    if inlet['T'] >= T0:  # and Tin >= T0
                         self.E_P += inlet['m'] * (self.outl[0]['e_PH'] - inlet['e_PH'])
-                    else:
+                    else:  # and Tin < T0
                         self.E_P += inlet['m'] * self.outl[0]['e_PH']
-                        self.E_F += inlet['E_PH']
-                else:
+                        self.E_F += inlet['m'] * inlet['e_PH']
+                else:  # Tin > Tout
                     self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
-        
+
         # Case 2: Outlet temperature is equal to T0
         elif self.outl[0]['T'] == T0:
             self.E_P = np.nan
             for _, inlet in self.inl.items():
-                self.E_F += inlet['E_PH']
-        
+                self.E_F += inlet['m'] * inlet['e_PH']
+
         # Case 3: Outlet temperature is less than T0
         else:
             for _, inlet in self.inl.items():
-                if inlet['T'] > self.outl[0]['T']:
-                    if inlet['T'] >= T0:
+                if inlet['T'] > self.outl[0]['T']:  # Tin > Tout
+                    if inlet['T'] >= T0:  # and Tin >= T0
                         self.E_P += inlet['m'] * self.outl[0]['e_PH']
-                        self.E_F += inlet['E_PH']
-                    else:
+                        self.E_F += inlet['m'] * inlet['e_PH']
+                    else:  # and Tin < T0
                         self.E_P += inlet['m'] * (self.outl[0]['e_PH'] - inlet['e_PH'])
-                else:
+                else:  # Tin < Tout
                     self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
 
         # Calculate exergy destruction and efficiency
         self.E_D = self.E_F - self.E_P
-        self.epsilon = self._calc_epsilon()
+        self.epsilon = self.calc_epsilon()
 
-        # Log the exergy balance results
-        logging.info(f"Deaerator exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+        # Log the results
+        logging.info(
+            f"Deaerator exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )
+
+        # Log the results
+        logging.info(
+            f"Compressor exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )

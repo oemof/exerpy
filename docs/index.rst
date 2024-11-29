@@ -1,12 +1,12 @@
 .. _exerpy_label:
 
-.. include:: some_file_here.rst
+.. include:: introduction.rst
 
 ..  toctree::
     :maxdepth: 2
     :hidden:
 
-    some_file_there
+    introduction
 
 ..  toctree::
     :maxdepth: 2
@@ -21,10 +21,16 @@
     :caption: Documentation
     :hidden:
 
-    modules
     api
     whats_new
     zliterature
+
+..  toctree::
+    :maxdepth: 2
+    :caption: Exergy Analysis
+    :hidden:
+
+    exergy_analysis
 
 ..  toctree::
     :maxdepth: 2

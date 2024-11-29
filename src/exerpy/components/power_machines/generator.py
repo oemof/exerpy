@@ -5,98 +5,84 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Generator(Component):
-    """
-    Generator component class.
+    r"""
+    Class for exergy analysis of generators.
 
-    This class represents a generator within the system, responsible for calculating
-    the exergy balance specific to a generator. It assesses the exergy interactions
-    between fuel input and electrical output to determine exergy product, exergy fuel,
-    exergy destruction, and exergy efficiency.
+    This class performs exergy analysis calculations for generators, converting mechanical 
+    or thermal energy flow into electrical energy. The exergy product is defined as 
+    the electrical power output, while the exergy fuel is the input energy flow.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product, defined as the energy flow in the outlet, representing the net
-        electrical work output of the generator.
     E_F : float
-        Exergy fuel, representing the energy input to the generator, representing the
-        mechanical work input of the generator.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction, representing irreversibilities within the generator, calculated
-        as the difference between exergy fuel and exergy product.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency, defined as the ratio of exergy product to exergy fuel, indicating
-        the efficiency of exergy transfer in the generator.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    inl : dict
+        Dictionary containing inlet stream data with energy flow.
+    outl : dict
+        Dictionary containing outlet stream data with energy flow.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Generator component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the generator.
+    Notes
+    -----
+    The exergy analysis for a generator is straightforward as electrical energy
+    is pure exergy. The equations are:
+
+    .. math::
+
+        \dot{E}_\mathrm{P} & = \dot{W}_\mathrm{el}
+
+        \dot{E}_\mathrm{F} & = \dot{W}_\mathrm{in}
+
+        \dot{E}_\mathrm{D} & = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+
+    where:
+        - :math:`\dot{W}_\mathrm{el}`: Electrical power output
+        - :math:`\dot{W}_\mathrm{in}`: Input power
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Generator component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize generator component with given parameters."""
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the generator.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the energy flows of the inlet and outlet streams.
+        Calculates the exergy product (electrical power output), exergy fuel (input power),
+        and the resulting exergy destruction and efficiency.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
-
-        Calculation Details
-        -------------------
-        - **Exergy Product (E_P)**:
-            Defined as the energy flow at the outlet, representing the electrical
-            power output.
-
-        - **Exergy Fuel (E_F)**:
-            The energy input from the fuel, representing the mechanical work 
-            input of the generator.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-            Represents irreversibilities within the generator process.
-
-        - **Exergy Efficiency (\(\epsilon\))**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
-            Indicates the efficiency of exergy transfer in the generator.
-
-        The method directly calculates exergy attributes based on input and output
-        energy flows without further temperature-based distinctions.
-        """
-        # Exergy product (physical exergy difference between outlet and inlets)
+            Ambient pressure in :math:`\text{Pa}`.
+        """      
+        # Exergy product is the electrical power output
         self.E_P = self.outl[0]['energy_flow']
-
-        # Exergy fuel (chemical exergy of fuel and air minus exhaust exergy)
+        
+        # Exergy fuel is the input power
         self.E_F = self.inl[0]['energy_flow']
-
-        # Exergy destruction (difference between exergy fuel and exergy product)
+        
+        # Calculate exergy destruction
         self.E_D = self.E_F - self.E_P
+        
+        # Calculate exergy efficiency
+        self.epsilon = self.calc_epsilon()
 
-        # Exergy efficiency (epsilon)
-        self.epsilon = self._calc_epsilon()
-
-        # Log the exergy balance results
-        logging.info(f"Generator exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+        # Log the results
+        logging.info(
+            f"Compressor exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )

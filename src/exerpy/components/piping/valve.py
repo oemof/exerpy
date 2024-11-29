@@ -7,130 +7,140 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Valve(Component):
-    """
-    Valve component class.
+    r"""
+    Class for exergy analysis of valves.
 
-    This class represents a valve within the system, responsible for calculating
-    the exergy balance specific to a valve. It evaluates the exergy interactions
-    between an inlet and an outlet stream to assess exergy product, exergy fuel,
-    exergy destruction, and exergy efficiency.
+    This class performs exergy analysis calculations for isenthalpic valves with 
+    one inlet and one outlet stream. The exergy product and fuel definitions
+    vary based on the temperature relationships between inlet stream, outlet stream,
+    and ambient conditions.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product, defined based on the temperature states of the inlet and
-        outlet relative to the reference temperature (T0). For a valve, it typically
-        represents the net exergy output.
     E_F : float
-        Exergy fuel, representing the total exergy input needed to drive the valve process,
-        calculated from the exergy difference between the inlet and outlet.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction, representing the irreversibilities within the valve,
-        calculated as the difference between exergy fuel and exergy product.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency, defined as the ratio of exergy product to exergy fuel, indicating
-        the efficiency of exergy transfer through the valve.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    inl : dict
+        Dictionary containing inlet stream data with temperature, mass flows,
+        and specific exergies.
+    outl : dict
+        Dictionary containing outlet stream data with temperature, mass flows,
+        and specific exergies.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Valve component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the valve.
+    Notes
+    -----
+    The exergy analysis accounts for physical, thermal, and mechanical exergy
+    based on temperature relationships:
+
+    .. math::
+
+        \dot{E}_\mathrm{P} =
+        \begin{cases}
+        \text{not defined (nan)}
+        & T_\mathrm{in}, T_\mathrm{out} > T_0\\
+        \dot{m} \cdot e_\mathrm{out}^\mathrm{T}
+        & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
+        \dot{m} \cdot (e_\mathrm{out}^\mathrm{T} - e_\mathrm{in}^\mathrm{T})
+        & T_0 \geq T_\mathrm{in}, T_\mathrm{out}
+        \end{cases}
+
+        \dot{E}_\mathrm{F} =
+        \begin{cases}
+        \dot{m} \cdot (e_\mathrm{in}^\mathrm{PH} - e_\mathrm{out}^\mathrm{PH})
+        & T_\mathrm{in}, T_\mathrm{out} > T_0\\
+        \dot{m} \cdot (e_\mathrm{in}^\mathrm{T} + e_\mathrm{in}^\mathrm{M} 
+        - e_\mathrm{out}^\mathrm{M})
+        & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
+        \dot{m} \cdot (e_\mathrm{in}^\mathrm{M} - e_\mathrm{out}^\mathrm{M})
+        & T_0 \geq T_\mathrm{in}, T_\mathrm{out}
+        \end{cases}
+
+    For all cases, except when :math:`T_\mathrm{out} > T_\mathrm{in}`, the exergy 
+    destruction is calculated as:
+
+    .. math::
+        \dot{E}_\mathrm{D} = \begin{cases}
+        \dot{E}_\mathrm{F} & \text{if } \dot{E}_\mathrm{P} = \text{nan}\\
+        \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P} & \text{otherwise}
+        \end{cases}
+
+    Where:
+        - :math:`e^\mathrm{T}`: Thermal exergy
+        - :math:`e^\mathrm{PH}`: Physical exergy
+        - :math:`e^\mathrm{M}`: Mechanical exergy
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Valve component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize valve component with given parameters."""
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the valve.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the inlet and outlet streams' thermal states
-        relative to the reference temperature (T0). The calculation varies based
-        on whether both temperatures are above, equal to, or below the reference
-        temperature.
+        Performs exergy balance calculations considering the temperature relationships
+        between inlet stream, outlet stream, and ambient conditions.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
+            Ambient pressure in :math:`\text{Pa}`.
 
         Raises
         ------
         ValueError
-            If the valve does not have at least one inlet and one outlet.
-
-        Calculation Details
-        -------------------
-        The exergy balance is calculated based on the relative temperatures of
-        the inlet and outlet streams in comparison to T0:
-
-        - **Exergy Product (E_P)**:
-            Calculated from the physical exergy difference in the outlet stream
-            relative to the inlet, with case-specific adjustments based on whether
-            the inlet and outlet temperatures are above, equal to, or below T0.
-
-        - **Exergy Fuel (E_F)**:
-            Calculated based on the exergy input required to achieve the desired
-            effect in the valve, dependent on the inlet and outlet thermal states.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-            Represents irreversibilities within the valve process.
-
-        - **Exergy Efficiency (\(\epsilon\))**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
-            Indicates the efficiency of exergy transfer through the valve.
-
-        This method includes cases where both inlet and outlet temperatures are
-        above T0, both are below, and where outlet temperature is equal to T0,
-        affecting the values of E_P and E_F.
-        """
+            If the required inlet and outlet streams are not properly defined.
+        """      
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 1 or len(self.outl) < 1:
             raise ValueError("Valve requires at least one inlet and one outlet.")
 
         T_in = self.inl[0]['T']
         T_out = self.outl[0]['T']
-        
+
         # Case-specific exergy calculations
         if T_in > T0 and T_out > T0:
             self.E_P = np.nan
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         elif T_out <= T0 and T_in > T0:
             self.E_P = self.inl[0]['m'] * self.outl[0]['e_T']
-            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] + self.inl[0]['e_M'] - self.outl[0]['e_M'])
+            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] + self.inl[0]['e_M'] - 
+                                        self.outl[0]['e_M'])
         elif T_in <= T0 and T_out <= T0:
             self.E_P = self.inl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_M'] - self.outl[0]['e_M'])
         else:
-            logging.warning("Exergy balance of a valve, where outlet temperature is larger than inlet temperature, is not implemented.")
+            logging.warning(
+                "Exergy balance of a valve, where outlet temperature is larger than "
+                "inlet temperature, is not implemented."
+            )
             self.E_P = np.nan
             self.E_F = np.nan
 
-        # Calculate exergy destruction and efficiency
+        # Calculate exergy destruction
         if np.isnan(self.E_P):
             self.E_D = self.E_F
         else:
             self.E_D = self.E_F - self.E_P
-        
-        self.epsilon = self._calc_epsilon()
 
-        # Log the exergy balance results
-        logging.info(f"Valve exergy balance calculated: E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}")
+        # Calculate exergy efficiency
+        self.epsilon = self.calc_epsilon()
+
+        # Log the results
+        logging.info(
+            f"Compressor exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )

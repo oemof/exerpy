@@ -6,142 +6,145 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Turbine(Component):
-    """
-    Turbine component class.
+    r"""
+    Class for exergy analysis of turbines.
 
-    This class represents a turbine within the system, responsible for calculating
-    the exergy balance specific to a turbine. It evaluates the exergy interactions
-    between the inlet and outlet streams, considering power output to determine
-    exergy product, exergy fuel, exergy destruction, and exergy efficiency based
-    on various operational scenarios.
+    This class performs exergy analysis calculations for turbines, with definitions
+    of exergy product and fuel varying based on the temperature relationships between
+    inlet stream, outlet stream, and ambient conditions.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product, representing net mechanical work output of the turbine, with 
-        calculations that vary based on the inlet and outlet temperatures
-        relative to the reference temperature (T0).
     E_F : float
-        Exergy fuel, defined as the net exergy input from the inlet stream, adjusted
-        by the physical exergy difference between inlet and outlet streams.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction, representing irreversibilities within the turbine,
-        calculated as the difference between exergy fuel and exergy product.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency, defined as the ratio of exergy product to exergy fuel,
-        indicating the efficiency of exergy transfer in the turbine.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    P : float
+        Power output of the turbine in :math:`\text{W}`.
+    inl : dict
+        Dictionary containing inlet stream data with temperature, mass flows,
+        enthalpies, and specific exergies. Must have at least one inlet.
+    outl : dict
+        Dictionary containing outlet streams data with temperature, mass flows,
+        enthalpies, and specific exergies. Can have multiple outlets, their 
+        properties will be summed up in the calculations.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Turbine component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the turbine.
-    _total_outlet(property_name: str) -> float
-        Calculates the sum of a specified property across all defined outlets.
+    Notes
+    -----
+    The exergy analysis considers three cases based on temperature relationships:
+
+    .. math::
+
+        \dot{E}_\mathrm{P} =
+        \begin{cases}
+        -P & T_\mathrm{in}, T_\mathrm{out} \geq T_0\\
+        -P + \dot{E}_\mathrm{out}^\mathrm{T}
+        & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
+        -P + \dot{E}_\mathrm{out}^\mathrm{T} - \dot{E}_\mathrm{in}^\mathrm{T}
+        & T_0 \geq T_\mathrm{in}, T_\mathrm{out}
+        \end{cases}
+
+        \dot{E}_\mathrm{F} =
+        \begin{cases}
+        \dot{E}_\mathrm{in}^\mathrm{PH} - \dot{E}_\mathrm{out}^\mathrm{PH}
+        & T_\mathrm{in}, T_\mathrm{out} \geq T_0\\
+        \dot{E}_\mathrm{in}^\mathrm{T} + \dot{E}_\mathrm{in}^\mathrm{M} -
+        \dot{E}_\mathrm{out}^\mathrm{M}
+        & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
+        \dot{E}_\mathrm{in}^\mathrm{M} - \dot{E}_\mathrm{out}^\mathrm{M}
+        & T_0 \geq T_\mathrm{in}, T_\mathrm{out}
+        \end{cases}
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Turbine component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize turbine component with given parameters."""
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the turbine.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the thermal and exergy states of the inlet
-        and outlet streams relative to a reference temperature (T0). Different cases
-        are considered based on whether the inlet and outlet temperatures are above,
-        below, or at the ambient temperature.
+        Performs exergy balance calculations considering the temperature relationships
+        between inlet stream, outlet stream, and ambient conditions.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
-
-        Calculation Details
-        -------------------
-        - **Exergy Product (E_P)**:
-            Represents the net mechanical work output of the turbine, with
-            case-specific formulas depending on the inlet and outlet
-            temperatures compared to T0.
-
-        - **Exergy Fuel (E_F)**:
-            Defined as the exergy input derived from the inlet stream, adjusted for
-            differences in physical exergy between inlet and outlet streams.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-            Represents irreversibilities within the turbine process.
-
-        - **Exergy Efficiency (\(\epsilon\))**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
-            Indicates the efficiency of exergy transfer in the turbine.
-
-        This method handles cases where both inlet and outlet temperatures are above T0,
-        where only the inlet is above T0, and where both are below T0.
-        """
-        # Get power flow in case it wasn't read during the parsing
+            Ambient pressure in :math:`\text{Pa}`.
+        """      
+        # Get power flow if not already available
         if self.P is None:
-            self.P = self._total_outlet('m') * (self.inl[0]['h'] - self.outl[0]['h'])
+            self.P = self._total_outlet('m', 'h') - self.inl[0]['m'] * self.inl[0]['h']
 
-        # Case 1: Both inlet and outlet temperatures are greater than ambient temperature
+        # Case 1: Both temperatures above ambient
         if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
             self.E_P = abs(self.P)
-            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_PH'] - 
+                        self._total_outlet('m', 'e_PH'))
 
-        # Case 2: Inlet temperature is greater than ambient, but outlet is less than or equal to ambient
+        # Case 2: Inlet above, outlet at/below ambient
         elif self.inl[0]['T'] > T0 and self.outl[0]['T'] <= T0:
-            self.E_P = -self.P + self._total_outlet('m') * self.outl[0]['h']
-            self.E_F = self.inl[0]['h'] + (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+            self.E_P = abs(self.P) + self._total_outlet('m', 'e_T')
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_T'] + 
+                        self.inl[0]['m'] * self.inl[0]['e_M'] - 
+                        self._total_outlet('m', 'e_M'))
 
-        # Case 3: Both inlet and outlet temperatures are less than or equal to ambient temperature
+        # Case 3: Both temperatures at/below ambient
         elif self.inl[0]['T'] <= T0 and self.outl[0]['T'] <= T0:
-            self.E_P = -self.P + (self._total_outlet('m') * self.outl[0]['h'] - self.inl[0]['h'] * self.inl[0]['m'])
-            self.E_F = self.inl[0]['e_PH'] * self.inl[0]['m'] - self.outl[0]['e_PH'] * self.outl[0]['m']
+            self.E_P = abs(self.P) + (
+                self._total_outlet('m', 'e_T') - self.inl[0]['m'] * self.inl[0]['e_T'])
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_M'] - 
+                        self._total_outlet('m', 'e_M'))
 
-        # Invalid case: if outlet temperature is larger than inlet temperature
+        # Invalid case: outlet temperature larger than inlet
         else:
-            msg = ('Exergy balance of a turbine where outlet temperature is '
-                   'larger than inlet temperature is not implemented.')
-            logging.warning(msg)
+            logging.warning(
+                'Exergy balance of a turbine where outlet temperature is larger '
+                'than inlet temperature is not implemented.'
+            )
             self.E_P = np.nan
             self.E_F = np.nan
 
         # Calculate exergy destruction and efficiency
         self.E_D = self.E_F - self.E_P
-        self.epsilon = self._calc_epsilon()
+        self.epsilon = self.calc_epsilon()
 
-    def _total_outlet(self, property_name: str) -> float:
-        """
-        Sum the specified property for all defined outlets.
+        # Log the results
+        logging.info(
+            f"Turbine exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )
+
+    def _total_outlet(self, mass_flow: str, property_name: str) -> float:
+        r"""
+        Calculate the sum of mass flow times property across all outlets.
 
         Parameters
         ----------
+        mass_flow : str
+            Key for the mass flow value.
         property_name : str
-            The property to be summed (e.g., 'h', 'e_PH', 'T').
+            Key for the property to be summed.
 
         Returns
         -------
         float
-            Sum of the specified property for all outlets, or 0 if no outlets are defined.
+            Sum of mass flow times property across all outlets.
         """
-        total_value = 0.0
+        total = 0.0
         for outlet in self.outl.values():
-            if outlet and property_name in outlet:
-                total_value += outlet[property_name]
-        return total_value
+            if outlet and mass_flow in outlet and property_name in outlet:
+                total += outlet[mass_flow] * outlet[property_name]
+        return total

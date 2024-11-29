@@ -1,6 +1,4 @@
-import sys
 import os
-import json
 import logging
 
 # Configure logging

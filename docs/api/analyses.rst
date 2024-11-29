@@ -1,5 +1,6 @@
-exerpy.analyses module
-=======================
+###############
+exerpy.analyses
+###############
 
 .. automodule:: exerpy.analyses
     :members:

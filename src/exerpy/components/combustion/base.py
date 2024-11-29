@@ -5,95 +5,92 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class CombustionChamber(Component):
-    """
-    CombustionChamber component class.
+    r"""
+    Class for exergy analysis of combustion chambers.
 
-    This class represents a combustion chamber within the system and is responsible for
-    calculating the exergy balance specific to a combustion chamber. It handles the
-    interactions between fuel and air inlets and the exhaust outlet to determine
-    exergy product, exergy fuel, exergy destruction, and exergy efficiency.
+    This class performs exergy analysis calculations for combustion chambers, considering
+    both physical and chemical exergy flows. The exergy product is defined as the
+    difference in physical exergy between outlet and inlet streams, while the exergy
+    fuel is the difference in chemical exergy between inlet and outlet streams.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product (physical exergy difference between outlet and inlets).
     E_F : float
-        Exergy fuel (chemical exergy of fuel and air minus exhaust exergy).
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction (difference between exergy fuel and exergy product).
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency.
-    inl : list of dict
-        List of inlet streams. The expected configuration is:
-            - `inl[0]`: Air inlet
-            - `inl[1]`: Fuel inlet
-            - `inl[2]`: Secondary air inlet (additional)
-    outl : list of dict
-        List of outlet streams. The expected configuration is:
-            - `outl[0]`: Exhaust outlet
-            - `outl[1]`: Slag / ash outlet (additional)
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    inl : dict
+        Dictionary containing inlet stream data with mass flows and specific exergies.
+    outl : dict
+        Dictionary containing outlet stream data with mass flows and specific exergies.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the CombustionChamber component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the combustion chamber.
+    Notes
+    -----
+    The exergy product and fuel for a combustion chamber are defined as:
+
+    .. math::
+        \dot{E}_\mathrm{P} = \sum_{out} \dot{m}_{out} \cdot e^\mathrm{PH}_{out} 
+        - \sum_{in} \dot{m}_{in} \cdot e^\mathrm{PH}_{in}
+
+    .. math::
+        \dot{E}_\mathrm{F} = \sum_{in} \dot{m}_{in} \cdot e^\mathrm{CH}_{in} 
+        - \sum_{out} \dot{m}_{out} \cdot e^\mathrm{CH}_{out}
+
+    The exergetic efficiency is calculated as:
+
+    .. math::
+        \varepsilon = \frac{\dot{E}_\mathrm{P}}{\dot{E}_\mathrm{F}}
+
+    The exergy destruction follows from the exergy balance:
+
+    .. math::
+        \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the CombustionChamber component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize combustion chamber component with given parameters."""
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the combustion chamber.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the inlet and outlet streams. It ensures that
-        there are at least two inlets (air and fuel) and one outlet (exhaust).
+        Performs exergy balance calculations considering both physical and chemical 
+        exergy flows. The exergy product is based on physical exergy differences,
+        while the exergy fuel is based on chemical exergy differences.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
+            Ambient pressure in :math:`\text{Pa}`.
 
         Raises
         ------
         ValueError
-            If the combustion chamber does not have at least two inlets (air and fuel)
-            and one outlet (exhaust).
+            If the required inlet and outlet streams are not properly defined.
 
-        Calculation Details
-        -------------------
-        - **Exergy Product (E_P)**:
-            \[
-            E_P = \dot{m}_{\text{exhaust}} \cdot e_{\text{PH,exhaust}} - \left( \dot{m}_{\text{air}} \cdot e_{\text{PH,air}} + \dot{m}_{\text{fuel}} \cdot e_{\text{PH,fuel}} \right)
-            \]
-        
-        - **Exergy Fuel (E_F)**:
-            \[
-            E_F = \left( \dot{m}_{\text{fuel}} \cdot e_{\text{CH,fuel}} + \dot{m}_{\text{air}} \cdot e_{\text{CH,air}} \right) - \dot{m}_{\text{exhaust}} \cdot e_{\text{CH,exhaust}}
-            \]
-        
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-        
-        - **Exergy Efficiency (\epsilon)**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
+        Notes
+        -----
+        This method updates the following component attributes:
+            - E_P (Exergy product)
+            - E_F (Exergy fuel)
+            - E_D (Exergy destruction)
+            - epsilon (Exergetic efficiency)
+
+        The calculation requires at least two inlet streams (typically air and fuel)
+        and one outlet stream (exhaust gases).
         """
         # Check for necessary inlet and outlet data
         if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 2 or len(self.outl) < 1:
@@ -127,6 +124,7 @@ class CombustionChamber(Component):
 
         # Log the results
         logging.info(
-            f"Combustion Chamber Exergy balance calculated: "
-            f"E_P={self.E_P}, E_F={self.E_F}, E_D={self.E_D}, Efficiency={self.epsilon}"
+            f"Compressor exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
         )

@@ -7,128 +7,134 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Compressor(Component):
-    """
-    Compressor component class.
+    r"""
+    Class for exergy analysis of compressors.
 
-    This class represents a compressor within the system, responsible for calculating
-    the exergy balance specific to a compressor. It evaluates the exergy interactions
-    between power input and compressed output to determine exergy product, exergy fuel,
-    exergy destruction, and exergy efficiency across different operational conditions.
+    This class performs exergy analysis calculations for compressors, with definitions
+    of exergy product and fuel varying based on the temperature relationships between
+    inlet stream, outlet stream, and ambient conditions.
+
+    Parameters
+    ----------
+    **kwargs : dict
+        Arbitrary keyword arguments passed to parent class.
 
     Attributes
     ----------
-    E_P : float
-        Exergy product, representing the mechanical or thermal exergy gain of the 
-        compressed outlet stream, with calculations that vary based on inlet
-        and outlet temperatures relative to the reference temperature (T0).
     E_F : float
-        Exergy fuel, defined as the power input needed to drive the compression,
-        adjusted according to the thermal and physical exergy of inlet and outlet streams.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+    E_P : float
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction, representing irreversibilities within the compressor,
-        calculated as the difference between exergy fuel and exergy product.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
     epsilon : float
-        Exergy efficiency, defined as the ratio of exergy product to exergy fuel,
-        indicating the efficiency of exergy transfer in the compressor.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
+    P : float
+        Power input to the compressor in :math:`\text{W}`.
+    inl : dict
+        Dictionary containing inlet stream data with temperature, mass flows,
+        enthalpies, and specific exergies.
+    outl : dict
+        Dictionary containing outlet stream data with temperature, mass flows,
+        enthalpies, and specific exergies.
 
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Compressor component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the compressor.
+    Notes
+    -----
+    The exergy analysis considers three cases based on temperature relationships:
+
+    Case 1 - **Both temperatures above ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} > T_0`):
+
+    .. math::
+
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{PH} - 
+        e_\mathrm{in}^\mathrm{PH})\\
+        \dot{E}_\mathrm{F} &= |\dot{W}|
+
+    Case 2 - **Inlet below, outlet above ambient** (:math:`T_\mathrm{in} < T_0 < T_\mathrm{out}`):
+
+    .. math::
+
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot e_\mathrm{out}^\mathrm{T} + 
+        \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} - e_\mathrm{in}^\mathrm{M})\\
+        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot e_\mathrm{in}^\mathrm{T}
+
+    Case 3 - **Both temperatures below ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} \leq T_0`):
+
+    .. math::
+
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} - 
+        e_\mathrm{in}^\mathrm{M})\\
+        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot (e_\mathrm{in}^\mathrm{T} 
+        - e_\mathrm{out}^\mathrm{T})
+
+    For all valid cases, the exergy destruction is:
+
+    .. math::
+
+        \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+
+    where:
+        - :math:`\dot{W}`: Power input
+        - :math:`e^\mathrm{T}`: Thermal exergy
+        - :math:`e^\mathrm{PH}`: Physical exergy
+        - :math:`e^\mathrm{M}`: Mechanical exergy
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Compressor component.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
-        """
+        r"""Initialize compressor component with given parameters."""
         super().__init__(**kwargs)
-    
+
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
-        """
+        r"""
         Calculate the exergy balance of the compressor.
 
-        This method computes the exergy product, exergy fuel, exergy destruction,
-        and exergy efficiency based on the thermal and exergy states of the inlet
-        and outlet streams relative to a reference temperature (T0). Different cases
-        are considered based on whether the inlet and outlet temperatures are above,
-        below, or at the ambient temperature.
+        Performs exergy balance calculations considering the temperature relationships
+        between inlet stream, outlet stream, and ambient conditions.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature in :math:`\text{K}`.
         p0 : float
-            Reference pressure in Pascals.
-
-        Calculation Details
-        -------------------
-        - **Exergy Product (E_P)**:
-            Calculated as the mechanical or thermal exergy gain of the compressed outlet stream,
-            with case-specific formulas based on the relative temperatures of the inlet
-            and outlet streams compared to T0.
-
-        - **Exergy Fuel (E_F)**:
-            Defined as the power input needed to drive the compressor, adjusted by the
-            thermal and physical exergy state of the inlet stream.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = E_F - E_P
-            \]
-            Represents irreversibilities within the compression process.
-
-        - **Exergy Efficiency (\(\epsilon\))**:
-            \[
-            \epsilon = \frac{E_P}{E_F}
-            \]
-            Indicates the effectiveness of exergy transfer in the compressor.
-
-        The method handles various cases where both the inlet and outlet temperatures
-        are above T0, where only the outlet is above T0, or where both are below T0.
-        """
-        # Get power flow in case it wasn't read during the parsing
+            Ambient pressure in :math:`\text{Pa}`.
+        """      
+        # Get power flow if not already available
         if self.P is None:
             self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])
-        
-        # Case 1: Both inlet and outlet temperatures are greater than ambient temperature
+
+        # Case 1: Both temperatures above ambient
         if round(self.inl[0]['T'], 5) >= T0 and round(self.outl[0]['T'], 5) > T0:
-            # Exergy product (useful exergy output, here it's mechanical work)
             self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
-            # Exergy fuel (input to the process), based on the physical exergy difference
             self.E_F = abs(self.P)
 
-        # Case 2: Inlet temperature is less than ambient, but outlet is greater than ambient temperature
+        # Case 2: Inlet below, outlet above ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) > T0:
-            # Exergy product (thermal exergy at the outlet + mechanical exergy change)
-            self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
-            # Exergy fuel includes power input and thermal exergy at the inlet
-            self.E_F = abs(self.P) + self.inl[0]['m'] + self.inl[0]['e_T']
+            self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] + 
+                        self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M']))
+            self.E_F = abs(self.P) + self.inl[0]['m'] * self.inl[0]['e_T']
 
-        # Case 3: Both inlet and outlet temperatures are less than or equal to ambient temperature
+        # Case 3: Both temperatures below ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) <= T0:
-            # Exergy product (thermal exergy at the outlet + mechanical exergy change)
             self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
-            # Exergy fuel includes power input and thermal exergy at the inlet
-            self.E_F = abs(self.P) + self.inl[0]['m'] + (self.inl[0]['e_T'] - self.outl[0]['e_T'])
+            self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] - 
+                                                        self.outl[0]['e_T'])
 
-        # Invalid case: if outlet temperature is smaller than inlet temperature, this condition is not supported
+        # Invalid case: outlet temperature smaller than inlet
         else:
-            msg = ('Exergy balance of a compressor where outlet temperature '
-                   'is smaller than inlet temperature is not implemented.')
-            logging.warning(msg)
+            logging.warning(
+                'Exergy balance of a compressor where outlet temperature is smaller '
+                'than inlet temperature is not implemented.'
+            )
             self.E_P = np.nan
             self.E_F = np.nan
 
         # Calculate exergy destruction and efficiency
-        # Exergy destruction is the difference between the fuel and the useful product
         self.E_D = self.E_F - self.E_P
+        self.epsilon = self.calc_epsilon()
 
-        # Exergy efficiency (epsilon) calculation
-        self.epsilon = self._calc_epsilon()
+        # Log the results
+        logging.info(
+            f"Compressor exergy balance calculated: "
+            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"Efficiency={self.epsilon:.2%}"
+        )

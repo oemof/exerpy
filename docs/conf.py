@@ -116,8 +116,9 @@ html_sidebars = {
 }
 
 html_theme_options = {
-    "light_logo": "./images/logo_exerpy_mid.svg",
-    "dark_logo": "./images/logo_exerpy_mid_darkmode.svg",
+    "light_logo": "./images/logo_exerpy_mid.svg",  # TODO change this to svg
+    "dark_logo": "./images/logo_exerpy_mid_dark.svg",  # TODO change this to svg and dark mode
+
     # "announcement": """
     # <div oemof-announcement=\"https://raw.githubusercontent.com/oemof/tespy/announcements/announcement.html\"></div>
     # """,

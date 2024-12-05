@@ -120,7 +120,7 @@ class CombustionChamber(Component):
         self.E_D = self.E_F - self.E_P
 
         # Exergy efficiency (epsilon)
-        self.epsilon = self._calc_epsilon()
+        self.epsilon = self.calc_epsilon()
 
         # Log the results
         logging.info(

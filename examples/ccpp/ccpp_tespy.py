@@ -34,6 +34,7 @@ economizer = HeatExchanger("economizer")
 drum = Drum("drum")
 feed_pump = Pump("feed pump")
 condensate_pump = Pump("condensate pump")
+drum_pump = Pump("drum pump")
 hp_steam_turbine = Turbine("high pressure steam turbine")
 lp_steam_turbine = Turbine("low pressure steam turbine")
 
@@ -48,43 +49,44 @@ water_out = Sink("cooling water sink")
 
 cc = CycleCloser("cycle closer")
 
-c1 = Connection(air_in, "out1", compressor, "in1", label="c1")
-c2 = Connection(compressor, "out1", combustion, "in1", label="c2")
-c3 = Connection(fuel_in, "out1", combustion, "in2", label="c3")
-c4 = Connection(combustion, "out1", gasturbine, "in1", label="c4")
-c5 = Connection(gasturbine, "out1", superheater, "in1", label="c5")
-c6 = Connection(superheater, "out1", evaporator, "in1", label="c6")
-c7 = Connection(evaporator, "out1", economizer, "in1", label="c7")
-c8 = Connection(economizer, "out1", flue_gas_out, "in1", label="c8")
+c1 = Connection(air_in, "out1", compressor, "in1", label="1")
+c2 = Connection(compressor, "out1", combustion, "in1", label="2")
+c3 = Connection(fuel_in, "out1", combustion, "in2", label="3")
+c4 = Connection(combustion, "out1", gasturbine, "in1", label="4")
+c5 = Connection(gasturbine, "out1", superheater, "in1", label="5")
+c6 = Connection(superheater, "out1", evaporator, "in1", label="6")
+c7 = Connection(evaporator, "out1", economizer, "in1", label="7")
+c8 = Connection(economizer, "out1", flue_gas_out, "in1", label="8")
 
 nw.add_conns(c1, c2, c3, c4, c5, c6, c7, c8)
 
-c9 = Connection(superheater, "out2", cc, "in1", label="c9")
-c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="c0")
-c0a = Connection(hp_steam_turbine, "out1", extraction, "in1", label="c0a")
-c10 = Connection(extraction, "out1", dea_steam_valve, "in1", label="c10")
-c10a = Connection(dea_steam_valve, "out1", deaerator, "in1", label="c10a")
+c9 = Connection(superheater, "out2", cc, "in1", label="9")
+c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="0")
+c0a = Connection(hp_steam_turbine, "out1", extraction, "in1", label="_??a")
+c10 = Connection(extraction, "out1", dea_steam_valve, "in1", label="10")
+c10a = Connection(dea_steam_valve, "out1", deaerator, "in1", label="10a")
 
-c11 = Connection(extraction, "out2", heating_condenser, "in1", label="c11")
-c12 = Connection(extraction, "out3", lp_steam_turbine, "in1", label="c12")
-c13 = Connection(lp_steam_turbine, "out1", main_condenser, "in1", label="c13")
+c11 = Connection(extraction, "out2", heating_condenser, "in1", label="11")
+c12 = Connection(extraction, "out3", lp_steam_turbine, "in1", label="12")
+c13 = Connection(lp_steam_turbine, "out1", main_condenser, "in1", label="13")
 
-c14 = Connection(water_in, "out1", main_condenser, "in2", label="c14")
-c15 = Connection(main_condenser, "out2", water_out, "in1", label="c15")
+c14 = Connection(water_in, "out1", main_condenser, "in2", label="14")
+c15 = Connection(main_condenser, "out2", water_out, "in1", label="15")
 
-c16 = Connection(main_condenser, "out1", condensate_pump, "in1", label="c16")
+c16 = Connection(main_condenser, "out1", condensate_pump, "in1", label="16")
 
-c17 = Connection(condensate_pump, "out1", deaerator, "in3", label="c17")
-c18 = Connection(heating_condenser, "out1", deaerator, "in2", label="c18")
-c20 = Connection(deaerator, "out1", feed_pump, "in1", label="c20")
+c17 = Connection(condensate_pump, "out1", deaerator, "in3", label="17")
+c18 = Connection(heating_condenser, "out1", deaerator, "in2", label="18")
+c20 = Connection(deaerator, "out1", feed_pump, "in1", label="20")
 
-c21 = Connection(feed_pump, "out1", economizer, "in2", label="c21")
-c22 = Connection(economizer, "out2", drum, "in1", label="c22")
-c22a = Connection(drum, "out1", evaporator, "in2", label="c22a")
-c22b = Connection(evaporator, "out2", drum, "in2", label="c22b")
-c23 = Connection(drum, "out2", superheater, "in2", label="c23")
+c21 = Connection(feed_pump, "out1", economizer, "in2", label="21")
+c22 = Connection(economizer, "out2", drum, "in1", label="22")
+c22a = Connection(drum, "out1", drum_pump, "in1", label="22a")
+c22b = Connection(drum_pump, "out1", evaporator, "in2", label="22b")
+c22c = Connection(evaporator, "out2", drum, "in2", label="22c")
+c23 = Connection(drum, "out2", superheater, "in2", label="23")
 
-nw.add_conns(c9, c0, c0a, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c23)
+nw.add_conns(c9, c0, c0a, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
 
 net_power = Bus("net power")
 net_power.add_comps(
@@ -94,6 +96,7 @@ net_power.add_comps(
     {"comp": compressor, "base": "bus", "char": 0.985},
     {"comp": feed_pump, "base": "bus", "char": 0.985},
     {"comp": condensate_pump, "base": "bus", "char": 0.985},
+    {"comp": drum_pump, "base": "bus", "char": 0.985},
 )
 nw.add_busses(net_power)
 
@@ -115,7 +118,7 @@ c4.set_attr(p=15)
 
 c5.set_attr(p=Ref(c6, 1, 0.007))
 c6.set_attr(p=Ref(c7, 1, 0.007))
-c7.set_attr(p=Ref(c8, 1, 0.003))
+c7.set_attr(p=Ref(c8, 1, 0.007))
 c8.set_attr(p=1.013)
 
 compressor.set_attr(eta_s=0.9)
@@ -141,15 +144,19 @@ c15.set_attr(p=1.013, T=25)
 c16.set_attr(p=0.05)
 c17.set_attr(h0=100e3)
 
-c18.set_attr(x=0)
+c18.set_attr(Td_bp=-10)
 c20.set_attr(x=0)
 
 c21.set_attr()
 c22.set_attr(Td_bp=-6, p=Ref(c21, 1, -0.02))
 c22b.set_attr(m=Ref(c9, 10, 0))
+c22c.set_attr(p=Ref(c22b, 1, -0.03), h=Ref(c22b, 1, 100))
 c23.set_attr(p=Ref(c9, 1, 0.05))
 
 nw.solve("design")
+
+c22c.set_attr(h=None)
+drum_pump.set_attr(eta_s=0.8)
 
 c3.set_attr(m=None)
 c4.set_attr(T=1150)
@@ -166,3 +173,40 @@ heating_condenser.set_attr(Q=-100e6)
 
 nw.solve("design")
 nw.print_results()
+
+component_json = {}
+for comp_type in nw.comps["comp_type"].unique():
+    component_json[comp_type] = {}
+    for c in nw.comps.loc[nw.comps["comp_type"] == comp_type, "object"]:
+        component_json[comp_type][c.label] = {}
+
+connection_json = {}
+for c in nw.conns["object"]:
+    connection_json[c.label] = {
+        "source_component": c.source.label,
+        "source_connector": int(c.source_id.removeprefix("out")) - 1,
+        "target_component": c.target.label,
+        "target_connector": int(c.target_id.removeprefix("in")) - 1
+    }
+    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
+    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
+    connection_json[c.label].update({f"mass_composition": c.fluid.val})
+
+
+json_export = {
+    "components": component_json,
+    "connections": connection_json,
+    "ambient_conditions": {
+        "Tamb": 283.15,
+        "Tamb_unit": "K",
+        "pamb": 101300.0,
+        "pamb_unit": "Pa"
+    }
+}
+
+
+import json
+
+
+with open("examples/ccpp/ccpp_tespy.json", "w", encoding="utf-8") as f:
+    json.dump(json_export, f, indent=2)

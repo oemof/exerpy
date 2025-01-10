@@ -90,10 +90,10 @@ nw.add_conns(c9, c0, c0a, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20
 
 net_power = Bus("net power")
 net_power.add_comps(
-    {"comp": gasturbine, "base": "component", "char": 0.985},
+    {"comp": gasturbine, "base": "component", "char": 0.995},
     {"comp": hp_steam_turbine, "base": "component", "char": 0.985},
     {"comp": lp_steam_turbine, "base": "component", "char": 0.985},
-    {"comp": compressor, "base": "bus", "char": 0.985},
+    {"comp": compressor, "base": "bus", "char": 0.995},
     {"comp": feed_pump, "base": "bus", "char": 0.985},
     {"comp": condensate_pump, "base": "bus", "char": 0.985},
     {"comp": drum_pump, "base": "bus", "char": 0.985},
@@ -102,11 +102,11 @@ nw.add_busses(net_power)
 
 c1.set_attr(
     fluid={
-        "AR": 0.0128,
-        "CO2": 0.0004,
-        "H2O": 0.0063,
-        "N2": 0.7505,
-        "O2": 0.2299
+        "AR": 0.01282,
+        "CO2": 0.00040,
+        "H2O": 0.00634,
+        "N2": 0.75051,
+        "O2": 0.22993
     },
     m=10,
     p=1.013,

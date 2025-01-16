@@ -44,7 +44,7 @@ c2.set_attr(p=0.6)
 
 a1.set_attr(fluid={"Ar": 0.0129, "CO2": 0.0005, "N2": 0.7552, "O2": 0.2314}, T=10, p=1.013)
 a2.set_attr()
-a3.set_attr(T=3, p=1.013)
+a3.set_attr(T=8, p=1.013)
 b1.set_attr(fluid={"water": 1}, T=70, p=5, m=10)
 b2.set_attr()
 b3.set_attr(T=120, p=5)

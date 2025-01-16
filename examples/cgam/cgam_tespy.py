@@ -49,15 +49,15 @@ nwk.add_conns(c1, c2, c3, c10)
 c4 = Connection(cb, 'out1', tur, 'in1', label='4')
 c5 = Connection(tur, 'out1', aph, 'in1', label='5')
 c6 = Connection(aph, 'out1', eva, 'in1', label='6')
-c6p = Connection(eva, 'out1', eco, 'in1', label='6p')
+c6p = Connection(eva, 'out1', eco, 'in1', label='6P')
 c7 = Connection(eco, 'out1', ch, 'in1', label='7')
 
 nwk.add_conns(c4, c5, c6, c6p, c7)
 
 c8 = Connection(fw, 'out1', eco, 'in2', label='8')
-c8p = Connection(eco, 'out2', dr, 'in1', label='8p')
+c8p = Connection(eco, 'out2', dr, 'in1', label='8P')
 c11 = Connection(dr, 'out1', eva, 'in2', label='11')
-c11p = Connection(eva, 'out2', dr, 'in2', label='11p')
+c11p = Connection(eva, 'out2', dr, 'in2', label='11P')
 c9 = Connection(dr, 'out2', ls, 'in1', label='9')
 
 nwk.add_conns(c8, c8p, c11, c11p, c9)
@@ -107,3 +107,40 @@ c1.set_attr(m=None)
 
 nwk.solve('design')
 nwk.print_results()
+
+component_json = {}
+for comp_type in nwk.comps["comp_type"].unique():
+    component_json[comp_type] = {}
+    for c in nwk.comps.loc[nwk.comps["comp_type"] == comp_type, "object"]:
+        component_json[comp_type][c.label] = {}
+
+connection_json = {}
+for c in nwk.conns["object"]:
+    connection_json[c.label] = {
+        "source_component": c.source.label,
+        "source_connector": int(c.source_id.removeprefix("out")) - 1,
+        "target_component": c.target.label,
+        "target_connector": int(c.target_id.removeprefix("in")) - 1
+    }
+    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
+    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
+    connection_json[c.label].update({f"mass_composition": c.fluid.val})
+
+
+json_export = {
+    "components": component_json,
+    "connections": connection_json,
+    "ambient_conditions": {
+        "Tamb": 283.15,
+        "Tamb_unit": "K",
+        "pamb": 101300.0,
+        "pamb_unit": "Pa"
+    }
+}
+
+
+import json
+
+
+with open("examples/cgam/cgam_tespy.json", "w", encoding="utf-8") as f:
+    json.dump(json_export, f, indent=2)

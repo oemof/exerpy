@@ -61,7 +61,7 @@ c8 = Connection(economizer, "out1", flue_gas_out, "in1", label="8")
 nw.add_conns(c1, c2, c3, c4, c5, c6, c7, c8)
 
 c9 = Connection(superheater, "out2", cc, "in1", label="9")
-c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="0")
+c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="_0")
 c0a = Connection(hp_steam_turbine, "out1", extraction, "in1", label="_??a")
 c10 = Connection(extraction, "out1", dea_steam_valve, "in1", label="10")
 c10a = Connection(dea_steam_valve, "out1", deaerator, "in1", label="10a")

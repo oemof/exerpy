@@ -20,7 +20,6 @@ M_air = sum([air_molar[key] * molar_masses[key] for key in air_molar])
 
 air = {key: value / M_air * molar_masses[key] for key, value in air_molar.items()}
 
-water = {f: (0 if f != 'H2O' else 1) for f in air}
 fuel = {f: (0 if f != 'CH4' else 1) for f in air}
 
 amb = Source('ambient air')
@@ -62,7 +61,7 @@ c9 = Connection(dr, 'out2', ls, 'in1', label='9')
 
 nwk.add_conns(c8, c8p, c11, c11p, c9)
 
-c8.set_attr(p=20, T=25, m=14, fluid=water)
+c8.set_attr(p=20, T=25, m=14, fluid={"IF97::water": 1})
 c1.set_attr(p=1.013, T=25, fluid=air, m=91.753028)
 c10.set_attr(T=25, fluid=fuel, p=12)
 c7.set_attr(p=1.013)

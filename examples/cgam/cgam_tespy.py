@@ -107,6 +107,9 @@ c1.set_attr(m=None)
 nwk.solve('design')
 nwk.print_results()
 
+p0 = 101300
+T0 = 298.15
+
 component_json = {}
 for comp_type in nwk.comps["comp_type"].unique():
     component_json[comp_type] = {}
@@ -124,6 +127,10 @@ for c in nwk.conns["object"]:
     connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
     connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
     connection_json[c.label].update({f"mass_composition": c.fluid.val})
+    c.get_physical_exergy(p0, T0)
+    connection_json[c.label].update({"e_T": c.ex_therm})
+    connection_json[c.label].update({"e_M": c.ex_mech})
+    connection_json[c.label].update({"e_PH": c.ex_physical})
 
 
 json_export = {

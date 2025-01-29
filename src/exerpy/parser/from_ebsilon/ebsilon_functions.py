@@ -2,6 +2,8 @@ import sys
 import os
 import logging
 
+from CoolProp.CoolProp import PropsSI as CP
+
 ebs_path = os.getenv("EBS")
 if not ebs_path:
     logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
@@ -53,12 +55,15 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     # Retrieve the fluid type from the stream
     fd.FluidType = (pipe.Kind-1000)
 
-    if fd.FluidType == 3:  # steam
-        fd.SteamTable = EpSteamTable.epSteamTableFromSuperiorModel
-        fdAnalysis = app.NewFluidAnalysis()
-
-    elif fd.FluidType == 4:  # water
-        fdAnalysis = app.NewFluidAnalysis()
+    if fd.FluidType == 3 or fd.FluidType == 4:  # steam or water
+        t_sat = CP('T', 'P', pressure, 'Q', 0, 'water')
+        if temperature > t_sat:
+            fd.FluidType = 3  # steam
+            fd.SteamTable = EpSteamTable.epSteamTableFromSuperiorModel
+            fdAnalysis = app.NewFluidAnalysis()
+        else:
+            fd.FluidType == 4  # water
+            fdAnalysis = app.NewFluidAnalysis()
 
     elif fd.FluidType == 15:  # 2PhaseLiquid
         fd.Medium = pipe.FMED.Value

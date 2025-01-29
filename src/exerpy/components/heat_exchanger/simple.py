@@ -223,3 +223,138 @@ class SimpleHeatExchanger(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+
+    def exergoeconomic_balance(self, T0: float) -> None:
+        """        
+        This function calculates:
+        - C_P, the cost flow associated with the product exergy
+        - C_F, the cost flow associated with the fuel exergy
+        - c_F, c_P as specific costs [currency / W of exergy]
+        - C_D, cost flow of exergy destruction
+        - r, relative cost difference
+        - f, exergoeconomic factor
+
+        Requires:
+        - self.inl[0], self.outl[0] each has e_T, e_PH, e_M, T, h, m
+        - self.Z_costs must be set beforehand (e.g. by ExergoeconomicAnalysis)
+        - self.E_F, self.E_P, self.E_D already computed by calc_exergy_balance
+        """
+        # For convenience, read inlet/outlet dictionaries
+        inlet = self.inl[0]
+        outlet = self.outl[0]
+
+        # Build "cost flows" from thermal, physical, mechanical exergies, analog to TESPy
+        # E.g. "C_therm_in = mass_flow_in * e_T_in"
+        C_therm_in = inlet['m'] * inlet['e_T']
+        C_therm_out = outlet['m'] * outlet['e_T']
+
+        C_mech_in = inlet['m'] * inlet['e_M']
+        C_mech_out = outlet['m'] * outlet['e_M']
+
+        C_phys_in = inlet['m'] * inlet['e_PH']
+        C_phys_out = outlet['m'] * outlet['e_PH']
+
+        # Heat transfer
+        Q = outlet['m'] * outlet['h'] - inlet['m'] * inlet['h']
+
+        # Initialize result placeholders
+        self.C_F = 0.0
+        self.C_P = 0.0
+
+        # === CASE 1: Heat release (Q < 0) ===
+        if Q < 0:
+            if inlet['T'] >= T0 and outlet['T'] >= T0:
+                # both above ambient
+                if getattr(self, 'dissipative', False):
+                    self.C_P = np.nan
+                else:
+                    self.C_P = C_therm_in - C_therm_out
+                self.C_F = C_phys_in - C_phys_out
+
+            elif inlet['T'] >= T0 and outlet['T'] < T0:
+                # inlet above, outlet below T0
+                self.C_P = C_therm_out
+                self.C_F = (C_therm_in + C_therm_out + (C_mech_in - C_mech_out))
+
+            elif inlet['T'] <= T0 and outlet['T'] <= T0:
+                # both below T0
+                self.C_P = C_therm_out - C_therm_in
+                # the line in TESPy is ambiguous but we mirror it
+                self.C_F = (self.C_P + (C_mech_in - C_mech_out))
+
+            else:
+                # unimplemented corner case
+                logging.warning(
+                    "SimpleHeatExchanger: unimplemented case (Q < 0, T_in < T0 < T_out?)."
+                )
+                self.C_P = np.nan
+                self.C_F = np.nan
+
+        # === CASE 2: Heat addition (Q > 0) ===
+        elif Q > 0:
+            if inlet['T'] >= T0 and outlet['T'] >= T0:
+                # both above T0
+                self.C_P = C_phys_out - C_phys_in
+                self.C_F = C_therm_out - C_therm_in
+
+            elif inlet['T'] < T0 and outlet['T'] > T0:
+                self.C_P = C_therm_out + C_therm_in
+                self.C_F = (C_therm_in + (C_mech_in - C_mech_out))
+
+            elif inlet['T'] < T0 and outlet['T'] < T0:
+                # both below T0
+                if getattr(self, 'dissipative', False):
+                    self.C_P = np.nan
+                else:
+                    self.C_P = (C_therm_in - C_therm_out) + (C_mech_out - C_mech_in)
+                self.C_F = (C_therm_in - C_therm_out)
+
+            else:
+                logging.warning(
+                    "SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?)."
+                )
+                self.C_P = np.nan
+                self.C_F = np.nan
+
+        # === CASE 3: Q == 0 or "fully dissipative" fallback ===
+        else:
+            self.C_P = np.nan
+            self.C_F = C_phys_in - C_phys_out
+
+        # Debug check difference
+        logging.debug(
+            f"{self.label}: difference C_P - (C_F + Z_costs) = "
+            f"{self.C_P - (self.C_F + getattr(self, 'Z_costs', 0.0))}"
+        )
+
+        # === Calculate final exergoeconomic metrics ===
+        # c_F, c_P: cost per exergy flow [currency/W], if E_F/E_P nonzero
+        if self.E_F and self.E_F > 1e-12:
+            self.c_F = self.C_F / self.E_F
+        else:
+            self.c_F = None
+
+        if self.E_P and self.E_P > 1e-12:
+            self.c_P = self.C_P / self.E_P
+        else:
+            self.c_P = None
+
+        # Cost flow associated with destruction: C_D = c_F * E_D
+        if self.c_F is not None and self.E_D is not None:
+            self.C_D = (self.c_F * self.E_D) if self.c_F > 1e-12 else 0.0
+        else:
+            self.C_D = None
+
+        # Relative cost difference: (C_P - C_F)/C_F => or (c_P - c_F)/c_F
+        if self.c_F and self.c_P:
+            self.r = (self.c_P - self.c_F) / self.c_F
+        else:
+            self.r = None
+
+        # Exergoeconomic factor: f = Z_costs / (Z_costs + C_D)
+        ZC = getattr(self, 'Z_costs', 0.0)
+        if self.C_D is not None and self.C_D > 1e-12:
+            self.f = ZC / (ZC + self.C_D)
+        else:
+            self.f = None

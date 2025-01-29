@@ -216,3 +216,164 @@ class HeatExchanger(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+
+    def exergoeconomic_balance(self, T0: float) -> None:
+        """
+        Adapted from TESPy's two-stream heat exchanger approach for exergoeconomic balances.
+        Determines cost flows of 'fuel' (C_F) and 'product' (C_P) exergy, then
+        calculates c_F, c_P, cost of exergy destruction C_D, relative cost difference r,
+        and exergoeconomic factor f.
+
+        Prerequisites:
+        - self.inl[0], self.inl[1], self.outl[0], self.outl[1] each has:
+            'm', 'e_T', 'e_PH', 'e_M', 'T'  (at least)
+        - self.E_F, self.E_P, self.E_D computed from calc_exergy_balance
+        - self.Z_costs assigned by your ExergoeconomicAnalysis (defaults to 0 if missing).
+        - If "fully dissipative", you can treat self.dissipative == True
+            for the logic to set C_P = np.nan, etc.
+
+        After calling this method, you can read:
+        - self.C_F, self.C_P  (currency/h)
+        - self.c_F, self.c_P  (currency/W, if E_F/E_P > 0)
+        - self.C_D, self.r, self.f
+        """
+        # For readability, label the streams
+        hot_in = self.inl[0]
+        hot_out = self.outl[0]
+        cold_in = self.inl[1]
+        cold_out = self.outl[1]
+
+        # For "dissipative" mode, just replicate the TESPy snippet
+        if getattr(self, 'dissipative', False):
+            # The simplest approach: product is undefined, 
+            # fuel is sum of total exergies from inlets
+            self.C_P = np.nan
+            # If you wanted to sum 'C_tot' from each inlet, approximate:
+            #   C_tot_in = m_in * (e_T + e_M + e_CH), etc.
+            # For a minimal approach:
+            self.C_F = (
+                hot_in['m'] * (hot_in['e_T'] + hot_in['e_M'] + hot_in.get('e_CH', 0.0))
+                + cold_in['m'] * (cold_in['e_T'] + cold_in['e_M'] + cold_in.get('e_CH', 0.0))
+            )
+
+        # Case 1: All streams above T0
+        elif all([s['T'] > T0 for s in [hot_in, hot_out, cold_in, cold_out]]):
+            # See TESPy snippet:
+            #   C_P = outl[1].C_therm - inl[1].C_therm
+            #   C_F = inl[0].C_physical - outl[0].C_physical + (inl[1].C_mech - outl[1].C_mech)
+            # We'll compute the relevant cost flows:
+            C_therm_out1 = cold_out['m']*cold_out['e_T']
+            C_therm_in1 = cold_in['m']*cold_in['e_T']
+
+            C_physical_in0 = hot_in['m']*hot_in['e_PH']
+            C_physical_out0 = hot_out['m']*hot_out['e_PH']
+
+            C_mech_in1 = cold_in['m']*cold_in['e_M']
+            C_mech_out1 = cold_out['m']*cold_out['e_M']
+
+            self.C_P = C_therm_out1 - C_therm_in1
+            self.C_F = (C_physical_in0 - C_physical_out0) + (C_mech_in1 - C_mech_out1)
+
+        # Case 2: All streams <= T0
+        elif all([s['T'] <= T0 for s in [hot_in, hot_out, cold_in, cold_out]]):
+            #   C_P = outl[0].C_therm - inl[0].C_therm
+            #   C_F = inl[1].C_physical - outl[1].C_physical + (inl[0].C_mech - outl[0].C_mech)
+            C_therm_out0 = hot_out['m']*hot_out['e_T']
+            C_therm_in0  = hot_in['m']*hot_in['e_T']
+
+            C_physical_in1  = cold_in['m']*cold_in['e_PH']
+            C_physical_out1 = cold_out['m']*cold_out['e_PH']
+
+            C_mech_in0  = hot_in['m']*hot_in['e_M']
+            C_mech_out0 = hot_out['m']*hot_out['e_M']
+
+            self.C_P = C_therm_out0 - C_therm_in0
+            self.C_F = (C_physical_in1 - C_physical_out1) + (C_mech_in0 - C_mech_out0)
+
+        # Case 3: inl[0].T> T0, outl[1].T> T0, outl[0].T<= T0, inl[1].T<=T0
+        elif (hot_in['T'] > T0 and cold_out['T'] > T0 and
+            hot_out['T'] <= T0 and cold_in['T'] <= T0):
+            #   C_P = outl[0].C_therm + outl[1].C_therm
+            #   C_F = inl[0].C_physical + inl[1].C_physical - (outl[0].C_mech + outl[1].C_mech)
+            C_therm_out0 = hot_out['m']*hot_out['e_T']
+            C_therm_out1 = cold_out['m']*cold_out['e_T']
+            C_physical_in0 = hot_in['m']*hot_in['e_PH']
+            C_physical_in1 = cold_in['m']*cold_in['e_PH']
+            C_mech_out0    = hot_out['m']*hot_out['e_M']
+            C_mech_out1    = cold_out['m']*cold_out['e_M']
+
+            self.C_P = C_therm_out0 + C_therm_out1
+            self.C_F = (C_physical_in0 + C_physical_in1) - (C_mech_out0 + C_mech_out1)
+
+        # Case 4: inl[0].T> T0, inl[1].T<= T0, outl[0].T<= T0, outl[1].T<= T0
+        elif (hot_in['T'] > T0 and cold_in['T'] <= T0 and
+            hot_out['T'] <= T0 and cold_out['T'] <= T0):
+            #   C_P = outl[0].C_therm
+            #   C_F = inl[0].C_physical + inl[1].C_physical - (outl[1].C_physical + outl[0].C_mech)
+            C_therm_out0 = hot_out['m']*hot_out['e_T']
+            C_physical_in0 = hot_in['m']*hot_in['e_PH']
+            C_physical_in1 = cold_in['m']*cold_in['e_PH']
+            C_physical_out1 = cold_out['m']*cold_out['e_PH']
+            C_mech_out0 = hot_out['m']*hot_out['e_M']
+
+            self.C_P = C_therm_out0
+            self.C_F = (C_physical_in0 + C_physical_in1) - (C_physical_out1 + C_mech_out0)
+
+        # Case 5: inl[0].T> T0, outl[0].T> T0, inl[1].T<=T0, outl[1].T<=T0
+        elif (hot_in['T'] > T0 and hot_out['T'] > T0 and
+            cold_in['T'] <= T0 and cold_out['T'] <= T0):
+            #   C_P = np.nan
+            #   C_F = ...
+            self.C_P = np.nan
+            self.C_F = (
+                hot_in['m']*hot_in['e_PH'] - hot_out['m']*hot_out['e_PH']
+                + cold_in['m']*cold_in['e_PH'] - cold_out['m']*cold_out['e_PH']
+            )
+
+        # Case 6: outl[1].T> T0, everything else <= T0
+        else:
+            #   C_P = outl[1].C_therm
+            #   C_F = inl[0].C_physical - outl[0].C_physical + ...
+            C_therm_out1 = cold_out['m']*cold_out['e_T']
+            C_physical_in0 = hot_in['m']*hot_in['e_PH']
+            C_physical_out0 = hot_out['m']*hot_out['e_PH']
+            C_physical_in1 = cold_in['m']*cold_in['e_PH']
+            C_mech_out1    = cold_out['m']*cold_out['e_M']
+
+            self.C_P = C_therm_out1
+            self.C_F = (C_physical_in0 - C_physical_out0) + (C_physical_in1 - (cold_out['m']*cold_out['e_PH'])) \
+                    + 0.0  # If you need that last term from TESPy snippet
+
+        # --- Now compute final exergoeconomic variables ---
+        # 1) Check we have a valid Z_costs assigned
+        ZC = getattr(self, "Z_costs", 0.0)
+
+        # 2) c_F, c_P in currency/W
+        if (self.E_F is not None and self.E_F > 1e-12):
+            self.c_F = self.C_F / self.E_F
+        else:
+            self.c_F = None
+
+        if (self.E_P is not None and self.E_P > 1e-12) and not np.isnan(self.C_P):
+            self.c_P = self.C_P / self.E_P
+        else:
+            self.c_P = None
+
+        # 3) cost of destruction, C_D = c_F * E_D
+        if self.c_F is not None and (self.E_D is not None):
+            self.C_D = (self.c_F * self.E_D) if self.c_F > 1e-12 else 0.0
+        else:
+            self.C_D = None
+
+        # 4) relative cost difference r = (c_P - c_F)/c_F
+        if self.c_F and self.c_P:
+            self.r = (self.c_P - self.c_F) / self.c_F
+        else:
+            self.r = None
+
+        # 5) exergoeconomic factor f = Z_costs/(Z_costs + C_D)
+        if (self.C_D is not None) and (self.C_D > 1e-12):
+            self.f = ZC / (ZC + self.C_D)
+        else:
+            self.f = None

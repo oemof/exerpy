@@ -6,3 +6,4 @@ import os
 __datapath__ = os.path.join(importlib.resources.files("exerpy"), "data")
 
 from .analyses import ExergyAnalysis
+from .analyses import ExergoeconomicAnalysis

@@ -572,6 +572,139 @@ class ExergyAnalysis:
         print(tabulate(df_component_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
+    
+
+class ExergoeconomicAnalysis:
+    """
+    Perform a basic exergoeconomic evaluation after an ExergyAnalysis has been run.
+
+    This class expects that each component in exergy_analysis.components already has:
+      - E_F, E_P, E_D (fuel, product, destruction exergy in W)
+      - an attribute Z_costs (investment/O&M cost rate in e.g. EUR/h or $/h), default 0
+
+    For each component, we calculate:
+      - C_F  : Cost flow of exergy fuel  (currency/h)
+      - c_F  : Specific cost of exergy fuel (currency/MJ or currency/kWh)
+      - C_P  : Cost flow of exergy product (currency/h)
+      - c_P  : Specific cost of exergy product
+      - C_D  : Cost flow associated with exergy destruction = c_F * E_D
+      - f    : Exergoeconomic factor = Z_costs / (Z_costs + C_D)
+      - r    : Relative cost difference = (c_P - c_F) / c_F
+    """
+
+    def __init__(self, exergy_analysis, component_costs=None):
+        """
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis
+            An instance of ExergyAnalysis (exerpy.analyses.ExergyAnalysis) 
+            that already has E_F, E_P, E_D, etc. for each component.
+        component_costs : dict
+            Dictionary of user-specified cost rates for each component,
+            e.g. {"Boiler": 1200.0, "Turbine": 800.0}. 
+            These are taken as Z_costs (EUR/h or your chosen currency/h).
+        """
+        self.exergy_analysis = exergy_analysis
+        self.component_costs = component_costs or {}
+        self.results_table = None  # Will store a summary dataframe
+
+    def run(self):
+        """
+        Calculate exergoeconomic costs for each component based on:
+          Z_costs (given or zero), E_F, E_P, E_D (from exergy analysis).
+        """
+        for cname, comp in self.exergy_analysis.components.items():
+            # 1) Assign Z_costs
+            comp.Z_costs = self.component_costs.get(cname, 0.0)
+
+            # 2) Calculate specific fuel cost c_F. 
+            #    In a simple approach, assume c_F covers entire investment cost:
+            #        C_F = Z_costs, hence c_F = Z_costs / E_F if E_F != 0
+            if getattr(comp, 'E_F', 0.0) > 1e-12:
+                comp.C_F = comp.Z_costs
+                comp.c_F = comp.C_F / comp.E_F  # currency per W
+            else:
+                comp.C_F = 0.0
+                comp.c_F = 0.0
+
+            # 3) Cost flow associated with exergy destruction
+            #    C_D = c_F * E_D
+            if getattr(comp, 'E_D', 0.0) > 0.0:
+                comp.C_D = comp.c_F * comp.E_D
+            else:
+                comp.C_D = 0.0
+
+            # 4) Exergoeconomic factor: f = Z_costs / (Z_costs + C_D)
+            denom = comp.Z_costs + comp.C_D
+            comp.f = comp.Z_costs / denom if denom > 1e-12 else None
+
+            # 5) Specific product cost c_P
+            #    A simple assumption: c_P = (C_F + Z_costs) / E_P. 
+            #    But typically, c_P = c_F + extra terms. Here, keep it minimal:
+            if getattr(comp, 'E_P', 0.0) > 1e-12:
+                # total cost flow of product side = C_F + Z_costs
+                # (which is effectively double-counting Z_costs in C_F if we already used Z_costs = C_F above,
+                #  but let's keep it simple for demonstration)
+                total_cost_flow = comp.C_F + comp.Z_costs
+                comp.c_P = total_cost_flow / comp.E_P
+            else:
+                comp.c_P = None
+
+            # 6) Relative cost difference r = (c_P - c_F)/c_F
+            if comp.c_F > 1e-12 and comp.c_P is not None:
+                comp.r = (comp.c_P - comp.c_F) / comp.c_F
+            else:
+                comp.r = None
+
+            # (These attributes can now be accessed directly on the component)
+
+        logging.info("Exergoeconomic analysis completed.")
+
+    def results(self):
+        """
+        Create and return a pandas DataFrame summarizing the exergoeconomic results.
+        """
+        cols = [
+            "Component",
+            "Z_costs [cur/h]",
+            "E_F [kW]",
+            "E_P [kW]",
+            "E_D [kW]",
+            "c_F [cur/kW]",  # if we treat comp.c_F as cost/W, multiply by 1e3 for cost/kW
+            "c_P [cur/kW]",
+            "C_D [cur/h]",
+            "f [-]",
+            "r [%]"
+        ]
+        data = {col: [] for col in cols}
+
+        # Fill table
+        for cname, comp in self.exergy_analysis.components.items():
+            data["Component"].append(cname)
+            data["Z_costs [cur/h]"].append(getattr(comp, "Z_costs", None))
+            data["E_F [kW]"].append(getattr(comp, "E_F", 0.0) * 1e-3)
+            data["E_P [kW]"].append(getattr(comp, "E_P", 0.0) * 1e-3)
+            data["E_D [kW]"].append(getattr(comp, "E_D", 0.0) * 1e-3)
+
+            if getattr(comp, "c_F", None) is not None:
+                data["c_F [cur/kW]"].append(comp.c_F * 1e3)  # convert cost/W -> cost/kW
+            else:
+                data["c_F [cur/kW]"].append(None)
+
+            if getattr(comp, "c_P", None) is not None:
+                data["c_P [cur/kW]"].append(comp.c_P * 1e3)
+            else:
+                data["c_P [cur/kW]"].append(None)
+
+            data["C_D [cur/h]"].append(getattr(comp, "C_D", None))
+            data["f [-]"].append(getattr(comp, "f", None))
+            # Turn r into % if present
+            r_val = getattr(comp, "r", None)
+            data["r [%]"].append(r_val * 100 if r_val is not None else None)
+
+        df = pd.DataFrame(data)
+        self.results_table = df
+        return df
 
 
 def _construct_components(component_data, connection_data):

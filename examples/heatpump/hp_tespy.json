@@ -1,26 +1,26 @@
 {
   "components": {
     "HeatExchanger": {
-      "condenser": {},
-      "evaporator": {}
-    },
-    "Valve": {
-      "valve": {}
+      "evaporator": {},
+      "condenser": {}
     },
     "CycleCloser": {
       "cc": {}
+    },
+    "Valve": {
+      "valve": {}
     },
     "Compressor": {
       "compressor": {},
       "air fan": {}
     },
-    "Source": {
-      "air inlet": {},
-      "water inlet": {}
-    },
     "Sink": {
       "air outlet": {},
       "water outlet": {}
+    },
+    "Source": {
+      "air inlet": {},
+      "water inlet": {}
     },
     "Pump": {
       "water pump": {}
@@ -44,7 +44,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "R245FA": 1
-      }
+      },
+      "e_T": 8963.145029346459,
+      "e_M": 1588.2833150007837,
+      "e_PH": 10551.428344347241
     },
     "31": {
       "source_component": "cc",
@@ -63,7 +66,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "R245FA": 1
-      }
+      },
+      "e_T": 8963.145029346459,
+      "e_M": 1588.2833150007837,
+      "e_PH": 10551.428344347241
     },
     "32": {
       "source_component": "valve",
@@ -82,7 +88,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "R245FA": 1
-      }
+      },
+      "e_T": 2886.6127148811793,
+      "e_M": -5415.2343824435375,
+      "e_PH": -2528.621667562358
     },
     "33": {
       "source_component": "evaporator",
@@ -101,7 +110,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "R245FA": 1
-      }
+      },
+      "e_T": 7.337609544904126,
+      "e_M": -6904.9021985461295,
+      "e_PH": -6897.564589001226
     },
     "34": {
       "source_component": "compressor",
@@ -120,14 +132,17 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "R245FA": 1
-      }
+      },
+      "e_T": 61001.69400452086,
+      "e_M": 1591.8959750386346,
+      "e_PH": 62593.589979559496
     },
     "11": {
       "source_component": "air inlet",
       "source_connector": 0,
       "target_component": "air fan",
       "target_connector": 0,
-      "m": 123.15627600471811,
+      "m": 251.77815825979346,
       "T": 283.15,
       "p": 101299.99999999999,
       "h": 283525.06194011786,
@@ -142,14 +157,17 @@
         "CO2": 0.0005,
         "N2": 0.7552,
         "O2": 0.2314
-      }
+      },
+      "e_T": 0.0,
+      "e_M": 0.0,
+      "e_PH": 0.0
     },
     "12": {
       "source_component": "air fan",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 0,
-      "m": 123.15627600471811,
+      "m": 251.77815825979346,
       "T": 285.94158788780896,
       "p": 104299.99999999999,
       "h": 286326.7855538324,
@@ -164,18 +182,21 @@
         "CO2": 0.0005,
         "N2": 0.7552,
         "O2": 0.2314
-      }
+      },
+      "e_T": 13.744834542575518,
+      "e_M": 2371.5186581109474,
+      "e_PH": 2385.263492653523
     },
     "13": {
       "source_component": "evaporator",
       "source_connector": 0,
       "target_component": "air outlet",
       "target_connector": 0,
-      "m": 123.15627600471811,
-      "T": 276.15,
+      "m": 251.77815825979346,
+      "T": 281.15,
       "p": 101299.99999999999,
-      "h": 276488.7650791387,
-      "s": 6781.946358481161,
+      "h": 281514.5573077617,
+      "s": 6799.983057279585,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
@@ -186,7 +207,10 @@
         "CO2": 0.0005,
         "N2": 0.7552,
         "O2": 0.2314
-      }
+      },
+      "e_T": 7.134040056228741,
+      "e_M": 0.0,
+      "e_PH": 7.134040056228741
     },
     "21": {
       "source_component": "water inlet",
@@ -205,7 +229,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
-      }
+      },
+      "e_T": 23341.85778146214,
+      "e_M": 398.7806711486754,
+      "e_PH": 23740.638452610812
     },
     "22": {
       "source_component": "water pump",
@@ -224,7 +251,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
-      }
+      },
+      "e_T": 23342.19352577484,
+      "e_M": 403.7812007972469,
+      "e_PH": 23745.974726572087
     },
     "23": {
       "source_component": "condenser",
@@ -243,7 +273,10 @@
       "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
-      }
+      },
+      "e_T": 71733.64569340541,
+      "e_M": 398.7806711486754,
+      "e_PH": 72132.42636455409
     }
   },
   "ambient_conditions": {

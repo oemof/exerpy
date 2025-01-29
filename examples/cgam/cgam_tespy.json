@@ -1,0 +1,382 @@
+{
+  "components": {
+    "Source": {
+      "methane": {},
+      "ambient air": {},
+      "feed water": {}
+    },
+    "Compressor": {
+      "compressor": {}
+    },
+    "HeatExchanger": {
+      "air preheater": {},
+      "economizer": {},
+      "evaporator": {}
+    },
+    "DiabaticCombustionChamber": {
+      "combustion chamber": {}
+    },
+    "Sink": {
+      "chimney": {},
+      "live steam": {}
+    },
+    "Turbine": {
+      "gas turbine": {}
+    },
+    "Drum": {
+      "drum": {}
+    }
+  },
+  "connections": {
+    "1": {
+      "source_component": "ambient air",
+      "source_connector": 0,
+      "target_component": "compressor",
+      "target_connector": 0,
+      "m": 90.93768025213349,
+      "T": 298.15,
+      "p": 101299.99999999999,
+      "h": 327381.6035266853,
+      "s": 6911.112368122053,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "O2": 0.22997585111067764,
+        "N2": 0.7576155344954176,
+        "CO2": 0.0004608534530315664,
+        "H2O": 0.011947760940873214,
+        "CH4": 0.0
+      },
+      "e_T": 0.0,
+      "e_M": 0.0,
+      "e_PH": 0.0
+    },
+    "2": {
+      "source_component": "compressor",
+      "source_connector": 0,
+      "target_component": "air preheater",
+      "target_connector": 1,
+      "m": 90.93768025213349,
+      "T": 611.5052734299336,
+      "p": 1012999.9999999999,
+      "h": 653922.9812480751,
+      "s": 6988.609347616783,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "O2": 0.22997585111067764,
+        "N2": 0.7576155344954176,
+        "CO2": 0.0004608534530315664,
+        "H2O": 0.011947760940873214,
+        "CH4": 0.0
+      },
+      "e_T": 105911.69777056432,
+      "e_M": 197523.95551447172,
+      "e_PH": 303435.65328503604
+    },
+    "3": {
+      "source_component": "air preheater",
+      "source_connector": 1,
+      "target_component": "combustion chamber",
+      "target_connector": 0,
+      "m": 90.93768025213349,
+      "T": 850.0,
+      "p": 962349.9999999999,
+      "h": 916984.0219766004,
+      "s": 7366.247754575404,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "O2": 0.22997585111067764,
+        "N2": 0.7576155344954176,
+        "CO2": 0.0004608534530315664,
+        "H2O": 0.011947760940873214,
+        "CH4": 0.0
+      },
+      "e_T": 260741.85727517243,
+      "e_M": 193161.9457036763,
+      "e_PH": 453903.8029788487
+    },
+    "10": {
+      "source_component": "methane",
+      "source_connector": 0,
+      "target_component": "combustion chamber",
+      "target_connector": 1,
+      "m": 1.6470042253270363,
+      "T": 298.15000000000094,
+      "p": 1200000.0,
+      "h": 899139.9590977639,
+      "s": 5366.980364340882,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "O2": 0,
+        "N2": 0,
+        "CO2": 0,
+        "H2O": 0,
+        "CH4": 1
+      },
+      "e_T": -1.0051735443994401e-09,
+      "e_M": 379051.8734263716,
+      "e_PH": 379051.8734263706
+    },
+    "4": {
+      "source_component": "combustion chamber",
+      "source_connector": 0,
+      "target_component": "gas turbine",
+      "target_connector": 0,
+      "m": 92.58468447746051,
+      "T": 1519.9998978474246,
+      "p": 914232.4999999999,
+      "h": 1879632.2769756527,
+      "s": 8036.520820730235,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "H2O": 0.051687922241419514,
+        "CO2": 0.04925321677262918,
+        "CH4": 0.0,
+        "O2": 0.15492062140397855,
+        "N2": 0.7441382395819728
+      },
+      "e_T": 907926.5789991459,
+      "e_M": 179565.2240275174,
+      "e_PH": 1087491.8030266634
+    },
+    "5": {
+      "source_component": "gas turbine",
+      "source_connector": 0,
+      "target_component": "air preheater",
+      "target_connector": 0,
+      "m": 92.58468447746051,
+      "T": 1011.3322218176083,
+      "p": 109929.46283233861,
+      "h": 1234872.1232501036,
+      "s": 8145.018024838208,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "H2O": 0.051687922241419514,
+        "CO2": 0.04925321677262918,
+        "CH4": 0.0,
+        "O2": 0.15492062140397855,
+        "N2": 0.7441382395819728
+      },
+      "e_T": 403588.6672645475,
+      "e_M": 6794.540631774753,
+      "e_PH": 410383.20789632224
+    },
+    "6": {
+      "source_component": "air preheater",
+      "source_connector": 0,
+      "target_component": "evaporator",
+      "target_connector": 0,
+      "m": 92.58468447746051,
+      "T": 794.8119057564256,
+      "p": 106631.57894736843,
+      "h": 976490.7187707494,
+      "s": 7866.746571532485,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "H2O": 0.051687922241419514,
+        "CO2": 0.04925321677262918,
+        "CH4": 0.0,
+        "O2": 0.15492062140397855,
+        "N2": 0.7441382395819728
+      },
+      "e_T": 230703.38104423456,
+      "e_M": 4265.056175834659,
+      "e_PH": 234968.43722006923
+    },
+    "6P": {
+      "source_component": "evaporator",
+      "source_connector": 0,
+      "target_component": "economizer",
+      "target_connector": 0,
+      "m": 92.58468447746051,
+      "T": 532.8837119854865,
+      "p": 103931.6070662261,
+      "h": 680478.9248215216,
+      "s": 7423.4102378601465,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "H2O": 0.051687922241419514,
+        "CO2": 0.04925321677262918,
+        "CH4": 0.0,
+        "O2": 0.15492062140397855,
+        "N2": 0.7441382395819728
+      },
+      "e_T": 69003.97845977242,
+      "e_M": 2133.392695476803,
+      "e_PH": 71137.37115524922
+    },
+    "7": {
+      "source_component": "economizer",
+      "source_connector": 0,
+      "target_component": "chimney",
+      "target_connector": 0,
+      "m": 92.58468447746051,
+      "T": 430.4792242504929,
+      "p": 101299.99999999999,
+      "h": 569483.8070924191,
+      "s": 7199.7362513067965,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "H2O": 0.051687922241419514,
+        "CO2": 0.04925321677262918,
+        "CH4": 0.0,
+        "O2": 0.15492062140397855,
+        "N2": 0.7441382395819728
+      },
+      "e_T": 26830.652517028007,
+      "e_M": 0.0,
+      "e_PH": 26830.652517028007
+    },
+    "8": {
+      "source_component": "feed water",
+      "source_connector": 0,
+      "target_component": "economizer",
+      "target_connector": 1,
+      "m": 14.0,
+      "T": 298.1897607923833,
+      "p": 2000000.0,
+      "h": 106769.39039266981,
+      "s": 367.29683210117037,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "water": 1
+      },
+      "e_T": -83.0088879673255,
+      "e_M": 1903.506633942216,
+      "e_PH": 1820.4977459748904
+    },
+    "8P": {
+      "source_component": "economizer",
+      "source_connector": 1,
+      "target_component": "drum",
+      "target_connector": 0,
+      "m": 14.0,
+      "T": 470.5345353184905,
+      "p": 2000000.0,
+      "h": 840801.387070351,
+      "s": 2305.232594051743,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "water": 1
+      },
+      "e_T": 156153.44036415068,
+      "e_M": 1903.506633942216,
+      "e_PH": 158056.9469980929
+    },
+    "11": {
+      "source_component": "drum",
+      "source_connector": 0,
+      "target_component": "evaporator",
+      "target_connector": 1,
+      "m": 29.00487400177209,
+      "T": 485.5345353184905,
+      "p": 2000000.0,
+      "h": 908621.8511364574,
+      "s": 2447.0239083620654,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "water": 1
+      },
+      "e_T": 181698.82406863442,
+      "e_M": 1903.506633942216,
+      "e_PH": 183602.33070257664
+    },
+    "11P": {
+      "source_component": "evaporator",
+      "source_connector": 1,
+      "target_component": "drum",
+      "target_connector": 1,
+      "m": 29.00487400177209,
+      "T": 485.5345353184905,
+      "p": 2000000.0,
+      "h": 1853502.9956889865,
+      "s": 4393.094142745364,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "water": 1
+      },
+      "e_T": 546359.1282397832,
+      "e_M": 1903.506633942216,
+      "e_PH": 548262.6348737255
+    },
+    "9": {
+      "source_component": "drum",
+      "source_connector": 1,
+      "target_component": "live steam",
+      "target_connector": 0,
+      "m": 14.0,
+      "T": 485.5345353184905,
+      "p": 2000000.0,
+      "h": 2798384.140241516,
+      "s": 6339.164377128662,
+      "m_unit": "kg / s",
+      "T_unit": "C",
+      "p_unit": "bar",
+      "h_unit": "J / kg",
+      "s_unit": "J / kgK",
+      "mass_composition": {
+        "water": 1
+      },
+      "e_T": 911019.4324109321,
+      "e_M": 1903.506633942216,
+      "e_PH": 912922.9390448744
+    }
+  },
+  "ambient_conditions": {
+    "Tamb": 283.15,
+    "Tamb_unit": "K",
+    "pamb": 101300.0,
+    "pamb_unit": "Pa"
+  }
+}

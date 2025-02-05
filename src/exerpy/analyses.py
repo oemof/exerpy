@@ -3,8 +3,6 @@ import pandas as pd
 import json
 from tabulate import tabulate
 from .components.component import component_registry
-from .parser.from_ebsilon import ebsilon_parser as ebs_parser
-from .parser.from_aspen import aspen_parser
 from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
@@ -165,6 +163,9 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Aspen data.
         """
+
+        from .parser.from_aspen import aspen_parser
+
         # Check if the file is an Aspen file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.bkp':
@@ -263,6 +264,9 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Ebsilon data.
         """
+
+        from .parser.from_ebsilon import ebsilon_parser as ebs_parser
+
         # Check if the file is an Ebsilon file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.ebs':

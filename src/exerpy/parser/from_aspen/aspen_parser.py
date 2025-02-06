@@ -54,14 +54,14 @@ class AspenModelParser:
         Parses the components and connections from the Aspen model.
         """
         try:
+            # Parse Tamb and pamb
+            self.parse_ambient_conditions()	
+
             # Parse streams (connections)
             self.parse_streams()
             
             # Parse blocks (components)
             self.parse_blocks()
-
-            # Parse Tamb and pamb
-            self.parse_ambient_conditions()	
 
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
@@ -151,6 +151,38 @@ class AspenModelParser:
                         ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED') is not None else None
                     ),
                     's_unit': fluid_property_data['s']['SI_unit'],
+                    'h_0': (
+                        convert_to_SI(
+                            'h',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000') is not None else None
+                    ),
+                    'h_0_unit': fluid_property_data['h']['SI_unit'],
+                    's_0': (
+                        convert_to_SI(
+                            's',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000') is not None else None
+                    ),
+                    's_0_unit': fluid_property_data['s']['SI_unit'],
+                    'h_A': (
+                        convert_to_SI(
+                            'h',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000') is not None else None
+                    ),
+                    'h_A_unit': fluid_property_data['h']['SI_unit'],
+                    's_A': (
+                        convert_to_SI(
+                            's',
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000').Value,
+                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000').UnitString
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000') is not None else None
+                    ),
+                    's_A_unit': fluid_property_data['s']['SI_unit'],
                     'm': (
                         convert_to_SI(
                             'm',
@@ -186,7 +218,20 @@ class AspenModelParser:
                     'mass_composition': {},
                     'molar_composition': {},
                 })
-                
+                try:
+                    connection_data['e_T'] = connection_data['h'] - connection_data['h_A'] - self.Tamb * (connection_data['s'] - connection_data['s_A'])
+                    connection_data['e_T_unit'] = fluid_property_data['e']['SI_unit']
+                except Exception as e:
+                    logging.warning(f"Error in the calculation of e_T for stream {stream_name}: {e}")
+                    connection_data['e_T'] = None
+
+                try:
+                    connection_data['e_M'] = connection_data['h_A'] - connection_data['h_0'] - self.Tamb * (connection_data['s_A'] - connection_data['s_0'])
+                    connection_data['e_M_unit'] = fluid_property_data['e']['SI_unit']
+                except Exception as e:
+                    logging.warning(f"Error in the calculation of e_M for stream {stream_name}: {e}")
+                    connection_data['e_M'] = None
+
                 # Retrieve the fluid names for the stream
                 mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
                 if mole_frac_node is not None:

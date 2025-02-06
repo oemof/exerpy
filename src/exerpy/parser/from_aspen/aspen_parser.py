@@ -268,7 +268,14 @@ class AspenModelParser:
             model_type = model_type_node.Value if model_type_node is not None else None
 
             component_type_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
-            component_type = component_type_node.AttributeValue(6) if component_type_node is not None else None
+            if component_type_node is None:
+                continue
+            component_type = component_type_node.AttributeValue(6)
+            if component_type == "Mixer":
+                mixer_value = component_type_node.Value 
+                if mixer_value in ["TRIANGLE", "HEAT"]:
+                    logging.info(f"Ignoring Mixer {block_name} with value {mixer_value}.")
+                    continue
 
             component_data = {
                 'name': block_name,
@@ -306,6 +313,7 @@ class AspenModelParser:
                 elif model_type == "TURBINE":
                     component_data['type'] = "Turbine"
 
+            
             # Handle Generators as multiplier blocks
             if component_type == 'Mult':
                 mult_value_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
@@ -313,13 +321,29 @@ class AspenModelParser:
                 if mult_value == 'WORK':
                     factor_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR')
                     factor = factor_node.Value if factor_node is not None else None
-                    component_data.update({
-                        'eta_el': (
-                            factor
-                            if factor is not None else None
-                        ),
-                        'type': 'Generator'
-                    })
+                    if factor is not None:
+                        if factor < 1:
+                            component_data.update({
+                                'eta_el': factor,
+                                'type': 'Generator'
+                            })
+                        elif factor > 1:
+                            component_data.update({
+                                'eta_el': 1 / factor,
+                                'type': 'Motor'
+                            })
+                        else:  # factor == 1
+                            choice = input(f"Multiplier Block '{block_name}' has factor = 1. Enter 'G' if it is a Generator or 'M' for Motor: ").strip().upper()
+                            if choice == 'M':
+                                component_data.update({
+                                    'eta_el': factor, 
+                                    'type': 'Motor'
+                                })
+                            else:
+                                component_data.update({
+                                    'eta_el': factor, 
+                                    'type': 'Generator'
+                                })
 
             # Create a connection for the heat flows of the SimpleHeatExchanger blocks
             if component_type == 'Heater':

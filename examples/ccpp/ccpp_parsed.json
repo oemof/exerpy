@@ -110,16 +110,6 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W"
-            },
-            "POWER": {
-                "name": "POWER",
-                "type": "Mixer",
-                "eta_s": null,
-                "eta_mech": null,
-                "Q": null,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W"
             }
         },
         "Motor": {
@@ -1388,7 +1378,7 @@
             "source_component": "GEN1",
             "source_connector": 0,
             "target_component": "POWER",
-            "target_connector": 0,
+            "target_connector": null,
             "energy_flow": 247946961.0,
             "E": 247946961.0,
             "E_unit": "W"
@@ -1399,7 +1389,7 @@
             "source_component": "GEN2",
             "source_connector": 0,
             "target_component": "POWER",
-            "target_connector": 1,
+            "target_connector": null,
             "energy_flow": 52467052.1,
             "E": 52467052.1,
             "E_unit": "W"
@@ -1410,7 +1400,7 @@
             "source_component": "PUMP1",
             "source_connector": null,
             "target_component": "POWER",
-            "target_connector": 2,
+            "target_connector": null,
             "energy_flow": 38191.1665,
             "E": 38191.1665,
             "E_unit": "W"
@@ -1421,7 +1411,7 @@
             "source_component": "PUMP2",
             "source_connector": null,
             "target_component": "POWER",
-            "target_connector": 3,
+            "target_connector": null,
             "energy_flow": 375821.71499999997,
             "E": 375821.71499999997,
             "E_unit": "W"
@@ -1430,22 +1420,11 @@
             "name": "ETOT",
             "kind": "power",
             "source_component": "POWER",
-            "source_connector": 0,
+            "source_connector": null,
             "target_component": null,
             "target_connector": null,
             "energy_flow": 300000000.0,
             "E": 300000000.0,
-            "E_unit": "W"
-        },
-        "H1": {
-            "name": "H1",
-            "kind": "heat",
-            "source_component": "HC",
-            "source_connector": null,
-            "target_component": null,
-            "target_connector": null,
-            "energy_flow": 99999999.6,
-            "E": 39720665.59515335,
             "E_unit": "W"
         },
         "HC_HEAT": {

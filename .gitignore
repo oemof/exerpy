@@ -30,11 +30,12 @@ MANIFEST
 .vscode/
 
 # Aspen 
-.def
-.ads
-.his
-.appdf
-.for
+*.def
+*.ads
+*.his
+*.appdf
+*.for
+*.34
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

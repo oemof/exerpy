@@ -21,7 +21,7 @@ fuel = {
 }
 
 product = {
-    "inputs": ['W3', 'W6', 'HC_HEAT'],
+    "inputs": ['ETOT', 'HC_HEAT'],
     "outputs": ['PUMP1_ELEC', 'PUMP2_ELEC']
 }
 

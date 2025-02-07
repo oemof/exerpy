@@ -378,21 +378,9 @@ class AspenModelParser:
                 motor_data = {
                     'name': motor_name,
                     'type': 'Motor',
-                    'P_el': (
-                        convert_to_SI(
-                            'power',
-                            elec_power,
-                            elec_power_node.UnitString
-                        ) if elec_power_node is not None else None
-                    ),
+                    'P_el': elec_power,
                     'P_el_unit': fluid_property_data['power']['SI_unit'],
-                    'P_mech': (
-                        convert_to_SI(
-                            'power',
-                            brake_power,
-                            brake_power_node.UnitString
-                        ) if brake_power_node is not None else None
-                    ),
+                    'P_mech': brake_power,
                     'P_mech_unit': fluid_property_data['power']['SI_unit'],
                     'eta_el': (
                         eff_driv

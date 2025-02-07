@@ -2,15 +2,25 @@
 requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
+[tool.flit.sdist]
+include = [
+    "LICENSE*",
+    "tox.ini",
+    "docs/",
+    "tests/",
+    "examples/",
+]
+exclude = ["docs/_build"]
+
 [project]
 name = "exerpy"
 dynamic = ["version"]
 description = "Exergy analysis for tabular input data"
 readme = "README.md"
 authors = [
-    {name = "Francesco Witte", email = "github@witte.sh"},
     {name = "Sergio Tomasinelli", email = "s.tomasinelli@tu-berlin.de"},
     {name = "Robert Müller", email = "robert.mueller.2@tu-berlin.de"},
+    {name = "Francesco Witte", email = "github@witte.sh"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -47,44 +57,23 @@ dev = [
     "build",
     "flit",
     "furo",
-    "pytest"
+    "isort",
+    "pytest",
+    "sphinx>=7.2.2",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinxcontrib.bibtex",
+    "tespy",
+    "tox",
 ]
 tespy = [
     "tespy"
 ]
 ebsilon = [
-
+    "pywin32"
 ]
 aspen = [
-
-]
-
-[tool.pytest.ini_options]
-norecursedirs = [
-    ".git",
-    "dist",
-]
-python_files = [
-    "test_*.py",
-    "*_test.py",
-    "*_tests.py",
-    "tests.py",
-]
-addopts = """
-    -ra
-    --strict-markers
-    --doctest-modules
-    --doctest-glob=\"*.rst\"
-    --tb=short
-    --pyargs
-    --ignore=docs/conf.py
-    --ignore=docs/scripts
-    --ignore=docs/_build
-"""
-testpaths = [
-    "src/",
-    "tests/",
-    "docs/"
+    "pywin32"
 ]
 
 [tool.isort]

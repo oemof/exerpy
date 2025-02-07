@@ -1,0 +1,12 @@
+v0.0.1 (launch date)
+++++++++++++++++++++++
+
+Initial release of ExerPy.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)
+- Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__)
+
+Thanks to Prof. Dr.-Ing. Fontina Petrakopoulou for the support and guidance.

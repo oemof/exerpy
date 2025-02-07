@@ -72,10 +72,39 @@ class AspenModelParser:
         """
         Parses the streams (connections) in the Aspen model.
         """
+        try:
+            # Get first stream to extract property set values
+            stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
+            if stream_nodes.Count > 0:
+                first_stream = stream_nodes[0].Name
+                # Extract from property set path
+                temp_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{first_stream}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL')
+                
+                if temp_node is not None and temp_node.Elements.Count >= 1:
+                    temp_str = temp_node.Elements[0].Name
+                    if temp_node.Elements[0].Elements.Count >= 1:
+                        pres_str = temp_node.Elements[0].Elements[0].Name
+                        
+                        # Create the node path templates for property retrieval
+                        h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
+                        hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'
+                    else:
+                        raise ValueError("Pressure value not found in property set path")
+                else:
+                    raise ValueError("Temperature value not found in property set path")
+            else:
+                raise ValueError("No streams found in the model")
+
+        except Exception as e:
+            logging.error(f"Error extracting property set values: {e}")
+            raise RuntimeError(f"Failed to extract property set values: {e}")
+
+        # Continue with stream parsing...
+
         # Get the stream nodes and their names
         stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
         stream_names = [stream_node.Name for stream_node in stream_nodes]
-        
+
         # ALL ASPEN CONNECTIONS
         # Initialize connection data with the common fields
         for stream_name in stream_names:
@@ -154,33 +183,33 @@ class AspenModelParser:
                     'h_0': (
                         convert_to_SI(
                             'h',
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000') is not None else None
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).Value,
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')) is not None else None
                     ),
                     'h_0_unit': fluid_property_data['h']['SI_unit'],
                     's_0': (
                         convert_to_SI(
                             's',
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T,P)\MIXED\TOTAL\15.00000\1.013000') is not None else None
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).Value,
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')) is not None else None
                     ),
                     's_0_unit': fluid_property_data['s']['SI_unit'],
                     'h_A': (
                         convert_to_SI(
                             'h',
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\HMX(S,P,T)\MIXED\TOTAL\15.00000') is not None else None
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).Value,
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')) is not None else None
                     ),
                     'h_A_unit': fluid_property_data['h']['SI_unit'],
                     's_A': (
                         convert_to_SI(
                             's',
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000').Value,
-                            self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\SMX(S,P,T)\MIXED\TOTAL\15.00000') is not None else None
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).Value,
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')) is not None else None
                     ),
                     's_A_unit': fluid_property_data['s']['SI_unit'],
                     'm': (

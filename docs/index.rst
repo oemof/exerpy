@@ -15,6 +15,7 @@
 
     installation
     examples
+    contribute
 
 ..  toctree::
     :maxdepth: 2
@@ -31,11 +32,3 @@
     :hidden:
 
     exergy_analysis
-
-..  toctree::
-    :maxdepth: 2
-    :caption: Contribute to ExerPy
-    :hidden:
-
-    development/what
-    development/how

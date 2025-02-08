@@ -185,7 +185,10 @@ class AspenModelParser:
                             'h',
                             self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).Value,
                             self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')) is not None else None
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')) is not None else (
+                            logging.warning(f"h_0 node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     'h_0_unit': fluid_property_data['h']['SI_unit'],
                     's_0': (
@@ -193,7 +196,10 @@ class AspenModelParser:
                             's',
                             self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).Value,
                             self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')) is not None else None
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')) is not None else (
+                            logging.warning(f"s_0 node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     's_0_unit': fluid_property_data['s']['SI_unit'],
                     'h_A': (
@@ -201,7 +207,10 @@ class AspenModelParser:
                             'h',
                             self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).Value,
                             self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')) is not None else None
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')) is not None else (
+                            logging.warning(f"h_A node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     'h_A_unit': fluid_property_data['h']['SI_unit'],
                     's_A': (
@@ -209,7 +218,10 @@ class AspenModelParser:
                             's',
                             self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).Value,
                             self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')) is not None else None
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')) is not None else (
+                            logging.warning(f"s_A node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     's_A_unit': fluid_property_data['s']['SI_unit'],
                     'm': (
@@ -233,7 +245,10 @@ class AspenModelParser:
                             'e',
                             self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').Value,
                             self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL') is not None else None
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL') is not None else (
+                            logging.warning(f"e_PH node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     'e_PH_unit': fluid_property_data['e']['SI_unit'],
                     'n': (

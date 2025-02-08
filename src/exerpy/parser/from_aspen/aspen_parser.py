@@ -372,16 +372,52 @@ class AspenModelParser:
                                 'type': 'Generator'
                             })
                         elif factor > 1:
+                            elec_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(OUT)').Elements(0)
+                            elec_power_name = elec_power_node.Name
+                            if elec_power_name in self.connections_data:
+                                elec_power = abs(self.connections_data[elec_power_name]['energy_flow'])
+                            else:
+                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                elec_power = None
+                            brake_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(IN)').Elements(0)
+                            brake_power_name = brake_power_node.Name
+                            if brake_power_name in self.connections_data:
+                                brake_power = abs(self.connections_data[brake_power_name]['energy_flow'])
+                            else:
+                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                brake_power = None
                             component_data.update({
-                                'eta_el': 1 / factor,
-                                'type': 'Motor'
+                                'eta_el': factor, 
+                                'type': 'Motor',
+                                'P_el': elec_power,
+                                'P_el_unit': fluid_property_data['power']['SI_unit'],
+                                'P_mech': brake_power,
+                                'P_mech_unit': fluid_property_data['power']['SI_unit'],
                             })
                         else:  # factor == 1
                             choice = input(f"Multiplier Block '{block_name}' has factor = 1. Enter 'G' if it is a Generator or 'M' for Motor: ").strip().upper()
                             if choice == 'M':
+                                elec_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(OUT)').Elements(0)
+                                elec_power_name = elec_power_node.Name
+                                if elec_power_name in self.connections_data:
+                                    elec_power = abs(self.connections_data[elec_power_name]['energy_flow'])
+                                else:
+                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    elec_power = None
+                                brake_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(IN)').Elements(0)
+                                brake_power_name = brake_power_node.Name
+                                if brake_power_name in self.connections_data:
+                                    brake_power = abs(self.connections_data[brake_power_name]['energy_flow'])
+                                else:
+                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    brake_power = None
                                 component_data.update({
                                     'eta_el': factor, 
-                                    'type': 'Motor'
+                                    'type': 'Motor',
+                                    'P_el': elec_power,
+                                    'P_el_unit': fluid_property_data['power']['SI_unit'],
+                                    'P_mech': brake_power,
+                                    'P_mech_unit': fluid_property_data['power']['SI_unit'],
                                 })
                             else:
                                 component_data.update({

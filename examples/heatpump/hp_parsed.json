@@ -54,7 +54,11 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 0.9852216748768474
+                "eta_el": 1.015,
+                "P_el": 716498.174,
+                "P_el_unit": "W",
+                "P_mech": 705909.531,
+                "P_mech_unit": "W"
             },
             "MOT2": {
                 "name": "MOT2",
@@ -65,7 +69,11 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 0.9852216748768474
+                "eta_el": 1.015,
+                "P_el": 907455.288,
+                "P_el_unit": "W",
+                "P_mech": 894044.6190000001,
+                "P_mech_unit": "W"
             },
             "MOT3": {
                 "name": "MOT3",
@@ -76,7 +84,11 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 0.9852216748768474
+                "eta_el": 1.015,
+                "P_el": 64.8684158,
+                "P_el_unit": "W",
+                "P_mech": 63.9097693,
+                "P_mech_unit": "W"
             },
             "PUMP-MOTOR": {
                 "name": "PUMP-MOTOR",
@@ -402,7 +414,7 @@
             "source_component": "COND",
             "source_connector": 0,
             "target_component": "VAL",
-            "target_connector": null,
+            "target_connector": 0,
             "T": 348.1505495,
             "T_unit": "K",
             "p": 2295000.0,
@@ -444,7 +456,7 @@
             "name": "32",
             "kind": "material",
             "source_component": "VAL",
-            "source_connector": null,
+            "source_connector": 0,
             "target_component": "EVA",
             "target_connector": 1,
             "T": 275.79006961,
@@ -576,7 +588,7 @@
             "name": "E1",
             "kind": "power",
             "source_component": "MOT1",
-            "source_connector": null,
+            "source_connector": 0,
             "target_component": null,
             "target_connector": null,
             "energy_flow": 716498.174,
@@ -587,7 +599,7 @@
             "name": "E2",
             "kind": "power",
             "source_component": "MOT2",
-            "source_connector": null,
+            "source_connector": 0,
             "target_component": null,
             "target_connector": null,
             "energy_flow": 907455.288,
@@ -598,7 +610,7 @@
             "name": "E3",
             "kind": "power",
             "source_component": "MOT3",
-            "source_connector": null,
+            "source_connector": 0,
             "target_component": null,
             "target_connector": null,
             "energy_flow": 64.8684158,
@@ -635,7 +647,7 @@
             "source_component": "FAN",
             "source_connector": 1,
             "target_component": "MOT1",
-            "target_connector": null,
+            "target_connector": 0,
             "energy_flow": 705909.531,
             "E": 705909.531,
             "E_unit": "W"
@@ -646,7 +658,7 @@
             "source_component": "COMP",
             "source_connector": 1,
             "target_component": "MOT2",
-            "target_connector": null,
+            "target_connector": 0,
             "energy_flow": 894044.6190000001,
             "E": 894044.6190000001,
             "E_unit": "W"
@@ -657,7 +669,7 @@
             "source_component": "PUMP",
             "source_connector": null,
             "target_component": "MOT3",
-            "target_connector": null,
+            "target_connector": 0,
             "energy_flow": 63.9097693,
             "E": 63.9097693,
             "E_unit": "W"

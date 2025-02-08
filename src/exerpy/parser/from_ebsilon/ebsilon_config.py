@@ -12,7 +12,12 @@ import logging
 
 ebs_path = os.getenv("EBS")
 if not ebs_path:
-    logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
+    logging.warning(
+        "Ebsilon path not found. Please set an environment variable named EBS "
+        "with the path to your Ebsilon Python program files as the value. For "
+        "example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data"
+        "\\Python'"
+    )
     EpSubstance = None
 
 else:
@@ -996,4 +1001,3 @@ connector_mapping = {
         9: 1,  # Inlet fuel gas
     },
 }
-

@@ -17,7 +17,7 @@ class AspenModelParser:
     def __init__(self, model_path):
         """
         Initializes the parser with the given model path.
-        
+
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
         """
@@ -25,7 +25,7 @@ class AspenModelParser:
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
-        
+
         # Dictionary to map component types to specific connector assignment functions
         self.connector_assignment_functions = {
             'Mixer': self.assign_mixer_connectors,
@@ -56,12 +56,12 @@ class AspenModelParser:
         try:
             # Parse streams (connections)
             self.parse_streams()
-            
+
             # Parse blocks (components)
             self.parse_blocks()
 
             # Parse Tamb and pamb
-            self.parse_ambient_conditions()	
+            self.parse_ambient_conditions()
 
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
@@ -75,7 +75,7 @@ class AspenModelParser:
         # Get the stream nodes and their names
         stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
         stream_names = [stream_node.Name for stream_node in stream_nodes]
-        
+
         # ALL ASPEN CONNECTIONS
         # Initialize connection data with the common fields
         for stream_name in stream_names:
@@ -113,7 +113,7 @@ class AspenModelParser:
                     abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value),
                     self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').UnitString
                     ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC') is not None else None
-            
+
             # MATERIAL STREAMS
             else:
                 # Assume it's a material stream and retrieve additional properties
@@ -186,12 +186,12 @@ class AspenModelParser:
                     'mass_composition': {},
                     'molar_composition': {},
                 })
-                
+
                 # Retrieve the fluid names for the stream
                 mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
                 if mole_frac_node is not None:
                     fluid_names = [fluid.Name for fluid in mole_frac_node.Elements]
-                    
+
                     # Retrieve the molar composition for each fluid
                     for fluid_name in fluid_names:
                         mole_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
@@ -420,7 +420,7 @@ class AspenModelParser:
             for idx, (port_label, stream_name) in enumerate(outlet_streams):
                 connections_data[stream_name]['source_connector'] = 0  # Assuming single outlet for mixer
                 logging.debug(f"Assigned connector 0 to outlet stream: {stream_name}")
-                
+
 
     def assign_splitter_connectors(self, block_name, aspen, connections_data):
         """
@@ -511,7 +511,7 @@ class AspenModelParser:
         """
         if component_type in connector_mappings:
             mapping = connector_mappings[component_type]
-            
+
             # Access the ports of the component to find the connected streams
             for port_label, connector_num in mapping.items():
                 port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
@@ -571,8 +571,8 @@ class AspenModelParser:
                 'T',
                 temp_node.Value,
                 temp_node.UnitString
-            ) if temp_node is not None else None            
-        
+            ) if temp_node is not None else None
+
             if self.Tamb is None:
                 raise ValueError("Ambient temperature (Tamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
@@ -582,8 +582,8 @@ class AspenModelParser:
                 'p',
                 pres_node.Value,
                 pres_node.UnitString
-            ) if pres_node is not None else None            
-        
+            ) if pres_node is not None else None
+
             if self.pamb is None:
                 raise ValueError("Ambient pressure (pamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
@@ -614,12 +614,12 @@ class AspenModelParser:
     def write_to_json(self, output_path):
         """
         Writes the parsed and sorted data to a JSON file.
-        
+
         Parameters:
             output_path (str): Path where the JSON file will be saved.
         """
         data = self.get_sorted_data()
-        
+
         try:
             with open(output_path, 'w') as json_file:
                 json.dump(data, json_file, indent=4)
@@ -631,13 +631,13 @@ class AspenModelParser:
 
 def run_aspen(model_path, output_dir=None):
     """
-    Main function to process the Aspen model and return parsed data. 
+    Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
-    
+
     Parameters:
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
-    
+
     Returns:
         dict: Parsed data in dictionary format.
     """

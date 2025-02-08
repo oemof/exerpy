@@ -1,29 +1,42 @@
 {
   "components": {
-    "HeatExchanger": {
-      "evaporator": {},
-      "condenser": {}
-    },
-    "CycleCloser": {
-      "cc": {}
+    "Compressor": {
+      "compressor": {
+        "name": "compressor",
+        "type": "Compressor",
+        "type_index": null
+      },
+      "air fan": {
+        "name": "air fan",
+        "type": "Compressor",
+        "type_index": null
+      }
     },
     "Valve": {
-      "valve": {}
+      "valve": {
+        "name": "valve",
+        "type": "Valve",
+        "type_index": null
+      }
     },
-    "Compressor": {
-      "compressor": {},
-      "air fan": {}
-    },
-    "Sink": {
-      "air outlet": {},
-      "water outlet": {}
-    },
-    "Source": {
-      "air inlet": {},
-      "water inlet": {}
+    "HeatExchanger": {
+      "evaporator": {
+        "name": "evaporator",
+        "type": "HeatExchanger",
+        "type_index": null
+      },
+      "condenser": {
+        "name": "condenser",
+        "type": "HeatExchanger",
+        "type_index": null
+      }
     },
     "Pump": {
-      "water pump": {}
+      "water pump": {
+        "name": "water pump",
+        "type": "Pump",
+        "type_index": null
+      }
     }
   },
   "connections": {
@@ -32,7 +45,7 @@
       "source_connector": 0,
       "target_component": "cc",
       "target_connector": 0,
-      "m": 11.055393660279124,
+      "m": 11.055393660279107,
       "T": 348.1505495421198,
       "p": 2295000.0,
       "h": 302351.1701302097,
@@ -47,14 +60,15 @@
       },
       "e_T": 8963.145029346459,
       "e_M": 1588.2833150007837,
-      "e_PH": 10551.428344347241
+      "e_PH": 10551.428344347241,
+      "kind": "material"
     },
     "31": {
       "source_component": "cc",
       "source_connector": 0,
       "target_component": "valve",
       "target_connector": 0,
-      "m": 11.055393660279124,
+      "m": 11.055393660279107,
       "T": 348.1505495421198,
       "p": 2295000.0,
       "h": 302351.1701302097,
@@ -69,14 +83,15 @@
       },
       "e_T": 8963.145029346459,
       "e_M": 1588.2833150007837,
-      "e_PH": 10551.428344347241
+      "e_PH": 10551.428344347241,
+      "kind": "material"
     },
     "32": {
       "source_component": "valve",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 1,
-      "m": 11.055393660279124,
+      "m": 11.055393660279107,
       "T": 275.7900634014922,
       "p": 60000.0,
       "h": 302351.1701302097,
@@ -91,18 +106,19 @@
       },
       "e_T": 2886.6127148811793,
       "e_M": -5415.2343824435375,
-      "e_PH": -2528.621667562358
+      "e_PH": -2528.621667562358,
+      "kind": "material"
     },
     "33": {
       "source_component": "evaporator",
       "source_connector": 1,
       "target_component": "compressor",
       "target_connector": 0,
-      "m": 11.055393660279124,
-      "T": 280.9415878878088,
+      "m": 11.055393660279107,
+      "T": 280.9415878878089,
       "p": 55000.0,
-      "h": 411945.99797199474,
-      "s": 1773.8071925948313,
+      "h": 411945.9979719948,
+      "s": 1773.8071925948318,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
@@ -111,20 +127,21 @@
       "mass_composition": {
         "R245FA": 1
       },
-      "e_T": 7.337609544904126,
+      "e_T": 7.337609544833413,
       "e_M": -6904.9021985461295,
-      "e_PH": -6897.564589001226
+      "e_PH": -6897.564589001297,
+      "kind": "material"
     },
     "34": {
       "source_component": "compressor",
       "source_connector": 0,
       "target_component": "condenser",
       "target_connector": 0,
-      "m": 11.055393660279124,
-      "T": 404.660002463746,
+      "m": 11.055393660279107,
+      "T": 404.66000246374614,
       "p": 2300000.0,
-      "h": 492817.9439798227,
-      "s": 1814.0006993554432,
+      "h": 492817.943979823,
+      "s": 1814.0006993554434,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
@@ -133,16 +150,17 @@
       "mass_composition": {
         "R245FA": 1
       },
-      "e_T": 61001.69400452086,
+      "e_T": 61001.694004521036,
       "e_M": 1591.8959750386346,
-      "e_PH": 62593.589979559496
+      "e_PH": 62593.58997955967,
+      "kind": "material"
     },
     "11": {
       "source_component": "air inlet",
       "source_connector": 0,
       "target_component": "air fan",
       "target_connector": 0,
-      "m": 251.77815825979346,
+      "m": 251.77815825979306,
       "T": 283.15,
       "p": 101299.99999999999,
       "h": 283525.06194011786,
@@ -160,14 +178,15 @@
       },
       "e_T": 0.0,
       "e_M": 0.0,
-      "e_PH": 0.0
+      "e_PH": 0.0,
+      "kind": "material"
     },
     "12": {
       "source_component": "air fan",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 0,
-      "m": 251.77815825979346,
+      "m": 251.77815825979306,
       "T": 285.94158788780896,
       "p": 104299.99999999999,
       "h": 286326.7855538324,
@@ -185,14 +204,15 @@
       },
       "e_T": 13.744834542575518,
       "e_M": 2371.5186581109474,
-      "e_PH": 2385.263492653523
+      "e_PH": 2385.263492653523,
+      "kind": "material"
     },
     "13": {
       "source_component": "evaporator",
       "source_connector": 0,
       "target_component": "air outlet",
       "target_connector": 0,
-      "m": 251.77815825979346,
+      "m": 251.77815825979306,
       "T": 281.15,
       "p": 101299.99999999999,
       "h": 281514.5573077617,
@@ -210,7 +230,8 @@
       },
       "e_T": 7.134040056228741,
       "e_M": 0.0,
-      "e_PH": 7.134040056228741
+      "e_PH": 7.134040056228741,
+      "kind": "material"
     },
     "21": {
       "source_component": "water inlet",
@@ -232,7 +253,8 @@
       },
       "e_T": 23341.85778146214,
       "e_M": 398.7806711486754,
-      "e_PH": 23740.638452610812
+      "e_PH": 23740.638452610812,
+      "kind": "material"
     },
     "22": {
       "source_component": "water pump",
@@ -254,7 +276,8 @@
       },
       "e_T": 23342.19352577484,
       "e_M": 403.7812007972469,
-      "e_PH": 23745.974726572087
+      "e_PH": 23745.974726572087,
+      "kind": "material"
     },
     "23": {
       "source_component": "condenser",
@@ -276,13 +299,14 @@
       },
       "e_T": 71733.64569340541,
       "e_M": 398.7806711486754,
-      "e_PH": 72132.42636455409
+      "e_PH": 72132.42636455409,
+      "kind": "material"
     }
   },
   "ambient_conditions": {
     "Tamb": 283.15,
     "Tamb_unit": "K",
-    "pamb": 101300.0,
+    "pamb": 101300,
     "pamb_unit": "Pa"
   }
 }

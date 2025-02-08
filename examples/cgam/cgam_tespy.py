@@ -110,43 +110,17 @@ nwk.print_results()
 p0 = 101300
 T0 = 298.15
 
-component_json = {}
-for comp_type in nwk.comps["comp_type"].unique():
-    component_json[comp_type] = {}
-    for c in nwk.comps.loc[nwk.comps["comp_type"] == comp_type, "object"]:
-        component_json[comp_type][c.label] = {}
 
-connection_json = {}
-for c in nwk.conns["object"]:
-    connection_json[c.label] = {
-        "source_component": c.source.label,
-        "source_connector": int(c.source_id.removeprefix("out")) - 1,
-        "target_component": c.target.label,
-        "target_connector": int(c.target_id.removeprefix("in")) - 1
-    }
-    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"mass_composition": c.fluid.val})
-    c.get_physical_exergy(p0, T0)
-    connection_json[c.label].update({"e_T": c.ex_therm})
-    connection_json[c.label].update({"e_M": c.ex_mech})
-    connection_json[c.label].update({"e_PH": c.ex_physical})
+from exerpy import ExergyAnalysis
 
 
-json_export = {
-    "components": component_json,
-    "connections": connection_json,
-    "ambient_conditions": {
-        "Tamb": T0,
-        "Tamb_unit": "K",
-        "pamb": p0,
-        "pamb_unit": "Pa"
-    }
-}
+ExergyAnalysis.from_tespy(nwk, T0, p0)
 
-
+# export of the results for validation
 import json
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
+json_export = nwk.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/cgam/cgam_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)

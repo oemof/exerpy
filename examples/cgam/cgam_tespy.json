@@ -1,30 +1,42 @@
 {
   "components": {
-    "DiabaticCombustionChamber": {
-      "combustion chamber": {}
+    "Compressor": {
+      "compressor": {
+        "name": "compressor",
+        "type": "Compressor",
+        "type_index": null
+      }
     },
     "HeatExchanger": {
-      "air preheater": {},
-      "evaporator": {},
-      "economizer": {}
+      "air preheater": {
+        "name": "air preheater",
+        "type": "HeatExchanger",
+        "type_index": null
+      },
+      "evaporator": {
+        "name": "evaporator",
+        "type": "HeatExchanger",
+        "type_index": null
+      },
+      "economizer": {
+        "name": "economizer",
+        "type": "HeatExchanger",
+        "type_index": null
+      }
     },
-    "Source": {
-      "methane": {},
-      "ambient air": {},
-      "feed water": {}
-    },
-    "Compressor": {
-      "compressor": {}
+    "CombustionChamber": {
+      "combustion chamber": {
+        "name": "combustion chamber",
+        "type": "DiabaticCombustionChamber",
+        "type_index": null
+      }
     },
     "Turbine": {
-      "gas turbine": {}
-    },
-    "Sink": {
-      "chimney": {},
-      "live steam": {}
-    },
-    "Drum": {
-      "drum": {}
+      "gas turbine": {
+        "name": "gas turbine",
+        "type": "Turbine",
+        "type_index": null
+      }
     }
   },
   "connections": {
@@ -33,7 +45,7 @@
       "source_connector": 0,
       "target_component": "compressor",
       "target_connector": 0,
-      "m": 90.93945658352891,
+      "m": 90.93945658352872,
       "T": 298.15,
       "p": 101299.99999999999,
       "h": 327381.6035266853,
@@ -52,14 +64,15 @@
       },
       "e_T": 0.0,
       "e_M": 0.0,
-      "e_PH": 0.0
+      "e_PH": 0.0,
+      "kind": "material"
     },
     "2": {
       "source_component": "compressor",
       "source_connector": 0,
       "target_component": "air preheater",
       "target_connector": 1,
-      "m": 90.93945658352891,
+      "m": 90.93945658352872,
       "T": 611.5052734299335,
       "p": 1012999.9999999999,
       "h": 653922.981248075,
@@ -78,14 +91,15 @@
       },
       "e_T": 105911.69777056447,
       "e_M": 197523.95551447172,
-      "e_PH": 303435.6532850362
+      "e_PH": 303435.6532850362,
+      "kind": "material"
     },
     "3": {
       "source_component": "air preheater",
       "source_connector": 1,
       "target_component": "combustion chamber",
       "target_connector": 0,
-      "m": 90.93945658352891,
+      "m": 90.93945658352872,
       "T": 850.0,
       "p": 962349.9999999999,
       "h": 916984.0219766004,
@@ -104,14 +118,15 @@
       },
       "e_T": 260741.85727517243,
       "e_M": 193161.9457036763,
-      "e_PH": 453903.8029788487
+      "e_PH": 453903.8029788487,
+      "kind": "material"
     },
     "10": {
       "source_component": "methane",
       "source_connector": 0,
       "target_component": "combustion chamber",
       "target_connector": 1,
-      "m": 1.6466228981600002,
+      "m": 1.6466228981599995,
       "T": 298.15000000000094,
       "p": 1200000.0,
       "h": 899139.9590977639,
@@ -130,43 +145,45 @@
       },
       "e_T": -1.0051735443994401e-09,
       "e_M": 379051.8734263716,
-      "e_PH": 379051.8734263706
+      "e_PH": 379051.8734263706,
+      "kind": "material"
     },
     "4": {
       "source_component": "combustion chamber",
       "source_connector": 0,
       "target_component": "gas turbine",
       "target_connector": 0,
-      "m": 92.5860794816889,
-      "T": 1519.9998978735248,
+      "m": 92.58607948168871,
+      "T": 1519.999897873525,
       "p": 914232.4999999999,
-      "h": 1879591.9244916153,
-      "s": 8036.535106424867,
+      "h": 1879591.9244916157,
+      "s": 8036.535106424868,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
       "h_unit": "J / kg",
       "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.0516781226603959,
-        "CO2": 0.04924118499666159,
-        "O2": 0.15493912937628382,
+        "H2O": 0.05167812266039597,
+        "CO2": 0.04924118499666167,
         "CH4": 0.0,
+        "O2": 0.1549391293762837,
         "N2": 0.7441415629666587
       },
       "e_T": 907912.4776993552,
-      "e_M": 179567.564276767,
-      "e_PH": 1087480.0419761222
+      "e_M": 179567.5642767668,
+      "e_PH": 1087480.041976122,
+      "kind": "material"
     },
     "5": {
       "source_component": "gas turbine",
       "source_connector": 0,
       "target_component": "air preheater",
       "target_connector": 0,
-      "m": 92.5860794816889,
-      "T": 1011.3288265235972,
+      "m": 92.58607948168871,
+      "T": 1011.328826523597,
       "p": 109929.46283233861,
-      "h": 1234835.2205010739,
+      "h": 1234835.2205010736,
       "s": 8145.032141842907,
       "m_unit": "kg / s",
       "T_unit": "C",
@@ -174,25 +191,26 @@
       "h_unit": "J / kg",
       "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.0516781226603959,
-        "CO2": 0.04924118499666159,
-        "O2": 0.15493912937628382,
+        "H2O": 0.05167812266039597,
+        "CO2": 0.04924118499666167,
         "CH4": 0.0,
+        "O2": 0.1549391293762837,
         "N2": 0.7441415629666587
       },
-      "e_T": 403580.3177285015,
-      "e_M": 6794.629147190988,
-      "e_PH": 410374.9468756925
+      "e_T": 403580.31772850076,
+      "e_M": 6794.629147191046,
+      "e_PH": 410374.9468756918,
+      "kind": "material"
     },
     "6": {
       "source_component": "air preheater",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 0,
-      "m": 92.5860794816889,
-      "T": 794.8050272449542,
+      "m": 92.58607948168871,
+      "T": 794.8050272449539,
       "p": 106631.57894736843,
-      "h": 976452.6620638635,
+      "h": 976452.6620638634,
       "s": 7866.7576875968625,
       "m_unit": "kg / s",
       "T_unit": "C",
@@ -200,67 +218,70 @@
       "h_unit": "J / kg",
       "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.0516781226603959,
-        "CO2": 0.04924118499666159,
-        "O2": 0.15493912937628382,
+        "H2O": 0.05167812266039597,
+        "CO2": 0.04924118499666167,
         "CH4": 0.0,
+        "O2": 0.1549391293762837,
         "N2": 0.7441415629666587
       },
-      "e_T": 230694.80523352738,
-      "e_M": 4265.111738412805,
-      "e_PH": 234959.9169719402
+      "e_T": 230694.80523352703,
+      "e_M": 4265.111738412534,
+      "e_PH": 234959.91697193956,
+      "kind": "material"
     },
     "6P": {
       "source_component": "evaporator",
       "source_connector": 0,
       "target_component": "economizer",
       "target_connector": 0,
-      "m": 92.5860794816889,
-      "T": 532.8742583080401,
+      "m": 92.58607948168871,
+      "T": 532.8742583080393,
       "p": 103931.6070662261,
-      "h": 680441.4098005131,
-      "s": 7423.416354853764,
+      "h": 680441.4098005124,
+      "s": 7423.416354853761,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
       "h_unit": "J / kg",
       "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.0516781226603959,
-        "CO2": 0.04924118499666159,
-        "O2": 0.15493912937628382,
+        "H2O": 0.05167812266039597,
+        "CO2": 0.04924118499666167,
         "CH4": 0.0,
+        "O2": 0.1549391293762837,
         "N2": 0.7441415629666587
       },
-      "e_T": 68997.46257797774,
-      "e_M": 2133.42048796693,
-      "e_PH": 71130.88306594467
+      "e_T": 68997.46257797763,
+      "e_M": 2133.4204879667172,
+      "e_PH": 71130.88306594435,
+      "kind": "material"
     },
     "7": {
       "source_component": "economizer",
       "source_connector": 0,
       "target_component": "chimney",
       "target_connector": 0,
-      "m": 92.5860794816889,
-      "T": 430.4737296987515,
+      "m": 92.58607948168871,
+      "T": 430.47372969875056,
       "p": 101299.99999999999,
-      "h": 569451.751384306,
-      "s": 7199.750159714102,
+      "h": 569451.7513843051,
+      "s": 7199.750159714101,
       "m_unit": "kg / s",
       "T_unit": "C",
       "p_unit": "bar",
       "h_unit": "J / kg",
       "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.0516781226603959,
-        "CO2": 0.04924118499666159,
-        "O2": 0.15493912937628382,
+        "H2O": 0.05167812266039597,
+        "CO2": 0.04924118499666167,
         "CH4": 0.0,
+        "O2": 0.1549391293762837,
         "N2": 0.7441415629666587
       },
-      "e_T": 26827.300730627787,
+      "e_T": 26827.30073062665,
       "e_M": 0.0,
-      "e_PH": 26827.300730627787
+      "e_PH": 26827.30073062665,
+      "kind": "material"
     },
     "8": {
       "source_component": "feed water",
@@ -282,7 +303,8 @@
       },
       "e_T": 7.523248086727107e-08,
       "e_M": 1903.50584276068,
-      "e_PH": 1903.5058428359125
+      "e_PH": 1903.5058428359125,
+      "kind": "material"
     },
     "8P": {
       "source_component": "economizer",
@@ -304,7 +326,8 @@
       },
       "e_T": 156138.8211536652,
       "e_M": 1903.50584276068,
-      "e_PH": 158042.32699642587
+      "e_PH": 158042.32699642587,
+      "kind": "material"
     },
     "11": {
       "source_component": "drum",
@@ -326,7 +349,8 @@
       },
       "e_T": 181655.28520051157,
       "e_M": 1903.50584276068,
-      "e_PH": 183558.79104327224
+      "e_PH": 183558.79104327224,
+      "kind": "material"
     },
     "11P": {
       "source_component": "evaporator",
@@ -348,7 +372,8 @@
       },
       "e_T": 546315.0162491542,
       "e_M": 1903.50584276068,
-      "e_PH": 548218.5220919149
+      "e_PH": 548218.5220919149,
+      "kind": "material"
     },
     "9": {
       "source_component": "drum",
@@ -370,7 +395,8 @@
       },
       "e_T": 910974.7472977976,
       "e_M": 1903.50584276068,
-      "e_PH": 912878.2531405583
+      "e_PH": 912878.2531405583,
+      "kind": "material"
     }
   },
   "ambient_conditions": {

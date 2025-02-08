@@ -7,12 +7,22 @@ from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
 
+try:
+    from tespy.networks import Network
+    from tespy.networks import load_network
+except ModuleNotFoundError:
+    Networt = None
+    load_network = None
+
+from .parser.from_aspen import aspen_parser
+from .parser.from_ebsilon import ebsilon_parser as ebs_parser
+
 
 class ExergyAnalysis:
     def __init__(self, component_data, connection_data, Tamb, pamb) -> None:
         """
         Constructor for ExergyAnalysis. It parses the provided simulation file and prepares it for exergy analysis.
-        
+
         Parameters
         ----------
         path_of_simulation : str
@@ -38,7 +48,7 @@ class ExergyAnalysis:
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data)
         self.connections = connection_data
-        
+
 
     def analyse(self, E_F, E_P, E_L={}) -> None:
         """
@@ -128,19 +138,46 @@ class ExergyAnalysis:
         else:
             logging.info(f"Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
-
-    
     @classmethod
-    def from_tespy(cls, nw, T0, p0, chemExLib, E_F, E_P, E_L):
-        # WORK IN PROGRESS -------------------------------------------
-        # calc_all_stream_exergies(nw, T0, p0, chemExLib)
-        # tespy_result = parse_nw_exergy_results(nw)
+    def from_tespy(cls, model: str | Network, Tamb=None, pamb=None, chemExLib=None):
+        """
+        Create an instance of the ExergyAnalysis class from a tespy network or
+        a tespy network export structure.
 
-        # component_data = tespy_result["Components"]
-        # connection_data = tespy_result["Connections"]
-        # return cls(component_data, connection_data)
-        pass
+        Parameters
+        ----------
+        model : str | tespy.networks.network.Network
+            Path to the tespy Network export or the actual Network instance.
+        Tamb : float, optional
+            Ambient temperature for analysis, default is None.
+        pamb : float, optional
+            Ambient pressure for analysis, default is None.
+        chemExLib : str, optional
+            Name of the library for chemical exergy tables.
 
+        Returns
+        -------
+        ExergyAnalysis
+            Instance of the ExergyAnalysis class.
+        """
+        if Network is None:
+            msg = "To use exerpy with tespy you have to install tespy."
+            raise ModuleNotFoundError(msg)
+
+        if isinstance(model, str):
+            model = load_network(model)
+        elif isinstance(model, Network):
+            pass
+        else:
+            msg = (
+                "Model parameter must be a path to a valid tespy network "
+                "export or a tespy network"
+            )
+            raise TypeError(msg)
+
+        data = model.to_exerpy(Tamb, pamb)
+        data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib)
+        return cls(data['components'], data['connections'], Tamb, pamb)
 
     @classmethod
     def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None):
@@ -163,9 +200,6 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Aspen data.
         """
-
-        from .parser.from_aspen import aspen_parser
-
         # Check if the file is an Aspen file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.bkp':
@@ -264,9 +298,6 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Ebsilon data.
         """
-
-        from .parser.from_ebsilon import ebsilon_parser as ebs_parser
-
         # Check if the file is an Ebsilon file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.ebs':
@@ -342,7 +373,6 @@ class ExergyAnalysis:
             raise ValueError("Parsed Ebsilon data is missing required components or connections.")
 
         return cls(component_data, connection_data, Tamb, pamb)
-    
 
     @classmethod
     def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None):
@@ -374,83 +404,15 @@ class ExergyAnalysis:
         JSONDecodeError
             If JSON file is malformed.
         """
-        try:
-            # Check file existence and extension
-            if not os.path.exists(json_path):
-                raise FileNotFoundError(f"File not found: {json_path}")
-            
-            if not json_path.endswith('.json'):
-                raise ValueError("File must have .json extension")
-
-            # Load and validate JSON
-            with open(json_path, 'r') as file:
-                try:
-                    data = json.load(file)
-                except json.JSONDecodeError as e:
-                    logging.error(f"Invalid JSON format: {e}")
-                    raise
-
-            # Validate required sections
-            required_sections = ['components', 'connections', 'ambient_conditions']
-            missing_sections = [s for s in required_sections if s not in data]
-            if missing_sections:
-                raise ValueError(f"Missing required sections: {missing_sections}")
-
-            # Check for mass_composition in material streams if chemical exergy is requested
-            if chemExLib:
-                for conn_name, conn_data in data['connections'].items():
-                    if conn_data.get('kind') == 'material' and 'mass_composition' not in conn_data:
-                        raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
-
-            # Extract or use provided ambient conditions
-            Tamb = Tamb or data['ambient_conditions'].get('Tamb')
-            pamb = pamb or data['ambient_conditions'].get('pamb')
-
-            if Tamb is None or pamb is None:
-                raise ValueError("Ambient conditions (Tamb, pamb) must be provided either in JSON or as parameters")
-
-            # Validate component data structure
-            if not isinstance(data['components'], dict):
-                raise ValueError("Components section must be a dictionary")
-            
-            for comp_type, components in data['components'].items():
-                if not isinstance(components, dict):
-                    raise ValueError(f"Component type '{comp_type}' must contain dictionary of components")
-                
-                for comp_name, comp_data in components.items():
-                    required_comp_fields = ['name', 'type', 'type_index']
-                    missing_fields = [f for f in required_comp_fields if f not in comp_data]
-                    if missing_fields:
-                        raise ValueError(f"Component '{comp_name}' missing required fields: {missing_fields}")
-
-            # Validate connection data structure
-            for conn_name, conn_data in data['connections'].items():
-                required_conn_fields = ['kind', 'source_component', 'target_component']
-                missing_fields = [f for f in required_conn_fields if f not in conn_data]
-                if missing_fields:
-                    raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
-
-            # Add chemical exergy if library provided
-            if chemExLib:
-                data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
-                logging.info("Added chemical exergy values")
-
-            # Calculate total exergy flows
-            data = add_total_exergy_flow(data)
-            logging.info("Added total exergy flows")
-
-            return cls(data['components'], data['connections'], Tamb, pamb)
-
-        except Exception as e:
-            logging.error(f"Error processing JSON file: {e}")
-            raise
-
+        data = _load_json(json_path)
+        data, Tamb, pamb = _process_json(data, chemExLib)
+        return cls(data['components'], data['connections'], Tamb, pamb)
 
     def exergy_results(self):
         """
         Displays a table of exergy analysis results with columns for E_F, E_P, E_D, and epsilon for each component,
         and additional information for material and non-material connections.
-        
+
         Parameters
         ----------
         provide_csv : bool, optional
@@ -505,7 +467,7 @@ class ExergyAnalysis:
         # Calculate the total y [%] and y* [%] as the sum of the values for all components
         df_component_results.loc["TOT", "y [%]"] = df_component_results["y [%]"].sum()
         df_component_results.loc["TOT", "y* [%]"] = df_component_results["y* [%]"].sum()
-        
+
         # MATERIAL CONNECTIONS
         material_connection_results = {
             "Connection": [],
@@ -533,7 +495,7 @@ class ExergyAnalysis:
         for conn_name, conn_data in self.connections.items():
             # Separate material and non-material connections based on fluid type
             kind = conn_data.get("kind", None)
-            
+
             # Check if the connection is a non-material energy flow type
             if kind in {'power', 'heat'}:
                 # Non-material connections: only record energy flow, converted to kW using lambda
@@ -570,7 +532,7 @@ class ExergyAnalysis:
         # Print the non-material connection results DataFrame in the console in a table format
         print("\nNon-Material Connection Exergy Analysis Results:")
         print(tabulate(df_non_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
-        
+
         # Print the component results DataFrame in the console in a table format
         print("\nComponent Exergy Analysis Results:")
         print(tabulate(df_component_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
@@ -593,7 +555,8 @@ def _construct_components(component_data, connection_data):
             component_class = component_registry.items.get(component_type)
 
             if component_class is None:
-                raise ValueError(f"Component type '{component_type}' is not registered.")
+                logging.warning(f"Component type '{component_type}' is not registered.")
+                continue
 
             # Instantiate the component with its attributes
             kwargs = component_information
@@ -610,7 +573,7 @@ def _construct_components(component_data, connection_data):
                 if conn_info['target_component'] == component_name:
                     target_connector_idx = conn_info['target_connector']  # Use 0-based indexing
                     component.inl[target_connector_idx] = conn_info  # Assign inlet stream
-                
+
                 # Assign outlet streams
                 if conn_info['source_component'] == component_name:
                     source_connector_idx = conn_info['source_connector']  # Use 0-based indexing
@@ -620,3 +583,73 @@ def _construct_components(component_data, connection_data):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _load_json(json_path):
+    # Check file existence and extension
+    if not os.path.exists(json_path):
+        raise FileNotFoundError(f"File not found: {json_path}")
+
+    if not json_path.endswith('.json'):
+        raise ValueError("File must have .json extension")
+
+    # Load and validate JSON
+    with open(json_path, 'r') as file:
+        try:
+            return json.load(file)
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON format: {e}")
+            raise
+
+
+def _process_json(data, Tamb, pamb, chemExLib):
+    # Validate required sections
+    required_sections = ['components', 'connections', 'ambient_conditions']
+    missing_sections = [s for s in required_sections if s not in data]
+    if missing_sections:
+        raise ValueError(f"Missing required sections: {missing_sections}")
+
+    # Check for mass_composition in material streams if chemical exergy is requested
+    if chemExLib:
+        for conn_name, conn_data in data['connections'].items():
+            if conn_data.get('kind') == 'material' and 'mass_composition' not in conn_data:
+                raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
+
+    # Extract or use provided ambient conditions
+    Tamb = Tamb or data['ambient_conditions'].get('Tamb')
+    pamb = pamb or data['ambient_conditions'].get('pamb')
+
+    if Tamb is None or pamb is None:
+        raise ValueError("Ambient conditions (Tamb, pamb) must be provided either in JSON or as parameters")
+
+    # Validate component data structure
+    if not isinstance(data['components'], dict):
+        raise ValueError("Components section must be a dictionary")
+
+    for comp_type, components in data['components'].items():
+        if not isinstance(components, dict):
+            raise ValueError(f"Component type '{comp_type}' must contain dictionary of components")
+
+        for comp_name, comp_data in components.items():
+            required_comp_fields = ['name', 'type', 'type_index']
+            missing_fields = [f for f in required_comp_fields if f not in comp_data]
+            if missing_fields:
+                raise ValueError(f"Component '{comp_name}' missing required fields: {missing_fields}")
+
+    # Validate connection data structure
+    for conn_name, conn_data in data['connections'].items():
+        required_conn_fields = ['kind', 'source_component', 'target_component']
+        missing_fields = [f for f in required_conn_fields if f not in conn_data]
+        if missing_fields:
+            raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
+
+    # Add chemical exergy if library provided
+    if chemExLib:
+        data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
+        logging.info("Added chemical exergy values")
+
+    # Calculate total exergy flows
+    data = add_total_exergy_flow(data)
+    logging.info("Added total exergy flows")
+
+    return data, Tamb, pamb

@@ -218,162 +218,428 @@ class HeatExchanger(Component):
         )
 
 
-    def exergoeconomic_balance(self, T0: float) -> None:
+    def exergoeconomic_balance(self, T0):
+        r"""
+        Assign cost of exergy fuel and product depending on stream temperatures.
+
+        This method implements logic for a two-inlet / two-outlet heat exchanger:
+        depending on the stream temperatures relative to T0, it sets the
+        exergoeconomic cost flows :math:`C_F` and :math:`C_P`. Then, it computes
+        the cost of exergy destruction, relative cost difference, and
+        exergoeconomic factor.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Notes
+        -----
+        - ``self.inl[0]``, ``self.inl[1]`` : Inlet dictionaries
+          for the hot and cold stream, each containing cost fields
+          like ``"C_PH"``, ``"C_T"``, ``"C_M"``, etc., as well as the temperature
+          under key ``"T"``.
+        - ``self.outl[0]``, ``self.outl[1]`` : Outlet dictionaries with similar
+          data fields.
+
+        The logic is:
+          1) Check if ``dissipative`` is True; if so, set
+             ``C_P = nan`` and ``C_F = sum inbound``.
+          2) Otherwise, use temperature-based branching to set
+             ``self.C_P`` and ``self.C_F`` from the
+             cost fields in the inbound/outbound streams
+             (like ``["C_PH"]``, ``["C_T"]``, ``["C_M"]``, etc.).
+          3) Compute ``self.c_F = C_F / E_F``, ``self.c_P = C_P / E_P``,
+             ``self.C_D = C_F - C_P``, ``self.r = (c_P - c_F) / c_F``,
+             and ``self.f = Z_costs / (Z_costs + C_D)``.
         """
-        Adapted from TESPy's two-stream heat exchanger approach for exergoeconomic balances.
-        Determines cost flows of 'fuel' (C_F) and 'product' (C_P) exergy, then
-        calculates c_F, c_P, cost of exergy destruction C_D, relative cost difference r,
-        and exergoeconomic factor f.
-
-        Prerequisites:
-        - self.inl[0], self.inl[1], self.outl[0], self.outl[1] each has:
-            'm', 'e_T', 'e_PH', 'e_M', 'T'  (at least)
-        - self.E_F, self.E_P, self.E_D computed from calc_exergy_balance
-        - self.Z_costs assigned by your ExergoeconomicAnalysis (defaults to 0 if missing).
-        - If "fully dissipative", you can treat self.dissipative == True
-            for the logic to set C_P = np.nan, etc.
-
-        After calling this method, you can read:
-        - self.C_F, self.C_P  (currency/h)
-        - self.c_F, self.c_P  (currency/W, if E_F/E_P > 0)
-        - self.C_D, self.r, self.f
-        """
-        # For readability, label the streams
-        hot_in = self.inl[0]
-        hot_out = self.outl[0]
-        cold_in = self.inl[1]
-        cold_out = self.outl[1]
-
-        # For "dissipative" mode, just replicate the TESPy snippet
-        if getattr(self, 'dissipative', False):
-            # The simplest approach: product is undefined, 
-            # fuel is sum of total exergies from inlets
+        # 1) Check if the HeatExchanger is 'dissipative'
+        if getattr(self, "dissipative", False):
             self.C_P = np.nan
-            # If you wanted to sum 'C_tot' from each inlet, approximate:
-            #   C_tot_in = m_in * (e_T + e_M + e_CH), etc.
-            # For a minimal approach:
-            self.C_F = (
-                hot_in['m'] * (hot_in['e_T'] + hot_in['e_M'] + hot_in.get('e_CH', 0.0))
-                + cold_in['m'] * (cold_in['e_T'] + cold_in['e_M'] + cold_in.get('e_CH', 0.0))
-            )
+            # Summation of inbound total cost flows
+            c_in0 = self.inl[0].get("C_tot", 0.0)
+            c_in1 = self.inl[1].get("C_tot", 0.0)
+            self.C_F = c_in0 + c_in1
 
-        # Case 1: All streams above T0
-        elif all([s['T'] > T0 for s in [hot_in, hot_out, cold_in, cold_out]]):
-            # See TESPy snippet:
-            #   C_P = outl[1].C_therm - inl[1].C_therm
-            #   C_F = inl[0].C_physical - outl[0].C_physical + (inl[1].C_mech - outl[1].C_mech)
-            # We'll compute the relevant cost flows:
-            C_therm_out1 = cold_out['m']*cold_out['e_T']
-            C_therm_in1 = cold_in['m']*cold_in['e_T']
-
-            C_physical_in0 = hot_in['m']*hot_in['e_PH']
-            C_physical_out0 = hot_out['m']*hot_out['e_PH']
-
-            C_mech_in1 = cold_in['m']*cold_in['e_M']
-            C_mech_out1 = cold_out['m']*cold_out['e_M']
-
-            self.C_P = C_therm_out1 - C_therm_in1
-            self.C_F = (C_physical_in0 - C_physical_out0) + (C_mech_in1 - C_mech_out1)
-
-        # Case 2: All streams <= T0
-        elif all([s['T'] <= T0 for s in [hot_in, hot_out, cold_in, cold_out]]):
-            #   C_P = outl[0].C_therm - inl[0].C_therm
-            #   C_F = inl[1].C_physical - outl[1].C_physical + (inl[0].C_mech - outl[0].C_mech)
-            C_therm_out0 = hot_out['m']*hot_out['e_T']
-            C_therm_in0  = hot_in['m']*hot_in['e_T']
-
-            C_physical_in1  = cold_in['m']*cold_in['e_PH']
-            C_physical_out1 = cold_out['m']*cold_out['e_PH']
-
-            C_mech_in0  = hot_in['m']*hot_in['e_M']
-            C_mech_out0 = hot_out['m']*hot_out['e_M']
-
-            self.C_P = C_therm_out0 - C_therm_in0
-            self.C_F = (C_physical_in1 - C_physical_out1) + (C_mech_in0 - C_mech_out0)
-
-        # Case 3: inl[0].T> T0, outl[1].T> T0, outl[0].T<= T0, inl[1].T<=T0
-        elif (hot_in['T'] > T0 and cold_out['T'] > T0 and
-            hot_out['T'] <= T0 and cold_in['T'] <= T0):
-            #   C_P = outl[0].C_therm + outl[1].C_therm
-            #   C_F = inl[0].C_physical + inl[1].C_physical - (outl[0].C_mech + outl[1].C_mech)
-            C_therm_out0 = hot_out['m']*hot_out['e_T']
-            C_therm_out1 = cold_out['m']*cold_out['e_T']
-            C_physical_in0 = hot_in['m']*hot_in['e_PH']
-            C_physical_in1 = cold_in['m']*cold_in['e_PH']
-            C_mech_out0    = hot_out['m']*hot_out['e_M']
-            C_mech_out1    = cold_out['m']*cold_out['e_M']
-
-            self.C_P = C_therm_out0 + C_therm_out1
-            self.C_F = (C_physical_in0 + C_physical_in1) - (C_mech_out0 + C_mech_out1)
-
-        # Case 4: inl[0].T> T0, inl[1].T<= T0, outl[0].T<= T0, outl[1].T<= T0
-        elif (hot_in['T'] > T0 and cold_in['T'] <= T0 and
-            hot_out['T'] <= T0 and cold_out['T'] <= T0):
-            #   C_P = outl[0].C_therm
-            #   C_F = inl[0].C_physical + inl[1].C_physical - (outl[1].C_physical + outl[0].C_mech)
-            C_therm_out0 = hot_out['m']*hot_out['e_T']
-            C_physical_in0 = hot_in['m']*hot_in['e_PH']
-            C_physical_in1 = cold_in['m']*cold_in['e_PH']
-            C_physical_out1 = cold_out['m']*cold_out['e_PH']
-            C_mech_out0 = hot_out['m']*hot_out['e_M']
-
-            self.C_P = C_therm_out0
-            self.C_F = (C_physical_in0 + C_physical_in1) - (C_physical_out1 + C_mech_out0)
-
-        # Case 5: inl[0].T> T0, outl[0].T> T0, inl[1].T<=T0, outl[1].T<=T0
-        elif (hot_in['T'] > T0 and hot_out['T'] > T0 and
-            cold_in['T'] <= T0 and cold_out['T'] <= T0):
-            #   C_P = np.nan
-            #   C_F = ...
-            self.C_P = np.nan
-            self.C_F = (
-                hot_in['m']*hot_in['e_PH'] - hot_out['m']*hot_out['e_PH']
-                + cold_in['m']*cold_in['e_PH'] - cold_out['m']*cold_out['e_PH']
-            )
-
-        # Case 6: outl[1].T> T0, everything else <= T0
         else:
-            #   C_P = outl[1].C_therm
-            #   C_F = inl[0].C_physical - outl[0].C_physical + ...
-            C_therm_out1 = cold_out['m']*cold_out['e_T']
-            C_physical_in0 = hot_in['m']*hot_in['e_PH']
-            C_physical_out0 = hot_out['m']*hot_out['e_PH']
-            C_physical_in1 = cold_in['m']*cold_in['e_PH']
-            C_mech_out1    = cold_out['m']*cold_out['e_M']
+            # Convenience references
+            i0, i1 = self.inl[0], self.inl[1]
+            o0, o1 = self.outl[0], self.outl[1]
 
-            self.C_P = C_therm_out1
-            self.C_F = (C_physical_in0 - C_physical_out0) + (C_physical_in1 - (cold_out['m']*cold_out['e_PH'])) \
-                    + 0.0  # If you need that last term from TESPy snippet
+            # Collect all temperatures
+            all_temps = [i0["T"], i1["T"], o0["T"], o1["T"]]
 
-        # --- Now compute final exergoeconomic variables ---
-        # 1) Check we have a valid Z_costs assigned
-        ZC = getattr(self, "Z_costs", 0.0)
+            if all(t > T0 for t in all_temps):
+                # Case 1: All streams above T0
+                self.C_P = o1["C_T"] - i1["C_T"]
+                self.C_F = i0["C_PH"] - o0["C_PH"] + (i1["C_M"] - o1["C_M"])
 
-        # 2) c_F, c_P in currency/W
-        if (self.E_F is not None and self.E_F > 1e-12):
+            elif all(t <= T0 for t in all_temps):
+                # Case 2: All streams below or equal to T0
+                self.C_P = o0["C_T"] - i0["C_T"]
+                self.C_F = i1["C_PH"] - o1["C_PH"] + (i0["C_M"] - o0["C_M"])
+
+            elif (i0["T"] > T0 and o1["T"] > T0 and
+                  o0["T"] <= T0 and i1["T"] <= T0):
+                # Case 3: Hot inlet/outlet above T0, cold inlet/outlet below T0
+                self.C_P = o0["C_T"] + o1["C_T"]
+                self.C_F = i0["C_PH"] + i1["C_PH"] - (o0["C_M"] + o1["C_M"])
+
+            elif (i0["T"] > T0 and i1["T"] <= T0 and
+                  o0["T"] <= T0 and o1["T"] <= T0):
+                # Case 4: First inlet above T0, all other streams below or equal
+                self.C_P = o0["C_T"]
+                self.C_F = i0["C_PH"] + i1["C_PH"] - (o1["C_PH"] + o0["C_M"])
+
+            elif (i0["T"] > T0 and o0["T"] > T0 and
+                  i1["T"] <= T0 and o1["T"] <= T0):
+                # Case 5: Hot stream inlet/outlet above T0, cold stream inlet/outlet below or equal
+                self.C_P = np.nan
+                self.C_F = (i0["C_PH"] - o0["C_PH"]) + (i1["C_PH"] - o1["C_PH"])
+
+            else:
+                # Case 6: Second outlet above T0, all others below or equal
+                self.C_P = o1["C_T"]
+                self.C_F = (i0["C_PH"] - o0["C_PH"]) + (i1["C_PH"] - o1["C_M"])
+
+        # 3) Compute c_F, c_P, C_D, r, f
+        if self.E_F != 0.0:
             self.c_F = self.C_F / self.E_F
         else:
-            self.c_F = None
+            self.c_F = np.nan
 
-        if (self.E_P is not None and self.E_P > 1e-12) and not np.isnan(self.C_P):
+        if (self.E_P is not None) and (self.E_P != 0.0) and not np.isnan(self.E_P):
             self.c_P = self.C_P / self.E_P
         else:
-            self.c_P = None
+            self.c_P = np.nan
 
-        # 3) cost of destruction, C_D = c_F * E_D
-        if self.c_F is not None and (self.E_D is not None):
-            self.C_D = (self.c_F * self.E_D) if self.c_F > 1e-12 else 0.0
+        # Cost of exergy destruction
+        if not np.isnan(self.C_P) and not np.isnan(self.C_F):
+            self.C_D = self.C_F - self.C_P
+        elif np.isnan(self.C_P) and not np.isnan(self.C_F):
+            self.C_D = self.C_F  # Since C_P is undefined
         else:
-            self.C_D = None
+            self.C_D = np.nan
 
-        # 4) relative cost difference r = (c_P - c_F)/c_F
-        if self.c_F and self.c_P:
+        # Relative cost difference
+        if (not np.isnan(self.c_F)) and (self.c_F != 0.0) and (not np.isnan(self.c_P)):
             self.r = (self.c_P - self.c_F) / self.c_F
         else:
-            self.r = None
+            self.r = np.nan
 
-        # 5) exergoeconomic factor f = Z_costs/(Z_costs + C_D)
-        if (self.C_D is not None) and (self.C_D > 1e-12):
-            self.f = ZC / (ZC + self.C_D)
+        # Exergoeconomic factor f = Z_costs / (Z_costs + C_D)
+        Z = getattr(self, "Z_costs", 0.0)
+        if not np.isnan(self.C_D):
+            denom = Z + self.C_D
         else:
-            self.f = None
+            denom = Z
+        if denom != 0.0:
+            self.f = Z / denom
+        else:
+            self.f = np.nan
+
+        # Log the results
+        logging.info(
+            f"HeatExchanger exergoeconomic balance calculated: "
+            f"C_P={self.C_P}, C_F={self.C_F}, C_D={self.C_D}, "
+            f"c_F={self.c_F}, c_P={self.c_P}, r={self.r}, f={self.f}"
+        )
+
+    def aux_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter, T0):
+        r"""
+        Insert the F/P-rule style auxiliary equations ensuring
+        c^T_in = c^T_out, c^M_in = c^M_out, c^CH_in = c^CH_out, etc.,
+        depending on the temperature scenario for the 2 inlets (0,1)
+        and 2 outlets (0,1).
+
+        This logic matches the 6-case structure used in the exergoeconomic_balance
+        method. For each scenario, we insert 5 lines enforcing equality of the
+        specific exergy cost for T, M, CH.
+
+        Parameters
+        ----------
+        exergy_cost_matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+
+        exergy_cost_vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+
+        counter : int
+            Current row index in the matrix to place equations.
+
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Returns
+        -------
+        list
+            [exergy_cost_matrix, exergy_cost_vector, new_counter]
+            with updated matrix, vector, and row index.
+        """
+        # Convenience references
+        i0, i1 = self.inl[0], self.inl[1]    # inlet dictionaries (hot=0, cold=1)
+        o0, o1 = self.outl[0], self.outl[1]  # outlet dictionaries
+
+        # Helper functions
+        def all_above(*streams):
+            return all(s["T"] > T0 for s in streams)
+
+        def all_below_eq(*streams):
+            return all(s["T"] <= T0 for s in streams)
+
+        # All streams list
+        all_streams = [i0, i1, o0, o1]
+
+        # Initialize list to track if a scenario is matched
+        scenario_matched = False
+
+        # 1) All streams above T0
+        if all_above(*all_streams):
+            scenario_matched = True
+            # row 0 => c^T_in0 = c^T_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i0, o0, "T")
+            # row 1 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i0, o0, "M")
+            # row 2 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i1, o1, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # 2) All streams below or equal to T0
+        elif all_below_eq(*all_streams):
+            scenario_matched = True
+            # row 0 => c^T_in1 = c^T_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i1, o1, "T")
+            # row 1 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i1, o1, "M")
+            # row 2 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i0, o0, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # 3) Hot inlet/outlet above T0, cold inlet/outlet below T0
+        elif (i0["T"] > T0 and o1["T"] > T0 and
+              o0["T"] <= T0 and i1["T"] <= T0):
+            scenario_matched = True
+            # row 0 => c^T_in0 = c^T_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i0, o0, "T")
+            # row 1 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i0, o0, "M")
+            # row 2 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i1, o1, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # 4) First inlet above T0, all other streams below or equal to T0
+        elif (i0["T"] > T0 and i1["T"] <= T0 and
+              o0["T"] <= T0 and o1["T"] <= T0):
+            scenario_matched = True
+            # row 0 => c^T_in0 = c^T_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i0, o0, "T")
+            # row 1 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i0, o0, "M")
+            # row 2 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i1, o1, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # 5) Hot inlet/outlet above T0, cold inlet/outlet below or equal to T0
+        elif (i0["T"] > T0 and o0["T"] > T0 and
+              i1["T"] <= T0 and o1["T"] <= T0):
+            scenario_matched = True
+            # row 0 => c^T_in0 = c^T_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i0, o0, "T")
+            # row 1 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i0, o0, "M")
+            # row 2 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i1, o1, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # 6) Second outlet above T0, all others below or equal to T0
+        else:
+            scenario_matched = True
+            # row 0 => c^T_in0 = c^T_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+0, i0, o0, "T")
+            # row 1 => c^M_in0 = c^M_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+1, i0, o0, "M")
+            # row 2 => c^M_in1 = c^M_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+2, i1, o1, "M")
+            # row 3 => c^CH_in0 = c^CH_out0
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+3, i0, o0, "CH")
+            # row 4 => c^CH_in1 = c^CH_out1
+            self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter+4, i1, o1, "CH")
+
+            # Set RHS=0 for these rows
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+
+            counter += 5
+
+        # If no scenario matched (should not happen), set dummy equations
+        if not scenario_matched:
+            for k in range(5):
+                exergy_cost_vector[counter + k] = 0.0
+            counter += 5
+
+        return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+    def dis_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter, T0):
+        r"""
+        Insert dissipative cost distribution equations.
+
+        If the heat exchanger is dissipative, distribute the cost of exergy destruction
+        among the serving components.
+
+        Parameters
+        ----------
+        exergy_cost_matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+
+        exergy_cost_vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+
+        counter : int
+            Current row index in the matrix to place equations.
+
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Returns
+        -------
+        list
+            [exergy_cost_matrix, exergy_cost_vector, new_counter]
+            with updated matrix, vector, and row index.
+        """
+        # Check if the component is dissipative
+        if not getattr(self, "dissipative", False):
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        # Check if serving_components is defined
+        if not hasattr(self, "serving_components") or self.serving_components is None:
+            logging.warning("Dissipative HeatExchanger has no serving_components defined.")
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        num_serving = len(self.serving_components)
+        if num_serving == 0:
+            logging.warning("Dissipative HeatExchanger has an empty serving_components list.")
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        # Distribute the cost equally among serving components
+        fraction = 1.0 / num_serving
+
+        for comp in self.serving_components:
+            # Distribute thermal exergy cost
+            exergy_cost_matrix[counter, comp.inl[0]["Ex_C_col"]["T"]] += fraction
+            exergy_cost_matrix[counter, comp.outl[0]["Ex_C_col"]["T"]] += -fraction
+            exergy_cost_matrix[counter, comp.inl[1]["Ex_C_col"]["T"]] += fraction
+            exergy_cost_matrix[counter, comp.outl[1]["Ex_C_col"]["T"]] += -fraction
+
+            # Distribute mechanical exergy cost
+            exergy_cost_matrix[counter+1, comp.inl[0]["Ex_C_col"]["M"]] += fraction
+            exergy_cost_matrix[counter+1, comp.outl[0]["Ex_C_col"]["M"]] += -fraction
+            exergy_cost_matrix[counter+1, comp.inl[1]["Ex_C_col"]["M"]] += fraction
+            exergy_cost_matrix[counter+1, comp.outl[1]["Ex_C_col"]["M"]] += -fraction
+
+            # Distribute chemical exergy cost
+            exergy_cost_matrix[counter+2, comp.inl[0]["Ex_C_col"]["CH"]] += fraction
+            exergy_cost_matrix[counter+2, comp.outl[0]["Ex_C_col"]["CH"]] += -fraction
+            exergy_cost_matrix[counter+2, comp.inl[1]["Ex_C_col"]["CH"]] += fraction
+            exergy_cost_matrix[counter+2, comp.outl[1]["Ex_C_col"]["CH"]] += -fraction
+
+            # Increment counter for each serving component's distribution
+            counter += 3  # Assuming 3 rows per serving component
+
+        # Set the cost rate equation for dissipative component
+        exergy_cost_matrix[counter, self.Ex_C_col["dissipative"]] = 1.0
+        exergy_cost_vector[counter] = self.Z_costs
+        counter += 1
+
+        return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+    def _insert_cost_eq(self, matrix, vector, row, in_conn, out_conn, exergy_type):
+        """
+        Helper method to insert cost equality equations into the matrix.
+
+        Parameters
+        ----------
+        matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+
+        vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+
+        row : int
+            Row index to insert the equation.
+
+        in_conn : dict
+            Inlet connection dictionary.
+
+        out_conn : dict
+            Outlet connection dictionary.
+
+        exergy_type : str
+            Type of exergy ('T', 'M', 'CH').
+
+        Returns
+        -------
+        None
+        """
+        in_e = in_conn.get(f"e_{exergy_type}", 0.0)
+        out_e = out_conn.get(f"e_{exergy_type}", 0.0)
+
+        if in_e != 0.0 and out_e != 0.0:
+            matrix[row, in_conn["Ex_C_col"][exergy_type]] = 1.0 / in_e
+            matrix[row, out_conn["Ex_C_col"][exergy_type]] = -1.0 / out_e
+        elif in_e == 0.0 and out_e != 0.0:
+            matrix[row, in_conn["Ex_C_col"][exergy_type]] = 1.0
+        elif in_e != 0.0 and out_e == 0.0:
+            matrix[row, out_conn["Ex_C_col"][exergy_type]] = 1.0
+        else:
+            # Both exergies are zero; enforce c_in - c_out = 0
+            matrix[row, in_conn["Ex_C_col"][exergy_type]] = 1.0
+            matrix[row, out_conn["Ex_C_col"][exergy_type]] = -1.0
+
+
+
+    

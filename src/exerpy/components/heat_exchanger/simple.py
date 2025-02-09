@@ -145,11 +145,11 @@ class SimpleHeatExchanger(Component):
         """      
         # Validate the number of inlets and outlets
         if not hasattr(self, 'inl') or not hasattr(self, 'outl'):
-            msg = "Simple heat exchanger requires at least one inlet and one outlet as well as one heat flow."
+            msg = "SimpleHeatExchanger requires at least one inlet and one outlet as well as one heat flow."
             logging.error(msg)
             raise ValueError(msg)
         if len(self.inl) > 2 or len(self.outl) > 2:
-            msg = "Simple heat exchanger requires a maximum of two inlets and two outlets."
+            msg = "SimpleHeatExchanger requires a maximum of two inlets and two outlets."
             logging.error(msg)
             raise ValueError(msg)
 
@@ -178,8 +178,10 @@ class SimpleHeatExchanger(Component):
                 self.E_P = outlet['m'] * (outlet['e_T'] - inlet['e_T'])
                 self.E_F = self.E_P + inlet['m'] * (inlet['e_M'] - outlet['m'] * outlet['e_M'])
             else:
-                logging.warning(f"Exergy balance for simple heat exchangers with outlet temperature higher "
-                                "than inlet temperature during heat release is not implemented.")
+                # Unimplemented corner case
+                logging.warning(
+                    "SimpleHeatExchanger: unimplemented case (Q < 0, T_in < T0 < T_out?)."
+                )
                 self.E_P = np.nan
                 self.E_F = np.nan
 
@@ -198,12 +200,13 @@ class SimpleHeatExchanger(Component):
                     (outlet['m'] * outlet['e_M'] - inlet['m'] * inlet['e_M'])
                 self.E_F = inlet['m'] * (inlet['e_T'] - outlet['e_T'])
             else:
-                logging.warning(f"Exergy balance for simple heat exchangers with inlet temperature "
-                                "higher than outlet temperature during heat addition is not implemented.")
+                logging.warning(
+                    "SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?)."
+                )
                 self.E_P = np.nan
                 self.E_F = np.nan
 
-        # Case 3: Fully dissipative (Q == 0 or other scenarios)
+        # Case 3: Fully dissipative or Q == 0
         else:
             self.E_P = np.nan
             self.E_F = inlet['m'] * (inlet['e_PH'] - outlet['e_PH'])
@@ -219,8 +222,8 @@ class SimpleHeatExchanger(Component):
 
         # Log the results
         logging.info(
-            f"Compressor exergy balance calculated: "
-            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
+            f"SimpleHeatExchanger '{self.label}' exergoeconomic balance calculated: "
+            f"E_P={self.E_P:.2f} W, E_F={self.E_F:.2f} W, E_D={self.E_D:.2f} W, "
             f"Efficiency={self.epsilon:.2%}"
         )
 
@@ -237,56 +240,51 @@ class SimpleHeatExchanger(Component):
 
         Requires:
         - self.inl[0], self.outl[0] each has e_T, e_PH, e_M, T, h, m
-        - self.Z_costs must be set beforehand (e.g. by ExergoeconomicAnalysis)
+        - self.Z_costs must be set beforehand (e.g., by ExergoeconomicAnalysis)
         - self.E_F, self.E_P, self.E_D already computed by calc_exergy_balance
         """
         # For convenience, read inlet/outlet dictionaries
         inlet = self.inl[0]
         outlet = self.outl[0]
 
-        # Build "cost flows" from thermal, physical, mechanical exergies, analog to TESPy
-        # E.g. "C_therm_in = mass_flow_in * e_T_in"
-        C_therm_in = inlet['m'] * inlet['e_T']
-        C_therm_out = outlet['m'] * outlet['e_T']
+        # Build "cost flows" from thermal, physical, mechanical exergies
+        C_T_in = inlet['m'] * inlet['e_T']
+        C_T_out = outlet['m'] * outlet['e_T']
 
-        C_mech_in = inlet['m'] * inlet['e_M']
-        C_mech_out = outlet['m'] * outlet['e_M']
+        C_PH_in = inlet['m'] * inlet['e_PH']
+        C_PH_out = outlet['m'] * outlet['e_PH']
 
-        C_phys_in = inlet['m'] * inlet['e_PH']
-        C_phys_out = outlet['m'] * outlet['e_PH']
-
-        # Heat transfer
-        Q = outlet['m'] * outlet['h'] - inlet['m'] * inlet['h']
+        C_M_in = inlet['m'] * inlet['e_M']
+        C_M_out = outlet['m'] * outlet['e_M']
 
         # Initialize result placeholders
         self.C_F = 0.0
         self.C_P = 0.0
 
+        # Heat transfer Q
+        Q = outlet['m'] * outlet['h'] - inlet['m'] * inlet['h']
+
         # === CASE 1: Heat release (Q < 0) ===
         if Q < 0:
             if inlet['T'] >= T0 and outlet['T'] >= T0:
-                # both above ambient
                 if getattr(self, 'dissipative', False):
                     self.C_P = np.nan
                 else:
-                    self.C_P = C_therm_in - C_therm_out
-                self.C_F = C_phys_in - C_phys_out
+                    self.C_P = C_T_in - C_T_out
+                self.C_F = C_PH_in - C_PH_out
 
             elif inlet['T'] >= T0 and outlet['T'] < T0:
-                # inlet above, outlet below T0
-                self.C_P = C_therm_out
-                self.C_F = (C_therm_in + C_therm_out + (C_mech_in - C_mech_out))
+                self.C_P = C_T_out
+                self.C_F = (C_T_in + C_T_out + (C_M_in - C_M_out))
 
             elif inlet['T'] <= T0 and outlet['T'] <= T0:
-                # both below T0
-                self.C_P = C_therm_out - C_therm_in
-                # the line in TESPy is ambiguous but we mirror it
-                self.C_F = (self.C_P + (C_mech_in - C_mech_out))
+                self.C_P = C_T_out - C_T_in
+                self.C_F = self.C_P + (C_M_in - C_M_out)
 
             else:
-                # unimplemented corner case
+                # Unimplemented corner case
                 logging.warning(
-                    "SimpleHeatExchanger: unimplemented case (Q < 0, T_in < T0 < T_out?)."
+                    f"SimpleHeatExchanger '{self.label}': unimplemented case (Q < 0, T_in < T0 < T_out?)."
                 )
                 self.C_P = np.nan
                 self.C_F = np.nan
@@ -294,67 +292,221 @@ class SimpleHeatExchanger(Component):
         # === CASE 2: Heat addition (Q > 0) ===
         elif Q > 0:
             if inlet['T'] >= T0 and outlet['T'] >= T0:
-                # both above T0
-                self.C_P = C_phys_out - C_phys_in
-                self.C_F = C_therm_out - C_therm_in
+                self.C_P = C_PH_out - C_PH_in
+                self.C_F = C_T_out - C_T_in
 
             elif inlet['T'] < T0 and outlet['T'] > T0:
-                self.C_P = C_therm_out + C_therm_in
-                self.C_F = (C_therm_in + (C_mech_in - C_mech_out))
+                self.C_P = C_T_out + C_T_in
+                self.C_F = (C_T_in + (C_M_in - C_M_out))
 
             elif inlet['T'] < T0 and outlet['T'] < T0:
-                # both below T0
                 if getattr(self, 'dissipative', False):
                     self.C_P = np.nan
                 else:
-                    self.C_P = (C_therm_in - C_therm_out) + (C_mech_out - C_mech_in)
-                self.C_F = (C_therm_in - C_therm_out)
+                    self.C_P = (C_T_in - C_T_out) + (C_M_out - C_M_in)
+                self.C_F = (C_T_in - C_T_out)
 
             else:
                 logging.warning(
-                    "SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?)."
+                    f"SimpleHeatExchanger '{self.label}': unimplemented case (Q > 0, T_in > T0 > T_out?)."
                 )
                 self.C_P = np.nan
                 self.C_F = np.nan
 
-        # === CASE 3: Q == 0 or "fully dissipative" fallback ===
+        # === CASE 3: Fully dissipative or Q == 0 ===
         else:
             self.C_P = np.nan
-            self.C_F = C_phys_in - C_phys_out
+            self.C_F = C_PH_in - C_PH_out
 
         # Debug check difference
         logging.debug(
             f"{self.label}: difference C_P - (C_F + Z_costs) = "
-            f"{self.C_P - (self.C_F + getattr(self, 'Z_costs', 0.0))}"
+            f"{self.C_P - (self.C_F + self.Z_costs)}"
         )
 
         # === Calculate final exergoeconomic metrics ===
         # c_F, c_P: cost per exergy flow [currency/W], if E_F/E_P nonzero
-        if self.E_F and self.E_F > 1e-12:
-            self.c_F = self.C_F / self.E_F
-        else:
-            self.c_F = None
-
-        if self.E_P and self.E_P > 1e-12:
-            self.c_P = self.C_P / self.E_P
-        else:
-            self.c_P = None
+        self.c_F = self.C_F / self.E_F if self.E_F and self.E_F > 1e-12 else None
+        self.c_P = self.C_P / self.E_P if self.E_P and self.E_P > 1e-12 and not np.isnan(self.E_P) else None
 
         # Cost flow associated with destruction: C_D = c_F * E_D
-        if self.c_F is not None and self.E_D is not None:
-            self.C_D = (self.c_F * self.E_D) if self.c_F > 1e-12 else 0.0
-        else:
-            self.C_D = None
+        self.C_D = (self.c_F * self.E_D) if self.c_F and self.E_D else None
 
-        # Relative cost difference: (C_P - C_F)/C_F => or (c_P - c_F)/c_F
-        if self.c_F and self.c_P:
-            self.r = (self.c_P - self.c_F) / self.c_F
-        else:
-            self.r = None
+        # Relative cost difference: (c_P - c_F)/c_F
+        self.r = ((self.c_P - self.c_F) / self.c_F) if self.c_F and self.c_P else None
 
         # Exergoeconomic factor: f = Z_costs / (Z_costs + C_D)
-        ZC = getattr(self, 'Z_costs', 0.0)
-        if self.C_D is not None and self.C_D > 1e-12:
-            self.f = ZC / (ZC + self.C_D)
+        Z = self.Z_costs
+        denom = Z + self.C_D if self.C_D else Z
+        self.f = (Z / denom) if denom != 0.0 else None
+
+    def aux_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter, T0):
+        r"""
+        Insert auxiliary cost equations ensuring cost flow consistency.
+
+        For SimpleHeatExchanger, ensures that:
+        - c_T_in = c_T_out
+        - c_PH_in = c_PH_out
+        - c_M_in = c_M_out
+
+        Each equation is inserted as:
+        c_in - c_out = 0
+
+        Parameters
+        ----------
+        exergy_cost_matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+        exergy_cost_vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+        counter : int
+            Current row index in the matrix to place equations.
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Returns
+        -------
+        list
+            [exergy_cost_matrix, exergy_cost_vector, new_counter]
+            with updated matrix, vector, and row index.
+        """
+        # Convenience references
+        inlet = self.inl[0]
+        outlet = self.outl[0]
+
+        # Insert equations:
+        # c_T_in - c_T_out = 0
+        # c_PH_in - c_PH_out = 0
+        # c_M_in - c_M_out = 0
+
+        # Thermal Exergy Cost Equation
+        self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter, inlet, outlet, "T")
+        exergy_cost_vector[counter] = 0.0
+        counter += 1
+
+        # Physical Exergy Cost Equation
+        self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter, inlet, outlet, "PH")
+        exergy_cost_vector[counter] = 0.0
+        counter += 1
+
+        # Mechanical Exergy Cost Equation
+        self._insert_cost_eq(exergy_cost_matrix, exergy_cost_vector, counter, inlet, outlet, "M")
+        exergy_cost_vector[counter] = 0.0
+        counter += 1
+
+        return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+    def dis_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter, T0):
+        r"""
+        Insert dissipative cost distribution equations.
+
+        If the heat exchanger is 'dissipative', distribute the cost of exergy destruction
+        among the serving components.
+
+        Parameters
+        ----------
+        exergy_cost_matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+        exergy_cost_vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+        counter : int
+            Current row index in the matrix to place equations.
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Returns
+        -------
+        list
+            [exergy_cost_matrix, exergy_cost_vector, new_counter]
+            with updated matrix, vector, and row index.
+        """
+        # Check if the component is dissipative
+        if not getattr(self, "dissipative", False):
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        # Check if serving_components is defined
+        if not hasattr(self, "serving_components") or self.serving_components is None:
+            logging.warning("Dissipative SimpleHeatExchanger has no serving_components defined.")
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        num_serving = len(self.serving_components)
+        if num_serving == 0:
+            logging.warning("Dissipative SimpleHeatExchanger has an empty serving_components list.")
+            return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+        # Distribute the cost equally among serving components
+        fraction = 1.0 / num_serving
+
+        for comp in self.serving_components:
+            # Distribute thermal exergy cost
+            exergy_cost_matrix[counter, comp.inl[0]["Ex_C_col"]["T"]] += fraction
+            exergy_cost_matrix[counter, comp.outl[0]["Ex_C_col"]["T"]] += -fraction
+
+            # Distribute physical exergy cost
+            exergy_cost_matrix[counter + 1, comp.inl[0]["Ex_C_col"]["PH"]] += fraction
+            exergy_cost_matrix[counter + 1, comp.outl[0]["Ex_C_col"]["PH"]] += -fraction
+
+            # Distribute mechanical exergy cost
+            exergy_cost_matrix[counter + 2, comp.inl[0]["Ex_C_col"]["M"]] += fraction
+            exergy_cost_matrix[counter + 2, comp.outl[0]["Ex_C_col"]["M"]] += -fraction
+
+            # Increment counter for each serving component's distribution
+            counter += 3  # Assuming 3 rows per serving component
+
+        # Set the cost rate equation for dissipative component
+        # Assuming a dedicated cost column for dissipative components named "dissipative"
+        if "dissipative" in self.Ex_C_col:
+            dissipative_col = self.Ex_C_col["dissipative"]
+            exergy_cost_matrix[counter, dissipative_col] = 1.0
+            exergy_cost_vector[counter] = self.Z_costs
+            counter += 1
         else:
-            self.f = None
+            logging.warning("Dissipative cost column 'dissipative' not found in Ex_C_col.")
+
+        return [exergy_cost_matrix, exergy_cost_vector, counter]
+
+    def _insert_cost_eq(self, matrix, vector, row, in_conn, out_conn, exergy_type):
+        """
+        Helper method to insert cost equality equations into the matrix.
+
+        Parameters
+        ----------
+        matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+        vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+        row : int
+            Row index to insert the equation.
+        in_conn : dict
+            Inlet connection dictionary.
+        out_conn : dict
+            Outlet connection dictionary.
+        exergy_type : str
+            Type of exergy ('T', 'PH', 'M').
+
+        Returns
+        -------
+        None
+        """
+        in_e = in_conn.get(f"e_{exergy_type}", 0.0)
+        out_e = out_conn.get(f"e_{exergy_type}", 0.0)
+
+        if exergy_type not in in_conn["Ex_C_col"] or exergy_type not in out_conn["Ex_C_col"]:
+            logging.error(f"Exergy type '{exergy_type}' not found in Ex_C_col mappings.")
+            raise KeyError(f"Exergy type '{exergy_type}' not found in Ex_C_col mappings.")
+
+        in_col = in_conn["Ex_C_col"][exergy_type]
+        out_col = out_conn["Ex_C_col"][exergy_type]
+
+        if in_e != 0.0 and out_e != 0.0:
+            matrix[row, in_col] = 1.0 / in_e
+            matrix[row, out_col] = -1.0 / out_e
+        elif in_e == 0.0 and out_e != 0.0:
+            # If inbound exergy is zero, enforce c_in = 0
+            matrix[row, in_col] = 1.0
+        elif in_e != 0.0 and out_e == 0.0:
+            # If outbound exergy is zero, enforce c_out = 0
+            matrix[row, out_col] = 1.0
+        else:
+            # Both exergies are zero; enforce c_in - c_out = 0
+            matrix[row, in_col] = 1.0
+            matrix[row, out_col] = -1.0

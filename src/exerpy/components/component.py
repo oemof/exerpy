@@ -108,56 +108,19 @@ class Component:
             return self.E_P / self.E_F
         
 
-    def exergoeconomic_balance(self):
+    def exergoeconomic_balance(self, T0):
+        r"""
+        Placeholder method for exergoeconomic balance.
+
+        This method is intentionally empty in the base class.
+        In each child class (e.g. Pump, Turbine, HeatExchanger), you should
+        override it with the logic that calculates the component's
+        exergoeconomic variables, e.g. ``C_F``, ``C_P``, ``C_D``, ``r``, and ``f``.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in :math:`\text{K}`.
         """
-        Calculate exergoeconomic properties using a minimal approach.
-        
-        Assumes:
-          - self.E_F, self.E_P, self.E_D : exergy [W] from exergy analysis
-          - self.Z_costs : cost rate [currency/h] assigned externally
-        Defines:
-          - C_F, c_F  : cost flow and specific cost of exergy "fuel"
-          - C_P, c_P  : cost flow and specific cost of exergy "product" (basic assumption)
-          - C_D       : cost flow associated with exergy destruction
-          - f         : exergoeconomic factor
-          - r         : relative cost difference
-        """
+        return
 
-        # If not assigned elsewhere, default 0
-        if not hasattr(self, "Z_costs"):
-            self.Z_costs = 0.0
-
-        # --- 1) Cost flow of exergy fuel, simple assumption ---
-        # e.g. assume Z_costs is the entire "fuel" cost flow
-        self.C_F = self.Z_costs
-
-        # specific cost of fuel c_F [currency/W]
-        if getattr(self, "E_F", 0.0) > 1e-12:
-            self.c_F = self.C_F / self.E_F
-        else:
-            self.c_F = 0.0
-
-        # --- 2) Cost flow of exergy destruction ---
-        #   C_D = c_F * E_D
-        if getattr(self, "E_D", 0.0) > 1e-12:
-            self.C_D = self.c_F * self.E_D
-        else:
-            self.C_D = 0.0
-
-        # --- 3) Cost flow & specific cost of product c_P (basic approach) ---
-        if getattr(self, "E_P", 0.0) > 1e-12:
-            # total product cost flow ~ C_F + Z_costs (can refine if needed)
-            total_cost_flow = self.C_F + self.Z_costs
-            self.c_P = total_cost_flow / self.E_P
-        else:
-            self.c_P = None
-
-        # --- 4) Exergoeconomic factor f = Z_costs / (Z_costs + C_D) ---
-        denom = self.Z_costs + self.C_D
-        self.f = (self.Z_costs / denom) if denom > 1e-12 else None
-
-        # --- 5) Relative cost difference r = (c_P - c_F)/c_F ---
-        if self.c_F > 1e-12 and self.c_P is not None:
-            self.r = (self.c_P - self.c_F) / self.c_F
-        else:
-            self.r = None

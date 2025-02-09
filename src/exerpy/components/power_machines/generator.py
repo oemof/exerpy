@@ -53,6 +53,8 @@ class Generator(Component):
     def __init__(self, **kwargs):
         r"""Initialize generator component with given parameters."""
         super().__init__(**kwargs)
+        # Ex_C_col will be assigned by ExergoeconomicAnalysis.run()
+        self.Ex_C_col = {}
 
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         r"""
@@ -79,10 +81,96 @@ class Generator(Component):
         
         # Calculate exergy efficiency
         self.epsilon = self.calc_epsilon()
-
+        
         # Log the results
         logging.info(
-            f"Compressor exergy balance calculated: "
+            f"Generator exergy balance calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+    def exergoeconomic_balance(self, T0: float) -> None:
+        """        
+        Calculate the exergoeconomic balance of the generator.
+
+        This function calculates:
+        - C_P: Cost flow associated with the product exergy (electrical power output)
+        - C_F: Cost flow associated with the fuel exergy (input power)
+        - c_F: Specific cost for fuel exergy [currency / W]
+        - c_P: Specific cost for product exergy [currency / W]
+        - C_D: Cost flow of exergy destruction (always 0 for Generator)
+        - r: Relative cost difference
+        - f: Exergoeconomic factor
+
+        Requires:
+        - self.inl[0] and self.outl[0] must have 'energy_flow' defined
+        - self.Z_costs must be set beforehand (e.g., by ExergoeconomicAnalysis)
+        - self.E_F, self.E_P already computed by calc_exergy_balance
+        """
+        # Calculate cost flows
+        # C_P: Cost associated with product exergy (electrical output)
+        self.C_P = self.E_P * self.c_P if hasattr(self, 'c_P') else 0.0
+
+        # C_F: Cost associated with fuel exergy (mechanical input)
+        # Since C_F = C_P + Z_costs
+        self.C_F = self.C_P + self.Z_costs
+
+        # Calculate specific costs
+        self.c_F = self.C_F / self.E_F if self.E_F and self.E_F > 1e-12 else 0.0
+        self.c_P = self.C_P / self.E_P if self.E_P and self.E_P > 1e-12 else 0.0
+
+        # Relative cost difference
+        self.r = ((self.c_P - self.c_F) / self.c_F) if self.c_F else 0.0
+
+        # Exergoeconomic factor
+        Z = self.Z_costs
+        denom = Z + self.C_D if self.C_D else Z
+        self.f = (Z / denom) if denom != 0.0 else 0.0
+
+        # Log the results
+        logging.info(
+            f"Generator '{self.label}' exergoeconomic calculations: "
+            f"C_P={self.C_P:.2f}, C_F={self.C_F:.2f}, C_D={self.C_D:.2f}, "
+            f"c_F={self.c_F:.4f}, c_P={self.c_P:.4f}, r={self.r:.4f}, f={self.f:.4f}"
+        )
+
+    def aux_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter: int, T0: float):
+        r"""
+        Insert auxiliary cost equations ensuring cost flow consistency.
+
+        For Generator, ensures that:
+        - C_F - C_P = Z_costs
+
+        Parameters
+        ----------
+        exergy_cost_matrix : ndarray
+            The main exergoeconomic matrix being assembled.
+        exergy_cost_vector : ndarray
+            The main RHS vector of the exergoeconomic system.
+        counter : int
+            Current row index for equations.
+        T0 : float
+            Ambient temperature in Kelvin.
+
+        Returns
+        -------
+        list
+            [exergy_cost_matrix, exergy_cost_vector, new_counter]
+            with updated matrix, vector, and row index.
+        """
+        # Insert the Exergy Flow Equation: C_F - C_P = Z_costs
+        C_F_col = self.Ex_C_col.get("C_F")
+        C_P_col = self.Ex_C_col.get("C_P")
+
+        if C_F_col is not None and C_P_col is not None:
+            # Equation: C_F - C_P = Z_costs => C_F - C_P - Z_costs = 0
+            exergy_cost_matrix[counter, C_F_col] = 1.0   # +C_F
+            exergy_cost_matrix[counter, C_P_col] = -1.0  # -C_P
+            exergy_cost_vector[counter] = self.Z_costs    # = Z_costs
+            counter += 1
+        else:
+            logging.error("C_F and/or C_P exergy cost columns missing in Ex_C_col for Generator.")
+            raise KeyError("C_F and/or C_P exergy cost columns missing in Ex_C_col for Generator.")
+
+        # Since Generator is non-dissipative, no additional equations are needed
+        return [exergy_cost_matrix, exergy_cost_vector, counter]

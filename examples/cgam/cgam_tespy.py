@@ -61,7 +61,7 @@ c9 = Connection(dr, 'out2', ls, 'in1', label='9')
 
 nwk.add_conns(c8, c8p, c11, c11p, c9)
 
-c8.set_attr(p=20, T=25, m=14, fluid={"IF97::water": 1})
+c8.set_attr(p=20, T=25, m=14, fluid={"water": 1})
 c1.set_attr(p=1.013, T=25, fluid=air, m=91.753028)
 c10.set_attr(T=25, fluid=fuel, p=12)
 c7.set_attr(p=1.013)
@@ -137,9 +137,9 @@ json_export = {
     "components": component_json,
     "connections": connection_json,
     "ambient_conditions": {
-        "Tamb": 283.15,
+        "Tamb": T0,
         "Tamb_unit": "K",
-        "pamb": 101300.0,
+        "pamb": p0,
         "pamb_unit": "Pa"
     }
 }

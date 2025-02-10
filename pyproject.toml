@@ -18,9 +18,9 @@ dynamic = ["version"]
 description = "Exergy analysis for tabular input data"
 readme = "README.md"
 authors = [
-    {name = "Francesco Witte", email = "github@witte.sh"},
     {name = "Sergio Tomasinelli", email = "s.tomasinelli@tu-berlin.de"},
     {name = "Robert Müller", email = "robert.mueller.2@tu-berlin.de"},
+    {name = "Francesco Witte", email = "github@witte.sh"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",

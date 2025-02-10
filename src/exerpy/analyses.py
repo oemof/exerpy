@@ -174,8 +174,8 @@ class ExergyAnalysis:
                 "export or a tespy network"
             )
             raise TypeError(msg)
-
-        data = model.to_exerpy(Tamb, pamb)
+        from .parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
+        data = model.to_exerpy(Tamb, pamb, EXERPY_TESPY_MAPPINGS)
         data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib)
         return cls(data['components'], data['connections'], Tamb, pamb)
 

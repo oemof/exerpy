@@ -3,7 +3,7 @@ grouped_components = {
     "Turbine": ['Compr'],
     "HeatExchanger": ['HeatX'],
     "CombustionChamber": ['RStoic'],
-    # "Valve": [],
+    "Valve": ['Valve'],
     "Pump": ['Pump'],
     "Compressor": ['Compr'],
     # "Condenser": [],
@@ -28,14 +28,14 @@ connector_mappings = {
         'WS(OUT)': 1   # outlet work flow
     },
     'HeatX': {
-        'C(IN)': 1,    # inlet cold strean
-        'C(OUT)': 1,   # outlet cold strean
-        'H(IN)': 0,    # inlet hot strean
-        'H(OUT)': 0    # outlet hot strean
+        'C(IN)': 1,    # inlet cold stream
+        'C(OUT)': 1,   # outlet cold stream
+        'H(IN)': 0,    # inlet hot stream
+        'H(OUT)': 0    # outlet hot stream
     },
     'Heater': {
-        'F(IN)': 0,    # inlet strean
-        'P(OUT)': 0,   # outlet strean
+        'F(IN)': 0,    # inlet stream
+        'P(OUT)': 0,   # outlet stream
     },
     'Generator': {
         'WS(IN)': 0,    # inlet work flow
@@ -44,6 +44,14 @@ connector_mappings = {
     'Pump': {
         'F(IN)': 0,    # inlet work flow
         'P(OUT)': 0,   # outlet work flow
+    },
+    'Motor': {
+        'WS(IN)': 0,    # inlet work flow
+        'WS(OUT)': 0,   # outlet work flow
+    },
+    'Valve': {
+        'F(IN)': 0,    # inlet stream
+        'P(OUT)': 0,   # outlet stream
     },
 # Following components need extra functions because they have multiple inputs/outputs:
 # Splitter, 

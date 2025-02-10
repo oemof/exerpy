@@ -134,3 +134,37 @@ class Pump(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+
+    def aux_eqs(self, A, b, counter, T0):
+        # c_in_ch = c_out_ch
+        # delta c_therm = delta c_mech   # alt: c_out_th - c_in_th = c_out_mech - c_in_mech  ->  c_out_th - c_in_th - c_out_mech + c_in_mech = 0
+
+        A[counter+0, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
+        A[counter+0, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else 1
+
+        dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
+        dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
+
+        if self.inl[0]["T"] > T0 and  self.outl[0]["T"] > T0:
+            if dET != 0 and dEM != 0:
+                A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/dET
+                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/dET
+                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
+                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
+            else:
+                logging.warning("case that thermal or mechanical exergy at pump outlet doesn't change is not implemented in exergoeconomics yet")
+
+        elif self.inl[0]["T"] <= T0 and  self.outl[0]["T"] > T0:
+            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
+            A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
+            A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
+
+        else:
+            A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/self.inl[0]["e_T"]
+            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
+
+        for i in range(2):
+            b[counter+i]=0
+
+        return [A, b, counter+2]

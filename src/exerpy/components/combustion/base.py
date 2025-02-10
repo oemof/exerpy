@@ -141,7 +141,7 @@ class CombustionChamber(Component):
             - Coefficient for inlet 1: +1/e_M (inlet 1) scaled by its mass fraction
             - Coefficient for inlet 2: +1/e_M (inlet 2) scaled by its mass fraction
         Else:
-            - Set the outlet’s cost coefficient to 1.
+            - Set the outlet's cost coefficient to 1.
         
         Chemical cost row:
         If the outlet and both inlets have nonzero chemical exergy (e_CH):
@@ -149,7 +149,7 @@ class CombustionChamber(Component):
             - Coefficient for inlet 1: +1/e_CH (inlet 1) scaled by its mass fraction
             - Coefficient for inlet 2: +1/e_CH (inlet 2) scaled by its mass fraction
         Else, if one of the inlets has zero chemical exergy:
-            - Set that inlet’s cost coefficient to 1.
+            - Set that inlet's cost coefficient to 1.
         
         The right-hand side entries for these auxiliary equations are set to zero.
         

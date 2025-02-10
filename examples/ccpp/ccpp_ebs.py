@@ -35,16 +35,34 @@ ean.exergy_results()
 
 
 Exe_Eco_Costs = {
-    "CC_Z": 8000000, # Investment cost for Combustion Chamber in €/h
-    "EVA_Z": 3000000, # Investment cost for Evaporator in €/h
-    "ST1_Z": 4000000,  # Investment cost for Steam Turbine 1 in €/h
-    "ST2_Z": 5000000,  # Investment cost for Steam Turbine 2 in €/h
-    "1_c": 1,    # Cost of air in €/GJ (for air exergy stream)
-    "3_c": 50,    # Cost of fuel in €/GJ (for fuel exergy stream)
-    "14_c": 2,    # Cost of cooling water in €/GJ (for water exergy stream)
-    "E3_c": 70, # Cost of electricity produced in €/GJ
-    "E4_c": 70, # Cost of electricity produced in €/GJ
+    # Component investment costs (in €/h)
+    "CC_Z":   2500000,   # Combustion Chamber 
+    "COMP_Z": 2000000,   # Compressor 
+    "COND_Z": 2500000,   # Condenser
+    "DEA_Z":  1500000,   # Deaerator 
+    "GEN1_Z": 1000000,   # Generator 1 
+    "GEN2_Z": 1000000,   # Generator 2 
+    "ECO_Z":  2000000,   # Economizer 
+    "EVA_Z":  3000000,   # Evaporator 
+    "SH_Z":   2500000,   # Super Heater
+    "MIX_Z":   500000,   # Mixer 
+    "MOT1_Z":  750000,   # Motor 1
+    "MOT2_Z":  750000,   # Motor 2 
+    "PUMP1_Z": 500000,   # Pump 1
+    "PUMP2_Z": 500000,   # Pump 2
+    "HC_Z":   1000000,   # Heat Consumer
+    "GT_Z":   7000000,   # Gas Turbine 
+    "ST1_Z":  4000000,   # Steam Turbine 1 
+    "ST2_Z":  5000000,   # Steam Turbine 2
+
+    # Connection costs (in €/GJ, to be converted later to €/J)
+    "1_c":    1,         # Cost of air
+    "3_c":    50,        # Cost of fuel
+    "14_c":   2,         # Cost of cooling water
+    "E3_c":   70,        # Cost of electricity (stream E3)
+    "E4_c":   70,        # Cost of electricity (stream E4)
 }
+
 
 # Initialize Exergoeconomic Analysis with existing exergy analysis
 exergoeco_analysis = ExergoeconomicAnalysis(ean)

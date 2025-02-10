@@ -620,48 +620,6 @@ def _construct_components(component_data, connection_data):
 
 class ExergoeconomicAnalysis:
     def __init__(self, exergy_analysis_instance):
-        """
-        Initialize the ExergoeconomicAnalysis with an existing ExergyAnalysis instance.
-
-        Parameters
-        ----------
-        exergy_analysis_instance : ExergyAnalysis
-            An instance of the ExergyAnalysis class containing components and connections.
-        """
-        self.exergy_analysis = exergy_analysis_instance
-        self.connections = exergy_analysis_instance.connections
-        self.components = exergy_analysis_instance.components
-        self.num_variables = 0  # Track number of equations for the matrix
-
-    def initialize_cost_variables(self):
-        """
-        Assign unique indices to cost-related variables in the matrix system.
-        
-        Material streams (kind "material") get three indices (thermal, mechanical, chemical).
-        Non-material streams (e.g. "heat", "power") get one index.
-        """
-        col_number = 0
-
-        # Process connections (streams).
-        for conn in self.connections.values():
-            kind = conn.get("kind", "material")
-            if kind == "material":
-                conn["CostVar_index"] = {
-                    "T": col_number,
-                    "M": col_number + 1,
-                    "CH": col_number + 2
-                }
-                col_number += 3
-            elif kind in ("heat", "power"):
-                conn["CostVar_index"] = {"exergy": col_number}
-                col_number += 1
-
-        # Store the total number of cost variables for later use.
-        self.num_variables = col_number
-
-
-class ExergoeconomicAnalysis:
-    def __init__(self, exergy_analysis_instance):
         r"""
         Initialize the ExergoeconomicAnalysis with an existing ExergyAnalysis instance.
 
@@ -676,34 +634,41 @@ class ExergoeconomicAnalysis:
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
 
     def initialize_cost_variables(self):
-        r"""
-        Assign unique indices to cost-related variables in the matrix system.
+        """
+        Assign unique indices to cost-related variables in the matrix system and build a dictionary
+        that maps these indices to variable names.
         
-        Material streams (kind "material") get three indices (thermal, mechanical, chemical).
-        Non-material streams (e.g. "heat", "power") get one index.
-        
-        Only consider connections that are linked to components in `self.components`.
+        Material streams (kind "material") get three indices (thermal, mechanical, chemical),
+        which are named as "<connection name>_c_eT", "<connection name>_c_eM", and "<connection name>_c_eCH".
+        Non-material streams (e.g. "heat", "power") get one index, named as "<connection name>_c_tot".
         """
         col_number = 0
+        self.variables = {}  # New dictionary to map variable indices to names
 
-        # Get a set of valid component names
-        valid_components = {comp.name for comp in self.components.values()}
-
-        # Process only relevant connections
+        # Process each connection (stream)
         for conn in self.connections.values():
-            # Check if the connection is linked to a valid component
-            if conn.get("source_component") in valid_components or conn.get("target_component") in valid_components:
-                kind = conn.get("kind", "material")
-                
-                if kind == "material":
-                    conn["CostVar_index"] = {"T": col_number, "M": col_number + 1, "CH": col_number + 2}
-                    col_number += 3
-                elif kind in ("heat", "power"):
-                    conn["CostVar_index"] = {"non_material": col_number}
-                    col_number += 1
+            kind = conn.get("kind", "material")
+            # For material streams, assign three indices.
+            if kind == "material":
+                conn["CostVar_index"] = {
+                    "T": col_number,
+                    "M": col_number + 1,
+                    "CH": col_number + 2
+                }
+                # Create variable names for each of the three cost components.
+                self.variables[str(col_number)]     = f"{conn['name']}_c_eT"
+                self.variables[str(col_number + 1)] = f"{conn['name']}_c_eM"
+                self.variables[str(col_number + 2)] = f"{conn['name']}_c_eCH"
+                col_number += 3
+            # For non-material streams (e.g., heat, power), assign one index.
+            elif kind in ("heat", "power"):
+                conn["CostVar_index"] = {"exergy": col_number}
+                self.variables[str(col_number)] = f"{conn['name']}_c_tot"
+                col_number += 1
 
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
+
 
 
     def assign_user_costs(self, Exe_Eco_Costs):
@@ -712,16 +677,17 @@ class ExergoeconomicAnalysis:
 
         For components:
         - Look for a key "<component_name>_Z" and assign it (converted from €/h to €/s).
+        If not provided, raise a ValueError.
 
-        For connections (only if their kind is in ["material", "heat", "power"]):
+        For connections:
         1) Only consider connections of accepted kinds.
         2) If the connection is an input (i.e. has no source_component) and no cost is provided
-           in Exe_Eco_Costs, raise a ValueError.
+        in Exe_Eco_Costs, raise a ValueError.
         3) In all other cases (input connections with a provided cost and connections with a source_component 
-           that have an assigned cost), assign the cost as follows:
-           - For material connections, assign c_TOT and also assign cost breakdown (c_T, c_M, c_CH)
-             and compute C_TOT as c_TOT * (e_T, e_M, e_CH * m).
-           - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
+        that have an assigned cost), assign the cost as follows:
+        - For material connections, assign c_TOT and also assign cost breakdown (c_T, c_M, c_CH)
+            and compute C_TOT as c_TOT * (e_T, e_M, e_CH * m).
+        - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
             
         Cost conversions:
         - For components: from €/h to €/s (divide by 3600).
@@ -732,6 +698,8 @@ class ExergoeconomicAnalysis:
             cost_key = f"{comp_name}_Z"
             if cost_key in Exe_Eco_Costs:
                 comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert €/h to €/s
+            else:
+                raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
@@ -745,11 +713,11 @@ class ExergoeconomicAnalysis:
             cost_key = f"{conn_name}_c"
             is_input = not conn.get("source_component")
 
-            # Step 2: If input connection and no cost is provided, raise an error.
+            # If input connection and no cost is provided, raise an error.
             if is_input and cost_key not in Exe_Eco_Costs:
                 raise ValueError(f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
-            # Step 3: Assign cost if provided.
+            # Assign cost if provided.
             if cost_key in Exe_Eco_Costs:
                 # Convert cost from €/GJ to €/J.
                 c_TOT = Exe_Eco_Costs[cost_key] * 1e-9
@@ -772,6 +740,7 @@ class ExergoeconomicAnalysis:
                     
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
+
 
 
     def construct_matrix(self, Tamb):
@@ -828,7 +797,7 @@ class ExergoeconomicAnalysis:
                         counter += 1
                 elif kind in {"heat", "power"}:
                     # For non-material streams, there is a single cost variable.
-                    idx = conn["CostVar_index"]["non_material"]
+                    idx = conn["CostVar_index"]["exergy"]
                     A[counter, idx] = 1
                     b[counter] = conn.get("C_TOT", 0)
                     counter += 1

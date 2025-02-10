@@ -145,103 +145,34 @@ class Compressor(Component):
 
 
     def aux_eqs(self, A, b, counter, T0):
-        """
-        Auxiliary equations for the compressor.
-        
-        This method adds two rows to the cost matrix A and vector b that enforce:
-        1. Equality of the chemical cost per unit exergy between the inlet and outlet,
-            i.e. c_in_ch = c_out_ch.
-        2. Equality of the changes in thermal and mechanical costs,
-            i.e. c_out_th - c_in_th - (c_out_mech - c_in_mech) = 0.
-        
-        The coefficients are determined using the specific exergy values:
-        - For the chemical cost row:
-            If the inlet (or outlet) chemical exergy (e_CH) is nonzero, use 1/e_CH;
-            otherwise, set the coefficient to 1.
-        - For the thermal/mechanical cost row, the treatment depends on the temperature
-            levels of inlet and outlet relative to the ambient T0:
-            Case 1: If both inlet and outlet temperatures exceed T0, then
-                    if Δe_T (outlet e_T minus inlet e_T) and Δe_M (outlet e_M minus inlet e_M) are nonzero:
-                        * Set: c_in_th coefficient = -1/Δe_T, c_out_th coefficient = 1/Δe_T,
-                                c_in_mech coefficient = 1/Δe_M, c_out_mech coefficient = -1/Δe_M.
-                    Otherwise, the case is not implemented.
-            Case 2: If the inlet temperature is below T0 and outlet above T0, then
-                    set: c_out_th coefficient = 1/(outlet e_T),
-                        c_in_mech coefficient = 1/Δe_M, c_out_mech coefficient = -1/Δe_M.
-            Case 3: Otherwise (both below ambient), set:
-                    c_in_th coefficient = -1/(inlet e_T) and c_out_th coefficient = 1/(outlet e_T).
-        
-        In all rows, the right-hand side is zero.
-        
-        Parameters
-        ----------
-        A : numpy.ndarray
-            The current cost matrix.
-        b : numpy.ndarray
-            The current right-hand-side vector.
-        counter : int
-            The current row index in the matrix.
-        T0 : float
-            Ambient temperature in SI (K).
-        
-        Returns
-        -------
-        A : numpy.ndarray
-            The updated cost matrix.
-        b : numpy.ndarray
-            The updated right-hand-side vector.
-        counter : int
-            The updated row index (counter + 2).
-        """
-        # --- Chemical cost auxiliary equation ---
-        # Enforce: (1/e_CH_in)*c_in_ch - (1/e_CH_out)*c_out_ch = 0.
-        in_chem = self.inl[0]["e_CH"]
-        out_chem = self.outl[0]["e_CH"]
-        if in_chem != 0:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1 / in_chem
-        else:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1
-        if out_chem != 0:
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1 / out_chem
-        else:
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
+        # c_in_ch = c_out_ch
+        # delta c_therm = delta c_mech   # alt: c_out_th - c_in_th = c_out_mech - c_in_mech  ->  c_out_th - c_in_th - c_out_mech + c_in_mech = 0
 
-        # --- Thermal and Mechanical cost auxiliary equation ---
-        # Define differences in thermal and mechanical exergy between outlet and inlet.
+        A[counter+0, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
+        A[counter+0, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else 1
+
         dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
         dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
 
-        # Get inlet and outlet temperatures (assumed in SI units).
-        Tin = self.inl[0]["T"]
-        Tout = self.outl[0]["T"]
-
-        if Tin > T0 and Tout > T0:
-            # Case 1: Both temperatures above ambient.
+        if self.inl[0]["T"] > T0 and  self.outl[0]["T"] > T0:
             if dET != 0 and dEM != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1 / dET
-                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1 / dET
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+                A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/dET
+                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/dET
+                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
+                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
             else:
-                logging.error("For compressor '%s': thermal or mechanical exergy difference is zero; auxiliary equation not implemented for this case.", self.label)
-        elif Tin <= T0 and Tout > T0:
-            # Case 2: Inlet below, outlet above ambient.
-            if self.outl[0]["e_T"] != 0 and dEM != 0:
-                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
-            else:
-                logging.error("For compressor '%s': invalid exergy values in case 2 of auxiliary equation.", self.label)
+                logging.warning("case that thermal or mechanical exergy at pump outlet doesn't change is not implemented in exergoeconomics yet")
+
+        elif self.inl[0]["T"] <= T0 and  self.outl[0]["T"] > T0:
+            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
+            A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
+            A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
+
         else:
-            # Case 3: Both temperatures below ambient.
-            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["e_T"]
-                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
-            else:
-                logging.error("For compressor '%s': invalid thermal exergy values in case 3 of auxiliary equation.", self.label)
+            A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/self.inl[0]["e_T"]
+            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
 
-        # Set the right-hand side entries to zero.
-        b[counter] = 0
-        b[counter+1] = 0
+        for i in range(2):
+            b[counter+i]=0
 
-        return A, b, counter + 2
+        return [A, b, counter+2]

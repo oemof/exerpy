@@ -144,3 +144,32 @@ class Valve(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+
+    def aux_eqs(self, A, b, counter, T0):
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
+            print("you shouldn't see this")
+        elif self.outl[0]["T"] <= T0:
+            # mech
+            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_T"] != 0:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
+            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_T"] != 0:
+                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
+            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_T"] == 0:
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = 1
+            else:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+            # chemical doesn't change either both 0 or not 0
+            A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
+            A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
+        else:
+            msg = ('Exergy balance of a valve, where outlet temperature is '
+                   'larger than inlet temperature is not implmented.')
+            logging.warning(msg)
+
+        for i in range(2):
+            b[counter+i]=0
+
+        return [A, b, counter+2]

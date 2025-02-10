@@ -134,43 +134,5 @@ class Generator(Component):
             f"c_F={self.c_F:.4f}, c_P={self.c_P:.4f}, r={self.r:.4f}, f={self.f:.4f}"
         )
 
-    def aux_eqs(self, exergy_cost_matrix, exergy_cost_vector, counter: int, T0: float):
-        r"""
-        Insert auxiliary cost equations ensuring cost flow consistency.
-
-        For Generator, ensures that:
-        - C_F - C_P = Z_costs
-
-        Parameters
-        ----------
-        exergy_cost_matrix : ndarray
-            The main exergoeconomic matrix being assembled.
-        exergy_cost_vector : ndarray
-            The main RHS vector of the exergoeconomic system.
-        counter : int
-            Current row index for equations.
-        T0 : float
-            Ambient temperature in Kelvin.
-
-        Returns
-        -------
-        list
-            [exergy_cost_matrix, exergy_cost_vector, new_counter]
-            with updated matrix, vector, and row index.
-        """
-        # Insert the Exergy Flow Equation: C_F - C_P = Z_costs
-        C_F_col = self.Ex_C_col.get("C_F")
-        C_P_col = self.Ex_C_col.get("C_P")
-
-        if C_F_col is not None and C_P_col is not None:
-            # Equation: C_F - C_P = Z_costs => C_F - C_P - Z_costs = 0
-            exergy_cost_matrix[counter, C_F_col] = 1.0   # +C_F
-            exergy_cost_matrix[counter, C_P_col] = -1.0  # -C_P
-            exergy_cost_vector[counter] = self.Z_costs    # = Z_costs
-            counter += 1
-        else:
-            logging.error("C_F and/or C_P exergy cost columns missing in Ex_C_col for Generator.")
-            raise KeyError("C_F and/or C_P exergy cost columns missing in Ex_C_col for Generator.")
-
-        # Since Generator is non-dissipative, no additional equations are needed
-        return [exergy_cost_matrix, exergy_cost_vector, counter]
+    def aux_eqs(self, A, b, counter, T0):
+        return [A, b, counter]

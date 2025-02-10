@@ -358,7 +358,7 @@ class AspenModelParser:
                     component_data['type'] = "Turbine"
 
             
-            # Handle Generators as multiplier blocks
+            # Handle Generators & Motors (if not in a Pump) as multiplier blocks
             if component_type == 'Mult':
                 mult_value_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
                 mult_value = mult_value_node.Value if mult_value_node is not None else None
@@ -387,7 +387,8 @@ class AspenModelParser:
                                 logging.warning(f"No WS(IN) ports found for block {block_name}")
                                 brake_power = None
                             component_data.update({
-                                'eta_el': factor, 
+                                'eta_el': 1/factor, 
+                                'multiplier factor' : factor,
                                 'type': 'Motor',
                                 'P_el': elec_power,
                                 'P_el_unit': fluid_property_data['power']['SI_unit'],

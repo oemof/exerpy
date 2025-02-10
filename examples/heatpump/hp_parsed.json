@@ -75,29 +75,14 @@
                 "P_mech": 894044.6190000001,
                 "P_mech_unit": "W"
             },
-            "MOT3": {
-                "name": "MOT3",
-                "type": "Motor",
-                "eta_s": null,
-                "eta_mech": null,
-                "Q": null,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "eta_el": 1.015,
-                "P_el": 64.8684158,
-                "P_el_unit": "W",
-                "P_mech": 63.9097693,
-                "P_mech_unit": "W"
-            },
             "PUMP-MOTOR": {
                 "name": "PUMP-MOTOR",
                 "type": "Motor",
-                "P_el": 63.9097693,
+                "P_el": 64.8830145,
                 "P_el_unit": "W",
                 "P_mech": 63.9097693,
                 "P_mech_unit": "W",
-                "eta_el": 1.0
+                "eta_el": 0.985
             }
         },
         "Pump": {
@@ -609,12 +594,12 @@
         "E3": {
             "name": "E3",
             "kind": "power",
-            "source_component": "MOT3",
-            "source_connector": 0,
+            "source_component": "PUMP",
+            "source_connector": null,
             "target_component": null,
             "target_connector": null,
-            "energy_flow": 64.8684158,
-            "E": 64.8684158,
+            "energy_flow": 64.8830145,
+            "E": 64.8830145,
             "E_unit": "W"
         },
         "PUMP_ELEC": {
@@ -624,9 +609,9 @@
             "source_connector": null,
             "target_component": "PUMP-MOTOR",
             "target_connector": 0,
-            "energy_flow": 63.9097693,
+            "energy_flow": 64.8830145,
             "energy_flow_unit": "W",
-            "E": 63.9097693,
+            "E": 64.8830145,
             "E_unit": "W"
         },
         "PUMP_MECH": {
@@ -661,17 +646,6 @@
             "target_connector": 0,
             "energy_flow": 894044.6190000001,
             "E": 894044.6190000001,
-            "E_unit": "W"
-        },
-        "W3": {
-            "name": "W3",
-            "kind": "power",
-            "source_component": "PUMP",
-            "source_connector": null,
-            "target_component": "MOT3",
-            "target_connector": 0,
-            "energy_flow": 63.9097693,
-            "E": 63.9097693,
             "E_unit": "W"
         }
     },

@@ -68,12 +68,22 @@ class ExergyAnalysis:
         self.E_P = 0.0
         self.E_L = 0.0
 
+        for ex_flow in [E_F, E_P, E_L]:
+            for connections in ex_flow.values():
+                for connection in connections:
+                    if connection not in self.connections:
+                        msg = (
+                            f"The connection {connection} is not part of the "
+                            "plant's connections."
+                        )
+                        raise ValueError(msg)
+
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
         if "inputs" in E_F:
             self.E_F += sum(
                 self.connections[conn]['E']
                 for conn in E_F["inputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
 
         if "outputs" in E_F:

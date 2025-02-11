@@ -1,5 +1,5 @@
 from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
-from tespy.connections import Connection, Ref
+from tespy.connections import Connection, Ref, Bus
 from tespy.networks import Network
 
 
@@ -68,6 +68,17 @@ condenser.set_attr(ttd_l=5)
 c3.set_attr(Td_bp=None)
 evaporator.set_attr(ttd_u=5)
 
+power_input = Bus("power input")
+power_input.add_comps(
+    {"comp": compressor, "base": "bus"},
+    {"comp": pump, "base": "bus"},
+    {"comp": fan, "base": "bus"}
+)
+
+nw.add_busses(
+    power_input
+)
+
 nw.solve("design")
 nw.print_results()
 
@@ -77,7 +88,7 @@ T0 = 283.15
 from exerpy import ExergyAnalysis
 
 
-ExergyAnalysis.from_tespy(nw, T0, p0)
+ean = ExergyAnalysis.from_tespy(nw, T0, p0)
 
 # export of the results for validation
 import json
@@ -87,3 +98,26 @@ from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/heatpump/hp_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+
+fuel = {
+    "inputs": [
+        'power input__motor_of_compressor',
+        'power input__motor_of_air fan',
+        'power input__motor_of_water pump'
+    ],
+    "outputs": []
+}
+
+product = {
+    "inputs": ['23'],
+    "outputs": ['21']
+}
+
+loss = {
+    "inputs": ['13'],
+    "outputs": ['11']
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+ean.exergy_results()

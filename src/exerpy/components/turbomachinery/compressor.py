@@ -83,6 +83,7 @@ class Compressor(Component):
     def __init__(self, **kwargs):
         r"""Initialize compressor component with given parameters."""
         super().__init__(**kwargs)
+        self.P = None
 
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         r"""

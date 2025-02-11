@@ -632,6 +632,8 @@ class ExergoeconomicAnalysis:
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
+        self.variables = {}  # New dictionary to map variable indices to names
+        self.equations = {}  # New dictionary to map equation indices to kind of equation
 
     def initialize_cost_variables(self):
         """
@@ -643,7 +645,6 @@ class ExergoeconomicAnalysis:
         Non-material streams (e.g. "heat", "power") get one index, named as "<connection name>_c_tot".
         """
         col_number = 0
-        self.variables = {}  # New dictionary to map variable indices to names
 
         # Process each connection (stream)
         for conn in self.connections.values():
@@ -656,14 +657,14 @@ class ExergoeconomicAnalysis:
                     "CH": col_number + 2
                 }
                 # Create variable names for each of the three cost components.
-                self.variables[str(col_number)]     = f"{conn['name']}_c_eT"
-                self.variables[str(col_number + 1)] = f"{conn['name']}_c_eM"
-                self.variables[str(col_number + 2)] = f"{conn['name']}_c_eCH"
+                self.variables[str(col_number)]     = f"C_{conn['name']}_T"
+                self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
+                self.variables[str(col_number + 2)] = f"C_{conn['name']}_CH"
                 col_number += 3
             # For non-material streams (e.g., heat, power), assign one index.
             elif kind in ("heat", "power"):
                 conn["CostVar_index"] = {"exergy": col_number}
-                self.variables[str(col_number)] = f"{conn['name']}_c_tot"
+                self.variables[str(col_number)] = f"C_{conn['name']}_TOT"
                 col_number += 1
 
         # Store the total number of cost variables for later use.
@@ -776,6 +777,7 @@ class ExergoeconomicAnalysis:
                 elif conn.get("source_component") == comp.name:
                     for key, col in conn["CostVar_index"].items():
                         A[counter, col] = -1  # Outgoing costs
+                self.equations[counter] = f"Z_costs_{comp.name}"  # Store the equation name
             
             # Set the right-hand side to -Z_costs (investment costs)
             b[counter] = -getattr(comp, "Z_costs", 1)
@@ -794,12 +796,14 @@ class ExergoeconomicAnalysis:
                         A[counter, idx] = 1  # Fix the cost variable to the provided cost.
                         # Use the breakdown cost if available; otherwise, use the overall C_TOT.
                         b[counter] = conn.get(f"C_{label}", conn.get("C_TOT", 0))
+                        self.equations[counter] = f"boundary_stream_costs_{conn["name"]}_{label}"
                         counter += 1
                 elif kind in {"heat", "power"}:
                     # For non-material streams, there is a single cost variable.
                     idx = conn["CostVar_index"]["exergy"]
                     A[counter, idx] = 1
                     b[counter] = conn.get("C_TOT", 0)
+                    self.equations[counter] = f"boundary_stream_costs_{conn["name"]}_TOT"
                     counter += 1
 
         # 3. Auxiliary equations.
@@ -809,7 +813,7 @@ class ExergoeconomicAnalysis:
             if hasattr(comp, "aux_eqs") and callable(comp.aux_eqs):
                 # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                 # and return the updated (A, b, counter).
-                A, b, counter = comp.aux_eqs(A, b, counter, Tamb)
+                A, b, counter, self.equations = comp.aux_eqs(A, b, counter, Tamb, self.equations)
 
         # Check that we have exactly as many equations as cost variables.
         # if counter != num_vars:

@@ -88,5 +88,5 @@ class Motor(Component):
         )
 
     
-    def aux_eqs(self, A, b, counter, T0):
-        return [A, b, counter]
+    def aux_eqs(self, A, b, counter, T0, equations):
+        return [A, b, counter, equations]

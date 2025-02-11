@@ -45,8 +45,8 @@ component_costs = {
 }
 
 
-eco = ExergoeconomicAnalysis(ean, component_costs)
+'''eco = ExergoeconomicAnalysis(ean, component_costs)
 eco.run()
 
 df_results = eco.results()
-print(df_results)
+print(df_results)'''

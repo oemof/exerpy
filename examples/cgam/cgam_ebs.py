@@ -31,7 +31,7 @@ loss = {
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
 
-# ------------------ Exergoeconomic Analysis ------------------
+'''# ------------------ Exergoeconomic Analysis ------------------
 
 # Instantiate the ExergoeconomicAnalysis class with the existing ExergyAnalysis instance
 exa = ExergoeconomicAnalysis(ean)
@@ -64,4 +64,4 @@ T0 = ean.Tamb  # Retrieved from the ExergyAnalysis instance
 exa.run(cost_dict=cost_inputs, T0=T0)
 
 # Display the exergoeconomic analysis results
-exa.print_results()
+exa.print_results()'''

@@ -134,5 +134,5 @@ class Generator(Component):
             f"c_F={self.c_F:.4f}, c_P={self.c_P:.4f}, r={self.r:.4f}, f={self.f:.4f}"
         )
 
-    def aux_eqs(self, A, b, counter, T0):
-        return [A, b, counter]
+    def aux_eqs(self, A, b, counter, T0, equations):
+        return [A, b, counter, equations]

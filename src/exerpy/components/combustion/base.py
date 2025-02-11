@@ -125,31 +125,31 @@ class CombustionChamber(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0):
+    def aux_eqs(self, A, b, counter, T0, equations):
         """
-        Auxiliary equations for the component.
+        Auxiliary equations for the combustion chamber.
         
-        This method adds two rows to the matrix A and vector b that enforce
-        auxiliary cost relations for the mechanical and chemical cost components.
+        This method adds two rows to the cost matrix A and right-hand side vector b 
+        to enforce auxiliary cost relations for the mechanical and chemical cost components.
         
         It assumes the component has at least two inlet streams (e.g. air and fuel)
         and one outlet stream. The equations are constructed as follows:
         
         Mechanical cost row:
-        If the outlet and both inlets have nonzero mechanical exergy (e_M):
-            - Coefficient for outlet: -1/e_M (outlet)
-            - Coefficient for inlet 1: +1/e_M (inlet 1) scaled by its mass fraction
-            - Coefficient for inlet 2: +1/e_M (inlet 2) scaled by its mass fraction
-        Else:
-            - Set the outlet's cost coefficient to 1.
+            If the outlet and both inlets have nonzero mechanical exergy (e_M):
+                - Coefficient for outlet: -1/e_M (outlet)
+                - Coefficient for inlet 1: +1/e_M (inlet 1) scaled by its mass fraction
+                - Coefficient for inlet 2: +1/e_M (inlet 2) scaled by its mass fraction
+            Else:
+                - Set the outlet's cost coefficient to 1.
         
         Chemical cost row:
-        If the outlet and both inlets have nonzero chemical exergy (e_CH):
-            - Coefficient for outlet: -1/e_CH (outlet)
-            - Coefficient for inlet 1: +1/e_CH (inlet 1) scaled by its mass fraction
-            - Coefficient for inlet 2: +1/e_CH (inlet 2) scaled by its mass fraction
-        Else, if one of the inlets has zero chemical exergy:
-            - Set that inlet's cost coefficient to 1.
+            If the outlet and both inlets have nonzero chemical exergy (e_CH):
+                - Coefficient for outlet: -1/e_CH (outlet)
+                - Coefficient for inlet 1: +1/e_CH (inlet 1) scaled by its mass fraction
+                - Coefficient for inlet 2: +1/e_CH (inlet 2) scaled by its mass fraction
+            Else, if one of the inlets has zero chemical exergy:
+                - Set that inlet's cost coefficient to 1.
         
         The right-hand side entries for these auxiliary equations are set to zero.
         
@@ -162,7 +162,9 @@ class CombustionChamber(Component):
         counter : int
             The current row index in the matrix.
         T0 : float
-            Ambient temperature (not used in this generic auxiliary equation, but provided for consistency).
+            Ambient temperature (provided for consistency, not used here).
+        equations : list or dict
+            Data structure for storing equation labels (e.g., self.equations).
         
         Returns
         -------
@@ -178,16 +180,15 @@ class CombustionChamber(Component):
         outlets = list(self.outl.values())
         
         # --- Mechanical cost auxiliary equation ---
-        # Use the mechanical cost variable (key "M") from the connection's CostVar_index.
         if (outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0):
             A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["e_M"]
             A[counter, inlets[0]["CostVar_index"]["M"]] = (1 / inlets[0]["e_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
             A[counter, inlets[1]["CostVar_index"]["M"]] = (1 / inlets[1]["e_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-        else:
+        else:  # pressure can only decrease in the combustion chamber (case with p_inlet = p0 and p_outlet < p0 NOT considered)
             A[counter, outlets[0]["CostVar_index"]["M"]] = 1
-
+        equations[counter] = f"aux_mixing_mech_{self.outl[0]["name"]}"
+        
         # --- Chemical cost auxiliary equation ---
-        # Use the chemical cost variable (key "CH") from the connection's CostVar_index.
         if (outlets[0]["e_CH"] != 0 and inlets[0]["e_CH"] != 0 and inlets[1]["e_CH"] != 0):
             A[counter+1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["e_CH"]
             A[counter+1, inlets[0]["CostVar_index"]["CH"]] = (1 / inlets[0]["e_CH"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
@@ -196,10 +197,10 @@ class CombustionChamber(Component):
             A[counter+1, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:
             A[counter+1, inlets[1]["CostVar_index"]["CH"]] = 1
-
+        equations[counter+1] = f"aux_mixing_chem_{self.outl[0]["name"]}"
+        
         # Set the right-hand side entries to zero.
         b[counter]   = 0
         b[counter+1] = 0
-
-        return A, b, counter + 2
-
+        
+        return [A, b, counter + 2, equations]

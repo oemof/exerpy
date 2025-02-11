@@ -228,6 +228,103 @@ class SimpleHeatExchanger(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0):
-        # each line needs to equal 0
-        return [A, b, counter]
+    def aux_eqs(self, A, b, counter, T0, equations):
+        """
+        Auxiliary equations for the Simple Heat Exchanger.
+
+        This function enforces the cost balance:
+            C_in - C_out + Z = 0,
+        by setting:
+        (i) a thermal cost relation that depends on the heat transfer direction,
+            and (ii) equality for the mechanical cost (c_M_in = c_M_out),
+            and (iii) equality for the chemical cost (c_CH_in = c_CH_out).
+
+        For the thermal cost equation:
+        - If heat is released to the ambient (i.e. self.inl[0]["T"] > self.outl[0]["T"]),
+            the exchanger behaves like a turbine (f‑rule):
+                c_T_in = +1/e_T, c_T_out = –1/e_T.
+        - If heat is injected from the ambient (i.e. self.inl[0]["T"] < self.outl[0]["T"]),
+            the exchanger behaves like a compressor (p‑rule):
+                The procedure is similar to that used for the compressor:
+                compute
+                    dET = self.outl[0]["e_T"] – self.inl[0]["e_T"]
+                    dEM = self.outl[0]["e_M"] – self.inl[0]["e_M"]
+                and then set:
+                    c_T_in = –1/dET, c_T_out = 1/dET,
+                    c_M_in = 1/dEM, c_M_out = –1/dEM.
+        Cases where either self.inl[0]["T"] or self.outl[0]["T"] is below T0, or the temperatures are equal,
+        are not implemented.
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Cost matrix.
+        b : numpy.ndarray
+            Right-hand-side vector.
+        counter : int
+            Current row index.
+        T0 : float
+            Ambient temperature.
+        equations : list or dict
+            Data structure for storing equation labels.
+
+        Returns
+        -------
+        A : numpy.ndarray
+            Updated cost matrix.
+        b : numpy.ndarray
+            Updated right-hand-side vector.
+        counter : int
+            Updated row index (counter + 3).
+        equations : list or dict
+            Updated structure with equation labels.
+        """
+        # --- Thermal cost equation (row counter) ---
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
+            if self.inl[0]["T"] > self.outl[0]["T"]:
+                # Heat is released (turbine-like behavior, f-rule).
+                A[counter, self.inl[0]["CostVar_index"]["T"]] = (1 / self.inl[0]["e_T"]
+                                                                if self.inl[0]["e_T"] != 0 else 1)
+                A[counter, self.outl[0]["CostVar_index"]["T"]] = (-1 / self.outl[0]["e_T"]
+                                                                if self.outl[0]["e_T"] != 0 else -1)
+                equations[counter] = f"aux_f_rule_{self.name}"
+            elif self.inl[0]["T"] < self.outl[0]["T"]:
+                # Heat is injected (compressor-like behavior, p-rule):
+                dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
+                dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
+                if dET != 0 and dEM != 0:
+                    A[counter, self.inl[0]["CostVar_index"]["T"]] = -1 / dET
+                    A[counter, self.outl[0]["CostVar_index"]["T"]] = 1 / dET
+                    A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
+                    A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+                    equations[counter] = f"aux_p_rule_{self.name}"
+                else:
+                    logging.warning("SimpleHeatExchanger: dET or dEM is zero; case not implemented.")
+                    equations[counter] = "aux_unimpl_HEX"
+            else:
+                logging.warning("SimpleHeatExchanger: Inlet and outlet temperatures are equal; case not implemented.")
+                equations[counter] = "aux_unimpl_HEX"
+        else:
+            logging.warning("SimpleHeatExchanger: Cases with T_in or T_out below T0 are not implemented.")
+            equations[counter] = "aux_unimpl_HEX"
+        b[counter] = 0
+
+        # --- Mechanical cost equality (row counter+1) ---
+        A[counter+1, self.inl[0]["CostVar_index"]["M"]] = (1 / self.inl[0]["e_M"]
+                                                        if self.inl[0]["e_M"] != 0 else 1)
+        A[counter+1, self.outl[0]["CostVar_index"]["M"]] = (-1 / self.outl[0]["e_M"]
+                                                            if self.outl[0]["e_M"] != 0 else 1)
+        equations[counter+1] = f"aux_equality_mech_{self.outl[0]['name']}"
+        b[counter+1] = 0
+
+        # --- Chemical cost equality (row counter+2) ---
+        A[counter+2, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_CH"]
+                                                            if self.inl[0]["e_CH"] != 0 else 1)
+        A[counter+2, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["e_CH"]
+                                                            if self.outl[0]["e_CH"] != 0 else 1)
+        equations[counter+2] = f"aux_equality_chem_{self.outl[0]['name']}"
+        b[counter+2] = 0
+
+        counter += 3
+        return A, b, counter, equations
+

@@ -150,7 +150,7 @@ class Turbine(Component):
         return total
     
 
-def aux_eqs(self, A, b, counter, T0):
+def aux_eqs(self, A, b, counter, T0, equations):
     # Only process if the inlet and the first outlet are above T0.
     # (You might wish to check all material outlets, but here we follow your condition on self.outl[0])
     if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
@@ -168,6 +168,7 @@ def aux_eqs(self, A, b, counter, T0):
             A[counter + row_offset, outlet["CostVar_index"]["T"]] = (
                 -1 / outlet["e_T"] if outlet["e_T"] != 0 else -1
             )
+            equations[counter + row_offset] = f"aux_f_rule_{outlet['name']}"
 
             # Mechanical exergy equation:
             A[counter + row_offset + 1, self.inl[0]["CostVar_index"]["M"]] = (
@@ -176,6 +177,7 @@ def aux_eqs(self, A, b, counter, T0):
             A[counter + row_offset + 1, outlet["CostVar_index"]["M"]] = (
                 -1 / outlet["e_M"] if outlet["e_M"] != 0 else -1
             )
+            equations[counter + row_offset + 1] = f"aux_f_rule_{outlet['name']}"
 
             # Chemical exergy equation:
             A[counter + row_offset + 2, self.inl[0]["CostVar_index"]["CH"]] = (
@@ -184,6 +186,7 @@ def aux_eqs(self, A, b, counter, T0):
             A[counter + row_offset + 2, outlet["CostVar_index"]["CH"]] = (
                 -1 / outlet["e_CH"] if outlet["e_CH"] != 0 else -1
             )
+            equations[counter + row_offset + 2] = f"aux_f_rule_{outlet['name']}"
 
         # Set the corresponding entries in vector b to zero for the new rows.
         num_new_rows = 3 * len(material_outlets)
@@ -193,6 +196,6 @@ def aux_eqs(self, A, b, counter, T0):
         # Update the counter to account for the newly added rows.
         counter += num_new_rows
     else:
-        logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet")
+        logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
 
-    return [A, b, counter]
+    return [A, b, counter, equations]

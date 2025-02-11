@@ -171,13 +171,14 @@ class Deaerator(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0):
+    def aux_eqs(self, A, b, counter, T0, equations):
         if self.outl[0]["e_CH"] != 0:
             A[counter+0, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"]
             for i, inlet in enumerate(self.outl.values()):
                 A[counter+0, inlet["CostVar_index"]["CH"]] = inlet["m"] / (self.outl[0]["m"] * inlet["e_CH"])
         else:
             A[counter+0, self.outl[i]["CostVar_index"]["CH"]] = 1
+        equations[counter] = f"aux_mixing_chem_{self.outl[0]["name"]}"
 
         if self.outl[0]["e_M"] != 0:
             A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
@@ -185,8 +186,9 @@ class Deaerator(Component):
                 A[counter+1, inlet["CostVar_index"]["M"]] = inlet["m"] / (self.outl[0]["m"] * inlet["e_M"])
         else:
             A[counter+1, self.outl[i]["CostVar_index"]["M"]] = 1
+        equations[counter] = f"aux_mixing_mech_{self.outl[0]["name"]}"
 
         for i in range(2):
             b[counter+i]=0
 
-        return [A, b, counter+2]
+        return [A, b, counter+2, equations]

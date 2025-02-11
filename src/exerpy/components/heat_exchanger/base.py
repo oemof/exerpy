@@ -218,260 +218,103 @@ class HeatExchanger(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0):
-        # inserts aux eqs into matrix and vector
-        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
-            # therm1
+    def aux_eqs(self, A, b, counter, T0, equations):
+        # Equality equation for mechanical and chemical exergy costs.
+        def set_equal(A, row, in_item, out_item, var):
+            if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
+                A[row, in_item["CostVar_index"][var]] = 1 / in_item["e_" + var]
+                A[row, out_item["CostVar_index"][var]] = -1 / out_item["e_" + var]
+            elif in_item["e_" + var] == 0 and out_item["e_" + var] != 0:
+                A[row, in_item["CostVar_index"][var]] = 1
+            elif in_item["e_" + var] != 0 and out_item["e_" + var] == 0:
+                A[row, out_item["CostVar_index"][var]] = 1
+            else:
+                A[row, in_item["CostVar_index"][var]] = 1
+                A[row, out_item["CostVar_index"][var]] = -1
+
+        # Thermal fuel rule on hot stream: c_T_in0 = c_T_out0.
+        def set_thermal_f_hot(A, row):
             if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
+                A[row, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
             elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1
             elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
             else:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and  self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and  self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and  self.outl[1]["e_M"] == 0:
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[0]["CostVar_index"]["T"]] = -1
 
-            # chemical doesn't change
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
-
-        elif all([c.T.val_SI <= T0 for c in self.inl + self.outl]):
-            # therm2
+        # Thermal fuel rule on cold stream: c_T_in1 = c_T_out1.
+        def set_thermal_f_cold(A, row):
             if self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["e_T"]
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["e_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
             elif self.inl[1]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1
             elif self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] == 0:
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = 1
             else:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = -1
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1
-            else:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] == 0:
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1
-            else:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1
-            # chem doesn't change, either 0 in and out or not 0 in and out
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1
 
-        elif (self.inl[0].T.val_SI > T0 and self.outl[1].T.val_SI > T0 and
-              self.outl[0].T.val_SI <= T0 and self.inl[1].T.val_SI <= T0):
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] != 0:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and self.outl[1]["e_M"] != 0:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] == 0:
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = -1
-            # two products c^T_out1 = c^T_out2
+        # Thermal product rule: Equate the two outlet thermal costs (c_T_out0 = c_T_out1).
+        def set_thermal_p_rule(A, row):
             if self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
-                A[counter+4, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
-                A[counter+4, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
             elif self.outl[0]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
-                A[counter+4, self.outl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
             elif self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] == 0:
-                A[counter+4, self.outl[1]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = 1
             else:
-                A[counter+4, self.outl[0]["CostVar_index"]["T"]] = 1
-                A[counter+4, self.outl[1]["CostVar_index"]["T"]] = -1
-            # chemical doesn't change
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1
 
-        elif (self.inl[0].T.val_SI > T0 and self.inl[1].T.val_SI <= T0 and
-              self.outl[0].T.val_SI <= T0 and self.outl[1].T.val_SI <= T0):
-            # therm2
-            if self.inl[1]["e_T"] != 0  and self.outl[1]["e_T"] != 0:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["e_T"]
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
-            elif self.inl[1]["e_T"] == 0  and self.outl[1]["e_T"] != 0:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1
-            elif self.inl[1]["e_T"] != 0  and self.outl[1]["e_T"] == 0:
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = 1
-            else:
-                A[counter+0, self.inl[1]["CostVar_index"]["T"]] = 1
-                A[counter+0, self.outl[1]["CostVar_index"]["T"]] = -1
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+0, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+0, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] != 0:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and self.outl[1]["e_M"] != 0:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] == 0:
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+1, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[1]["CostVar_index"]["M"]] = -1
-            # chemical doesn't change
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
-
-        elif (self.inl[0].T.val_SI > T0 and self.inl[1].T.val_SI <= T0 and
-              self.outl[0].T.val_SI > T0 and self.outl[1].T.val_SI > T0):
-            # therm1
-            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
-            elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
-            elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = 1
-            else:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and self.outl[1]["e_M"] == 0:
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1
-
-            # chem doesn't change, either 0 in and out or not 0 in and out
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
-
-        elif (self.inl[0].T.val_SI > T0 and self.inl[1].T.val_SI <= T0 and
-              self.outl[0].T.val_SI > T0 and self.outl[1].T.val_SI <= T0):
-            # dissipative, should not reach this point in the programm
+        # Determine the thermal case based on temperatures.
+        # Case 1: All temperatures > T0.
+        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        # Case 2: All temperatures <= T0.
+        elif all([c["T"] <= T0 for c in self.inl + self.outl]):
+            set_thermal_f_cold(A, counter + 0)
+            equations[counter] = f"aux_f_rule_cold_{self.name}"
+        # Case 3: Mixed temperatures: inl[0]["T"] > T0 and outl[1]["T"] > T0, while outl[0]["T"] <= T0 and inl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
+            self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
+            set_thermal_p_rule(A, counter + 0)
+            equations[counter] = f"aux_p_rule_{self.name}"
+        # Case 4: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
+            set_thermal_f_cold(A, counter + 0)
+            equations[counter] = f"aux_f_rule_cold_{self.name}"
+        # Case 5: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] > T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        # Case 6: Mixed temperatures (dissipative case): inl[0]["T"] > T0, inl[1]["T"] <= T0, outl[0]["T"] > T0, and outl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
             print("you shouldn't see this")
             return
-
+        # Case 7: Default case.
         else:
-            # therm1
-            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
-            elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
-            elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = 1
-            else:
-                A[counter+0, self.inl[0]["CostVar_index"]["T"]] = 1
-                A[counter+0, self.outl[0]["CostVar_index"]["T"]] = -1
-            # mech1
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1
-            # mech2
-            if self.inl[1]["e_M"] != 0 and  self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1 / self.inl[1]["e_M"]
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1 / self.outl[1]["e_M"]
-            elif self.inl[1]["e_M"] == 0 and  self.outl[1]["e_M"] != 0:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-            elif self.inl[1]["e_M"] != 0 and  self.outl[1]["e_M"] == 0:
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter+2, self.inl[1]["CostVar_index"]["M"]] = 1
-                A[counter+2, self.outl[1]["CostVar_index"]["M"]] = -1
-
-            # chemical doesn't change
-            A[counter+3, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+3, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            A[counter+4, self.inl[1]["CostVar_index"]["CH"]] = 1 / self.inl[1]["e_CH"] if self.inl[1]["e_CH"] != 0 else 1
-            A[counter+4, self.outl[1]["CostVar_index"]["CH"]] = -1 / self.outl[1]["e_CH"] if self.outl[1]["e_CH"] != 0 else -1
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        
+        # Mechanical and chemical equations are always set.
+        set_equal(A, counter + 1, self.inl[0], self.outl[0], "M")
+        set_equal(A, counter + 2, self.inl[1], self.outl[1], "M")
+        set_equal(A, counter + 3, self.inl[0], self.outl[0], "CH")
+        set_equal(A, counter + 4, self.inl[1], self.outl[1], "CH")
+        equations[counter +1] = f"aux_equality_mech_{self.outl[0]["name"]}"
+        equations[counter +2] = f"aux_equality_mech_{self.outl[1]["name"]}"
+        equations[counter +3] = f"aux_equality_chem_{self.outl[0]["name"]}"
+        equations[counter +4] = f"aux_equality_chem_{self.outl[1]["name"]}"
 
         for i in range(5):
-            b[counter+i]=0
-        return [A, b, counter+5]
+            b[counter + i] = 0
+        return [A, b, counter + 5, equations]

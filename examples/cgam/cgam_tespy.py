@@ -78,30 +78,31 @@ aph.set_attr(pr1=0.97, pr2=0.95)
 eva.set_attr(pr1=0.95 ** 0.5)
 eco.set_attr(pr1=0.95 ** 0.5, pr2=1)
 
-power = Bus('total power')
-power.add_comps({'comp': cmp, 'base': 'bus'}, {'comp': tur})
+# power = Bus('total power')
+# power.add_comps({'comp': cmp, 'base': 'bus'}, {'comp': tur})
 
-nwk.add_busses(power)
+# nwk.add_busses(power)
 
-heat_output = Bus('heat output')
+# heat_output = Bus('heat output')
 power_output = Bus('power output')
-fuel_input = Bus('fuel input')
+# fuel_input = Bus('fuel input')
 
-heat_output.add_comps(
-    {'comp': eco, 'char': -1},
-    {'comp': eva, 'char': -1})
+# heat_output.add_comps(
+#     {'comp': eco, 'char': -1},
+#     {'comp': eva, 'char': -1})
 power_output.add_comps(
     {'comp': cmp, 'base': 'bus', 'char': 1},
     {'comp': tur, 'char': 1})
-fuel_input.add_comps({'comp': cb, 'base': 'bus'})
-nwk.add_busses(heat_output, power_output, fuel_input)
+# fuel_input.add_comps({'comp': cb, 'base': 'bus'})
+# nwk.add_busses(heat_output, power_output, fuel_input)
+nwk.add_busses(power_output)
 
 nwk.solve('design')
 
 c4.set_attr(T=1520 - 273.15)
 c10.set_attr(m=None)
 
-power.set_attr(P=-30e6)
+power_output.set_attr(P=-30e6)
 c1.set_attr(m=None)
 
 nwk.solve('design')
@@ -114,7 +115,7 @@ T0 = 298.15
 from exerpy import ExergyAnalysis
 
 
-ExergyAnalysis.from_tespy(nwk, T0, p0)
+ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib='Ahrendts')
 
 # export of the results for validation
 import json
@@ -124,3 +125,22 @@ from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 json_export = nwk.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/cgam/cgam_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+
+fuel = {
+    "inputs": ['1', '10'],
+    "outputs": []
+}
+
+product = {
+    "inputs": ['generator_of_gas turbine__power output', '9'],
+    "outputs": ['power output__motor_of_compressor', '8']
+}
+
+loss = {
+    "inputs": ['7'],
+    "outputs": []
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+ean.exergy_results()

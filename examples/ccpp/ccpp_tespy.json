@@ -1,55 +1,189 @@
 {
   "components": {
-    "HeatExchanger": {
-      "superheater": {},
-      "economizer": {},
-      "evaporator": {}
+    "Turbine": {
+      "gas turbine": {
+        "name": "gas turbine",
+        "type": "Turbine",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "low pressure steam turbine": {
+        "name": "low pressure steam turbine",
+        "type": "Turbine",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "high pressure steam turbine": {
+        "name": "high pressure steam turbine",
+        "type": "Turbine",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
-    "Source": {
-      "fuel inlet": {},
-      "air inlet": {},
-      "cooling water source": {}
+    "HeatExchanger": {
+      "economizer": {
+        "name": "economizer",
+        "type": "HeatExchanger",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "superheater": {
+        "name": "superheater",
+        "type": "HeatExchanger",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "evaporator": {
+        "name": "evaporator",
+        "type": "HeatExchanger",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
     "Compressor": {
-      "gas turbine compressor": {}
+      "gas turbine compressor": {
+        "name": "gas turbine compressor",
+        "type": "Compressor",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
-    "DiabaticCombustionChamber": {
-      "combustion chamber": {}
-    },
-    "Sink": {
-      "flue gas outlet": {},
-      "cooling water sink": {}
-    },
-    "Turbine": {
-      "gas turbine": {},
-      "low pressure steam turbine": {},
-      "high pressure steam turbine": {}
-    },
-    "SimpleHeatExchanger": {
-      "heating condenser": {}
-    },
-    "CycleCloser": {
-      "cycle closer": {}
+    "CombustionChamber": {
+      "combustion chamber": {
+        "name": "combustion chamber",
+        "type": "DiabaticCombustionChamber",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
     "Condenser": {
-      "main condenser": {}
-    },
-    "Merge": {
-      "deaerator": {}
-    },
-    "Drum": {
-      "drum": {}
-    },
-    "Pump": {
-      "drum pump": {},
-      "feed pump": {},
-      "condensate pump": {}
+      "main condenser": {
+        "name": "main condenser",
+        "type": "Condenser",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
     "Splitter": {
-      "turbine outlet extraction": {}
+      "turbine outlet extraction": {
+        "name": "turbine outlet extraction",
+        "type": "Splitter",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
+    },
+    "Pump": {
+      "drum pump": {
+        "name": "drum pump",
+        "type": "Pump",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "condensate pump": {
+        "name": "condensate pump",
+        "type": "Pump",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      },
+      "feed pump": {
+        "name": "feed pump",
+        "type": "Pump",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
+    },
+    "Mixer": {
+      "deaerator": {
+        "name": "deaerator",
+        "type": "Merge",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
+    },
+    "Drum": {
+      "drum": {
+        "name": "drum",
+        "type": "Drum",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
+    },
+    "SimpleHeatExchanger": {
+      "heating condenser": {
+        "name": "heating condenser",
+        "type": "SimpleHeatExchanger",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
     },
     "Valve": {
-      "dea steam inlet valve": {}
+      "dea steam inlet valve": {
+        "name": "dea steam inlet valve",
+        "type": "Valve",
+        "type_index": null,
+        "inl": [],
+        "outl": []
+      }
+    },
+    "Motor": {
+      "motor_of_gas turbine compressor": {
+        "name": "motor_of_gas turbine compressor",
+        "type": "Motor",
+        "type_index": null
+      },
+      "motor_of_feed pump": {
+        "name": "motor_of_feed pump",
+        "type": "Motor",
+        "type_index": null
+      },
+      "motor_of_condensate pump": {
+        "name": "motor_of_condensate pump",
+        "type": "Motor",
+        "type_index": null
+      },
+      "motor_of_drum pump": {
+        "name": "motor_of_drum pump",
+        "type": "Motor",
+        "type_index": null
+      }
+    },
+    "Generator": {
+      "generator_of_gas turbine": {
+        "name": "generator_of_gas turbine",
+        "type": "Generator",
+        "type_index": null
+      },
+      "generator_of_high pressure steam turbine": {
+        "name": "generator_of_high pressure steam turbine",
+        "type": "Generator",
+        "type_index": null
+      },
+      "generator_of_low pressure steam turbine": {
+        "name": "generator_of_low pressure steam turbine",
+        "type": "Generator",
+        "type_index": null
+      },
+      "generator_of_heating condenser": {
+        "name": "generator_of_heating condenser",
+        "type": "Generator",
+        "type_index": null
+      }
     }
   },
   "connections": {
@@ -58,16 +192,6 @@
       "source_connector": 0,
       "target_component": "gas turbine compressor",
       "target_connector": 0,
-      "m": 637.8845562751899,
-      "T": 288.15,
-      "p": 101299.99999999999,
-      "h": 302736.9398811739,
-      "s": 6841.760639197064,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "AR": 0.01282,
         "CO2": 0.0004,
@@ -76,6 +200,17 @@
         "O2": 0.22993,
         "CH4": 0
       },
+      "kind": "material",
+      "m": 637.8845562751899,
+      "m_unit": "kg / s",
+      "T": 288.15,
+      "T_unit": "C",
+      "p": 101299.99999999999,
+      "p_unit": "bar",
+      "h": 302736.9398811739,
+      "h_unit": "J / kg",
+      "s": 6841.760639197064,
+      "s_unit": "J / kgK",
       "e_T": 0.0,
       "e_M": 0.0,
       "e_PH": 0.0
@@ -85,16 +220,6 @@
       "source_connector": 0,
       "target_component": "combustion chamber",
       "target_connector": 0,
-      "m": 637.8845562751899,
-      "T": 655.6700964358738,
-      "p": 1551000.0,
-      "h": 682861.2617463997,
-      "s": 6901.364990884209,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "AR": 0.01282,
         "CO2": 0.0004,
@@ -103,366 +228,392 @@
         "O2": 0.22993,
         "CH4": 0
       },
-      "e_T": 137745.45781204372,
+      "kind": "material",
+      "m": 637.8845562751899,
+      "m_unit": "kg / s",
+      "T": 655.6700964358739,
+      "T_unit": "C",
+      "p": 1551000.0,
+      "p_unit": "bar",
+      "h": 682861.2617463998,
+      "h_unit": "J / kg",
+      "s": 6901.364990884209,
+      "s_unit": "J / kgK",
+      "e_T": 137745.45781204384,
       "e_M": 225203.87011453122,
-      "e_PH": 362949.327926575
+      "e_PH": 362949.3279265751
     },
     "3": {
       "source_component": "fuel inlet",
       "source_connector": 0,
       "target_component": "combustion chamber",
       "target_connector": 1,
-      "m": 12.372642780737646,
-      "T": 288.15,
-      "p": 1551000.0,
-      "h": 872513.3352324266,
-      "s": 5146.485655425749,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "CH4": 1,
+        "H2O": 0,
+        "CO2": 0,
         "AR": 0,
         "N2": 0,
-        "CO2": 0,
-        "O2": 0,
-        "H2O": 0
+        "O2": 0
       },
-      "e_T": 0.0,
+      "kind": "material",
+      "m": 12.369574072358445,
+      "m_unit": "kg / s",
+      "T": 288.15000000000117,
+      "T_unit": "C",
+      "p": 1551000.0,
+      "p_unit": "bar",
+      "h": 872513.3352324293,
+      "h_unit": "J / kg",
+      "s": 5146.485655425761,
+      "s_unit": "J / kgK",
+      "e_T": -7.293692760867996e-10,
       "e_M": 403261.9238202308,
-      "e_PH": 403261.9238202308
+      "e_PH": 403261.92382023006
     },
     "4": {
       "source_component": "combustion chamber",
       "source_connector": 0,
       "target_component": "gas turbine",
       "target_connector": 0,
-      "m": 650.2571990559276,
-      "T": 1423.1498971903823,
-      "p": 1500000.0,
-      "h": 1735493.0774247916,
-      "s": 7756.230568474196,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.04895281101721766,
-        "CO2": 0.052589511821466206,
-        "AR": 0.012576070890191016,
-        "N2": 0.7362298723710811,
+        "H2O": 0.04894244308068379,
+        "CO2": 0.052576813819776524,
+        "AR": 0.012576130239515057,
+        "N2": 0.7362333468064309,
         "CH4": 0.0,
-        "O2": 0.14965173390004402
+        "O2": 0.14967126605359377
       },
-      "e_T": 824475.5294721851,
-      "e_M": 210658.7061233957,
-      "e_PH": 1035134.2355955808
+      "kind": "material",
+      "m": 650.2541303475483,
+      "m_unit": "kg / s",
+      "T": 1423.1498972164768,
+      "T_unit": "C",
+      "p": 1500000.0,
+      "p_unit": "bar",
+      "h": 1735452.0098192561,
+      "h_unit": "J / kg",
+      "s": 7756.247157722733,
+      "s_unit": "J / kgK",
+      "e_T": 824460.4132151542,
+      "e_M": 210661.61246574848,
+      "e_PH": 1035122.0256809026
     },
     "5": {
       "source_component": "gas turbine",
       "source_connector": 0,
       "target_component": "superheater",
       "target_connector": 0,
-      "m": 650.2571990559276,
-      "T": 803.843098687045,
-      "p": 103399.99999999999,
-      "h": 975211.828741995,
-      "s": 7841.555024290623,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.04895281101721766,
-        "CO2": 0.052589511821466206,
-        "AR": 0.012576070890191016,
-        "N2": 0.7362298723710811,
+        "H2O": 0.04894244308068379,
+        "CO2": 0.052576813819776524,
+        "AR": 0.012576130239515057,
+        "N2": 0.7362333468064309,
         "CH4": 0.0,
-        "O2": 0.14965173390004402
+        "O2": 0.14967126605359377
       },
-      "e_T": 248643.9598773684,
-      "e_M": 1622.7850919123557,
-      "e_PH": 250266.74496928076
+      "kind": "material",
+      "m": 650.2541303475483,
+      "m_unit": "kg / s",
+      "T": 803.8392282142966,
+      "T_unit": "C",
+      "p": 103399.99999999999,
+      "p_unit": "bar",
+      "h": 975175.4356206177,
+      "h_unit": "J / kg",
+      "s": 7841.571533491191,
+      "s_unit": "J / kgK",
+      "e_T": 248636.4251462706,
+      "e_M": 1622.8074583125467,
+      "e_PH": 250259.23260458314
     },
     "6": {
       "source_component": "superheater",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 0,
-      "m": 650.2571990559276,
-      "T": 733.1751310334074,
-      "p": 102699.99999999999,
-      "h": 894023.7207562199,
-      "s": 7737.837859950891,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.04895281101721766,
-        "CO2": 0.052589511821466206,
-        "AR": 0.012576070890191016,
-        "N2": 0.7362298723710811,
+        "H2O": 0.04894244308068379,
+        "CO2": 0.052576813819776524,
+        "AR": 0.012576130239515057,
+        "N2": 0.7362333468064309,
         "CH4": 0.0,
-        "O2": 0.14965173390004402
+        "O2": 0.14967126605359377
       },
-      "e_T": 197879.12673573295,
-      "e_M": 1085.6111522664964,
-      "e_PH": 198964.73788799945
+      "kind": "material",
+      "m": 650.2541303475483,
+      "m_unit": "kg / s",
+      "T": 733.172986238716,
+      "T_unit": "C",
+      "p": 102699.99999999999,
+      "p_unit": "bar",
+      "h": 893990.2421595224,
+      "h_unit": "J / kg",
+      "s": 7737.8577451732035,
+      "s_unit": "J / kgK",
+      "e_T": 197873.541132383,
+      "e_M": 1085.6261149329512,
+      "e_PH": 198959.16724731593
     },
     "7": {
       "source_component": "evaporator",
       "source_connector": 0,
       "target_component": "economizer",
       "target_connector": 0,
-      "m": 650.2571990559276,
-      "T": 547.1542997833923,
-      "p": 101999.99999999999,
-      "h": 686741.3839755586,
-      "s": 7414.089844655045,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.04895281101721766,
-        "CO2": 0.052589511821466206,
-        "AR": 0.012576070890191016,
-        "N2": 0.7362298723710811,
+        "H2O": 0.04894244308068379,
+        "CO2": 0.052576813819776524,
+        "AR": 0.012576130239515057,
+        "N2": 0.7362333468064309,
         "CH4": 0.0,
-        "O2": 0.14965173390004402
+        "O2": 0.14967126605359377
       },
-      "e_T": 84425.69147735188,
-      "e_M": 544.7002374839644,
-      "e_PH": 84970.39171483585
+      "kind": "material",
+      "m": 650.2541303475483,
+      "m_unit": "kg / s",
+      "T": 547.1542997833899,
+      "T_unit": "C",
+      "p": 101999.99999999999,
+      "p_unit": "bar",
+      "h": 686712.4874855987,
+      "h_unit": "J / kg",
+      "s": 7414.116410706759,
+      "s_unit": "J / kgK",
+      "e_T": 84422.77035497455,
+      "e_M": 544.707744923631,
+      "e_PH": 84967.47809989817
     },
     "8": {
       "source_component": "economizer",
       "source_connector": 0,
       "target_component": "flue gas outlet",
       "target_connector": 0,
-      "m": 650.2571990559276,
-      "T": 506.3133086569362,
-      "p": 101299.99999999999,
-      "h": 642427.8189597982,
-      "s": 7331.938600825619,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
-        "H2O": 0.04895281101721766,
-        "CO2": 0.052589511821466206,
-        "AR": 0.012576070890191016,
-        "N2": 0.7362298723710811,
+        "H2O": 0.04894244308068379,
+        "CO2": 0.052576813819776524,
+        "AR": 0.012576130239515057,
+        "N2": 0.7362333468064309,
         "CH4": 0.0,
-        "O2": 0.14965173390004402
+        "O2": 0.14967126605359377
       },
-      "e_T": 64328.70760852477,
+      "kind": "material",
+      "m": 650.2541303475483,
+      "m_unit": "kg / s",
+      "T": 506.31381087692336,
+      "T_unit": "C",
+      "p": 101299.99999999999,
+      "p_unit": "bar",
+      "h": 642399.9020491345,
+      "h_unit": "J / kg",
+      "s": 7331.967061098001,
+      "s_unit": "J / kgK",
+      "e_T": 64326.2277531976,
       "e_M": 0.0,
-      "e_PH": 64328.70760852477
+      "e_PH": 64326.2277531976
     },
     "9": {
       "source_component": "superheater",
       "source_connector": 1,
       "target_component": "cycle closer",
       "target_connector": 0,
-      "m": 80.75280698394126,
-      "T": 778.8430986870617,
-      "p": 5000000.0,
-      "h": 3447926.344887303,
-      "s": 6995.185906084774,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1428963.989365818,
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 778.8392282143111,
+      "T_unit": "C",
+      "p": 5000000.0,
+      "p_unit": "bar",
+      "h": 3447917.327481315,
+      "h_unit": "J / kg",
+      "s": 6995.1743281065965,
+      "s_unit": "J / kgK",
+      "e_T": 1428958.3081542416,
       "e_M": 4897.515649001909,
-      "e_PH": 1433861.5050148198
+      "e_PH": 1433855.8238032435
     },
     "_0": {
       "source_component": "cycle closer",
       "source_connector": 0,
       "target_component": "high pressure steam turbine",
       "target_connector": 0,
-      "m": 80.75280698394126,
-      "T": 778.8430986870617,
-      "p": 4999999.999999999,
-      "h": 3447926.344887303,
-      "s": 6995.185906084774,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1428963.989365818,
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 778.8392282143111,
+      "T_unit": "C",
+      "p": 5000000.0,
+      "p_unit": "bar",
+      "h": 3447917.327481315,
+      "h_unit": "J / kg",
+      "s": 6995.1743281065965,
+      "s_unit": "J / kgK",
+      "e_T": 1428958.3081542416,
       "e_M": 4897.515649001909,
-      "e_PH": 1433861.5050148198
+      "e_PH": 1433855.8238032435
     },
     "_??a": {
       "source_component": "high pressure steam turbine",
       "source_connector": 0,
       "target_component": "turbine outlet extraction",
       "target_connector": 0,
-      "m": 80.75280698394126,
-      "T": 604.6884891840982,
-      "p": 1500000.0000000002,
-      "h": 3107753.6830773028,
-      "s": 7037.9432283768865,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1079968.8213673448,
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 604.6852839872294,
+      "T_unit": "C",
+      "p": 1500000.0000000002,
+      "p_unit": "bar",
+      "h": 3107746.666516668,
+      "h_unit": "J / kg",
+      "s": 7037.931624750628,
+      "s_unit": "J / kgK",
+      "e_T": 1079965.1483916168,
       "e_M": 1399.499419002236,
-      "e_PH": 1081368.3207863471
+      "e_PH": 1081364.647810619
     },
     "10": {
       "source_component": "turbine outlet extraction",
       "source_connector": 0,
       "target_component": "dea steam inlet valve",
       "target_connector": 0,
-      "m": 8.787407995192074,
-      "T": 604.6884891840982,
-      "p": 1500000.0,
-      "h": 3107753.6830773028,
-      "s": 7037.9432283768865,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1079968.8213673448,
+      "kind": "material",
+      "m": 8.786949806689062,
+      "m_unit": "kg / s",
+      "T": 604.685283987229,
+      "T_unit": "C",
+      "p": 1500000.0,
+      "p_unit": "bar",
+      "h": 3107746.666516668,
+      "h_unit": "J / kg",
+      "s": 7037.931624750627,
+      "s_unit": "J / kgK",
+      "e_T": 1079965.148391617,
       "e_M": 1399.499419002236,
-      "e_PH": 1081368.3207863471
+      "e_PH": 1081364.6478106193
     },
     "10a": {
       "source_component": "dea steam inlet valve",
       "source_connector": 0,
       "target_component": "deaerator",
       "target_connector": 0,
-      "m": 8.787407995192074,
-      "T": 599.4355802541563,
-      "p": 1000000.0,
-      "h": 3107753.6830773028,
-      "s": 7220.364117622792,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1027904.4230586663,
+      "kind": "material",
+      "m": 8.786949806689062,
+      "m_unit": "kg / s",
+      "T": 599.4322850843714,
+      "T_unit": "C",
+      "p": 1000000.0,
+      "p_unit": "bar",
+      "h": 3107746.666516668,
+      "h_unit": "J / kg",
+      "s": 7220.352412311748,
+      "s_unit": "J / kgK",
+      "e_T": 1027900.7793834091,
       "e_M": 899.3184914732585,
-      "e_PH": 1028803.7415501395
+      "e_PH": 1028800.0978748823
     },
     "11": {
       "source_component": "turbine outlet extraction",
       "source_connector": 1,
       "target_component": "heating condenser",
       "target_connector": 0,
-      "m": 41.85695235787125,
-      "T": 604.6884891840982,
-      "p": 1500000.0,
-      "h": 3107753.6830773028,
-      "s": 7037.9432283768865,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1079968.8213673448,
+      "kind": "material",
+      "m": 41.85707528868758,
+      "m_unit": "kg / s",
+      "T": 604.685283987229,
+      "T_unit": "C",
+      "p": 1500000.0,
+      "p_unit": "bar",
+      "h": 3107746.666516668,
+      "h_unit": "J / kg",
+      "s": 7037.931624750627,
+      "s_unit": "J / kgK",
+      "e_T": 1079965.148391617,
       "e_M": 1399.499419002236,
-      "e_PH": 1081368.3207863471
+      "e_PH": 1081364.6478106193
     },
     "12": {
       "source_component": "turbine outlet extraction",
       "source_connector": 2,
       "target_component": "low pressure steam turbine",
       "target_connector": 0,
-      "m": 30.10844663087794,
-      "T": 604.6884891840982,
-      "p": 1500000.0,
-      "h": 3107753.6830773028,
-      "s": 7037.9432283768865,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 1079968.8213673448,
+      "kind": "material",
+      "m": 30.10661571481208,
+      "m_unit": "kg / s",
+      "T": 604.6852839872294,
+      "T_unit": "C",
+      "p": 1500000.0000000002,
+      "p_unit": "bar",
+      "h": 3107746.666516668,
+      "h_unit": "J / kg",
+      "s": 7037.931624750628,
+      "s_unit": "J / kgK",
+      "e_T": 1079965.1483916168,
       "e_M": 1399.499419002236,
-      "e_PH": 1081368.3207863471
+      "e_PH": 1081364.647810619
     },
     "13": {
       "source_component": "low pressure steam turbine",
       "source_connector": 0,
       "target_component": "main condenser",
       "target_connector": 0,
-      "m": 30.10844663087794,
-      "T": 306.02425509123174,
-      "p": 5000.0,
-      "h": 2251616.425311176,
-      "s": 7383.7155503140675,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 125693.15711951489,
+      "kind": "material",
+      "m": 30.10661571481208,
+      "m_unit": "kg / s",
+      "T": 306.02425509123174,
+      "T_unit": "C",
+      "p": 5000.0,
+      "p_unit": "bar",
+      "h": 2251612.493107444,
+      "h_unit": "J / kg",
+      "s": 7383.702700993576,
+      "s_unit": "J / kgK",
+      "e_T": 125692.92744748225,
       "e_M": -96.3886654931643,
-      "e_PH": 125596.76845402172
+      "e_PH": 125596.53878198907
     },
     "14": {
       "source_component": "cooling water source",
       "source_connector": 0,
       "target_component": "main condenser",
       "target_connector": 1,
-      "m": 1181.56689505258,
-      "T": 288.14999999985514,
-      "p": 101299.99999999999,
-      "h": 63076.80686884753,
-      "s": 224.44832842072532,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 1181.4928453191485,
+      "m_unit": "kg / s",
+      "T": 288.14999999985514,
+      "T_unit": "C",
+      "p": 101299.99999999999,
+      "p_unit": "bar",
+      "h": 63076.80686884753,
+      "h_unit": "J / kg",
+      "s": 224.44832842072532,
+      "s_unit": "J / kgK",
       "e_T": 2.59597437946013e-07,
       "e_M": 0.0,
       "e_PH": 2.59597437946013e-07
@@ -472,19 +623,20 @@
       "source_connector": 1,
       "target_component": "cooling water sink",
       "target_connector": 0,
-      "m": 1181.56689505258,
-      "T": 301.02550000002896,
-      "p": 101299.99999999999,
-      "h": 116941.95576744253,
-      "s": 407.3279704814247,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 1181.4928453191485,
+      "m_unit": "kg / s",
+      "T": 301.02550000002896,
+      "T_unit": "C",
+      "p": 101299.99999999999,
+      "p_unit": "bar",
+      "h": 116941.95576744253,
+      "h_unit": "J / kg",
+      "s": 407.3279704814247,
+      "s_unit": "J / kgK",
       "e_T": 1168.3800390640754,
       "e_M": 0.0,
       "e_PH": 1168.3800390640754
@@ -494,19 +646,20 @@
       "source_connector": 0,
       "target_component": "condensate pump",
       "target_connector": 0,
-      "m": 30.10844663087794,
-      "T": 306.02425509123174,
-      "p": 5000.0,
-      "h": 137748.59559770583,
-      "s": 476.198271713836,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 30.10661571481208,
+      "m_unit": "kg / s",
+      "T": 306.02425509123174,
+      "T_unit": "C",
+      "p": 5000.0,
+      "p_unit": "bar",
+      "h": 137748.59559770583,
+      "h_unit": "J / kg",
+      "s": 476.198271713836,
+      "s_unit": "J / kgK",
       "e_T": 2226.431234701231,
       "e_M": -96.3886654931643,
       "e_PH": 2130.0425692080667
@@ -516,19 +669,20 @@
       "source_connector": 0,
       "target_component": "deaerator",
       "target_connector": 2,
-      "m": 30.10844663087794,
-      "T": 306.1081783345808,
-      "p": 1000000.0,
-      "h": 138998.6965501147,
-      "s": 477.01512227714045,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 30.10661571481208,
+      "m_unit": "kg / s",
+      "T": 306.1081783345808,
+      "T_unit": "C",
+      "p": 1000000.0,
+      "p_unit": "bar",
+      "h": 138998.6965501147,
+      "h_unit": "J / kg",
+      "s": 477.01512227714045,
+      "s_unit": "J / kgK",
       "e_T": 2245.4495403274777,
       "e_M": 899.3184914732585,
       "e_PH": 3144.768031800736
@@ -538,19 +692,20 @@
       "source_connector": 0,
       "target_component": "deaerator",
       "target_connector": 1,
-      "m": 41.85695235787125,
-      "T": 443.0280078816778,
-      "p": 1000000.0,
-      "h": 718664.3116148602,
-      "s": 2040.1869430322733,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 41.85707528868758,
+      "m_unit": "kg / s",
+      "T": 443.0280078816778,
+      "T_unit": "C",
+      "p": 1000000.0,
+      "p_unit": "bar",
+      "h": 718664.3116148602,
+      "h_unit": "J / kg",
+      "s": 2040.1869430322733,
+      "s_unit": "J / kgK",
       "e_T": 131483.10445448145,
       "e_M": 899.3184914732585,
       "e_PH": 132382.42294595472
@@ -560,19 +715,20 @@
       "source_connector": 0,
       "target_component": "feed pump",
       "target_connector": 0,
-      "m": 80.75280698394126,
-      "T": 453.02800788167605,
-      "p": 1000000.0,
-      "h": 762515.0697660876,
-      "s": 2138.0644702301915,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 453.02800788167605,
+      "T_unit": "C",
+      "p": 1000000.0,
+      "p_unit": "bar",
+      "h": 762515.0697660876,
+      "h_unit": "J / kg",
+      "s": 2138.0644702301915,
+      "s_unit": "J / kgK",
       "e_T": 147130.45314362878,
       "e_M": 899.3184914732585,
       "e_PH": 148029.77163510205
@@ -582,19 +738,20 @@
       "source_connector": 0,
       "target_component": "economizer",
       "target_connector": 1,
-      "m": 80.75280698394126,
-      "T": 453.8487577692773,
-      "p": 5007000.0,
-      "h": 768154.5554349344,
-      "s": 2140.550356790877,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 453.8487577692773,
+      "T_unit": "C",
+      "p": 5007000.0,
+      "p_unit": "bar",
+      "h": 768154.5554349344,
+      "h_unit": "J / kg",
+      "s": 2140.550356790877,
+      "s_unit": "J / kgK",
       "e_T": 148048.44308610668,
       "e_M": 4904.506005380767,
       "e_PH": 152952.94909148745
@@ -604,19 +761,20 @@
       "source_connector": 1,
       "target_component": "drum",
       "target_connector": 0,
-      "m": 80.75280698394126,
-      "T": 531.1531997796071,
-      "p": 5005000.0,
-      "h": 1124986.9151207262,
-      "s": 2865.4626791546816,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 531.1531997796071,
+      "T_unit": "C",
+      "p": 5005000.0,
+      "p_unit": "bar",
+      "h": 1124986.9151207262,
+      "h_unit": "J / kg",
+      "s": 2865.4626791546816,
+      "s_unit": "J / kgK",
       "e_T": 295999.3143251644,
       "e_M": 4902.5087629842565,
       "e_PH": 300901.82308814867
@@ -626,63 +784,66 @@
       "source_connector": 0,
       "target_component": "drum pump",
       "target_connector": 0,
-      "m": 807.5280698394125,
-      "T": 537.153199779607,
-      "p": 5005000.0,
-      "h": 1154954.9955955842,
-      "s": 2921.566289428906,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 309801.1394995046,
+      "kind": "material",
+      "m": 807.5064081018872,
+      "m_unit": "kg / s",
+      "T": 537.1531997796071,
+      "T_unit": "C",
+      "p": 5005000.0,
+      "p_unit": "bar",
+      "h": 1154954.995595584,
+      "h_unit": "J / kg",
+      "s": 2921.5662894289057,
+      "s_unit": "J / kgK",
+      "e_T": 309801.13949950447,
       "e_M": 4902.5087629842565,
-      "e_PH": 314703.64826248883
+      "e_PH": 314703.6482624887
     },
     "22b": {
       "source_component": "drum pump",
       "source_connector": 0,
       "target_component": "evaporator",
       "target_connector": 1,
-      "m": 807.5280698394125,
-      "T": 537.1542997834068,
-      "p": 5008000.0,
-      "h": 1154959.820174731,
-      "s": 2921.568085776811,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
-      "e_T": 309802.45059827296,
+      "kind": "material",
+      "m": 807.5064081018872,
+      "m_unit": "kg / s",
+      "T": 537.1542997834039,
+      "T_unit": "C",
+      "p": 5008000.0,
+      "p_unit": "bar",
+      "h": 1154959.8201747178,
+      "h_unit": "J / kg",
+      "s": 2921.5680857767916,
+      "s_unit": "J / kgK",
+      "e_T": 309802.4505982654,
       "e_M": 4905.504625713967,
-      "e_PH": 314707.95522398694
+      "e_PH": 314707.95522397937
     },
     "22c": {
       "source_component": "evaporator",
       "source_connector": 1,
       "target_component": "drum",
       "target_connector": 1,
-      "m": 807.5280698394125,
-      "T": 537.1531997796071,
-      "p": 5005000.0,
-      "h": 1321872.695111158,
-      "s": 3232.3113423934237,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 807.5064081018872,
+      "m_unit": "kg / s",
+      "T": 537.1531997796071,
+      "T_unit": "C",
+      "p": 5005000.0,
+      "p_unit": "bar",
+      "h": 1321872.695111158,
+      "h_unit": "J / kg",
+      "s": 3232.3113423934237,
+      "s_unit": "J / kgK",
       "e_T": 387177.65200335276,
       "e_M": 4902.5087629842565,
       "e_PH": 392080.160766337
@@ -692,28 +853,173 @@
       "source_connector": 1,
       "target_component": "superheater",
       "target_connector": 1,
-      "m": 80.75280698394126,
-      "T": 537.1531997796071,
-      "p": 5005000.0,
-      "h": 2794163.910276468,
-      "s": 5973.226254134408,
-      "m_unit": "kg / s",
-      "T_unit": "C",
-      "p_unit": "bar",
-      "h_unit": "J / kg",
-      "s_unit": "J / kgK",
       "mass_composition": {
         "water": 1
       },
+      "kind": "material",
+      "m": 80.75064081018873,
+      "m_unit": "kg / s",
+      "T": 537.1531997796071,
+      "T_unit": "C",
+      "p": 5005000.0,
+      "p_unit": "bar",
+      "h": 2794163.910276468,
+      "h_unit": "J / kg",
+      "s": 5973.226254134408,
+      "s_unit": "J / kgK",
       "e_T": 1069674.2353504985,
       "e_M": 4902.5087629842565,
       "e_PH": 1074576.7441134828
+    },
+    "gas turbine__generator_of_gas turbine": {
+      "source_component": "gas turbine",
+      "source_connector": 999,
+      "target_component": "generator_of_gas turbine",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 494372982.57914895
+    },
+    "generator_of_gas turbine__net power": {
+      "source_component": "generator_of_gas turbine",
+      "source_connector": 0,
+      "target_component": "net power",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 491901117.6662532
+    },
+    "high pressure steam turbine__generator_of_high pressure steam turbine": {
+      "source_component": "high pressure steam turbine",
+      "source_connector": 999,
+      "target_component": "generator_of_high pressure steam turbine",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 27468998.857720684
+    },
+    "generator_of_high pressure steam turbine__net power": {
+      "source_component": "generator_of_high pressure steam turbine",
+      "source_connector": 0,
+      "target_component": "net power",
+      "target_connector": 1,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 27056963.874854874
+    },
+    "low pressure steam turbine__generator_of_low pressure steam turbine": {
+      "source_component": "low pressure steam turbine",
+      "source_connector": 999,
+      "target_component": "generator_of_low pressure steam turbine",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 25775302.559149794
+    },
+    "generator_of_low pressure steam turbine__net power": {
+      "source_component": "generator_of_low pressure steam turbine",
+      "source_connector": 0,
+      "target_component": "net power",
+      "target_connector": 2,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 25388673.020762548
+    },
+    "net power__motor_of_gas turbine compressor": {
+      "source_component": "net power",
+      "source_connector": 3,
+      "target_component": "motor_of_gas turbine compressor",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 243693903.90191668
+    },
+    "motor_of_gas turbine compressor__gas turbine compressor": {
+      "source_component": "motor_of_gas turbine compressor",
+      "source_connector": 0,
+      "target_component": "gas turbine compressor",
+      "target_connector": 999,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 242475434.3824071
+    },
+    "net power__motor_of_feed pump": {
+      "source_component": "net power",
+      "source_connector": 4,
+      "target_component": "motor_of_feed pump",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 462326.9863951885
+    },
+    "motor_of_feed pump__feed pump": {
+      "source_component": "motor_of_feed pump",
+      "source_connector": 0,
+      "target_component": "feed pump",
+      "target_connector": 999,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 455392.0815992607
+    },
+    "net power__motor_of_condensate pump": {
+      "source_component": "net power",
+      "source_connector": 5,
+      "target_component": "motor_of_condensate pump",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 38209.450739994005
+    },
+    "motor_of_condensate pump__condensate pump": {
+      "source_component": "motor_of_condensate pump",
+      "source_connector": 0,
+      "target_component": "condensate pump",
+      "target_connector": 999,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 37636.30897889409
+    },
+    "net power__motor_of_drum pump": {
+      "source_component": "net power",
+      "source_connector": 6,
+      "target_component": "motor_of_drum pump",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 3955.206667011955
+    },
+    "motor_of_drum pump__drum pump": {
+      "source_component": "motor_of_drum pump",
+      "source_connector": 0,
+      "target_component": "drum pump",
+      "target_connector": 999,
+      "mass_composition": null,
+      "kind": "power",
+      "energy_flow": 3895.8785670067755
+    },
+    "heating condenser__generator_of_heating condenser": {
+      "source_component": "heating condenser",
+      "source_connector": 999,
+      "target_component": "generator_of_heating condenser",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "heat",
+      "energy_flow": 100000000.0
+    },
+    "generator_of_heating condenser__heat output": {
+      "source_component": "generator_of_heating condenser",
+      "source_connector": 0,
+      "target_component": "heat output",
+      "target_connector": 0,
+      "mass_composition": null,
+      "kind": "heat",
+      "energy_flow": 100000000.0
     }
   },
   "ambient_conditions": {
-    "Tamb": 283.15,
+    "Tamb": 288.15,
     "Tamb_unit": "K",
-    "pamb": 101300.0,
+    "pamb": 101300,
     "pamb_unit": "Pa"
   }
 }

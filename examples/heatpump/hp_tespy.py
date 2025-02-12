@@ -70,9 +70,9 @@ evaporator.set_attr(ttd_u=5)
 
 power_input = Bus("power input")
 power_input.add_comps(
-    {"comp": compressor, "base": "bus"},
-    {"comp": pump, "base": "bus"},
-    {"comp": fan, "base": "bus"}
+    {"comp": compressor, "base": "bus", "char": 0.998},
+    {"comp": pump, "base": "bus", "char": 0.998},
+    {"comp": fan, "base": "bus", "char": 0.998}
 )
 
 nw.add_busses(

@@ -1,6 +1,5 @@
 import os
 import logging
-import win32com.client as win32
 import json
 
 from exerpy.functions import convert_to_SI, fluid_property_data
@@ -39,9 +38,10 @@ class AspenModelParser:
         """
         Initializes the Aspen Plus application and opens the specified model.
         """
+        from win32com.client import Dispatch
         try:
             # Start Aspen Plus application via COM Dispatch
-            self.aspen = win32.Dispatch('Apwn.Document')
+            self.aspen = Dispatch('Apwn.Document')
             # Load the Aspen model file
             self.aspen.InitFromArchive2(self.model_path)
             logging.info(f"Model opened successfully: {self.model_path}")

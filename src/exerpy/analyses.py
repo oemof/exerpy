@@ -28,27 +28,12 @@ class ExergyAnalysis:
         path_of_simulation : str
             Path to the simulation file (e.g., "my_simulation.ebs" for Ebsilon models).
         """
-
-        self.E_F = {
-            'inputs': [],
-            'outputs': []
-        }
-        self.E_P = {
-            'inputs': [],
-            'outputs': []
-        }
-        self.E_L = {
-            'inputs': [],
-            'outputs': []
-        }
-
         self.Tamb = Tamb
         self.pamb = pamb
 
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data)
         self.connections = connection_data
-
 
     def analyse(self, E_F, E_P, E_L={}) -> None:
         """
@@ -90,7 +75,7 @@ class ExergyAnalysis:
             self.E_F -= sum(
                 self.connections[conn]['E']
                 for conn in E_F["outputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
 
         # Calculate total product exergy (E_P) by summing up all specified input and output connections
@@ -98,13 +83,13 @@ class ExergyAnalysis:
             self.E_P += sum(
                 self.connections[conn]['E']
                 for conn in E_P["inputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
         if "outputs" in E_P:
             self.E_P -= sum(
                 self.connections[conn]['E']
                 for conn in E_P["outputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
 
         # Calculate total loss exergy (E_L) by summing up all specified input and output connections
@@ -112,22 +97,26 @@ class ExergyAnalysis:
             self.E_L += sum(
                 self.connections[conn]['E']
                 for conn in E_L["inputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
         if "outputs" in E_L:
             self.E_L -= sum(
                 self.connections[conn]['E']
                 for conn in E_L["outputs"]
-                if conn in self.connections and self.connections[conn]['E'] is not None
+                if self.connections[conn]['E'] is not None
             )
 
         # Calculate overall exergy efficiency epsilon = E_P / E_F
+        # E_F == 0 should throw an error because it does not make sense
         self.epsilon = self.E_P / self.E_F if self.E_F != 0 else None
 
         # The rest is counted as total exergy destruction with all components of the system
         self.E_D = self.E_F - self.E_P - self.E_L
 
-        logging.info(f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, Efficiency = {self.epsilon:.2%}")
+        logging.info(
+            f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, "
+            f"E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, "
+            f"Efficiency = {self.epsilon:.2%}")
 
         # Perform exergy balance for each individual component in the system
         total_component_E_D = 0.0
@@ -415,7 +404,7 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb = _process_json(data, chemExLib)
+        data, Tamb, pamb = _process_json(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib)
         return cls(data['components'], data['connections'], Tamb, pamb)
 
     def exergy_results(self):
@@ -612,7 +601,7 @@ def _load_json(json_path):
             raise
 
 
-def _process_json(data, Tamb, pamb, chemExLib):
+def _process_json(data, Tamb=None, pamb=None, chemExLib=None):
     # Validate required sections
     required_sections = ['components', 'connections', 'ambient_conditions']
     missing_sections = [s for s in required_sections if s not in data]

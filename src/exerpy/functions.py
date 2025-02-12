@@ -9,16 +9,16 @@ from exerpy import __datapath__
 def mass_to_molar_fractions(mass_fractions):
     """
     Convert mass fractions to molar fractions.
-    
+
     Parameters:
     - mass_fractions: Dictionary with component names as keys and mass fractions as values.
-    
+
     Returns:
     - molar_fractions: Dictionary with component names as keys and molar fractions as values.
     """
     molar_masses = {}
     molar_fractions = {}
-    
+
     # Step 1: Get the molar masses for each component
     for fraction in mass_fractions.keys():
         try:
@@ -49,16 +49,16 @@ def mass_to_molar_fractions(mass_fractions):
 def molar_to_mass_fractions(molar_fractions):
     """
     Convert molar fractions to mass fractions.
-    
+
     Parameters:
     - molar_fractions: Dictionary with component names as keys and molar fractions as values.
-    
+
     Returns:
     - mass_fractions: Dictionary with component names as keys and mass fractions as values.
     """
     molar_masses = {}
     mass_fractions = {}
-    
+
     # Step 1: Get the molar masses for each component
     for fraction in molar_fractions.keys():
         try:
@@ -92,17 +92,17 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
     - Case A: Handle pure substance.
     - Case B: If water condenses, handle the liquid and gas phases separately.
     - Case C: If water doesn't condense or if water is not present, handle the mixture using the standard approach (ideal mixture).
-    
+
     Parameters:
     - stream_data: Dictionary containing 'mass_composition' of the stream.
     - Tamb: Ambient temperature in Celsius.
     - pamb: Ambient pressure in bar.
-    
+
     Returns:
     - eCH: Chemical exergy in kJ/kg.
     """
     logging.info(f"Starting chemical exergy calculation with Tamb={Tamb}, pamb={pamb}")
-    
+
     try:
         # Check if molar fractions already exist
         if 'molar_composition' in stream_data:
@@ -112,7 +112,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
             # If not, convert mass composition to molar fractions
             molar_fractions = mass_to_molar_fractions(stream_data['mass_composition'])
             logging.info(f"Converted mass composition to molar fractions: {molar_fractions}")
-        
+
         try:
             # Load chemical exergy data
             chem_ex_file = os.path.join(__datapath__, f'{chemExLib}.json')
@@ -123,7 +123,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
             error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
             logging.error(error_msg)
             raise FileNotFoundError(error_msg)
-            
+
 
         R = 8.314  # Universal gas constant in J/(molK)
         aliases_water = CP.get_aliases('H2O')
@@ -193,7 +193,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                         else:
                             logging.error(f"No matching alias found for {substance}")
                             raise KeyError(f"No matching alias found for {substance}")
-                        
+
                         if fraction > 0:  # Avoid log(0)
                             entropy_mixing += fraction * math.log(fraction)
 
@@ -213,7 +213,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                         else:
                             logging.error(f"No matching alias found for {substance}")
                             raise KeyError(f"No matching alias found for {substance}")
-                        
+
                         if fraction > 0:  # Avoid log(0)
                             entropy_mixing += fraction * math.log(fraction)
 
@@ -231,7 +231,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                     else:
                         logging.error(f"No matching alias found for {substance}")
                         raise KeyError(f"No matching alias found for {substance}")
-                    
+
                     if fraction > 0:  # Avoid log(0)
                         entropy_mixing += fraction * math.log(fraction)
 
@@ -241,7 +241,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
             logging.info(f"Chemical exergy: {eCH} kJ/kg")
 
         return eCH
-    
+
     except Exception as e:
         logging.error(f"Error in calc_chemical_exergy: {e}")
         raise
@@ -250,12 +250,12 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
 def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
     """
     Adds the chemical exergy to each connection in the JSON data, prioritizing molar composition if available.
-    
+
     Parameters:
     - my_json: The JSON object containing the components and connections.
     - Tamb: Ambient temperature in Celsius.
     - pamb: Ambient pressure in bar.
-    
+
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
     """
@@ -279,7 +279,7 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
                 else:
                     stream_data = {'mass_composition': mass_composition}
                     logging.info(f"Using mass composition for connection {conn_name}")
-                
+
                 # Add the chemical exergy value
                 conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
                 conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
@@ -296,10 +296,10 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
 def add_total_exergy_flow(my_json):
     """
     Adds the total exergy flow to each connection in the JSON data based on its kind.
-    
+
     Parameters:
     - my_json: The JSON object containing the components and connections.
-    
+
     Returns:
     - The modified JSON object with added total exergy flow for each connection.
     """
@@ -323,7 +323,7 @@ def add_total_exergy_flow(my_json):
                 if component_name:
                     # Find the material connections for this component
                     material_connections = [
-                        conn for conn in my_json['connections'].values() 
+                        conn for conn in my_json['connections'].values()
                         if (conn['source_component'] == component_name or conn['target_component'] == component_name)
                         and conn['kind'] == 'material'
                     ]
@@ -356,7 +356,7 @@ def add_total_exergy_flow(my_json):
             else:
                 logging.warning(f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation.")
                 conn_data['E'] = None
-            
+
             conn_data['E_unit'] = fluid_property_data['power']['SI_unit']
 
         except Exception as e:

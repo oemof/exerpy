@@ -6,25 +6,18 @@ simulate them, extract data about components and connections, and write the data
 """
 
 import os
-import sys
 import logging
-from win32com.client import Dispatch
 import json
 
+
 from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy import __ebsilon_path__
 
-ebs_path = os.getenv("EBS")
-if not ebs_path:
-    logging.warning(
-        "Ebsilon path not found. Please set an environment variable named EBS "
-        "with the path to your Ebsilon Python program files as the value. For "
-        "example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data"
-        "\\Python'"
-    )
 
-else:
-    sys.path.append(ebs_path)
+if __ebsilon_path__ is not None:
     from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
+    from win32com.client import Dispatch
+
 
 from .ebsilon_config import (
     ebs_objects,
@@ -53,6 +46,8 @@ class EbsilonModelParser:
         Parameters:
             model_path (str): Path to the Ebsilon model file.
         """
+        # check here if ebsilon dependencies are available, raise error if not
+
         self.model_path = model_path
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model

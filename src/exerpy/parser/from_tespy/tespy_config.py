@@ -17,5 +17,6 @@ EXERPY_TESPY_MAPPINGS = {
     "Splitter": "Splitter",
     "Separator": "Separator",
     "Generator": "Generator",
-    "Motor": "Motor"
+    "Motor": "Motor",
+    "Drum": "Drum"
 }

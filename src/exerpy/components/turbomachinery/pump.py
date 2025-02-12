@@ -47,7 +47,7 @@ class Pump(Component):
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{PH} - 
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{PH} -
         e_\mathrm{in}^\mathrm{PH})\\
         \dot{E}_\mathrm{F} &= |\dot{W}|
 
@@ -55,7 +55,7 @@ class Pump(Component):
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= |\dot{W}| + (e_\mathrm{out}^\mathrm{PH} - 
+        \dot{E}_\mathrm{P} &= |\dot{W}| + (e_\mathrm{out}^\mathrm{PH} -
         e_\mathrm{in}^\mathrm{M})\\
         \dot{E}_\mathrm{F} &= e_\mathrm{in}^\mathrm{M} + e_\mathrm{in}^\mathrm{PH}
 
@@ -96,7 +96,7 @@ class Pump(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
-        """      
+        """
         # Get power flow if not already available
         if self.P is None:
             self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])

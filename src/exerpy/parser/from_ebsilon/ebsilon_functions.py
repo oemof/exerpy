@@ -1,21 +1,15 @@
-import sys
-import os
 import logging
 
 from CoolProp.CoolProp import PropsSI as CP
 
-ebs_path = os.getenv("EBS")
-if not ebs_path:
-    logging.warning(
-        "Ebsilon path not found. Please set an environment variable named EBS "
-        "with the path to your Ebsilon Python program files as the value. For "
-        "example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data"
-        "\\Python'"
-    )
+from exerpy import __ebsilon_path__
 
-else:
-    sys.path.append(ebs_path)
+
+if __ebsilon_path__ is not None:
     from EbsOpen import EpSteamTable, EpGasTable
+else:
+    EpSteamTable = None
+    EpGasTable = None
 
 from exerpy.functions import convert_to_SI
 from .ebsilon_config import unit_id_to_string, substance_mapping

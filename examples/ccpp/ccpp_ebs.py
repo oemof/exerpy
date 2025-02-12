@@ -4,7 +4,7 @@ import json
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
 from exerpy import ExergyAnalysis

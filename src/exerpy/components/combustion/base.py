@@ -124,7 +124,7 @@ class CombustionChamber(Component):
 
         # Log the results
         logging.info(
-            f"Compressor exergy balance calculated: "
+            f"CombustionChamber exergy balance calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )

@@ -98,7 +98,11 @@ net_power.add_comps(
     {"comp": condensate_pump, "base": "bus", "char": 0.985},
     {"comp": drum_pump, "base": "bus", "char": 0.985},
 )
-nw.add_busses(net_power)
+heat_output = Bus("heat output")
+heat_output.add_comps(
+    {"comp": heating_condenser, "base": "component"}
+)
+nw.add_busses(net_power, heat_output)
 
 c1.set_attr(
     fluid={
@@ -181,7 +185,7 @@ T0 = 288.15
 from exerpy import ExergyAnalysis
 
 
-ExergyAnalysis.from_tespy(nw, T0, p0)
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts")
 
 # export of the results for validation
 import json
@@ -191,3 +195,31 @@ from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/ccpp/ccpp_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+fuel = {
+    "inputs": ['1', '3'],
+    "outputs": []
+}
+
+product = {
+    "inputs": [
+        'generator_of_gas turbine__net power',
+        'generator_of_high pressure steam turbine__net power',
+        'generator_of_low pressure steam turbine__net power',
+        'generator_of_heating condenser__heat output'
+    ],
+    "outputs": [
+        'net power__motor_of_feed pump',
+        'net power__motor_of_drum pump',
+        'net power__motor_of_condensate pump',
+        'net power__motor_of_gas turbine compressor',
+    ]
+}
+
+loss = {
+    "inputs": ['8', '15'],
+    "outputs": ['14']
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+ean.exergy_results()

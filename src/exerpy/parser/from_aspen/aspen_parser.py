@@ -54,14 +54,14 @@ class AspenModelParser:
         Parses the components and connections from the Aspen model.
         """
         try:
+            # Parse Tamb and pamb
+            self.parse_ambient_conditions()
+
             # Parse streams (connections)
             self.parse_streams()
 
             # Parse blocks (components)
             self.parse_blocks()
-
-            # Parse Tamb and pamb
-            self.parse_ambient_conditions()
 
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
@@ -72,6 +72,35 @@ class AspenModelParser:
         """
         Parses the streams (connections) in the Aspen model.
         """
+        try:
+            # Get first stream to extract property set values
+            stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
+            if stream_nodes.Count > 0:
+                first_stream = stream_nodes[0].Name
+                # Extract from property set path
+                temp_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{first_stream}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL')
+
+                if temp_node is not None and temp_node.Elements.Count >= 1:
+                    temp_str = temp_node.Elements[0].Name
+                    if temp_node.Elements[0].Elements.Count >= 1:
+                        pres_str = temp_node.Elements[0].Elements[0].Name
+
+                        # Create the node path templates for property retrieval
+                        h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
+                        hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'
+                    else:
+                        raise ValueError("Pressure value not found in property set path")
+                else:
+                    raise ValueError("Temperature value not found in property set path")
+            else:
+                raise ValueError("No streams found in the model")
+
+        except Exception as e:
+            logging.error(f"Error extracting property set values: {e}")
+            raise RuntimeError(f"Failed to extract property set values: {e}")
+
+        # Continue with stream parsing...
+
         # Get the stream nodes and their names
         stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
         stream_names = [stream_node.Name for stream_node in stream_nodes]
@@ -151,6 +180,50 @@ class AspenModelParser:
                         ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED') is not None else None
                     ),
                     's_unit': fluid_property_data['s']['SI_unit'],
+                    'h_0': (
+                        convert_to_SI(
+                            'h',
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).Value,
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')) is not None else (
+                            logging.warning(f"h_0 node not found for stream {stream_name}"),
+                            None
+                        )[1]
+                    ),
+                    'h_0_unit': fluid_property_data['h']['SI_unit'],
+                    's_0': (
+                        convert_to_SI(
+                            's',
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).Value,
+                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')) is not None else (
+                            logging.warning(f"s_0 node not found for stream {stream_name}"),
+                            None
+                        )[1]
+                    ),
+                    's_0_unit': fluid_property_data['s']['SI_unit'],
+                    'h_A': (
+                        convert_to_SI(
+                            'h',
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).Value,
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')) is not None else (
+                            logging.warning(f"h_A node not found for stream {stream_name}"),
+                            None
+                        )[1]
+                    ),
+                    'h_A_unit': fluid_property_data['h']['SI_unit'],
+                    's_A': (
+                        convert_to_SI(
+                            's',
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).Value,
+                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).UnitString
+                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')) is not None else (
+                            logging.warning(f"s_A node not found for stream {stream_name}"),
+                            None
+                        )[1]
+                    ),
+                    's_A_unit': fluid_property_data['s']['SI_unit'],
                     'm': (
                         convert_to_SI(
                             'm',
@@ -172,7 +245,10 @@ class AspenModelParser:
                             'e',
                             self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').Value,
                             self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL').UnitString
-                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL') is not None else None
+                        ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL') is not None else (
+                            logging.warning(f"e_PH node not found for stream {stream_name}"),
+                            None
+                        )[1]
                     ),
                     'e_PH_unit': fluid_property_data['e']['SI_unit'],
                     'n': (
@@ -186,6 +262,19 @@ class AspenModelParser:
                     'mass_composition': {},
                     'molar_composition': {},
                 })
+                try:
+                    connection_data['e_T'] = connection_data['h'] - connection_data['h_A'] - self.Tamb * (connection_data['s'] - connection_data['s_A'])
+                    connection_data['e_T_unit'] = fluid_property_data['e']['SI_unit']
+                except Exception as e:
+                    logging.warning(f"Error in the calculation of e_T for stream {stream_name}: {e}")
+                    connection_data['e_T'] = None
+
+                try:
+                    connection_data['e_M'] = connection_data['h_A'] - connection_data['h_0'] - self.Tamb * (connection_data['s_A'] - connection_data['s_0'])
+                    connection_data['e_M_unit'] = fluid_property_data['e']['SI_unit']
+                except Exception as e:
+                    logging.warning(f"Error in the calculation of e_M for stream {stream_name}: {e}")
+                    connection_data['e_M'] = None
 
                 # Retrieve the fluid names for the stream
                 mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
@@ -223,7 +312,14 @@ class AspenModelParser:
             model_type = model_type_node.Value if model_type_node is not None else None
 
             component_type_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
-            component_type = component_type_node.AttributeValue(6) if component_type_node is not None else None
+            if component_type_node is None:
+                continue
+            component_type = component_type_node.AttributeValue(6)
+            if component_type == "Mixer":
+                mixer_value = component_type_node.Value
+                if mixer_value in ["TRIANGLE", "HEAT"]:
+                    logging.info(f"Ignoring Mixer {block_name} with value {mixer_value}.")
+                    continue
 
             component_data = {
                 'name': block_name,
@@ -261,20 +357,74 @@ class AspenModelParser:
                 elif model_type == "TURBINE":
                     component_data['type'] = "Turbine"
 
-            # Handle Generators as multiplier blocks
+
+            # Handle Generators & Motors (if not in a Pump) as multiplier blocks
             if component_type == 'Mult':
                 mult_value_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
                 mult_value = mult_value_node.Value if mult_value_node is not None else None
                 if mult_value == 'WORK':
                     factor_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Input\FACTOR')
                     factor = factor_node.Value if factor_node is not None else None
-                    component_data.update({
-                        'eta_el': (
-                            factor
-                            if factor is not None else None
-                        ),
-                        'type': 'Generator'
-                    })
+                    if factor is not None:
+                        if factor < 1:
+                            component_data.update({
+                                'eta_el': factor,
+                                'type': 'Generator'
+                            })
+                        elif factor > 1:
+                            elec_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(OUT)').Elements(0)
+                            elec_power_name = elec_power_node.Name
+                            if elec_power_name in self.connections_data:
+                                elec_power = abs(self.connections_data[elec_power_name]['energy_flow'])
+                            else:
+                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                elec_power = None
+                            brake_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(IN)').Elements(0)
+                            brake_power_name = brake_power_node.Name
+                            if brake_power_name in self.connections_data:
+                                brake_power = abs(self.connections_data[brake_power_name]['energy_flow'])
+                            else:
+                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                brake_power = None
+                            component_data.update({
+                                'eta_el': 1/factor,
+                                'multiplier factor' : factor,
+                                'type': 'Motor',
+                                'P_el': elec_power,
+                                'P_el_unit': fluid_property_data['power']['SI_unit'],
+                                'P_mech': brake_power,
+                                'P_mech_unit': fluid_property_data['power']['SI_unit'],
+                            })
+                        else:  # factor == 1
+                            choice = input(f"Multiplier Block '{block_name}' has factor = 1. Enter 'G' if it is a Generator or 'M' for Motor: ").strip().upper()
+                            if choice == 'M':
+                                elec_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(OUT)').Elements(0)
+                                elec_power_name = elec_power_node.Name
+                                if elec_power_name in self.connections_data:
+                                    elec_power = abs(self.connections_data[elec_power_name]['energy_flow'])
+                                else:
+                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    elec_power = None
+                                brake_power_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\WS(IN)').Elements(0)
+                                brake_power_name = brake_power_node.Name
+                                if brake_power_name in self.connections_data:
+                                    brake_power = abs(self.connections_data[brake_power_name]['energy_flow'])
+                                else:
+                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    brake_power = None
+                                component_data.update({
+                                    'eta_el': factor,
+                                    'type': 'Motor',
+                                    'P_el': elec_power,
+                                    'P_el_unit': fluid_property_data['power']['SI_unit'],
+                                    'P_mech': brake_power,
+                                    'P_mech_unit': fluid_property_data['power']['SI_unit'],
+                                })
+                            else:
+                                component_data.update({
+                                    'eta_el': factor,
+                                    'type': 'Generator'
+                                })
 
             # Create a connection for the heat flows of the SimpleHeatExchanger blocks
             if component_type == 'Heater':
@@ -309,21 +459,9 @@ class AspenModelParser:
                 motor_data = {
                     'name': motor_name,
                     'type': 'Motor',
-                    'P_el': (
-                        convert_to_SI(
-                            'power',
-                            elec_power,
-                            elec_power_node.UnitString
-                        ) if elec_power_node is not None else None
-                    ),
+                    'P_el': elec_power,
                     'P_el_unit': fluid_property_data['power']['SI_unit'],
-                    'P_mech': (
-                        convert_to_SI(
-                            'power',
-                            brake_power,
-                            brake_power_node.UnitString
-                        ) if brake_power_node is not None else None
-                    ),
+                    'P_mech': brake_power,
                     'P_mech_unit': fluid_property_data['power']['SI_unit'],
                     'eta_el': (
                         eff_driv

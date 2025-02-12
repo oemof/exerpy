@@ -10,9 +10,9 @@ class Mixer(Component):
     r"""
     Class for exergy analysis of mixers.
 
-    This class performs exergy analysis calculations for mixers with multiple 
-    inlet streams and one outlet stream. The exergy product and fuel definitions 
-    vary based on the temperature relationships between inlet streams, outlet 
+    This class performs exergy analysis calculations for mixers with multiple
+    inlet streams and one outlet stream. The exergy product and fuel definitions
+    vary based on the temperature relationships between inlet streams, outlet
     stream, and ambient conditions.
 
     Parameters
@@ -114,7 +114,7 @@ class Mixer(Component):
         ------
         ValueError
             If the required inlet and outlet streams are not properly defined.
-        """      
+        """
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 1:
             raise ValueError("Mixer requires at least two inlets and one outlet.")

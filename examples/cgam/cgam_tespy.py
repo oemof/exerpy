@@ -78,30 +78,31 @@ aph.set_attr(pr1=0.97, pr2=0.95)
 eva.set_attr(pr1=0.95 ** 0.5)
 eco.set_attr(pr1=0.95 ** 0.5, pr2=1)
 
-power = Bus('total power')
-power.add_comps({'comp': cmp, 'base': 'bus'}, {'comp': tur})
+# power = Bus('total power')
+# power.add_comps({'comp': cmp, 'base': 'bus'}, {'comp': tur})
 
-nwk.add_busses(power)
+# nwk.add_busses(power)
 
-heat_output = Bus('heat output')
+# heat_output = Bus('heat output')
 power_output = Bus('power output')
-fuel_input = Bus('fuel input')
+# fuel_input = Bus('fuel input')
 
-heat_output.add_comps(
-    {'comp': eco, 'char': -1},
-    {'comp': eva, 'char': -1})
+# heat_output.add_comps(
+#     {'comp': eco, 'char': -1},
+#     {'comp': eva, 'char': -1})
 power_output.add_comps(
     {'comp': cmp, 'base': 'bus', 'char': 1},
     {'comp': tur, 'char': 1})
-fuel_input.add_comps({'comp': cb, 'base': 'bus'})
-nwk.add_busses(heat_output, power_output, fuel_input)
+# fuel_input.add_comps({'comp': cb, 'base': 'bus'})
+# nwk.add_busses(heat_output, power_output, fuel_input)
+nwk.add_busses(power_output)
 
 nwk.solve('design')
 
 c4.set_attr(T=1520 - 273.15)
 c10.set_attr(m=None)
 
-power.set_attr(P=-30e6)
+power_output.set_attr(P=-30e6)
 c1.set_attr(m=None)
 
 nwk.solve('design')
@@ -110,43 +111,36 @@ nwk.print_results()
 p0 = 101300
 T0 = 298.15
 
-component_json = {}
-for comp_type in nwk.comps["comp_type"].unique():
-    component_json[comp_type] = {}
-    for c in nwk.comps.loc[nwk.comps["comp_type"] == comp_type, "object"]:
-        component_json[comp_type][c.label] = {}
 
-connection_json = {}
-for c in nwk.conns["object"]:
-    connection_json[c.label] = {
-        "source_component": c.source.label,
-        "source_connector": int(c.source_id.removeprefix("out")) - 1,
-        "target_component": c.target.label,
-        "target_connector": int(c.target_id.removeprefix("in")) - 1
-    }
-    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"mass_composition": c.fluid.val})
-    c.get_physical_exergy(p0, T0)
-    connection_json[c.label].update({"e_T": c.ex_therm})
-    connection_json[c.label].update({"e_M": c.ex_mech})
-    connection_json[c.label].update({"e_PH": c.ex_physical})
+from exerpy import ExergyAnalysis
 
 
-json_export = {
-    "components": component_json,
-    "connections": connection_json,
-    "ambient_conditions": {
-        "Tamb": T0,
-        "Tamb_unit": "K",
-        "pamb": p0,
-        "pamb_unit": "Pa"
-    }
-}
+ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib='Ahrendts')
 
-
+# export of the results for validation
 import json
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
+json_export = nwk.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/cgam/cgam_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+
+fuel = {
+    "inputs": ['1', '10'],
+    "outputs": []
+}
+
+product = {
+    "inputs": ['generator_of_gas turbine__power output', '9'],
+    "outputs": ['power output__motor_of_compressor', '8']
+}
+
+loss = {
+    "inputs": ['7'],
+    "outputs": []
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+ean.exergy_results()

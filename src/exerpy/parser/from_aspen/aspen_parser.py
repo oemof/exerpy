@@ -1,6 +1,5 @@
 import os
 import logging
-import win32com.client as win32
 import json
 
 from exerpy.functions import convert_to_SI, fluid_property_data
@@ -17,7 +16,7 @@ class AspenModelParser:
     def __init__(self, model_path):
         """
         Initializes the parser with the given model path.
-        
+
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
         """
@@ -25,7 +24,7 @@ class AspenModelParser:
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
-        
+
         # Dictionary to map component types to specific connector assignment functions
         self.connector_assignment_functions = {
             'Mixer': self.assign_mixer_connectors,
@@ -39,9 +38,10 @@ class AspenModelParser:
         """
         Initializes the Aspen Plus application and opens the specified model.
         """
+        from win32com.client import Dispatch
         try:
             # Start Aspen Plus application via COM Dispatch
-            self.aspen = win32.Dispatch('Apwn.Document')
+            self.aspen = Dispatch('Apwn.Document')
             # Load the Aspen model file
             self.aspen.InitFromArchive2(self.model_path)
             logging.info(f"Model opened successfully: {self.model_path}")
@@ -55,11 +55,11 @@ class AspenModelParser:
         """
         try:
             # Parse Tamb and pamb
-            self.parse_ambient_conditions()	
+            self.parse_ambient_conditions()
 
             # Parse streams (connections)
             self.parse_streams()
-            
+
             # Parse blocks (components)
             self.parse_blocks()
 
@@ -79,12 +79,12 @@ class AspenModelParser:
                 first_stream = stream_nodes[0].Name
                 # Extract from property set path
                 temp_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{first_stream}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL')
-                
+
                 if temp_node is not None and temp_node.Elements.Count >= 1:
                     temp_str = temp_node.Elements[0].Name
                     if temp_node.Elements[0].Elements.Count >= 1:
                         pres_str = temp_node.Elements[0].Elements[0].Name
-                        
+
                         # Create the node path templates for property retrieval
                         h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
                         hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'
@@ -142,7 +142,7 @@ class AspenModelParser:
                     abs(self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').Value),
                     self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC').UnitString
                     ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\QCALC') is not None else None
-            
+
             # MATERIAL STREAMS
             else:
                 # Assume it's a material stream and retrieve additional properties
@@ -280,7 +280,7 @@ class AspenModelParser:
                 mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
                 if mole_frac_node is not None:
                     fluid_names = [fluid.Name for fluid in mole_frac_node.Elements]
-                    
+
                     # Retrieve the molar composition for each fluid
                     for fluid_name in fluid_names:
                         mole_frac = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED\{fluid_name}').Value
@@ -316,7 +316,7 @@ class AspenModelParser:
                 continue
             component_type = component_type_node.AttributeValue(6)
             if component_type == "Mixer":
-                mixer_value = component_type_node.Value 
+                mixer_value = component_type_node.Value
                 if mixer_value in ["TRIANGLE", "HEAT"]:
                     logging.info(f"Ignoring Mixer {block_name} with value {mixer_value}.")
                     continue
@@ -357,7 +357,7 @@ class AspenModelParser:
                 elif model_type == "TURBINE":
                     component_data['type'] = "Turbine"
 
-            
+
             # Handle Generators & Motors (if not in a Pump) as multiplier blocks
             if component_type == 'Mult':
                 mult_value_node = self.aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}')
@@ -387,7 +387,7 @@ class AspenModelParser:
                                 logging.warning(f"No WS(IN) ports found for block {block_name}")
                                 brake_power = None
                             component_data.update({
-                                'eta_el': 1/factor, 
+                                'eta_el': 1/factor,
                                 'multiplier factor' : factor,
                                 'type': 'Motor',
                                 'P_el': elec_power,
@@ -413,7 +413,7 @@ class AspenModelParser:
                                     logging.warning(f"No WS(IN) ports found for block {block_name}")
                                     brake_power = None
                                 component_data.update({
-                                    'eta_el': factor, 
+                                    'eta_el': factor,
                                     'type': 'Motor',
                                     'P_el': elec_power,
                                     'P_el_unit': fluid_property_data['power']['SI_unit'],
@@ -422,7 +422,7 @@ class AspenModelParser:
                                 })
                             else:
                                 component_data.update({
-                                    'eta_el': factor, 
+                                    'eta_el': factor,
                                     'type': 'Generator'
                                 })
 
@@ -558,7 +558,7 @@ class AspenModelParser:
             for idx, (port_label, stream_name) in enumerate(outlet_streams):
                 connections_data[stream_name]['source_connector'] = 0  # Assuming single outlet for mixer
                 logging.debug(f"Assigned connector 0 to outlet stream: {stream_name}")
-                
+
 
     def assign_splitter_connectors(self, block_name, aspen, connections_data):
         """
@@ -649,7 +649,7 @@ class AspenModelParser:
         """
         if component_type in connector_mappings:
             mapping = connector_mappings[component_type]
-            
+
             # Access the ports of the component to find the connected streams
             for port_label, connector_num in mapping.items():
                 port_node = aspen.Tree.FindNode(fr'\Data\Blocks\{block_name}\Ports\{port_label}')
@@ -709,8 +709,8 @@ class AspenModelParser:
                 'T',
                 temp_node.Value,
                 temp_node.UnitString
-            ) if temp_node is not None else None            
-        
+            ) if temp_node is not None else None
+
             if self.Tamb is None:
                 raise ValueError("Ambient temperature (Tamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
@@ -720,8 +720,8 @@ class AspenModelParser:
                 'p',
                 pres_node.Value,
                 pres_node.UnitString
-            ) if pres_node is not None else None            
-        
+            ) if pres_node is not None else None
+
             if self.pamb is None:
                 raise ValueError("Ambient pressure (pamb) not found in the Aspen model. Please set it in Setup > Calculation Options.")
 
@@ -752,12 +752,12 @@ class AspenModelParser:
     def write_to_json(self, output_path):
         """
         Writes the parsed and sorted data to a JSON file.
-        
+
         Parameters:
             output_path (str): Path where the JSON file will be saved.
         """
         data = self.get_sorted_data()
-        
+
         try:
             with open(output_path, 'w') as json_file:
                 json.dump(data, json_file, indent=4)
@@ -769,13 +769,13 @@ class AspenModelParser:
 
 def run_aspen(model_path, output_dir=None):
     """
-    Main function to process the Aspen model and return parsed data. 
+    Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
-    
+
     Parameters:
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
-    
+
     Returns:
         dict: Parsed data in dictionary format.
     """

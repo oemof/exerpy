@@ -1,8 +1,11 @@
 .. _exerpy_development_what_label:
 
-######################
+####################
+Contribute to exerpy
+####################
+
 What can I contribute?
-######################
+**********************
 
 exerpy is developed as an open and free to use library driven by
 `Sergio Tomasinelli <https://github.com/sertomas>`__. The goal is, that many
@@ -48,9 +51,8 @@ issue tracker and get starting to develop the missing features.
 
 .. _exerpy_development_how_label:
 
-#####################
 How can I contribute?
-#####################
+*********************
 
 You will find the most important information concerning the development process
 in the following sections. If you have any further questions feel free to

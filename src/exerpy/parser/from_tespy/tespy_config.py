@@ -1,0 +1,20 @@
+EXERPY_TESPY_MAPPINGS = {
+    "SteamTurbine": "Turbine",
+    "HeatExchanger": "HeatExchanger",
+    "Desuperheater": "HeatExchanger",
+    "Condenser": "Condenser",
+    "SimpleHeatExchanger": "SimpleHeatExchanger",
+    "ParabolicTrough": "SimpleHeatExchanger",
+    "Pipe": "SimpleHeatExchanger",
+    "SolarCollector": "SimpleHeatExchanger",
+    "CombustionChamber": "CombustionChamber",
+    "DiabaticCombustionChamber": "CombustionChamber",
+    "Valve": "Valve",
+    "Compressor": "Compressor",
+    "Pump": "Pump",
+    "Turbine": "Turbine",
+    "Merge": "Mixer",
+    "Generator": "Generator",
+    "Motor": "Motor",
+    "Drum": "Drum"
+}

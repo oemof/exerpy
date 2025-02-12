@@ -46,7 +46,7 @@ class Compressor(Component):
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{PH} - 
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{PH} -
         e_\mathrm{in}^\mathrm{PH})\\
         \dot{E}_\mathrm{F} &= |\dot{W}|
 
@@ -54,7 +54,7 @@ class Compressor(Component):
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= \dot{m} \cdot e_\mathrm{out}^\mathrm{T} + 
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot e_\mathrm{out}^\mathrm{T} +
         \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} - e_\mathrm{in}^\mathrm{M})\\
         \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot e_\mathrm{in}^\mathrm{T}
 
@@ -62,9 +62,9 @@ class Compressor(Component):
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} - 
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} -
         e_\mathrm{in}^\mathrm{M})\\
-        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot (e_\mathrm{in}^\mathrm{T} 
+        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot (e_\mathrm{in}^\mathrm{T}
         - e_\mathrm{out}^\mathrm{T})
 
     For all valid cases, the exergy destruction is:
@@ -83,6 +83,7 @@ class Compressor(Component):
     def __init__(self, **kwargs):
         r"""Initialize compressor component with given parameters."""
         super().__init__(**kwargs)
+        self.P = None
 
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         r"""
@@ -97,7 +98,7 @@ class Compressor(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
-        """      
+        """
         # Get power flow if not already available
         if self.P is None:
             self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])
@@ -109,14 +110,14 @@ class Compressor(Component):
 
         # Case 2: Inlet below, outlet above ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) > T0:
-            self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] + 
+            self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] +
                         self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M']))
             self.E_F = abs(self.P) + self.inl[0]['m'] * self.inl[0]['e_T']
 
         # Case 3: Both temperatures below ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) <= T0:
             self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
-            self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] - 
+            self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] -
                                                         self.outl[0]['e_T'])
 
         # Invalid case: outlet temperature smaller than inlet

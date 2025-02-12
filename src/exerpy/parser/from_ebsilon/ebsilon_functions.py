@@ -1,15 +1,10 @@
-import sys
-import os
 import logging
 
 from CoolProp.CoolProp import PropsSI as CP
 
-ebs_path = os.getenv("EBS")
-if not ebs_path:
-    logging.error("Ebsilon path not found. Please set an environment variable named EBS with the path to your Ebsilon Python program files as the value. For example: 'C:\\Program Files\\Ebsilon\\EBSILONProfessional 17\\Data\\Python'")
+from . import __ebsilon_path__
 
-else:
-    sys.path.append(ebs_path)
+if __ebsilon_path__ is not None:
     from EbsOpen import EpSteamTable, EpGasTable
 
 from exerpy.functions import convert_to_SI
@@ -20,7 +15,7 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
     """
     Calculate a thermodynamic property (enthalpy or entropy) for a given stream based on pressure and temperature.
 
-    This method takes pressure and temperature values and calculates the specified property for any fluid stream. 
+    This method takes pressure and temperature values and calculates the specified property for any fluid stream.
     It automatically handles the composition of the stream by setting up appropriate fluid properties and analysis
     parameters based on the stream's fluid type and composition.
 

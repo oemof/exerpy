@@ -98,7 +98,11 @@ net_power.add_comps(
     {"comp": condensate_pump, "base": "bus", "char": 0.985},
     {"comp": drum_pump, "base": "bus", "char": 0.985},
 )
-nw.add_busses(net_power)
+heat_output = Bus("heat output")
+heat_output.add_comps(
+    {"comp": heating_condenser, "base": "component"}
+)
+nw.add_busses(net_power, heat_output)
 
 c1.set_attr(
     fluid={
@@ -177,43 +181,45 @@ nw.print_results()
 p0 = 101300
 T0 = 288.15
 
-component_json = {}
-for comp_type in nw.comps["comp_type"].unique():
-    component_json[comp_type] = {}
-    for c in nw.comps.loc[nw.comps["comp_type"] == comp_type, "object"]:
-        component_json[comp_type][c.label] = {}
 
-connection_json = {}
-for c in nw.conns["object"]:
-    connection_json[c.label] = {
-        "source_component": c.source.label,
-        "source_connector": int(c.source_id.removeprefix("out")) - 1,
-        "target_component": c.target.label,
-        "target_connector": int(c.target_id.removeprefix("in")) - 1
-    }
-    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"mass_composition": c.fluid.val})
-    c.get_physical_exergy(p0, T0)
-    connection_json[c.label].update({"e_T": c.ex_therm})
-    connection_json[c.label].update({"e_M": c.ex_mech})
-    connection_json[c.label].update({"e_PH": c.ex_physical})
+from exerpy import ExergyAnalysis
 
 
-json_export = {
-    "components": component_json,
-    "connections": connection_json,
-    "ambient_conditions": {
-        "Tamb": 283.15,
-        "Tamb_unit": "K",
-        "pamb": 101300.0,
-        "pamb_unit": "Pa"
-    }
-}
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts")
 
-
+# export of the results for validation
 import json
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
+json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/ccpp/ccpp_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+fuel = {
+    "inputs": ['1', '3'],
+    "outputs": []
+}
+
+product = {
+    "inputs": [
+        'generator_of_gas turbine__net power',
+        'generator_of_high pressure steam turbine__net power',
+        'generator_of_low pressure steam turbine__net power',
+        'generator_of_heating condenser__heat output'
+    ],
+    "outputs": [
+        'net power__motor_of_feed pump',
+        'net power__motor_of_drum pump',
+        'net power__motor_of_condensate pump',
+        'net power__motor_of_gas turbine compressor',
+    ]
+}
+
+loss = {
+    "inputs": ['8', '15'],
+    "outputs": ['14']
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+ean.exergy_results()

@@ -8,11 +8,11 @@ fluid types, error handling, and exergy computations.
 The test suite uses pytest fixtures to provide mock objects that simulate
 the behavior of the Ebsilon application and its components.
 """
-import os
 import pytest
 from unittest.mock import Mock, patch
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_X_from_PT, calc_eT, calc_eM
 from exerpy.parser.from_ebsilon.ebsilon_config import substance_mapping
+from exerpy.parser.from_ebsilon import __ebsilon_path__
 
 @pytest.fixture
 def mock_app():
@@ -71,9 +71,9 @@ def mock_pipe():
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_X_from_PT_steam(mock_app, mock_pipe):
     """
     Test property calculation for steam fluid type.
@@ -99,9 +99,9 @@ def test_calc_X_from_PT_steam(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_X_from_PT_invalid_property(mock_app, mock_pipe):
     """
     Test error handling for invalid property request.
@@ -122,9 +122,9 @@ def test_calc_X_from_PT_invalid_property(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_X_from_PT_flue_gas(mock_app, mock_pipe):
     """
     Test property calculation for flue gas with composition.
@@ -159,9 +159,9 @@ def test_calc_X_from_PT_flue_gas(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eT(mock_app, mock_pipe):
     """
     Test thermal exergy calculation.
@@ -189,9 +189,9 @@ def test_calc_eT(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eM(mock_app, mock_pipe):
     """
     Test mechanical exergy calculation.
@@ -219,9 +219,9 @@ def test_calc_eM(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(
-    os.environ.get('GITHUB_ACTIONS') == 'true',
-    reason='GitHub actions cannot handle the tabular CoolProp back ends, '
-    'skipping this test. The test should run on your local machine.')
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_error_handling_in_property_calc(mock_app, mock_pipe):
     """
     Test error handling in property calculations.

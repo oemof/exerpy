@@ -20,6 +20,8 @@ class ExergyAnalysis:
         """
         self.Tamb = Tamb
         self.pamb = pamb
+        self._component_data = component_data
+        self._connection_data = connection_data
 
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data)
@@ -313,12 +315,10 @@ class ExergyAnalysis:
                 "an Ebsilon (.ebs) file."
             )
 
-        data, Tamb, pamb = _process_json(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib)
-
-        with open(output_path, 'w') as json_file:
-            json.dump(data, json_file, indent=4)
-            logging.info(f"Parsed Ebsilon model and saved JSON data to {output_path}.")
-
+        data, Tamb, pamb = _process_json(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib,
+            required_component_fields=["name", "type", "type_index"]
+        )
         return cls(data["components"], data["connections"], Tamb, pamb)
 
     @classmethod
@@ -352,7 +352,9 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb = _process_json(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib)
+        data, Tamb, pamb = _process_json(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib
+        )
         return cls(data['components'], data['connections'], Tamb, pamb)
 
     def exergy_results(self):
@@ -486,6 +488,24 @@ class ExergyAnalysis:
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 
+    def export_to_json(self, output_path):
+        data = self._serialize()
+        with open(output_path, 'w') as json_file:
+            json.dump(data, json_file, indent=4)
+            logging.info(f"Model exported to JSON file: {output_path}.")
+
+    def _serialize(self):
+        export = {}
+        export["components"] = self._component_data
+        export["connections"] = self._connection_data
+        export["ambient_conditions"] = {
+            "Tamb": self.Tamb,
+            "Tamb_unit": "K",
+            "pamb": self.pamb,
+            "pamb_unit": "Pa"
+        }
+        return export
+
 
 def _construct_components(component_data, connection_data):
     components = {}  # Initialize a dictionary to store created components
@@ -549,7 +569,7 @@ def _load_json(json_path):
             raise
 
 
-def _process_json(data, Tamb=None, pamb=None, chemExLib=None):
+def _process_json(data, Tamb=None, pamb=None, chemExLib=None, required_component_fields=['name']):
     # Validate required sections
     required_sections = ['components', 'connections', 'ambient_conditions']
     missing_sections = [s for s in required_sections if s not in data]
@@ -578,8 +598,7 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None):
             raise ValueError(f"Component type '{comp_type}' must contain dictionary of components")
 
         for comp_name, comp_data in components.items():
-            required_comp_fields = ['name', 'type', 'type_index']
-            missing_fields = [f for f in required_comp_fields if f not in comp_data]
+            missing_fields = [f for f in required_component_fields if f not in comp_data]
             if missing_fields:
                 raise ValueError(f"Component '{comp_name}' missing required fields: {missing_fields}")
 

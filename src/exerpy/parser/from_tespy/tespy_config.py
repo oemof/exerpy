@@ -14,8 +14,6 @@ EXERPY_TESPY_MAPPINGS = {
     "Pump": "Pump",
     "Turbine": "Turbine",
     "Merge": "Mixer",
-    "Splitter": "Splitter",
-    "Separator": "Separator",
     "Generator": "Generator",
     "Motor": "Motor",
     "Drum": "Drum"

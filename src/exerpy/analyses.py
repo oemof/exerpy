@@ -483,8 +483,8 @@ class ExergyAnalysis:
 
             component_results["E_F [kW]"].append(E_F_kW)
             component_results["E_P [kW]"].append(E_P_kW)
-            component_results["E_D [kW]"].append(E_D_kW)
-            component_results["E_L [kW]"].append(E_L_kW)
+            component_results["E_D [kW]"].append(E_D_kW+E_L_kW)
+            component_results["E_L [kW]"].append(0)
             component_results["ε [%]"].append(epsilon_percent)
             component_results["y [%]"].append(convert(component.y, 1e2))
             component_results["y* [%]"].append(convert(component.y_star, 1e2))

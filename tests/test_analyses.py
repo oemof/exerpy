@@ -104,11 +104,11 @@ def exergy_analysis(mock_component_data, mock_connection_data):
 def test_component_construction(mock_component_data, mock_connection_data):
     """Test proper component construction and connection assignment."""
     components = _construct_components(mock_component_data, mock_connection_data)
-    
+
     assert len(components) == 2
     assert isinstance(components["T1"], MockTurbine)
     assert isinstance(components["C1"], MockCompressor)
-    
+
     # Check connections
     assert 0 in components["C1"].inl
     assert 0 in components["C1"].outl
@@ -129,9 +129,9 @@ def test_analyse_basic(exergy_analysis):
     """Test basic exergy analysis calculation."""
     E_F = {"inputs": ["1"]}  # Fuel input: 50000
     E_P = {"inputs": ["3"]}  # Product input: 35000
-    
+
     exergy_analysis.analyse(E_F, E_P)
-    
+
     assert exergy_analysis.E_F == 50000
     assert exergy_analysis.E_P == 35000
     assert exergy_analysis.epsilon == pytest.approx(0.7, rel=1e-2)
@@ -139,21 +139,21 @@ def test_analyse_basic(exergy_analysis):
 def test_analyse_with_losses(exergy_analysis):
     """Test exergy analysis with loss accounting."""
     E_F = {"inputs": ["1"]}
-    E_P = {"inputs": ["3"]}  
-    E_L = {"inputs": ["2"]}  
-    
+    E_P = {"inputs": ["3"]}
+    E_L = {"inputs": ["2"]}
+
     exergy_analysis.analyse(E_F, E_P, E_L)
-    
-    assert exergy_analysis.E_L == 5000 
+
+    assert exergy_analysis.E_L == 5000
     assert exergy_analysis.E_D == exergy_analysis.E_F - exergy_analysis.E_P - exergy_analysis.E_L
 
 def test_component_exergy_balance(exergy_analysis):
     """Test individual component exergy balance calculations."""
     E_F = {"inputs": ["1"]}
     E_P = {"outputs": ["3"]}
-    
+
     exergy_analysis.analyse(E_F, E_P)
-    
+
     comp = exergy_analysis.components["C1"]
     assert comp.E_F == 50000
     assert comp.E_P == 40000
@@ -166,15 +166,15 @@ def test_exergy_results(exergy_analysis):
     E_F = {"inputs": ["1"]}
     E_P = {"outputs": ["3"]}
     exergy_analysis.analyse(E_F, E_P)
-    
+
     comp_results, material_results, non_material_results = exergy_analysis.exergy_results()
-    
+
     # Check component results
     assert isinstance(comp_results, pd.DataFrame)
     assert "E_F [kW]" in comp_results.columns
     assert "ε [%]" in comp_results.columns
     assert len(comp_results) == 3  # Two components plus total
-    
+
     # Check connection results
     assert isinstance(material_results, pd.DataFrame)
     assert isinstance(non_material_results, pd.DataFrame)
@@ -185,7 +185,7 @@ def test_from_ebsilon(tmp_path):
     """Test creating instance from Ebsilon file."""
     test_file = tmp_path / "test.ebs"
     test_file.write_text("")
-    
+
     with pytest.raises(FileNotFoundError, match="File not found"):
         ExergyAnalysis.from_ebsilon(str(test_file), simulate=False)
 
@@ -209,7 +209,7 @@ def test_ebsilon_invalid_format(tmp_path):
     """Test handling of invalid file format."""
     invalid_file = tmp_path / "test.txt"
     invalid_file.write_text("")
-    
+
     with pytest.raises(ValueError, match="Unsupported file format"):
         ExergyAnalysis.from_ebsilon(str(invalid_file))
 
@@ -252,7 +252,7 @@ def test_from_json_missing_type_index(tmp_path):
     json_path = tmp_path / "invalid.json"
     with open(json_path, 'w') as f:
         json.dump(invalid_data, f)
-    
+
     with pytest.raises(ValueError, match="missing required fields: \\['type_index'\\]"):
         ExergyAnalysis.from_json(str(json_path))
 
@@ -283,7 +283,7 @@ def test_from_json_missing_composition(tmp_path):
     json_path = tmp_path / "missing_comp.json"
     with open(json_path, 'w') as f:
         json.dump(data, f)
-    
+
     with pytest.raises(ValueError, match="Material stream '1' missing mass_composition"):
         ExergyAnalysis.from_json(str(json_path), chemExLib='Ahrendts')
 
@@ -309,7 +309,7 @@ def test_from_json_missing_sections(tmp_path):
     json_path = tmp_path / "incomplete.json"
     with open(json_path, 'w') as f:
         json.dump(incomplete_data, f)
-    
+
     with pytest.raises(ValueError, match="Missing required sections"):
         ExergyAnalysis.from_json(str(json_path))
 
@@ -323,7 +323,7 @@ def test_from_json_invalid_component_structure(tmp_path):
     json_path = tmp_path / "invalid.json"
     with open(json_path, 'w') as f:
         json.dump(invalid_data, f)
-    
+
     with pytest.raises(ValueError, match="must contain dictionary"):
         ExergyAnalysis.from_json(str(json_path))
 

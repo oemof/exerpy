@@ -7,16 +7,6 @@ from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
 
-try:
-    from tespy.networks import Network
-    from tespy.networks import load_network
-except ModuleNotFoundError:
-    Networt = None
-    load_network = None
-
-from .parser.from_aspen import aspen_parser
-from .parser.from_ebsilon import ebsilon_parser as ebs_parser
-
 
 class ExergyAnalysis:
     def __init__(self, component_data, connection_data, Tamb, pamb) -> None:
@@ -138,7 +128,7 @@ class ExergyAnalysis:
             logging.info(f"Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
-    def from_tespy(cls, model: str | Network, Tamb=None, pamb=None, chemExLib=None):
+    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None):
         """
         Create an instance of the ExergyAnalysis class from a tespy network or
         a tespy network export structure.
@@ -159,9 +149,9 @@ class ExergyAnalysis:
         ExergyAnalysis
             Instance of the ExergyAnalysis class.
         """
-        if Network is None:
-            msg = "To use exerpy with tespy you have to install tespy."
-            raise ModuleNotFoundError(msg)
+        from tespy.networks import Network
+        from tespy.networks import load_network
+        from .parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
         if isinstance(model, str):
             model = load_network(model)
@@ -173,7 +163,7 @@ class ExergyAnalysis:
                 "export or a tespy network"
             )
             raise TypeError(msg)
-        from .parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
+
         data = model.to_exerpy(Tamb, pamb, EXERPY_TESPY_MAPPINGS)
         data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib)
         return cls(data['components'], data['connections'], Tamb, pamb)
@@ -199,6 +189,7 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Aspen data.
         """
+        from .parser.from_aspen import aspen_parser
         # Check if the file is an Aspen file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.bkp':
@@ -297,6 +288,7 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Ebsilon data.
         """
+        from .parser.from_ebsilon import ebsilon_parser as ebs_parser
         # Check if the file is an Ebsilon file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.ebs':

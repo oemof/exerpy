@@ -5,7 +5,7 @@ This script contains the configuration data used by the Ebsilon model parser,
 including lists of component types, fluid types, fluid composition parameters,
 and groups for sorting components into functional categories.
 """
-from exerpy import __ebsilon_path__
+from . import __ebsilon_path__
 
 
 if __ebsilon_path__ is not None:

@@ -4,14 +4,13 @@ Ebsilon Model Parser
 This module defines the EbsilonModelParser class, which is used to parse Ebsilon models,
 simulate them, extract data about components and connections, and write the data to a JSON file.
 """
-
 import os
 import logging
 import json
 
 
 from exerpy.functions import convert_to_SI, fluid_property_data
-from exerpy import __ebsilon_path__
+from . import __ebsilon_path__
 
 
 if __ebsilon_path__ is not None:

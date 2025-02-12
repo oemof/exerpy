@@ -2,14 +2,10 @@ import logging
 
 from CoolProp.CoolProp import PropsSI as CP
 
-from exerpy import __ebsilon_path__
-
+from . import __ebsilon_path__
 
 if __ebsilon_path__ is not None:
     from EbsOpen import EpSteamTable, EpGasTable
-else:
-    EpSteamTable = None
-    EpGasTable = None
 
 from exerpy.functions import convert_to_SI
 from .ebsilon_config import unit_id_to_string, substance_mapping

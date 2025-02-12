@@ -304,74 +304,30 @@ class ExergyAnalysis:
 
             # If simulate is set to False, try to load the existing JSON data
             if not simulate:
-                try:
-                    if os.path.exists(output_path):
-                        # Load the previously saved parsed JSON data
-                        with open(output_path, 'r') as json_file:
-                            ebsilon_data = json.load(json_file)
-                            logging.info(f"Successfully loaded existing Ebsilon data from {output_path}.")
-                    else:
-                        logging.error(
-                            'Skipping the simulation requires a pre-existing file with the ending "_parsed.json". '
-                            f'File not found at {output_path}.'
-                        )
-                        raise FileNotFoundError(f'File not found: {output_path}')
-                except (FileNotFoundError, json.JSONDecodeError) as e:
-                    logging.error(f"Failed to load or decode existing JSON file: {e}")
-                    raise
+                data = _load_json(output_path)
 
             # If simulation is requested, run the simulation
             else:
-                logging.info("Running Ebsilon simulation and generating JSON data.")
-                ebsilon_data = ebs_parser.run_ebsilon(path)
+                logging.info(
+                    "Running Ebsilon simulation and generating JSON data."
+                )
+                data = ebs_parser.run_ebsilon(path)
                 logging.info("Simulation completed successfully.")
 
         else:
             # If the file format is not supported
-            raise ValueError(f"Unsupported file format: {file_extension}. Please provide an Ebsilon (.ebs) file.")
+            raise ValueError(
+                f"Unsupported file format: {file_extension}. Please provide "
+                "an Ebsilon (.ebs) file."
+            )
 
-        # Retrieve the ambient conditions from the simulation or use provided values
-        Tamb = ebsilon_data['ambient_conditions'].get('Tamb', Tamb)
-        pamb = ebsilon_data['ambient_conditions'].get('pamb', pamb)
+        data, Tamb, pamb = _process_json(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib)
 
-        # Add chemical exergy values
-        try:
-            if chemExLib is not None:
-                ebsilon_data = add_chemical_exergy(ebsilon_data, Tamb, pamb, chemExLib)
-                logging.info("Chemical exergy values successfully added to the EbsilonProfessional data.")
-            else:
-                logging.info("Chemical exergy values not added: No chemical exergy library provided.")
-        except Exception as e:
-            logging.error(f"Failed to add chemical exergy values: {e}")
-            raise
+        with open(output_path, 'w') as json_file:
+            json.dump(data, json_file, indent=4)
+            logging.info(f"Parsed Ebsilon model and saved JSON data to {output_path}.")
 
-        # Calculate the total exergy flow of each component
-        try:
-            ebsilon_data = add_total_exergy_flow(ebsilon_data)
-            logging.info("Total exergy flows successfully added to the Ebsilon data.")
-        except Exception as e:
-            logging.error(f"Failed to add total exergy flows: {e}")
-            raise
-
-        # Save the generated JSON data
-        try:
-            with open(output_path, 'w') as json_file:
-                json.dump(ebsilon_data, json_file, indent=4)
-                logging.info(f"Parsed Ebsilon model and saved JSON data to {output_path}.")
-        except Exception as e:
-            logging.error(f"Failed to save parsed JSON data: {e}")
-            raise
-
-        # Extract component and connection data
-        component_data = ebsilon_data.get("components", {})
-        connection_data = ebsilon_data.get("connections", {})
-
-        # Validate that required data is present
-        if not component_data or not connection_data:
-            logging.error("Component or connection data is missing or improperly formatted.")
-            raise ValueError("Parsed Ebsilon data is missing required components or connections.")
-
-        return cls(component_data, connection_data, Tamb, pamb)
+        return cls(data["components"], data["connections"], Tamb, pamb)
 
     @classmethod
     def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None):

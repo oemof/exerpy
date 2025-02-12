@@ -171,11 +171,14 @@ superheater.set_attr(ttd_u=25)
 c15.set_attr(T=301.0255 - 273.15)
 
 c1.set_attr(m=637.8845562751899)
-# net_power.set_attr(P=-300e6)
 
 heating_condenser.set_attr(Q=-100e6)
 
 nw.solve("design")
+c1.set_attr(m=None)
+net_power.set_attr(P=-300e6)
+nw.solve("design")
+
 nw.print_results()
 
 p0 = 101300
@@ -206,7 +209,7 @@ product = {
         'generator_of_gas turbine__net power',
         'generator_of_high pressure steam turbine__net power',
         'generator_of_low pressure steam turbine__net power',
-        'generator_of_heating condenser__heat output'
+        'heating condenser__generator_of_heating condenser'
     ],
     "outputs": [
         'net power__motor_of_feed pump',

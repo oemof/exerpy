@@ -110,3 +110,105 @@ class Condenser(Component):
 
         # Log the exergy balance results
         logging.info(f"Condenser exergy balance calculated: E_D={self.E_D}, E_L={self.E_L}")
+
+
+    def aux_eqs(self, A, b, counter, T0, equations):
+        # Equality equation for mechanical and chemical exergy costs.
+        def set_equal(A, row, in_item, out_item, var):
+            if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
+                A[row, in_item["CostVar_index"][var]] = 1 / in_item["e_" + var]
+                A[row, out_item["CostVar_index"][var]] = -1 / out_item["e_" + var]
+            elif in_item["e_" + var] == 0 and out_item["e_" + var] != 0:
+                A[row, in_item["CostVar_index"][var]] = 1
+            elif in_item["e_" + var] != 0 and out_item["e_" + var] == 0:
+                A[row, out_item["CostVar_index"][var]] = 1
+            else:
+                A[row, in_item["CostVar_index"][var]] = 1
+                A[row, out_item["CostVar_index"][var]] = -1
+
+        # Thermal fuel rule on hot stream: c_T_in0 = c_T_out0.
+        def set_thermal_f_hot(A, row):
+            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
+                A[row, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
+            elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1
+            elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
+            else:
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[0]["CostVar_index"]["T"]] = -1
+
+        # Thermal fuel rule on cold stream: c_T_in1 = c_T_out1.
+        def set_thermal_f_cold(A, row):
+            if self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["e_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+            elif self.inl[1]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1
+            elif self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] == 0:
+                A[row, self.outl[1]["CostVar_index"]["T"]] = 1
+            else:
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1
+
+        # Thermal product rule: Equate the two outlet thermal costs (c_T_out0 = c_T_out1).
+        def set_thermal_p_rule(A, row):
+            if self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+            elif self.outl[0]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
+            elif self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] == 0:
+                A[row, self.outl[1]["CostVar_index"]["T"]] = 1
+            else:
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1
+
+        # Determine the thermal case based on temperatures.
+        # Case 1: All temperatures > T0.
+        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        # Case 2: All temperatures <= T0.
+        elif all([c["T"] <= T0 for c in self.inl + self.outl]):
+            set_thermal_f_cold(A, counter + 0)
+            equations[counter] = f"aux_f_rule_cold_{self.name}"
+        # Case 3: Mixed temperatures: inl[0]["T"] > T0 and outl[1]["T"] > T0, while outl[0]["T"] <= T0 and inl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
+            self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
+            set_thermal_p_rule(A, counter + 0)
+            equations[counter] = f"aux_p_rule_{self.name}"
+        # Case 4: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
+            set_thermal_f_cold(A, counter + 0)
+            equations[counter] = f"aux_f_rule_cold_{self.name}"
+        # Case 5: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] > T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        # Case 6: Mixed temperatures (dissipative case): inl[0]["T"] > T0, inl[1]["T"] <= T0, outl[0]["T"] > T0, and outl[1]["T"] <= T0.
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
+            print("you shouldn't see this")
+            return
+        # Case 7: Default case.
+        else:
+            set_thermal_f_hot(A, counter + 0)
+            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        
+        # Mechanical and chemical equations are always set.
+        set_equal(A, counter + 1, self.inl[0], self.outl[0], "M")
+        set_equal(A, counter + 2, self.inl[1], self.outl[1], "M")
+        set_equal(A, counter + 3, self.inl[0], self.outl[0], "CH")
+        set_equal(A, counter + 4, self.inl[1], self.outl[1], "CH")
+        equations[counter +1] = f"aux_equality_mech_{self.outl[0]["name"]}"
+        equations[counter +2] = f"aux_equality_mech_{self.outl[1]["name"]}"
+        equations[counter +3] = f"aux_equality_chem_{self.outl[0]["name"]}"
+        equations[counter +4] = f"aux_equality_chem_{self.outl[1]["name"]}"
+
+        for i in range(5):
+            b[counter + i] = 0
+        return [A, b, counter + 5, equations]

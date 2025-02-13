@@ -148,7 +148,7 @@ class Pump(Component):
         dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
         dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
 
-        if self.inl[0]["T"] > T0 and  self.outl[0]["T"] > T0:
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
             if dET != 0 and dEM != 0:
                 A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/dET
                 A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/dET
@@ -158,7 +158,7 @@ class Pump(Component):
             else:
                 logging.warning("case that thermal or mechanical exergy at pump outlet doesn't change is not implemented in exergoeconomics yet")
 
-        elif self.inl[0]["T"] <= T0 and  self.outl[0]["T"] > T0:
+        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
             A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
             A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
             A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM

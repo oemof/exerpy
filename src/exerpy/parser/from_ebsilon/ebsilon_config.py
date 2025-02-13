@@ -865,6 +865,8 @@ connector_mapping = {
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
         3: 1,  # Connector 3 in Ebsilon is outlet(1): 1st extraction
         4: 2,  # Connector 4 in Ebsilon is outlet(2): 2nd extraction
+        5: 3,  # Connector 5 in Ebsilon is outlet(3): shaft power from previous stage
+        6: 4,  # Connector 6 in Ebsilon is outlet(4): shaft power to next stage
     },
     7: {  # Condenser
         1: 1,  # Inlet cold stream
@@ -926,8 +928,10 @@ connector_mapping = {
         4: 1,  # Inlet fuel gas
     },
     23: {  # Gas turbine (Turbine only)
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
+        1: 0,  # Connector 1 in Ebsilon is inlet(0): inlet gas
+        2: 0,  # Connector 2 in Ebsilon is outlet(0): outlet gas
+        3: 1,  # Connector 3 in Ebsilon is outlet(1): shaft power to compressor
+        4: 2,  # Connector 4 in Ebsilon is outlet(2): shaft power to generator
     },
     24: {  # Compressor / Fan
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
@@ -966,6 +970,13 @@ connector_mapping = {
         3: 1,  # Inlet 2
     },
     55: {  # Universal Heat Exchanger
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet hot stream (if present)
+    },
+    51: {  # Universal Heat Exchanger
         1: 1,  # Inlet cold stream
         2: 1,  # Outlet cold stream
         3: 0,  # Inlet hot stream

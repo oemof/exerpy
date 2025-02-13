@@ -357,7 +357,7 @@ class ExergyAnalysis:
         )
         return cls(data['components'], data['connections'], Tamb, pamb)
 
-    def exergy_results(self):
+    def exergy_results(self, print_results=True):
         """
         Displays a table of exergy analysis results with columns for E_F, E_P, E_D, and epsilon for each component,
         and additional information for material and non-material connections.
@@ -474,17 +474,18 @@ class ExergyAnalysis:
         df_material_connection_results = df_material_connection_results.sort_values(by="Connection")
         df_non_material_connection_results = df_non_material_connection_results.sort_values(by="Connection")
 
-        # Print the material connection results DataFrame in the console in a table format
-        print("\nMaterial Connection Exergy Analysis Results:")
-        print(tabulate(df_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
+        if print_results:
+            # Print the material connection results DataFrame in the console in a table format
+            print("\nMaterial Connection Exergy Analysis Results:")
+            print(tabulate(df_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
-        # Print the non-material connection results DataFrame in the console in a table format
-        print("\nNon-Material Connection Exergy Analysis Results:")
-        print(tabulate(df_non_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
+            # Print the non-material connection results DataFrame in the console in a table format
+            print("\nNon-Material Connection Exergy Analysis Results:")
+            print(tabulate(df_non_material_connection_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
-        # Print the component results DataFrame in the console in a table format
-        print("\nComponent Exergy Analysis Results:")
-        print(tabulate(df_component_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
+            # Print the component results DataFrame in the console in a table format
+            print("\nComponent Exergy Analysis Results:")
+            print(tabulate(df_component_results.reset_index(drop=True), headers='keys', tablefmt='psql', floatfmt='.3f'))
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 
@@ -649,31 +650,36 @@ class ExergoeconomicAnalysis:
         Non-material streams (e.g. "heat", "power") get one index, named as "<connection name>_c_tot".
         """
         col_number = 0
+        valid_components = {comp.name for comp in self.components.values()}
 
-        # Process each connection (stream)
+        # Process each connection (stream) which is part of the system (has a valid source or target)
         for conn in self.connections.values():
-            kind = conn.get("kind", "material")
-            # For material streams, assign three indices.
-            if kind == "material":
-                conn["CostVar_index"] = {
-                    "T": col_number,
-                    "M": col_number + 1,
-                    "CH": col_number + 2
-                }
-                # Create variable names for each of the three cost components.
-                self.variables[str(col_number)]     = f"C_{conn['name']}_T"
-                self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
-                self.variables[str(col_number + 2)] = f"C_{conn['name']}_CH"
-                col_number += 3
-            # For non-material streams (e.g., heat, power), assign one index.
-            elif kind in ("heat", "power"):
-                conn["CostVar_index"] = {"exergy": col_number}
-                self.variables[str(col_number)] = f"C_{conn['name']}_TOT"
-                col_number += 1
+            is_part_of_the_system = (conn.get("source_component") in valid_components) or \
+                                    (conn.get("target_component") in valid_components)
+            if not is_part_of_the_system:
+                continue
+            else:
+                kind = conn.get("kind", "material")
+                # For material streams, assign three indices.
+                if kind == "material":
+                    conn["CostVar_index"] = {
+                        "T": col_number,
+                        "M": col_number + 1,
+                        "CH": col_number + 2
+                    }
+                    # Create variable names for each of the three cost components.
+                    self.variables[str(col_number)]     = f"C_{conn['name']}_T"
+                    self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
+                    self.variables[str(col_number + 2)] = f"C_{conn['name']}_CH"
+                    col_number += 3
+                # For non-material streams (e.g., heat, power), assign one index.
+                elif kind in ("heat", "power"):
+                    conn["CostVar_index"] = {"exergy": col_number}
+                    self.variables[str(col_number)] = f"C_{conn['name']}_TOT"
+                    col_number += 1
 
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
-
 
 
     def assign_user_costs(self, Exe_Eco_Costs):
@@ -686,14 +692,14 @@ class ExergoeconomicAnalysis:
 
         For connections:
         1) Only consider connections of accepted kinds.
-        2) If the connection is an input (i.e. has no source_component) and no cost is provided
-        in Exe_Eco_Costs, raise a ValueError.
+        2) If the connection is an input (i.e. has no source_component) and is not a power connection,
+        and no cost is provided in Exe_Eco_Costs, raise a ValueError.
         3) In all other cases (input connections with a provided cost and connections with a source_component 
         that have an assigned cost), assign the cost as follows:
         - For material connections, assign c_TOT and also assign cost breakdown (c_T, c_M, c_CH)
             and compute C_TOT as c_TOT * (e_T, e_M, e_CH * m).
         - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
-            
+        
         Cost conversions:
         - For components: from €/h to €/s (divide by 3600).
         - For connections: from €/GJ to €/J (multiply by 1e-9).
@@ -714,12 +720,14 @@ class ExergoeconomicAnalysis:
             # Only consider valid connection types
             if kind not in accepted_kinds:
                 continue
-
+            
             cost_key = f"{conn_name}_c"
-            is_input = not conn.get("source_component")
 
-            # If input connection and no cost is provided, raise an error.
-            if is_input and cost_key not in Exe_Eco_Costs:
+            # Check if the connection is an input (but also not an output)
+            is_input = not conn.get("source_component") and conn.get("target_component")
+
+            # For input connections (except for power connections) a cost is mandatory.
+            if is_input and kind != "power" and cost_key not in Exe_Eco_Costs:
                 raise ValueError(f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
             # Assign cost if provided.
@@ -745,7 +753,6 @@ class ExergoeconomicAnalysis:
                     
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
-
 
 
     def construct_matrix(self, Tamb):
@@ -789,6 +796,7 @@ class ExergoeconomicAnalysis:
 
         # 2. Inlet stream equations.
         # For each connection that is considered an inlet stream, set the cost variable to the provided cost.
+        # Input power connections are non considered, as their specific cost is set equal to one of the output ones.
         for conn in self.connections.values():
             # A connection is treated as an inlet if its source_component is missing or not valid and is outlet is a system component.
             if not (conn.get("source_component") in valid_components) and (conn.get("target_component") in valid_components):
@@ -802,15 +810,41 @@ class ExergoeconomicAnalysis:
                         b[counter] = conn.get(f"C_{label}", conn.get("C_TOT", 0))
                         self.equations[counter] = f"boundary_stream_costs_{conn["name"]}_{label}"
                         counter += 1
-                elif kind in {"heat", "power"}:
-                    # For non-material streams, there is a single cost variable.
+                elif kind == "heat":
+                    # For heat streams, there is a single cost variable.
                     idx = conn["CostVar_index"]["exergy"]
                     A[counter, idx] = 1
                     b[counter] = conn.get("C_TOT", 0)
                     self.equations[counter] = f"boundary_stream_costs_{conn["name"]}_TOT"
                     counter += 1
+                elif kind == "power":
+                    logging.info("The specific cost of inlet power flow is assumed to be unknown.",
+                                 "Their specific cost is set equal to one of all power outputs.",
+                                  "Change the source code for treat them differently.")
+                    
+        
+        # 3. Auxiliary equations for the equality of the specific costs 
+        # of all power flows at the input or output of the system.
+        power_conns = [conn for conn in self.connections.values() 
+                    if conn.get("kind") == "power" and 
+                    (conn.get("source_component") not in valid_components or conn.get("target_component") not in valid_components) and not
+                    (conn.get("source_component") not in valid_components and conn.get("target_component") not in valid_components)]
 
-        # 3. Auxiliary equations.
+        # Only add auxiliary equations if there is more than one power connection.
+        if len(power_conns) > 1:
+            # Choose the first connection as reference.
+            ref = power_conns[0]
+            ref_idx = ref["CostVar_index"]["exergy"]
+            for conn in power_conns[1:]:
+                cur_idx = conn["CostVar_index"]["exergy"]
+                A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
+                A[counter, cur_idx] = -1 / conn["E"] if conn["E"] != 0 else -1
+                b[counter] = 0
+                self.equations[counter] = f"aux_power_eq_{ref['name']}_{conn['name']}"
+                counter += 1
+
+
+        # 4. Auxiliary equations.
         # These equations are needed because we have more variables than components.
         # For each productive component call its auxiliary equation routine, if available.
         for comp in self.components.values():
@@ -818,10 +852,13 @@ class ExergoeconomicAnalysis:
                 # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                 # and return the updated (A, b, counter).
                 A, b, counter, self.equations = comp.aux_eqs(A, b, counter, Tamb, self.equations)
+                print(f"Component {comp.name} done with {len(self.equations)} equations.")
+            else:
+                # If no auxiliary equations are provided.
+                logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
 
-        # Check that we have exactly as many equations as cost variables.
-        # if counter != num_vars:
-            # raise ValueError(f"Number of equations ({counter}) does not match number of variables ({num_vars}).")  # TODO: Enable this check
+        # 5. Dissipative components:
+        # TODO: Implement the equations for dissipative components.
 
         return A, b
 
@@ -837,14 +874,23 @@ class ExergoeconomicAnalysis:
         try:
             C_solution = np.linalg.solve(exergy_cost_matrix, exergy_cost_vector)
         except np.linalg.LinAlgError:
-            raise ValueError("Exergoeconomic system is singular and cannot be solved.")
+            raise ValueError(f"Exergoeconomic system is singular and cannot be solved. "
+                             f"Provided equations: {len(self.equations)}, provided variables: {len(self.variables)}")
 
         # Step 3: Assign solutions to connections
         for conn_name, conn in self.connections.items():
-            conn.C_therm = C_solution[conn.CostVar_index["therm"]]
-            conn.C_mech = C_solution[conn.CostVar_index["mech"]]
-            conn.C_chemical = C_solution[conn.CostVar_index["chemical"]]
-            conn.C_tot = conn.C_therm + conn.C_mech + conn.C_chemical
+            is_part_of_the_system = conn.get("source_component") or conn.get("target_component")
+            if not is_part_of_the_system:
+                continue
+            else:
+                kind = conn.get("kind")
+                if kind == "material":
+                    conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
+                    conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
+                    conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
+                    conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
+                elif kind in {"heat", "power"}:
+                    conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
 
 
     def run(self, Exe_Eco_Costs, Tamb):
@@ -862,4 +908,89 @@ class ExergoeconomicAnalysis:
         self.assign_user_costs(Exe_Eco_Costs)
         self.solve_exergoeconomic_analysis(Tamb)
         print("Exergoeconomic analysis completed successfully.")
+
+
+    def exergoeconomic_results(self, print_results=True):
+        """
+        Generate and (optionally) print tables for the exergoeconomic analysis.
+        
+        This function first obtains the exergy analysis results tables (for components,
+        material connections, and non-material connections) by calling the exergy_results()
+        method on the underlying exergy analysis with print_results=False. It then adds new
+        columns with the cost data. The cost values are computed internally in [€/s] and are
+        converted to [€/h] (multiplied by 3600) for display.
+        
+        For material connections, the following columns are added:
+        - C^T [€/h]
+        - C^M [€/h]
+        - C^CH [€/h]
+        - C^TOT [€/h]
+        For heat/power connections, only the column:
+        - C^TOT [€/h]
+        is added.
+        
+        Returns
+        -------
+        tuple of pandas.DataFrame
+            (df_component_results, df_material_connection_results, df_non_material_connection_results)
+            with added cost columns.
+        """
+        # Retrieve the base exergy results without printing them
+        df_comp, df_mat, df_non_mat = self.exergy_analysis.exergy_results(print_results=False)
+        
+        # For material connections, add cost columns (convert from €/s to €/h by multiplying by 3600)
+        C_T_list = []
+        C_M_list = []
+        C_CH_list = []
+        C_TOT_list = []
+        
+        for idx, row in df_mat.iterrows():
+            conn_name = row['Connection']
+            conn_data = self.connections.get(conn_name, {})
+            kind = conn_data.get("kind", None)
+            if kind == "material":
+                C_T = conn_data.get("C_T", None)
+                C_M = conn_data.get("C_M", None)
+                C_CH = conn_data.get("C_CH", None)
+                C_TOT = conn_data.get("C_TOT", None)
+                C_T_list.append(C_T * 3600 if C_T is not None else None)
+                C_M_list.append(C_M * 3600 if C_M is not None else None)
+                C_CH_list.append(C_CH * 3600 if C_CH is not None else None)
+                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
+            elif kind in {"heat", "power"}:
+                # For non-material streams in the material table, only C^TOT is defined.
+                C_T_list.append(np.nan)
+                C_M_list.append(np.nan)
+                C_CH_list.append(np.nan)
+                C_TOT = conn_data.get("C_TOT", None)
+                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
+            else:
+                C_T_list.append(np.nan)
+                C_M_list.append(np.nan)
+                C_CH_list.append(np.nan)
+                C_TOT_list.append(np.nan)
+        
+        df_mat["C^T [€/h]"] = C_T_list
+        df_mat["C^M [€/h]"] = C_M_list
+        df_mat["C^CH [€/h]"] = C_CH_list
+        df_mat["C^TOT [€/h]"] = C_TOT_list
+        
+        # For non-material connections, add the total cost column (converted to €/h)
+        C_TOT_non_mat = []
+        for idx, row in df_non_mat.iterrows():
+            conn_name = row["Connection"]
+            conn_data = self.connections.get(conn_name, {})
+            C_TOT = conn_data.get("C_TOT", None)
+            C_TOT_non_mat.append(C_TOT * 3600 if C_TOT is not None else None)
+        df_non_mat["C^TOT [€/h]"] = C_TOT_non_mat
+
+        if print_results:
+            print("\nExergoeconomic Analysis - Material Connection Results:")
+            print(tabulate(df_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print("\nExergoeconomic Analysis - Non-Material Connection Results:")
+            print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print("\nExergoeconomic Analysis - Component Results (unchanged):")
+            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+        
+        return df_comp, df_mat, df_non_mat
 

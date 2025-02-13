@@ -186,7 +186,7 @@ class Deaerator(Component):
                 A[counter+1, inlet["CostVar_index"]["M"]] = inlet["m"] / (self.outl[0]["m"] * inlet["e_M"])
         else:
             A[counter+1, self.outl[i]["CostVar_index"]["M"]] = 1
-        equations[counter] = f"aux_mixing_mech_{self.outl[0]["name"]}"
+        equations[counter+1] = f"aux_mixing_mech_{self.outl[0]["name"]}"
 
         for i in range(2):
             b[counter+i]=0

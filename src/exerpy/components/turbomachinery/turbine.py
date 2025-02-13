@@ -151,52 +151,69 @@ class Turbine(Component):
         return total
     
 
-def aux_eqs(self, A, b, counter, T0, equations):
-    # Only process if the inlet and the first outlet are above T0.
-    # (You might wish to check all material outlets, but here we follow your condition on self.outl[0])
-    if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-        # Filter outlets to include only those with kind == "material"
-        material_outlets = [outlet for outlet in self.outl.values() if outlet.get("kind") == "material"]
+    def aux_eqs(self, A, b, counter, T0, equations):
+        # Only process if the inlet and the first outlet are above T0.
+        # (You might wish to check all material outlets, but here we follow your condition on self.outl[0])
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
+            # Filter outlets to include only those with kind == "material"
+            material_outlets = [outlet for outlet in self.outl.values() if outlet.get("kind") == "material"]
 
-        # Loop over each material outlet (each one gets its own set of three equations)
-        for i, outlet in enumerate(material_outlets):
-            row_offset = 3 * i
+            # Loop over each material outlet (each one gets its own set of three equations)
+            for i, outlet in enumerate(material_outlets):
+                row_offset = 3 * i
 
-            # Thermal exergy equation:
-            A[counter + row_offset, self.inl[0]["CostVar_index"]["T"]] = (
-                1 / self.inl[0]["e_T"] if self.inl[0]["e_T"] != 0 else 1
-            )
-            A[counter + row_offset, outlet["CostVar_index"]["T"]] = (
-                -1 / outlet["e_T"] if outlet["e_T"] != 0 else -1
-            )
-            equations[counter + row_offset] = f"aux_f_rule_{outlet['name']}"
+                # Thermal exergy equation:
+                A[counter + row_offset, self.inl[0]["CostVar_index"]["T"]] = (
+                    1 / self.inl[0]["e_T"] if self.inl[0]["e_T"] != 0 else 1
+                )
+                A[counter + row_offset, outlet["CostVar_index"]["T"]] = (
+                    -1 / outlet["e_T"] if outlet["e_T"] != 0 else -1
+                )
+                equations[counter + row_offset] = f"aux_f_rule_{outlet['name']}"
 
-            # Mechanical exergy equation:
-            A[counter + row_offset + 1, self.inl[0]["CostVar_index"]["M"]] = (
-                1 / self.inl[0]["e_M"] if self.inl[0]["e_M"] != 0 else 1
-            )
-            A[counter + row_offset + 1, outlet["CostVar_index"]["M"]] = (
-                -1 / outlet["e_M"] if outlet["e_M"] != 0 else -1
-            )
-            equations[counter + row_offset + 1] = f"aux_f_rule_{outlet['name']}"
+                # Mechanical exergy equation:
+                A[counter + row_offset + 1, self.inl[0]["CostVar_index"]["M"]] = (
+                    1 / self.inl[0]["e_M"] if self.inl[0]["e_M"] != 0 else 1
+                )
+                A[counter + row_offset + 1, outlet["CostVar_index"]["M"]] = (
+                    -1 / outlet["e_M"] if outlet["e_M"] != 0 else -1
+                )
+                equations[counter + row_offset + 1] = f"aux_f_rule_{outlet['name']}"
 
-            # Chemical exergy equation:
-            A[counter + row_offset + 2, self.inl[0]["CostVar_index"]["CH"]] = (
-                1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            )
-            A[counter + row_offset + 2, outlet["CostVar_index"]["CH"]] = (
-                -1 / outlet["e_CH"] if outlet["e_CH"] != 0 else -1
-            )
-            equations[counter + row_offset + 2] = f"aux_f_rule_{outlet['name']}"
+                # Chemical exergy equation:
+                A[counter + row_offset + 2, self.inl[0]["CostVar_index"]["CH"]] = (
+                    1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
+                )
+                A[counter + row_offset + 2, outlet["CostVar_index"]["CH"]] = (
+                    -1 / outlet["e_CH"] if outlet["e_CH"] != 0 else -1
+                )
+                equations[counter + row_offset + 2] = f"aux_f_rule_{outlet['name']}"
 
-        # Set the corresponding entries in vector b to zero for the new rows.
-        num_new_rows = 3 * len(material_outlets)
-        for j in range(num_new_rows):
-            b[counter + j] = 0
+            # Set the corresponding entries in vector b to zero for the new rows.
+            num_new_rows = 3 * len(material_outlets)
+            for j in range(num_new_rows):
+                b[counter + j] = 0
 
-        # Update the counter to account for the newly added rows.
-        counter += num_new_rows
-    else:
-        logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
+            # Update the counter to account for the newly added rows.
+            counter += num_new_rows
+        else:
+            logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
 
-    return [A, b, counter, equations]
+        # Now, add an auxiliary equation for shaft power equality.
+        # We consider power outlets (with kind "power") that have both a source and target component.
+        power_outlets = [outlet for outlet in self.outl.values()
+                         if outlet.get("kind") == "power" and outlet.get("source_component") and outlet.get("target_component")]
+        # If there is more than one power outlet, add one equation per additional outlet.
+        if len(power_outlets) > 1:
+            # Choose the first power outlet as reference.
+            ref = power_outlets[0]
+            ref_idx = ref["CostVar_index"]["exergy"]
+            for outlet in power_outlets[1:]:
+                cur_idx = outlet["CostVar_index"]["exergy"]
+                A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
+                A[counter, cur_idx] = -1 / outlet["E"] if outlet["E"] != 0 else -1
+                b[counter] = 0
+                equations[counter] = f"aux_p_rule_power_{self.name}_{outlet['name']}"
+                counter += 1
+
+        return [A, b, counter, equations]

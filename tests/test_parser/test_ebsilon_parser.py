@@ -16,6 +16,7 @@ import pytest
 from unittest.mock import Mock, patch
 import json
 from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser, run_ebsilon
+from exerpy.parser.from_ebsilon import __ebsilon_path__
 
 class MockEpFluidType:
     """Mock class simulating Ebsilon's EpFluidType enumeration."""
@@ -85,14 +86,14 @@ def mock_component():
     mock_comp = Mock()
     mock_comp.Name = "TestComponent"
     mock_comp.Kind = 10046  # Component type 46 (measuring point)
-    
+
     # Setup measurement properties
     mock_comp.FTYP = Mock()
     mock_comp.FTYP.Value = 26  # Temperature measurement type
     mock_comp.MEASM = Mock()
     mock_comp.MEASM.Value = 298.15  # Kelvin
     mock_comp.MEASM.Dimension = "K"
-    
+
     return mock_comp
 
 @pytest.fixture
@@ -119,7 +120,7 @@ def mock_pipe():
     mock_pipe.Name = "TestPipe"
     mock_pipe.Kind = 1013  # Logic fluid type
     mock_pipe.FluidType = 1  # Steam/water
-    
+
     # Setup thermodynamic properties
     properties = {
         'M': (10.0, "kg/s"),     # Mass flow
@@ -131,15 +132,15 @@ def mock_pipe():
         'X': (1.0, "-"),         # Quality
         'Q': (1000.0, "kW")      # Heat flow
     }
-    
+
     for prop, (value, dim) in properties.items():
         setattr(mock_pipe, prop, Mock(Value=value, Dimension=dim))
-    
+
     # Setup connection methods
     mock_pipe.HasComp = Mock(return_value=True)
     mock_pipe.Comp = Mock()
     mock_pipe.Link = Mock()
-    
+
     return mock_pipe
 
 @pytest.fixture
@@ -162,17 +163,21 @@ def parser():
         mock_app = Mock()
         mock_model = Mock()
         mock_oc = Mock()
-        
+
         mock_app.Open.return_value = mock_model
         mock_app.ObjectCaster = mock_oc
         mock_dispatch.return_value = mock_app
-        
+
         parser = EbsilonModelParser("dummy_path.ebs")
         parser.app = mock_app
         parser.model = mock_model
         parser.oc = mock_oc
         return parser
-    
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_initialize_model():
     """
     Test Ebsilon model initialization.
@@ -192,12 +197,17 @@ def test_initialize_model():
     with patch('exerpy.parser.from_ebsilon.ebsilon_parser.Dispatch', return_value=mock_app) as mocked_dispatch:
         parser = EbsilonModelParser("dummy_path.ebs")
         parser.initialize_model()
-        
+
         mocked_dispatch.assert_called_once()
         assert parser.app == mock_app
         assert parser.model == mock_model
         assert parser.oc == mock_oc
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_simulate_model(parser):
     """
     Test model simulation execution.
@@ -216,9 +226,10 @@ def test_simulate_model(parser):
     mock_calc_errors.Count = 0
     parser.model = Mock()
     parser.model.CalculationErrors = mock_calc_errors
-    
+
     parser.simulate_model()
     parser.model.SimulateNew.assert_called_once()
+
 
 def test_parse_component(parser, mock_component):
     """
@@ -240,11 +251,12 @@ def test_parse_component(parser, mock_component):
     parser.oc = Mock()
     parser.oc.CastToComp = Mock(return_value=mock_component)
     parser.oc.CastToComp46 = Mock(return_value=mock_component)
-    
+
     parser.parse_component(mock_component)
-    
+
     assert parser.Tamb is not None
     assert isinstance(parser.Tamb, (int, float))
+
 
 def test_parse_connection(parser, mock_pipe):
     """
@@ -268,21 +280,22 @@ def test_parse_connection(parser, mock_pipe):
     parser.pamb = 101325
     parser.oc = Mock()
     parser.oc.CastToPipe = Mock(return_value=mock_pipe)
-    
+
     # Configure source and target components
     mock_comp0 = Mock()
     mock_comp0.Kind = 10046  # Source component
     mock_comp1 = Mock()
     mock_comp1.Kind = 10031  # Target component
-    
+
     mock_pipe.Comp.side_effect = [mock_comp0, mock_comp1]
-    
+
     parser.parse_connection(mock_pipe)
-    
+
     assert mock_pipe.Name in parser.connections_data
     connection_data = parser.connections_data[mock_pipe.Name]
     assert 'kind' in connection_data
     assert 'fluid_type' in connection_data
+
 
 def test_get_sorted_data(parser):
     """
@@ -311,14 +324,15 @@ def test_get_sorted_data(parser):
     }
     parser.Tamb = 298.15
     parser.pamb = 101325
-    
+
     sorted_data = parser.get_sorted_data()
-    
+
     assert 'components' in sorted_data
     assert 'connections' in sorted_data
     assert 'ambient_conditions' in sorted_data
     assert list(sorted_data['components']['group1'].keys()) == ['comp1', 'comp2']
     assert list(sorted_data['connections'].keys()) == ['conn1', 'conn2']
+
 
 def test_write_to_json(parser, tmp_path):
     """
@@ -342,16 +356,17 @@ def test_write_to_json(parser, tmp_path):
         'connections': {'conn1': {}},
         'ambient_conditions': {'Tamb': 298.15, 'pamb': 101325}
     }
-    
+
     output_file = tmp_path / "test_output.json"
-    
+
     with patch.object(parser, 'get_sorted_data', return_value=test_data):
         parser.write_to_json(str(output_file))
-    
+
     assert output_file.exists()
     with open(output_file) as f:
         loaded_data = json.load(f)
     assert loaded_data == test_data
+
 
 @patch('win32com.client.Dispatch')
 def test_run_ebsilon(mock_dispatch, tmp_path):
@@ -375,17 +390,18 @@ def test_run_ebsilon(mock_dispatch, tmp_path):
     """
     mock_parser = Mock()
     mock_parser.get_sorted_data.return_value = {'test': 'data'}
-    
+
     with patch('os.path.exists', return_value=True), \
          patch('exerpy.parser.from_ebsilon.ebsilon_parser.EbsilonModelParser', return_value=mock_parser):
-        
+
         result = run_ebsilon("test.ebs", str(tmp_path / "output.json"))
-        
+
         assert result == {'test': 'data'}
         mock_parser.initialize_model.assert_called_once()
         mock_parser.simulate_model.assert_called_once()
         mock_parser.parse_model.assert_called_once()
         mock_parser.write_to_json.assert_called_once()
+
 
 def test_run_ebsilon_file_not_found():
     """

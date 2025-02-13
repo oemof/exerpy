@@ -1,21 +1,21 @@
-###############
-Exergy Analysis
-###############
+#####################
+Exergy Analysis Intro
+#####################
 
-Exergy analysis is a powerful tool for evaluating and optimizing thermodynamic 
-systems. Unlike conventional energy analysis, which focuses on the quantity of 
-energy, exergy analysis considers both the quantity and quality of energy, 
-providing deeper insights into system inefficiencies. This approach helps 
-identify where and why irreversibilities occur, enabling engineers and 
-researchers to develop strategies for improving efficiency, reducing costs, 
+Exergy analysis is a powerful tool for evaluating and optimizing thermodynamic
+systems. Unlike conventional energy analysis, which focuses on the quantity of
+energy, exergy analysis considers both the quantity and quality of energy,
+providing deeper insights into system inefficiencies. This approach helps
+identify where and why irreversibilities occur, enabling engineers and
+researchers to develop strategies for improving efficiency, reducing costs,
 and supporting sustainable energy conversion.
 
-The ExerPy library offers a flexible, Python-based solution for conducting 
-exergy analysis on energy-conversion systems. It supports integration with 
-simulation tools like Ebsilon Professional, Aspen Plus, and TESPy, allowing 
+The ExerPy library offers a flexible, Python-based solution for conducting
+exergy analysis on energy-conversion systems. It supports integration with
+simulation tools like Ebsilon Professional, Aspen Plus, and TESPy, allowing
 users to extract detailed data about components and connections.
 
-The features described in this section are based on a paper published for TESPy. 
+The features described in this section are based on a paper published for TESPy.
 For more details, see :cite:`Witte2022`.
 
 
@@ -126,6 +126,6 @@ potential exergy are neglected and therefore not considered as well.
 
 .. note::
 
-    The generic exergy analysis balance equations have been implemented and tested 
+    The generic exergy analysis balance equations have been implemented and tested
     only for the most common components. A list of components that have been considered
     can be found in the API documentation.

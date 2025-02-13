@@ -1,5 +1,5 @@
 from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
-from tespy.connections import Connection, Ref
+from tespy.connections import Connection, Ref, Bus
 from tespy.networks import Network
 
 
@@ -7,16 +7,16 @@ nw = Network(T_unit="C", p_unit="bar")
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
-fan = Compressor("air fan")
+fan = Compressor("FAN")
 
 water_in = Source("water inlet")
 water_out = Sink("water outlet")
-pump = Pump("water pump")
+pump = Pump("PUMP")
 
-evaporator = HeatExchanger("evaporator")
-condenser = HeatExchanger("condenser")
-compressor = Compressor("compressor")
-valve = Valve("valve")
+evaporator = HeatExchanger("EVA")
+condenser = HeatExchanger("COND")
+compressor = Compressor("COMP")
+valve = Valve("VAL")
 cc = CycleCloser("cc")
 
 a1 = Connection(air_in, "out1", fan, "in1", label="11")
@@ -68,49 +68,58 @@ condenser.set_attr(ttd_l=5)
 c3.set_attr(Td_bp=None)
 evaporator.set_attr(ttd_u=5)
 
+power_input = Bus("power input")
+power_input.add_comps(
+    {"comp": compressor, "base": "bus", "char": 0.985},
+    {"comp": pump, "base": "bus", "char": 0.985},
+    {"comp": fan, "base": "bus", "char": 0.985}
+)
+
+nw.add_busses(
+    power_input
+)
+
 nw.solve("design")
 nw.print_results()
 
 p0 = 101300
 T0 = 283.15
 
-component_json = {}
-for comp_type in nw.comps["comp_type"].unique():
-    component_json[comp_type] = {}
-    for c in nw.comps.loc[nw.comps["comp_type"] == comp_type, "object"]:
-        component_json[comp_type][c.label] = {}
-
-connection_json = {}
-for c in nw.conns["object"]:
-    connection_json[c.label] = {
-        "source_component": c.source.label,
-        "source_connector": int(c.source_id.removeprefix("out")) - 1,
-        "target_component": c.target.label,
-        "target_connector": int(c.target_id.removeprefix("in")) - 1
-    }
-    c.get_physical_exergy(p0, T0)
-    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"mass_composition": c.fluid.val})
-    connection_json[c.label].update({"e_T": c.ex_therm})
-    connection_json[c.label].update({"e_M": c.ex_mech})
-    connection_json[c.label].update({"e_PH": c.ex_physical})
+from exerpy import ExergyAnalysis
 
 
-json_export = {
-    "components": component_json,
-    "connections": connection_json,
-    "ambient_conditions": {
-        "Tamb": 283.15,
-        "Tamb_unit": "K",
-        "pamb": 101300.0,
-        "pamb_unit": "Pa"
-    }
-}
+ean = ExergyAnalysis.from_tespy(nw, T0, p0)
 
-
+# export of the results for validation
 import json
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
+json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/heatpump/hp_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+
+fuel = {
+    "inputs": [
+        'power input__motor_of_COMP',
+        'power input__motor_of_FAN',
+        'power input__motor_of_PUMP'
+    ],
+    "outputs": []
+}
+
+product = {
+    "inputs": ['23'],
+    "outputs": ['21']
+}
+
+loss = {
+    "inputs": ['13'],
+    "outputs": ['11']
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/heatpump/hp_tespy.json")
+df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")

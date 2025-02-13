@@ -1,0 +1,531 @@
+{
+    "components": {
+        "Compressor": {
+            "AC": {
+                "name": "AC",
+                "type": "Compressor",
+                "label": "AC"
+            }
+        },
+        "HeatExchanger": {
+            "APH": {
+                "name": "APH",
+                "type": "HeatExchanger",
+                "label": "APH"
+            },
+            "EV": {
+                "name": "EV",
+                "type": "HeatExchanger",
+                "label": "EV"
+            },
+            "PH": {
+                "name": "PH",
+                "type": "HeatExchanger",
+                "label": "PH"
+            }
+        },
+        "CombustionChamber": {
+            "CC": {
+                "name": "CC",
+                "type": "DiabaticCombustionChamber",
+                "label": "CC"
+            }
+        },
+        "Turbine": {
+            "EXP": {
+                "name": "EXP",
+                "type": "Turbine",
+                "label": "EXP"
+            }
+        },
+        "Drum": {
+            "drum": {
+                "name": "drum",
+                "type": "Drum",
+                "label": "drum"
+            }
+        },
+        "Motor": {
+            "motor_of_AC": {
+                "name": "motor_of_AC",
+                "type": "Motor",
+                "type_index": null,
+                "label": "motor_of_AC"
+            }
+        },
+        "Generator": {
+            "generator_of_EXP": {
+                "name": "generator_of_EXP",
+                "type": "Generator",
+                "type_index": null,
+                "label": "generator_of_EXP"
+            }
+        }
+    },
+    "connections": {
+        "1": {
+            "source_component": "ambient air",
+            "source_connector": 0,
+            "target_component": "AC",
+            "target_connector": 0,
+            "mass_composition": {
+                "O2": 0.22997585111067764,
+                "N2": 0.7576155344954176,
+                "CO2": 0.0004608534530315664,
+                "H2O": 0.011947760940873214,
+                "CH4": 0.0
+            },
+            "kind": "material",
+            "m": 90.9394565835289,
+            "m_unit": "kg / s",
+            "T": 298.15,
+            "T_unit": "C",
+            "p": 101299.99999999999,
+            "p_unit": "bar",
+            "h": 327381.6035266853,
+            "h_unit": "J / kg",
+            "s": 6911.112368122053,
+            "s_unit": "J / kgK",
+            "e_T": 0.0,
+            "e_M": 0.0,
+            "e_PH": 0.0,
+            "e_CH": -432.4551235970402,
+            "e_CH_unit": "J / kg",
+            "E": -39327.23393667766,
+            "E_unit": "W"
+        },
+        "2": {
+            "source_component": "AC",
+            "source_connector": 0,
+            "target_component": "APH",
+            "target_connector": 1,
+            "mass_composition": {
+                "O2": 0.22997585111067764,
+                "N2": 0.7576155344954176,
+                "CO2": 0.0004608534530315664,
+                "H2O": 0.011947760940873214,
+                "CH4": 0.0
+            },
+            "kind": "material",
+            "m": 90.9394565835289,
+            "m_unit": "kg / s",
+            "T": 611.5052734299336,
+            "T_unit": "C",
+            "p": 1012999.9999999999,
+            "p_unit": "bar",
+            "h": 653922.9812480751,
+            "h_unit": "J / kg",
+            "s": 6988.609347616783,
+            "s_unit": "J / kgK",
+            "e_T": 105911.69777056438,
+            "e_M": 197523.95551447166,
+            "e_PH": 303435.65328503604,
+            "e_CH": -432.4551235970402,
+            "e_CH_unit": "J / kg",
+            "E": 27554946.18387258,
+            "E_unit": "W"
+        },
+        "3": {
+            "source_component": "APH",
+            "source_connector": 1,
+            "target_component": "CC",
+            "target_connector": 0,
+            "mass_composition": {
+                "O2": 0.22997585111067764,
+                "N2": 0.7576155344954176,
+                "CO2": 0.0004608534530315664,
+                "H2O": 0.011947760940873214,
+                "CH4": 0.0
+            },
+            "kind": "material",
+            "m": 90.9394565835289,
+            "m_unit": "kg / s",
+            "T": 850.0,
+            "T_unit": "C",
+            "p": 962349.9999999999,
+            "p_unit": "bar",
+            "h": 916984.0219766004,
+            "h_unit": "J / kg",
+            "s": 7366.247754575403,
+            "s_unit": "J / kgK",
+            "e_T": 260741.85727517243,
+            "e_M": 193161.94570367655,
+            "e_PH": 453903.802978849,
+            "e_CH": -432.4551235970402,
+            "e_CH_unit": "J / kg",
+            "E": 41238437.95015701,
+            "E_unit": "W"
+        },
+        "10": {
+            "source_component": "methane",
+            "source_connector": 0,
+            "target_component": "CC",
+            "target_connector": 1,
+            "mass_composition": {
+                "O2": 0,
+                "N2": 0,
+                "CO2": 0,
+                "H2O": 0,
+                "CH4": 1
+            },
+            "kind": "material",
+            "m": 1.6466228981600035,
+            "m_unit": "kg / s",
+            "T": 298.15000000000094,
+            "T_unit": "C",
+            "p": 1200000.0,
+            "p_unit": "bar",
+            "h": 899139.9590977639,
+            "h_unit": "J / kg",
+            "s": 5366.980364340882,
+            "s_unit": "J / kgK",
+            "e_T": -1.0051735443994401e-09,
+            "e_M": 379051.8734263716,
+            "e_PH": 379051.8734263706,
+            "e_CH": 51384297.00551026,
+            "e_CH_unit": "J / kg",
+            "E": 85234715.54950202,
+            "E_unit": "W"
+        },
+        "4": {
+            "source_component": "CC",
+            "source_connector": 0,
+            "target_component": "EXP",
+            "target_connector": 0,
+            "mass_composition": {
+                "H2O": 0.05167812266039598,
+                "CO2": 0.04924118499666168,
+                "CH4": 0.0,
+                "O2": 0.15493912937628365,
+                "N2": 0.7441415629666587
+            },
+            "kind": "material",
+            "m": 92.5860794816889,
+            "m_unit": "kg / s",
+            "T": 1519.999897873525,
+            "T_unit": "C",
+            "p": 914232.4999999999,
+            "p_unit": "bar",
+            "h": 1879591.924491616,
+            "h_unit": "J / kg",
+            "s": 8036.535106424867,
+            "s_unit": "J / kgK",
+            "e_T": 907912.4776993559,
+            "e_M": 179567.56427676673,
+            "e_PH": 1087480.0419761227,
+            "e_CH": 4210.537673900658,
+            "e_CH_unit": "J / kg",
+            "E": 101075350.77688807,
+            "E_unit": "W"
+        },
+        "5": {
+            "source_component": "EXP",
+            "source_connector": 0,
+            "target_component": "APH",
+            "target_connector": 0,
+            "mass_composition": {
+                "H2O": 0.05167812266039598,
+                "CO2": 0.04924118499666168,
+                "CH4": 0.0,
+                "O2": 0.15493912937628365,
+                "N2": 0.7441415629666587
+            },
+            "kind": "material",
+            "m": 92.5860794816889,
+            "m_unit": "kg / s",
+            "T": 1011.3288265235976,
+            "T_unit": "C",
+            "p": 109929.46283233861,
+            "p_unit": "bar",
+            "h": 1234835.2205010746,
+            "h_unit": "J / kg",
+            "s": 8145.032141842907,
+            "s_unit": "J / kgK",
+            "e_T": 403580.3177285017,
+            "e_M": 6794.629147190988,
+            "e_PH": 410374.9468756927,
+            "e_CH": 4210.537673900658,
+            "e_CH_unit": "J / kg",
+            "E": 38384844.624463156,
+            "E_unit": "W"
+        },
+        "6": {
+            "source_component": "APH",
+            "source_connector": 0,
+            "target_component": "EV",
+            "target_connector": 0,
+            "mass_composition": {
+                "H2O": 0.05167812266039598,
+                "CO2": 0.04924118499666168,
+                "CH4": 0.0,
+                "O2": 0.15493912937628365,
+                "N2": 0.7441415629666587
+            },
+            "kind": "material",
+            "m": 92.5860794816889,
+            "m_unit": "kg / s",
+            "T": 794.8050272449545,
+            "T_unit": "C",
+            "p": 106631.57894736843,
+            "p_unit": "bar",
+            "h": 976452.6620638643,
+            "h_unit": "J / kg",
+            "s": 7866.7576875968625,
+            "s_unit": "J / kgK",
+            "e_T": 230694.80523352756,
+            "e_M": 4265.111738412805,
+            "e_PH": 234959.91697194037,
+            "e_CH": 4210.537673900658,
+            "e_CH_unit": "J / kg",
+            "E": 22143854.72351151,
+            "E_unit": "W"
+        },
+        "6P": {
+            "source_component": "EV",
+            "source_connector": 0,
+            "target_component": "PH",
+            "target_connector": 0,
+            "mass_composition": {
+                "H2O": 0.05167812266039598,
+                "CO2": 0.04924118499666168,
+                "CH4": 0.0,
+                "O2": 0.15493912937628365,
+                "N2": 0.7441415629666587
+            },
+            "kind": "material",
+            "m": 92.5860794816889,
+            "m_unit": "kg / s",
+            "T": 532.8742583080405,
+            "T_unit": "C",
+            "p": 103931.6070662261,
+            "p_unit": "bar",
+            "h": 680441.4098005135,
+            "h_unit": "J / kg",
+            "s": 7423.416354853764,
+            "s_unit": "J / kgK",
+            "e_T": 68997.46257797809,
+            "e_M": 2133.4204879665044,
+            "e_PH": 71130.8830659446,
+            "e_CH": 4210.537673900658,
+            "e_CH_unit": "J / kg",
+            "E": 6975566.768882677,
+            "E_unit": "W"
+        },
+        "7": {
+            "source_component": "PH",
+            "source_connector": 0,
+            "target_component": "chimney",
+            "target_connector": 0,
+            "mass_composition": {
+                "H2O": 0.05167812266039598,
+                "CO2": 0.04924118499666168,
+                "CH4": 0.0,
+                "O2": 0.15493912937628365,
+                "N2": 0.7441415629666587
+            },
+            "kind": "material",
+            "m": 92.5860794816889,
+            "m_unit": "kg / s",
+            "T": 430.4737296987471,
+            "T_unit": "C",
+            "p": 101299.99999999999,
+            "p_unit": "bar",
+            "h": 569451.7513843015,
+            "h_unit": "J / kg",
+            "s": 7199.750159714093,
+            "s_unit": "J / kgK",
+            "e_T": 26827.30073062543,
+            "e_M": 0.0,
+            "e_PH": 26827.30073062543,
+            "e_CH": 4210.537673900658,
+            "e_CH_unit": "J / kg",
+            "E": 2873671.7734612683,
+            "E_unit": "W"
+        },
+        "8": {
+            "source_component": "feed water",
+            "source_connector": 0,
+            "target_component": "PH",
+            "target_connector": 1,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 14.0,
+            "m_unit": "kg / s",
+            "T": 298.14999999997775,
+            "T_unit": "C",
+            "p": 2000000.0,
+            "p_unit": "bar",
+            "h": 106676.98424826135,
+            "h_unit": "J / kg",
+            "s": 366.70788852569905,
+            "s_unit": "J / kgK",
+            "e_T": 4.364333960893417e-08,
+            "e_M": 1903.5058427343524,
+            "e_PH": 1903.5058427779957,
+            "e_CH": 2497.8812416223836,
+            "e_CH_unit": "J / kg",
+            "E": 61619.41918160531,
+            "E_unit": "W"
+        },
+        "8P": {
+            "source_component": "PH",
+            "source_connector": 1,
+            "target_component": "drum",
+            "target_connector": 0,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 14.0,
+            "m_unit": "kg / s",
+            "T": 470.52722542466125,
+            "T_unit": "C",
+            "p": 2000000.0,
+            "p_unit": "bar",
+            "h": 840683.9368031839,
+            "h_unit": "J / kg",
+            "s": 2304.8870983237057,
+            "s_unit": "J / kgK",
+            "e_T": 156138.82115369057,
+            "e_M": 1903.5058427343524,
+            "e_PH": 158042.32699642493,
+            "e_CH": 2497.8812416223836,
+            "e_CH_unit": "J / kg",
+            "E": 2247562.9153326624,
+            "E_unit": "W"
+        },
+        "11": {
+            "source_component": "drum",
+            "source_connector": 0,
+            "target_component": "EV",
+            "target_connector": 1,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 29.004763168002953,
+            "m_unit": "kg / s",
+            "T": 485.52722542466364,
+            "T_unit": "C",
+            "p": 2000000.0,
+            "p_unit": "bar",
+            "h": 908498.0773277595,
+            "h_unit": "J / kg",
+            "s": 2446.754200378806,
+            "s_unit": "J / kgK",
+            "e_T": 181655.285200538,
+            "e_M": 1903.5058427343524,
+            "e_PH": 183558.79104327236,
+            "e_CH": 2497.8812416223836,
+            "e_CH_unit": "J / kg",
+            "E": 5396529.715450111,
+            "E_unit": "W"
+        },
+        "11P": {
+            "source_component": "EV",
+            "source_connector": 1,
+            "target_component": "drum",
+            "target_connector": 1,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 29.004763168002953,
+            "m_unit": "kg / s",
+            "T": 485.52722542466364,
+            "T_unit": "C",
+            "p": 2000000.0,
+            "p_unit": "bar",
+            "h": 1853395.3402629306,
+            "h_unit": "J / kg",
+            "s": 4392.880418344691,
+            "s_unit": "J / kgK",
+            "e_T": 546315.0162491805,
+            "e_M": 1903.5058427343524,
+            "e_PH": 548218.5220919149,
+            "e_CH": 2497.8812416223836,
+            "e_CH_unit": "J / kg",
+            "E": 15973398.85142364,
+            "E_unit": "W"
+        },
+        "9": {
+            "source_component": "drum",
+            "source_connector": 1,
+            "target_component": "live steam",
+            "target_connector": 0,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 14.0,
+            "m_unit": "kg / s",
+            "T": 485.52722542466364,
+            "T_unit": "C",
+            "p": 2000000.0,
+            "p_unit": "bar",
+            "h": 2798292.603198102,
+            "h_unit": "J / kg",
+            "s": 6339.006636310576,
+            "s_unit": "J / kgK",
+            "e_T": 910974.7472978234,
+            "e_M": 1903.5058427343524,
+            "e_PH": 912878.2531405578,
+            "e_CH": 2497.8812416223836,
+            "e_CH_unit": "J / kg",
+            "E": 12815265.881350523,
+            "E_unit": "W"
+        },
+        "power output__motor_of_AC": {
+            "source_component": "power output",
+            "source_connector": 0,
+            "target_component": "motor_of_AC",
+            "target_connector": 0,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 29695495.44202004,
+            "E": 29695495.44202004,
+            "E_unit": "W"
+        },
+        "motor_of_AC__AC": {
+            "source_component": "motor_of_AC",
+            "source_connector": 0,
+            "target_component": "AC",
+            "target_connector": 999,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 29695495.44202004,
+            "E": 29695495.44202004,
+            "E_unit": "W"
+        },
+        "EXP__generator_of_EXP": {
+            "source_component": "EXP",
+            "source_connector": 999,
+            "target_component": "generator_of_EXP",
+            "target_connector": 0,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 59695495.44202003,
+            "E": 59695495.44202003,
+            "E_unit": "W"
+        },
+        "generator_of_EXP__power output": {
+            "source_component": "generator_of_EXP",
+            "source_connector": 0,
+            "target_component": "power output",
+            "target_connector": 1,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 59695495.44202003,
+            "E": 59695495.44202003,
+            "E_unit": "W"
+        }
+    },
+    "ambient_conditions": {
+        "Tamb": 298.15,
+        "Tamb_unit": "K",
+        "pamb": 101300,
+        "pamb_unit": "Pa"
+    }
+}

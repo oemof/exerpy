@@ -35,7 +35,7 @@ class Turbine(Component):
         enthalpies, and specific exergies. Must have at least one inlet.
     outl : dict
         Dictionary containing outlet streams data with temperature, mass flows,
-        enthalpies, and specific exergies. Can have multiple outlets, their 
+        enthalpies, and specific exergies. Can have multiple outlets, their
         properties will be summed up in the calculations.
 
     Notes
@@ -68,6 +68,7 @@ class Turbine(Component):
     def __init__(self, **kwargs):
         r"""Initialize turbine component with given parameters."""
         super().__init__(**kwargs)
+        self.P = None
 
     def calc_exergy_balance(self, T0: float, p0: float) -> None:
         r"""
@@ -82,7 +83,7 @@ class Turbine(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
-        """      
+        """
         # Get power flow if not already available
         if self.P is None:
             self.P = self._total_outlet('m', 'h') - self.inl[0]['m'] * self.inl[0]['h']
@@ -90,21 +91,21 @@ class Turbine(Component):
         # Case 1: Both temperatures above ambient
         if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
             self.E_P = abs(self.P)
-            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_PH'] - 
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_PH'] -
                         self._total_outlet('m', 'e_PH'))
 
         # Case 2: Inlet above, outlet at/below ambient
         elif self.inl[0]['T'] > T0 and self.outl[0]['T'] <= T0:
             self.E_P = abs(self.P) + self._total_outlet('m', 'e_T')
-            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_T'] + 
-                        self.inl[0]['m'] * self.inl[0]['e_M'] - 
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_T'] +
+                        self.inl[0]['m'] * self.inl[0]['e_M'] -
                         self._total_outlet('m', 'e_M'))
 
         # Case 3: Both temperatures at/below ambient
         elif self.inl[0]['T'] <= T0 and self.outl[0]['T'] <= T0:
             self.E_P = abs(self.P) + (
                 self._total_outlet('m', 'e_T') - self.inl[0]['m'] * self.inl[0]['e_T'])
-            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_M'] - 
+            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_M'] -
                         self._total_outlet('m', 'e_M'))
 
         # Invalid case: outlet temperature larger than inlet

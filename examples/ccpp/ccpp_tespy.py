@@ -1,3 +1,5 @@
+import pandas as pd
+
 from tespy.components import Compressor
 from tespy.components import Condenser
 from tespy.components import CycleCloser
@@ -23,26 +25,26 @@ nw = Network(T_unit="C", p_unit="bar")
 air_in = Source("air inlet")
 fuel_in = Source("fuel inlet")
 flue_gas_out = Sink("flue gas outlet")
-compressor = Compressor("gas turbine compressor")
-combustion = DiabaticCombustionChamber("combustion chamber")
-gasturbine = Turbine("gas turbine")
+compressor = Compressor("COMP")
+combustion = DiabaticCombustionChamber("CC")
+gasturbine = Turbine("GT")
 
-superheater = HeatExchanger("superheater")
-evaporator = HeatExchanger("evaporator")
-economizer = HeatExchanger("economizer")
+superheater = HeatExchanger("SH")
+evaporator = HeatExchanger("EVA")
+economizer = HeatExchanger("ECO")
 
 drum = Drum("drum")
-feed_pump = Pump("feed pump")
-condensate_pump = Pump("condensate pump")
+feed_pump = Pump("PUMP2")
+condensate_pump = Pump("PUMP1")
 drum_pump = Pump("drum pump")
-hp_steam_turbine = Turbine("high pressure steam turbine")
-lp_steam_turbine = Turbine("low pressure steam turbine")
+hp_steam_turbine = Turbine("ST1")
+lp_steam_turbine = Turbine("ST2")
 
-deaerator = Merge("deaerator", num_in=3)
+deaerator = Merge("DEA", num_in=3)
 dea_steam_valve = Valve("dea steam inlet valve")
 extraction = Splitter("turbine outlet extraction", num_out=3)
-heating_condenser = SimpleHeatExchanger("heating condenser")
-main_condenser = Condenser("main condenser")
+heating_condenser = SimpleHeatExchanger("HC")
+main_condenser = Condenser("COND")
 
 water_in = Source("cooling water source")
 water_out = Sink("cooling water sink")
@@ -98,7 +100,11 @@ net_power.add_comps(
     {"comp": condensate_pump, "base": "bus", "char": 0.985},
     {"comp": drum_pump, "base": "bus", "char": 0.985},
 )
-nw.add_busses(net_power)
+heat_output = Bus("heat output")
+heat_output.add_comps(
+    {"comp": heating_condenser, "base": "component"}
+)
+nw.add_busses(net_power, heat_output)
 
 c1.set_attr(
     fluid={
@@ -167,53 +173,59 @@ superheater.set_attr(ttd_u=25)
 c15.set_attr(T=301.0255 - 273.15)
 
 c1.set_attr(m=637.8845562751899)
-# net_power.set_attr(P=-300e6)
 
 heating_condenser.set_attr(Q=-100e6)
 
 nw.solve("design")
+c1.set_attr(m=None)
+net_power.set_attr(P=-300e6)
+nw.solve("design")
+
 nw.print_results()
 
 p0 = 101300
 T0 = 288.15
 
-component_json = {}
-for comp_type in nw.comps["comp_type"].unique():
-    component_json[comp_type] = {}
-    for c in nw.comps.loc[nw.comps["comp_type"] == comp_type, "object"]:
-        component_json[comp_type][c.label] = {}
 
-connection_json = {}
-for c in nw.conns["object"]:
-    connection_json[c.label] = {
-        "source_component": c.source.label,
-        "source_connector": int(c.source_id.removeprefix("out")) - 1,
-        "target_component": c.target.label,
-        "target_connector": int(c.target_id.removeprefix("in")) - 1
-    }
-    connection_json[c.label].update({param: c.get_attr(param).val_SI for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"{param}_unit": c.get_attr(param).unit for param in ["m", "T", "p", "h", "s"]})
-    connection_json[c.label].update({f"mass_composition": c.fluid.val})
-    c.get_physical_exergy(p0, T0)
-    connection_json[c.label].update({"e_T": c.ex_therm})
-    connection_json[c.label].update({"e_M": c.ex_mech})
-    connection_json[c.label].update({"e_PH": c.ex_physical})
+from exerpy import ExergyAnalysis
 
 
-json_export = {
-    "components": component_json,
-    "connections": connection_json,
-    "ambient_conditions": {
-        "Tamb": 283.15,
-        "Tamb_unit": "K",
-        "pamb": 101300.0,
-        "pamb_unit": "Pa"
-    }
-}
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts")
 
-
+# export of the results for validation
 import json
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
+json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
 with open("examples/ccpp/ccpp_tespy.json", "w", encoding="utf-8") as f:
     json.dump(json_export, f, indent=2)
+
+fuel = {
+    "inputs": ['1', '3'],
+    "outputs": []
+}
+
+product = {
+    "inputs": [
+        'generator_of_GT__net power',
+        'generator_of_ST1__net power',
+        'generator_of_ST2__net power',
+        'HC__generator_of_HC'
+    ],
+    "outputs": [
+        'net power__motor_of_PUMP2',
+        'net power__motor_of_drum pump',
+        'net power__motor_of_PUMP1',
+        'net power__motor_of_COMP',
+    ]
+}
+
+loss = {
+    "inputs": ['8', '15'],
+    "outputs": ['14']
+}
+
+ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+df_component_results, _, _ = ean.exergy_results()
+df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")

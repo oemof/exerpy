@@ -15,6 +15,9 @@
 
     installation
     examples
+    exergy_analysis
+    contribute
+    zliterature
 
 ..  toctree::
     :maxdepth: 2
@@ -23,19 +26,3 @@
 
     api
     whats_new
-    zliterature
-
-..  toctree::
-    :maxdepth: 2
-    :caption: Exergy Analysis
-    :hidden:
-
-    exergy_analysis
-
-..  toctree::
-    :maxdepth: 2
-    :caption: Contribute to ExerPy
-    :hidden:
-
-    development/what
-    development/how

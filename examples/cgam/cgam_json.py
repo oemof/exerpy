@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s -
 from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cgam_parsed.json'))
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cgam_tespy.json'))
 
 # Initialize the exergy analysis with the simulation path
 ean = ExergyAnalysis.from_json(model_path, chemExLib='Ahrendts')
@@ -19,8 +19,8 @@ fuel = {
 }
 
 product = {
-    "inputs": ['E1', '9'],
-    "outputs": ['8']
+    "inputs": ['generator_of_EXP__power output', '9'],
+    "outputs": ['power output__motor_of_AC', '8']
 }
 
 loss = {

@@ -20,7 +20,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "COMP"
             },
             "FAN": {
                 "name": "FAN",
@@ -41,7 +42,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "FAN"
             }
         },
         "HeatExchanger": {
@@ -64,7 +66,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 11.05451841557744,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "COND"
             },
             "EVA": {
                 "name": "EVA",
@@ -85,7 +88,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 251.7777331892102,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "EVA"
             }
         },
         "Motor": {
@@ -94,8 +98,8 @@
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
-                "eta_el": 1.0,
+                "eta_mech": 1.0,
+                "eta_el": 0.985,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
@@ -108,15 +112,16 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 706986.8820379723
+                "energy_flow_1": 706986.8820379723,
+                "label": "MOT1"
             },
             "MOT2": {
                 "name": "MOT2",
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
-                "eta_el": 1.0,
+                "eta_mech": 1.0,
+                "eta_el": 0.985,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
@@ -129,15 +134,16 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 895840.0395649885
+                "energy_flow_1": 895840.0395649885,
+                "label": "MOT2"
             },
             "MOT3": {
                 "name": "MOT3",
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
-                "eta_el": 1.0,
+                "eta_mech": 1.0,
+                "eta_el": 0.985,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
@@ -150,7 +156,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 64.06499551030171
+                "energy_flow_1": 64.06499551030171,
+                "label": "MOT3"
             }
         },
         "Pump": {
@@ -173,7 +180,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "PUMP"
             }
         },
         "Valve": {
@@ -196,7 +204,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "VAL"
             }
         }
     },
@@ -606,9 +615,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 706986.8820379723,
+            "energy_flow": 716317.6733745142,
             "energy_flow_unit": "W",
-            "E": 706986.8820379723,
+            "E": 716317.6733745142,
             "E_unit": "W"
         },
         "E2": {
@@ -622,9 +631,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 895840.0395649885,
+            "energy_flow": 907663.3091226991,
             "energy_flow_unit": "W",
-            "E": 895840.0395649885,
+            "E": 907663.3091226991,
             "E_unit": "W"
         },
         "E3": {
@@ -638,9 +647,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 64.06499551030171,
+            "energy_flow": 64.91052336982855,
             "energy_flow_unit": "W",
-            "E": 64.06499551030171,
+            "E": 64.91052336982855,
             "E_unit": "W"
         },
         "Logic": {

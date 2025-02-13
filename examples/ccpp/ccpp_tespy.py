@@ -1,3 +1,5 @@
+import pandas as pd
+
 from tespy.components import Compressor
 from tespy.components import Condenser
 from tespy.components import CycleCloser
@@ -23,26 +25,26 @@ nw = Network(T_unit="C", p_unit="bar")
 air_in = Source("air inlet")
 fuel_in = Source("fuel inlet")
 flue_gas_out = Sink("flue gas outlet")
-compressor = Compressor("gas turbine compressor")
-combustion = DiabaticCombustionChamber("combustion chamber")
-gasturbine = Turbine("gas turbine")
+compressor = Compressor("COMP")
+combustion = DiabaticCombustionChamber("CC")
+gasturbine = Turbine("GT")
 
-superheater = HeatExchanger("superheater")
-evaporator = HeatExchanger("evaporator")
-economizer = HeatExchanger("economizer")
+superheater = HeatExchanger("SH")
+evaporator = HeatExchanger("EVA")
+economizer = HeatExchanger("ECO")
 
 drum = Drum("drum")
-feed_pump = Pump("feed pump")
-condensate_pump = Pump("condensate pump")
+feed_pump = Pump("PUMP2")
+condensate_pump = Pump("PUMP1")
 drum_pump = Pump("drum pump")
-hp_steam_turbine = Turbine("high pressure steam turbine")
-lp_steam_turbine = Turbine("low pressure steam turbine")
+hp_steam_turbine = Turbine("ST1")
+lp_steam_turbine = Turbine("ST2")
 
-deaerator = Merge("deaerator", num_in=3)
+deaerator = Merge("DEA", num_in=3)
 dea_steam_valve = Valve("dea steam inlet valve")
 extraction = Splitter("turbine outlet extraction", num_out=3)
-heating_condenser = SimpleHeatExchanger("heating condenser")
-main_condenser = Condenser("main condenser")
+heating_condenser = SimpleHeatExchanger("HC")
+main_condenser = Condenser("COND")
 
 water_in = Source("cooling water source")
 water_out = Sink("cooling water sink")
@@ -206,16 +208,16 @@ fuel = {
 
 product = {
     "inputs": [
-        'generator_of_gas turbine__net power',
-        'generator_of_high pressure steam turbine__net power',
-        'generator_of_low pressure steam turbine__net power',
-        'heating condenser__generator_of_heating condenser'
+        'generator_of_GT__net power',
+        'generator_of_ST1__net power',
+        'generator_of_ST2__net power',
+        'HC__generator_of_HC'
     ],
     "outputs": [
-        'net power__motor_of_feed pump',
+        'net power__motor_of_PUMP2',
         'net power__motor_of_drum pump',
-        'net power__motor_of_condensate pump',
-        'net power__motor_of_gas turbine compressor',
+        'net power__motor_of_PUMP1',
+        'net power__motor_of_COMP',
     ]
 }
 
@@ -225,4 +227,5 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
+df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")

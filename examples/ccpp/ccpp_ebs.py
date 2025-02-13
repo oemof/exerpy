@@ -4,7 +4,7 @@ import json
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
 from exerpy import ExergyAnalysis
@@ -31,4 +31,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/ccpp/ccpp_ebs.json")
+df_component_results.to_csv("examples/ccpp/ccpp_components_ebsilon.csv")

@@ -29,13 +29,13 @@ fw = Source('feed water')
 ch = Sink('chimney')
 ls = Sink('live steam')
 
-cmp = Compressor('compressor')
-aph = HeatExchanger('air preheater')
-cb = DiabaticCombustionChamber('combustion chamber')
-tur = Turbine('gas turbine')
+cmp = Compressor('AC')
+aph = HeatExchanger('APH')
+cb = DiabaticCombustionChamber('CC')
+tur = Turbine('EXP')
 
-eva = HeatExchanger('evaporator')
-eco = HeatExchanger('economizer')
+eva = HeatExchanger('EV')
+eco = HeatExchanger('PH')
 dr = Drum('drum')
 
 c1 = Connection(amb, 'out1', cmp, 'in1', label='1')
@@ -133,8 +133,8 @@ fuel = {
 }
 
 product = {
-    "inputs": ['generator_of_gas turbine__power output', '9'],
-    "outputs": ['power output__motor_of_compressor', '8']
+    "inputs": ['generator_of_EXP__power output', '9'],
+    "outputs": ['power output__motor_of_AC', '8']
 }
 
 loss = {
@@ -143,4 +143,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/cgam/cgam_tespy.json")
+df_component_results.to_csv("examples/cgam/cgam_components_tespy.csv")

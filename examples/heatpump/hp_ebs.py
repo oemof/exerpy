@@ -29,4 +29,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/heatpump/hp_ebs.json")
+df_component_results.to_csv("examples/heatpump/hp_components_ebsilon.csv")

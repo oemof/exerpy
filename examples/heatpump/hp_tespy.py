@@ -7,16 +7,16 @@ nw = Network(T_unit="C", p_unit="bar")
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
-fan = Compressor("air fan")
+fan = Compressor("FAN")
 
 water_in = Source("water inlet")
 water_out = Sink("water outlet")
-pump = Pump("water pump")
+pump = Pump("PUMP")
 
-evaporator = HeatExchanger("evaporator")
-condenser = HeatExchanger("condenser")
-compressor = Compressor("compressor")
-valve = Valve("valve")
+evaporator = HeatExchanger("EVA")
+condenser = HeatExchanger("COND")
+compressor = Compressor("COMP")
+valve = Valve("VAL")
 cc = CycleCloser("cc")
 
 a1 = Connection(air_in, "out1", fan, "in1", label="11")
@@ -70,9 +70,9 @@ evaporator.set_attr(ttd_u=5)
 
 power_input = Bus("power input")
 power_input.add_comps(
-    {"comp": compressor, "base": "bus", "char": 0.998},
-    {"comp": pump, "base": "bus", "char": 0.998},
-    {"comp": fan, "base": "bus", "char": 0.998}
+    {"comp": compressor, "base": "bus", "char": 0.985},
+    {"comp": pump, "base": "bus", "char": 0.985},
+    {"comp": fan, "base": "bus", "char": 0.985}
 )
 
 nw.add_busses(
@@ -102,9 +102,9 @@ with open("examples/heatpump/hp_tespy.json", "w", encoding="utf-8") as f:
 
 fuel = {
     "inputs": [
-        'power input__motor_of_compressor',
-        'power input__motor_of_air fan',
-        'power input__motor_of_water pump'
+        'power input__motor_of_COMP',
+        'power input__motor_of_FAN',
+        'power input__motor_of_PUMP'
     ],
     "outputs": []
 }
@@ -120,4 +120,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/heatpump/hp_tespy.json")
+df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")

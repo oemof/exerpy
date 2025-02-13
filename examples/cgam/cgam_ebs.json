@@ -20,7 +20,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "CC"
             }
         },
         "Compressor": {
@@ -43,7 +44,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "AC"
             }
         },
         "Generator": {
@@ -66,7 +68,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 29999998.99701561
+                "energy_flow_1": 29999998.99701561,
+                "label": "GEN"
             }
         },
         "HeatExchanger": {
@@ -89,7 +92,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 92.60040050259556,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "APH"
             },
             "EV": {
                 "name": "EV",
@@ -110,7 +114,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 92.60040050259403,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "EV"
             },
             "PH": {
                 "name": "PH",
@@ -131,7 +136,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 92.60040050258908,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "PH"
             }
         },
         "Turbine": {
@@ -154,7 +160,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "EXP"
             }
         }
     },

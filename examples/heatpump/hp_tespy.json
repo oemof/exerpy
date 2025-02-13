@@ -1,396 +1,421 @@
 {
-  "components": {
-    "HeatExchanger": {
-      "condenser": {
-        "name": "condenser",
-        "type": "HeatExchanger",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      },
-      "evaporator": {
-        "name": "evaporator",
-        "type": "HeatExchanger",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      }
+    "components": {
+        "Valve": {
+            "VAL": {
+                "name": "VAL",
+                "type": "Valve",
+                "label": "VAL"
+            }
+        },
+        "Compressor": {
+            "COMP": {
+                "name": "COMP",
+                "type": "Compressor",
+                "label": "COMP"
+            },
+            "FAN": {
+                "name": "FAN",
+                "type": "Compressor",
+                "label": "FAN"
+            }
+        },
+        "HeatExchanger": {
+            "COND": {
+                "name": "COND",
+                "type": "HeatExchanger",
+                "label": "COND"
+            },
+            "EVA": {
+                "name": "EVA",
+                "type": "HeatExchanger",
+                "label": "EVA"
+            }
+        },
+        "Pump": {
+            "PUMP": {
+                "name": "PUMP",
+                "type": "Pump",
+                "label": "PUMP"
+            }
+        },
+        "Motor": {
+            "motor_of_COMP": {
+                "name": "motor_of_COMP",
+                "type": "Motor",
+                "type_index": null,
+                "label": "motor_of_COMP"
+            },
+            "motor_of_PUMP": {
+                "name": "motor_of_PUMP",
+                "type": "Motor",
+                "type_index": null,
+                "label": "motor_of_PUMP"
+            },
+            "motor_of_FAN": {
+                "name": "motor_of_FAN",
+                "type": "Motor",
+                "type_index": null,
+                "label": "motor_of_FAN"
+            }
+        },
+        "Generator": {}
     },
-    "Valve": {
-      "valve": {
-        "name": "valve",
-        "type": "Valve",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      }
+    "connections": {
+        "30": {
+            "source_component": "COND",
+            "source_connector": 0,
+            "target_component": "cc",
+            "target_connector": 0,
+            "mass_composition": {
+                "R245FA": 1
+            },
+            "kind": "material",
+            "m": 11.05539366027679,
+            "m_unit": "kg / s",
+            "T": 348.1505495421332,
+            "T_unit": "C",
+            "p": 2295000.0,
+            "p_unit": "bar",
+            "h": 302351.17013022944,
+            "h_unit": "J / kg",
+            "s": 1325.126914384986,
+            "s_unit": "J / kgK",
+            "e_T": 8963.145029350359,
+            "e_M": 1588.2833150007837,
+            "e_PH": 10551.428344351141,
+            "E": 116650.19402500444,
+            "E_unit": "W"
+        },
+        "31": {
+            "source_component": "cc",
+            "source_connector": 0,
+            "target_component": "VAL",
+            "target_connector": 0,
+            "mass_composition": {
+                "R245FA": 1
+            },
+            "kind": "material",
+            "m": 11.05539366027679,
+            "m_unit": "kg / s",
+            "T": 348.1505495421334,
+            "T_unit": "C",
+            "p": 2295000.0,
+            "p_unit": "bar",
+            "h": 302351.1701302295,
+            "h_unit": "J / kg",
+            "s": 1325.1269143849868,
+            "s_unit": "J / kgK",
+            "e_T": 8963.145029350213,
+            "e_M": 1588.2833150007837,
+            "e_PH": 10551.428344350996,
+            "E": 116650.19402500283,
+            "E_unit": "W"
+        },
+        "32": {
+            "source_component": "VAL",
+            "source_connector": 0,
+            "target_component": "EVA",
+            "target_connector": 1,
+            "mass_composition": {
+                "R245FA": 1
+            },
+            "kind": "material",
+            "m": 11.05539366027679,
+            "m_unit": "kg / s",
+            "T": 275.7900634014922,
+            "T_unit": "C",
+            "p": 60000.0,
+            "p_unit": "bar",
+            "h": 302351.1701302295,
+            "h_unit": "J / kg",
+            "s": 1371.3216875155322,
+            "s_unit": "J / kgK",
+            "e_T": 2886.6127148806263,
+            "e_M": -5415.2343824435375,
+            "e_PH": -2528.621667562911,
+            "E": -27954.907952813533,
+            "E_unit": "W"
+        },
+        "33": {
+            "source_component": "EVA",
+            "source_connector": 1,
+            "target_component": "COMP",
+            "target_connector": 0,
+            "mass_composition": {
+                "R245FA": 1
+            },
+            "kind": "material",
+            "m": 11.05539366027679,
+            "m_unit": "kg / s",
+            "T": 280.9415878878089,
+            "T_unit": "C",
+            "p": 55000.0,
+            "p_unit": "bar",
+            "h": 411945.9979719948,
+            "h_unit": "J / kg",
+            "s": 1773.8071925948318,
+            "s_unit": "J / kgK",
+            "e_T": 7.337609544833413,
+            "e_M": -6904.9021985461295,
+            "e_PH": -6897.564589001297,
+            "E": -76255.29182859462,
+            "E_unit": "W"
+        },
+        "34": {
+            "source_component": "COMP",
+            "source_connector": 0,
+            "target_component": "COND",
+            "target_connector": 0,
+            "mass_composition": {
+                "R245FA": 1
+            },
+            "kind": "material",
+            "m": 11.05539366027679,
+            "m_unit": "kg / s",
+            "T": 404.66000246374614,
+            "T_unit": "C",
+            "p": 2300000.0,
+            "p_unit": "bar",
+            "h": 492817.943979823,
+            "h_unit": "J / kg",
+            "s": 1814.0006993554434,
+            "s_unit": "J / kgK",
+            "e_T": 61001.694004521036,
+            "e_M": 1591.8959750386346,
+            "e_PH": 62593.58997955967,
+            "E": 691996.7778339888,
+            "E_unit": "W"
+        },
+        "11": {
+            "source_component": "air inlet",
+            "source_connector": 0,
+            "target_component": "FAN",
+            "target_connector": 0,
+            "mass_composition": {
+                "Ar": 0.0129,
+                "CO2": 0.0005,
+                "N2": 0.7552,
+                "O2": 0.2314
+            },
+            "kind": "material",
+            "m": 251.7781582596948,
+            "m_unit": "kg / s",
+            "T": 283.15,
+            "T_unit": "C",
+            "p": 101299.99999999999,
+            "p_unit": "bar",
+            "h": 283525.06194011786,
+            "h_unit": "J / kg",
+            "s": 6807.108745686481,
+            "s_unit": "J / kgK",
+            "e_T": 0.0,
+            "e_M": 0.0,
+            "e_PH": 0.0,
+            "E": 0.0,
+            "E_unit": "W"
+        },
+        "12": {
+            "source_component": "FAN",
+            "source_connector": 0,
+            "target_component": "EVA",
+            "target_connector": 0,
+            "mass_composition": {
+                "Ar": 0.0129,
+                "CO2": 0.0005,
+                "N2": 0.7552,
+                "O2": 0.2314
+            },
+            "kind": "material",
+            "m": 251.7781582596948,
+            "m_unit": "kg / s",
+            "T": 285.94158788780896,
+            "T_unit": "C",
+            "p": 104299.99999999999,
+            "p_unit": "bar",
+            "h": 286326.7855538324,
+            "h_unit": "J / kg",
+            "s": 6808.579556638489,
+            "s_unit": "J / kgK",
+            "e_T": 13.744834542575518,
+            "e_M": 2371.5186581109474,
+            "e_PH": 2385.263492653523,
+            "E": 600557.249144391,
+            "E_unit": "W"
+        },
+        "13": {
+            "source_component": "EVA",
+            "source_connector": 0,
+            "target_component": "air outlet",
+            "target_connector": 0,
+            "mass_composition": {
+                "Ar": 0.0129,
+                "CO2": 0.0005,
+                "N2": 0.7552,
+                "O2": 0.2314
+            },
+            "kind": "material",
+            "m": 251.7781582596948,
+            "m_unit": "kg / s",
+            "T": 281.15,
+            "T_unit": "C",
+            "p": 101299.99999999999,
+            "p_unit": "bar",
+            "h": 281514.5573077617,
+            "h_unit": "J / kg",
+            "s": 6799.983057279585,
+            "s_unit": "J / kgK",
+            "e_T": 7.134040056228741,
+            "e_M": 0.0,
+            "e_PH": 7.134040056228741,
+            "E": 1796.1954663081622,
+            "E_unit": "W"
+        },
+        "21": {
+            "source_component": "water inlet",
+            "source_connector": 0,
+            "target_component": "PUMP",
+            "target_connector": 0,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "T": 343.15000000000515,
+            "T_unit": "C",
+            "p": 500000.0,
+            "p_unit": "bar",
+            "h": 293448.57047906204,
+            "h_unit": "J / kg",
+            "s": 954.8526003230088,
+            "s_unit": "J / kgK",
+            "e_T": 23341.857781468978,
+            "e_M": 398.7806711486754,
+            "e_PH": 23740.63845261765,
+            "E": 237406.38452617652,
+            "E_unit": "W"
+        },
+        "22": {
+            "source_component": "PUMP",
+            "source_connector": 0,
+            "target_component": "COND",
+            "target_connector": 1,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "T": 343.1505495421334,
+            "T_unit": "C",
+            "p": 505000.0,
+            "p_unit": "bar",
+            "h": 293454.96145350154,
+            "h_unit": "J / kg",
+            "s": 954.8563252055131,
+            "s_unit": "J / kgK",
+            "e_T": 23342.193525760347,
+            "e_M": 403.78120081571893,
+            "e_PH": 23745.974726576067,
+            "E": 237459.74726576067,
+            "E_unit": "W"
+        },
+        "23": {
+            "source_component": "COND",
+            "source_connector": 1,
+            "target_component": "water outlet",
+            "target_connector": 0,
+            "mass_composition": {
+                "water": 1
+            },
+            "kind": "material",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "T": 393.14999999999725,
+            "T_unit": "C",
+            "p": 500000.0,
+            "p_unit": "bar",
+            "h": 504023.47786451847,
+            "h_unit": "J / kg",
+            "s": 1527.6342336393327,
+            "s_unit": "J / kgK",
+            "e_T": 71733.64569340833,
+            "e_M": 398.7806711486754,
+            "e_PH": 72132.426364557,
+            "E": 721324.26364557,
+            "E_unit": "W"
+        },
+        "power input__motor_of_COMP": {
+            "source_component": "power input",
+            "source_connector": 0,
+            "target_component": "motor_of_COMP",
+            "target_connector": 0,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 907686.496638772,
+            "E": 907686.496638772,
+            "E_unit": "W"
+        },
+        "motor_of_COMP__COMP": {
+            "source_component": "motor_of_COMP",
+            "source_connector": 0,
+            "target_component": "COMP",
+            "target_connector": 999,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 894071.1991891904,
+            "E": 894071.1991891904,
+            "E_unit": "W"
+        },
+        "power input__motor_of_PUMP": {
+            "source_component": "power input",
+            "source_connector": 1,
+            "target_component": "motor_of_PUMP",
+            "target_connector": 0,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 64.88298923356298,
+            "E": 64.88298923356298,
+            "E_unit": "W"
+        },
+        "motor_of_PUMP__PUMP": {
+            "source_component": "motor_of_PUMP",
+            "source_connector": 0,
+            "target_component": "PUMP",
+            "target_connector": 999,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 63.90974439505953,
+            "E": 63.90974439505953,
+            "E_unit": "W"
+        },
+        "power input__motor_of_FAN": {
+            "source_component": "power input",
+            "source_connector": 2,
+            "target_component": "motor_of_FAN",
+            "target_connector": 0,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 716155.1384911169,
+            "E": 716155.1384911169,
+            "E_unit": "W"
+        },
+        "motor_of_FAN__FAN": {
+            "source_component": "motor_of_FAN",
+            "source_connector": 0,
+            "target_component": "FAN",
+            "target_connector": 999,
+            "mass_composition": null,
+            "kind": "power",
+            "energy_flow": 705412.8114137502,
+            "E": 705412.8114137502,
+            "E_unit": "W"
+        }
     },
-    "Compressor": {
-      "compressor": {
-        "name": "compressor",
-        "type": "Compressor",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      },
-      "air fan": {
-        "name": "air fan",
-        "type": "Compressor",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      }
-    },
-    "Pump": {
-      "water pump": {
-        "name": "water pump",
-        "type": "Pump",
-        "type_index": null,
-        "inl": [],
-        "outl": []
-      }
-    },
-    "Motor": {
-      "motor_of_compressor": {
-        "name": "motor_of_compressor",
-        "type": "Motor",
-        "type_index": null
-      },
-      "motor_of_water pump": {
-        "name": "motor_of_water pump",
-        "type": "Motor",
-        "type_index": null
-      },
-      "motor_of_air fan": {
-        "name": "motor_of_air fan",
-        "type": "Motor",
-        "type_index": null
-      }
-    },
-    "Generator": {}
-  },
-  "connections": {
-    "30": {
-      "source_component": "condenser",
-      "source_connector": 0,
-      "target_component": "cc",
-      "target_connector": 0,
-      "mass_composition": {
-        "R245FA": 1
-      },
-      "kind": "material",
-      "m": 11.055393660279107,
-      "m_unit": "kg / s",
-      "T": 348.1505495421198,
-      "T_unit": "C",
-      "p": 2295000.0,
-      "p_unit": "bar",
-      "h": 302351.1701302097,
-      "h_unit": "J / kg",
-      "s": 1325.1269143849302,
-      "s_unit": "J / kgK",
-      "e_T": 8963.145029346459,
-      "e_M": 1588.2833150007837,
-      "e_PH": 10551.428344347241
-    },
-    "31": {
-      "source_component": "cc",
-      "source_connector": 0,
-      "target_component": "valve",
-      "target_connector": 0,
-      "mass_composition": {
-        "R245FA": 1
-      },
-      "kind": "material",
-      "m": 11.055393660279107,
-      "m_unit": "kg / s",
-      "T": 348.1505495421198,
-      "T_unit": "C",
-      "p": 2295000.0,
-      "p_unit": "bar",
-      "h": 302351.1701302097,
-      "h_unit": "J / kg",
-      "s": 1325.1269143849302,
-      "s_unit": "J / kgK",
-      "e_T": 8963.145029346459,
-      "e_M": 1588.2833150007837,
-      "e_PH": 10551.428344347241
-    },
-    "32": {
-      "source_component": "valve",
-      "source_connector": 0,
-      "target_component": "evaporator",
-      "target_connector": 1,
-      "mass_composition": {
-        "R245FA": 1
-      },
-      "kind": "material",
-      "m": 11.055393660279107,
-      "m_unit": "kg / s",
-      "T": 275.7900634014922,
-      "T_unit": "C",
-      "p": 60000.0,
-      "p_unit": "bar",
-      "h": 302351.1701302097,
-      "h_unit": "J / kg",
-      "s": 1371.3216875154603,
-      "s_unit": "J / kgK",
-      "e_T": 2886.6127148811793,
-      "e_M": -5415.2343824435375,
-      "e_PH": -2528.621667562358
-    },
-    "33": {
-      "source_component": "evaporator",
-      "source_connector": 1,
-      "target_component": "compressor",
-      "target_connector": 0,
-      "mass_composition": {
-        "R245FA": 1
-      },
-      "kind": "material",
-      "m": 11.055393660279107,
-      "m_unit": "kg / s",
-      "T": 280.9415878878089,
-      "T_unit": "C",
-      "p": 55000.0,
-      "p_unit": "bar",
-      "h": 411945.9979719948,
-      "h_unit": "J / kg",
-      "s": 1773.8071925948318,
-      "s_unit": "J / kgK",
-      "e_T": 7.337609544833413,
-      "e_M": -6904.9021985461295,
-      "e_PH": -6897.564589001297
-    },
-    "34": {
-      "source_component": "compressor",
-      "source_connector": 0,
-      "target_component": "condenser",
-      "target_connector": 0,
-      "mass_composition": {
-        "R245FA": 1
-      },
-      "kind": "material",
-      "m": 11.055393660279107,
-      "m_unit": "kg / s",
-      "T": 404.66000246374614,
-      "T_unit": "C",
-      "p": 2300000.0,
-      "p_unit": "bar",
-      "h": 492817.943979823,
-      "h_unit": "J / kg",
-      "s": 1814.0006993554434,
-      "s_unit": "J / kgK",
-      "e_T": 61001.694004521036,
-      "e_M": 1591.8959750386346,
-      "e_PH": 62593.58997955967
-    },
-    "11": {
-      "source_component": "air inlet",
-      "source_connector": 0,
-      "target_component": "air fan",
-      "target_connector": 0,
-      "mass_composition": {
-        "Ar": 0.0129,
-        "CO2": 0.0005,
-        "N2": 0.7552,
-        "O2": 0.2314
-      },
-      "kind": "material",
-      "m": 251.77815825979306,
-      "m_unit": "kg / s",
-      "T": 283.15,
-      "T_unit": "C",
-      "p": 101299.99999999999,
-      "p_unit": "bar",
-      "h": 283525.06194011786,
-      "h_unit": "J / kg",
-      "s": 6807.108745686481,
-      "s_unit": "J / kgK",
-      "e_T": 0.0,
-      "e_M": 0.0,
-      "e_PH": 0.0
-    },
-    "12": {
-      "source_component": "air fan",
-      "source_connector": 0,
-      "target_component": "evaporator",
-      "target_connector": 0,
-      "mass_composition": {
-        "Ar": 0.0129,
-        "CO2": 0.0005,
-        "N2": 0.7552,
-        "O2": 0.2314
-      },
-      "kind": "material",
-      "m": 251.77815825979306,
-      "m_unit": "kg / s",
-      "T": 285.94158788780896,
-      "T_unit": "C",
-      "p": 104299.99999999999,
-      "p_unit": "bar",
-      "h": 286326.7855538324,
-      "h_unit": "J / kg",
-      "s": 6808.579556638489,
-      "s_unit": "J / kgK",
-      "e_T": 13.744834542575518,
-      "e_M": 2371.5186581109474,
-      "e_PH": 2385.263492653523
-    },
-    "13": {
-      "source_component": "evaporator",
-      "source_connector": 0,
-      "target_component": "air outlet",
-      "target_connector": 0,
-      "mass_composition": {
-        "Ar": 0.0129,
-        "CO2": 0.0005,
-        "N2": 0.7552,
-        "O2": 0.2314
-      },
-      "kind": "material",
-      "m": 251.77815825979306,
-      "m_unit": "kg / s",
-      "T": 281.15,
-      "T_unit": "C",
-      "p": 101299.99999999999,
-      "p_unit": "bar",
-      "h": 281514.5573077617,
-      "h_unit": "J / kg",
-      "s": 6799.983057279585,
-      "s_unit": "J / kgK",
-      "e_T": 7.134040056228741,
-      "e_M": 0.0,
-      "e_PH": 7.134040056228741
-    },
-    "21": {
-      "source_component": "water inlet",
-      "source_connector": 0,
-      "target_component": "water pump",
-      "target_connector": 0,
-      "mass_composition": {
-        "water": 1
-      },
-      "kind": "material",
-      "m": 10.0,
-      "m_unit": "kg / s",
-      "T": 343.1499999999942,
-      "T_unit": "C",
-      "p": 500000.0,
-      "p_unit": "bar",
-      "h": 293448.570479014,
-      "h_unit": "J / kg",
-      "s": 954.8526003228634,
-      "s_unit": "J / kgK",
-      "e_T": 23341.85778146214,
-      "e_M": 398.7806711486754,
-      "e_PH": 23740.638452610812
-    },
-    "22": {
-      "source_component": "water pump",
-      "source_connector": 0,
-      "target_component": "condenser",
-      "target_connector": 1,
-      "mass_composition": {
-        "water": 1
-      },
-      "kind": "material",
-      "m": 10.0,
-      "m_unit": "kg / s",
-      "T": 343.15054954211985,
-      "T_unit": "C",
-      "p": 505000.0,
-      "p_unit": "bar",
-      "h": 293454.9614534429,
-      "h_unit": "J / kg",
-      "s": 954.8563252053201,
-      "s_unit": "J / kgK",
-      "e_T": 23342.19352577484,
-      "e_M": 403.7812007972469,
-      "e_PH": 23745.974726572087
-    },
-    "23": {
-      "source_component": "condenser",
-      "source_connector": 1,
-      "target_component": "water outlet",
-      "target_connector": 0,
-      "mass_composition": {
-        "water": 1
-      },
-      "kind": "material",
-      "m": 10.0,
-      "m_unit": "kg / s",
-      "T": 393.14999999999867,
-      "T_unit": "C",
-      "p": 500000.0,
-      "p_unit": "bar",
-      "h": 504023.4778645258,
-      "h_unit": "J / kg",
-      "s": 1527.6342336393689,
-      "s_unit": "J / kgK",
-      "e_T": 71733.64569340541,
-      "e_M": 398.7806711486754,
-      "e_PH": 72132.42636455409
-    },
-    "power input__motor_of_compressor": {
-      "source_component": "power input",
-      "source_connector": 0,
-      "target_component": "motor_of_compressor",
-      "target_connector": 0,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 895862.9250394566
-    },
-    "motor_of_compressor__compressor": {
-      "source_component": "motor_of_compressor",
-      "source_connector": 0,
-      "target_component": "compressor",
-      "target_connector": 999,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 894071.1991893777
-    },
-    "power input__motor_of_water pump": {
-      "source_component": "power input",
-      "source_connector": 1,
-      "target_component": "motor_of_water pump",
-      "target_connector": 0,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 64.03781992897954
-    },
-    "motor_of_water pump__water pump": {
-      "source_component": "motor_of_water pump",
-      "source_connector": 0,
-      "target_component": "water pump",
-      "target_connector": 999,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 63.90974428912159
-    },
-    "power input__motor_of_air fan": {
-      "source_component": "power input",
-      "source_connector": 2,
-      "target_component": "motor_of_air fan",
-      "target_connector": 0,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 706826.4643427108
-    },
-    "motor_of_air fan__air fan": {
-      "source_component": "motor_of_air fan",
-      "source_connector": 0,
-      "target_component": "air fan",
-      "target_connector": 999,
-      "mass_composition": null,
-      "kind": "power",
-      "energy_flow": 705412.8114140254
+    "ambient_conditions": {
+        "Tamb": 283.15,
+        "Tamb_unit": "K",
+        "pamb": 101300,
+        "pamb_unit": "Pa"
     }
-  },
-  "ambient_conditions": {
-    "Tamb": 283.15,
-    "Tamb_unit": "K",
-    "pamb": 101300,
-    "pamb_unit": "Pa"
-  }
 }

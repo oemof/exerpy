@@ -20,7 +20,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "CC"
             }
         },
         "Compressor": {
@@ -43,7 +44,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "COMP"
             }
         },
         "Condenser": {
@@ -66,7 +68,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 30.11301041134036,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "COND"
             }
         },
         "Deaerator": {
@@ -89,7 +92,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 8.789150274607149,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "DEA"
             }
         },
         "Generator": {
@@ -112,7 +116,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 251827804.941329
+                "energy_flow_1": 251827804.941329,
+                "label": "GEN1"
             },
             "GEN2": {
                 "name": "GEN2",
@@ -133,7 +138,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 53248978.97416295
+                "energy_flow_1": 53248978.97416295,
+                "label": "GEN2"
             }
         },
         "HeatExchanger": {
@@ -156,7 +162,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "ECO"
             },
             "EVA": {
                 "name": "EVA",
@@ -177,7 +184,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "EVA"
             },
             "SH": {
                 "name": "SH",
@@ -198,7 +206,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "SH"
             }
         },
         "Mixer": {
@@ -221,7 +230,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "MIX"
             }
         },
         "Motor": {
@@ -244,7 +254,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 38217.57256737605
+                "energy_flow_1": 38217.57256737605,
+                "label": "MOT1"
             },
             "MOT2": {
                 "name": "MOT2",
@@ -265,7 +276,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 462388.69502952823
+                "energy_flow_1": 462388.69502952823,
+                "label": "MOT2"
             }
         },
         "Pump": {
@@ -288,7 +300,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "PUMP1"
             },
             "PUMP2": {
                 "name": "PUMP2",
@@ -309,7 +322,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "PUMP2"
             }
         },
         "SimpleHeatExchanger": {
@@ -332,7 +346,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "HC"
             }
         },
         "Turbine": {
@@ -355,7 +370,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "GT"
             },
             "ST1": {
                 "name": "ST1",
@@ -376,7 +392,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "ST1"
             },
             "ST2": {
                 "name": "ST2",
@@ -397,7 +414,8 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null
+                "energy_flow_1": null,
+                "label": "ST2"
             }
         }
     },

@@ -54,6 +54,7 @@ Exe_Eco_Costs = {
     "GT_Z":   7000000,   # Gas Turbine 
     "ST1_Z":  4000000,   # Steam Turbine 1 
     "ST2_Z":  5000000,   # Steam Turbine 2
+    "SEP_Z":  0.0,       # Separator
 
     # Connection costs (in €/GJ, to be converted later to €/J)
     "1_c":    1,         # Cost of air

@@ -146,30 +146,102 @@ class Valve(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """
+        Auxiliary equations for the valve.
+        
+        This function enforces cost balance in a valve by adding a mechanical cost equation,
+        and—if chemical exergy is enabled—a chemical cost equation. The valve is assumed
+        to have one inlet and one outlet stream.
+        
+        The mechanical cost equation is constructed as follows:
+        - If both the inlet and outlet have nonzero mechanical exergy (e_M), 
+            the coefficients are set as 1/e_M for the inlet and -1/e_M for the outlet.
+        - Otherwise, fallback values (typically 1) are assigned.
+        
+        The chemical cost equation (added only if chemical_exergy_enabled is True) is constructed
+        analogously using e_CH.
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index.
+        T0 : float
+            Ambient temperature.
+        equations : list or dict
+            Data structure for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
+        """
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
             print("you shouldn't see this")
         elif self.outl[0]["T"] <= T0:
-            # mech
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_T"] != 0:
+            # --- Mechanical cost equation (always added) ---
+            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
                 A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
                 A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_T"] != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_T"] == 0:
+            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
                 A[counter, self.outl[0]["CostVar_index"]["M"]] = 1
             else:
                 A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
                 A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
-            # chemical doesn't change either both 0 or not 0
-            A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1
+            equations[counter] = f"aux_valve_mech_{self.outl[0]['name']}"
+            
+            if chemical_exergy_enabled:
+                # --- Chemical cost equation (conditionally added) ---
+                A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1)
+                A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1)
+                equations[counter+1] = f"aux_valve_chem_{self.outl[0]['name']}"
+                # Set right-hand side for both rows.
+                b[counter] = 0
+                b[counter+1] = 0
+                counter += 2
+            else:
+                # Only mechanical row is added.
+                b[counter] = 0
+                counter += 1
+        else:
+            msg = ('Exergy balance of a valve, where outlet temperature is larger than inlet temperature is not implemented.')
+            logging.warning(msg)
+        
+        return A, b, counter, equations
+    
+    def exergoeconomic_balance(self, T0):
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"]
+            self.C_P = np.nan
+            # dissipative
+        elif self.outl[0]["T"] <= T0 and self.inl[0]["T"] > T0:
+            self.C_P = self.outl[0]["C_T"]
+            self.C_F = self.inl[0]["C_T"] + (
+                self.inl[0]["C_M"] - self.outl[0]["C_M"])
+        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] <= T0:
+            self.C_P = self.outl[0]["C_T"] - self.inl[0]["C_T"]
+            self.C_F = self.inl[0]["C_M"] - self.outl[0]["C_M"]
         else:
             msg = ('Exergy balance of a valve, where outlet temperature is '
                    'larger than inlet temperature is not implmented.')
             logging.warning(msg)
+            self.C_P = np.nan
+            self.C_F = np.nan
 
-        for i in range(2):
-            b[counter+i]=0
-
-        return [A, b, counter+2]
+        self.c_F = self.C_F / self.E_F
+        self.c_P = self.C_P / self.E_P
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D)

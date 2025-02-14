@@ -90,50 +90,18 @@ class Generator(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def exergoeconomic_balance(self, T0: float) -> None:
-        """        
-        Calculate the exergoeconomic balance of the generator.
-
-        This function calculates:
-        - C_P: Cost flow associated with the product exergy (electrical power output)
-        - C_F: Cost flow associated with the fuel exergy (input power)
-        - c_F: Specific cost for fuel exergy [currency / W]
-        - c_P: Specific cost for product exergy [currency / W]
-        - C_D: Cost flow of exergy destruction (always 0 for Generator)
-        - r: Relative cost difference
-        - f: Exergoeconomic factor
-
-        Requires:
-        - self.inl[0] and self.outl[0] must have 'energy_flow' defined
-        - self.Z_costs must be set beforehand (e.g., by ExergoeconomicAnalysis)
-        - self.E_F, self.E_P already computed by calc_exergy_balance
-        """
-        # Calculate cost flows
-        # C_P: Cost associated with product exergy (electrical output)
-        self.C_P = self.E_P * self.c_P if hasattr(self, 'c_P') else 0.0
-
-        # C_F: Cost associated with fuel exergy (mechanical input)
-        # Since C_F = C_P + Z_costs
-        self.C_F = self.C_P + self.Z_costs
-
-        # Calculate specific costs
-        self.c_F = self.C_F / self.E_F if self.E_F and self.E_F > 1e-12 else 0.0
-        self.c_P = self.C_P / self.E_P if self.E_P and self.E_P > 1e-12 else 0.0
-
-        # Relative cost difference
-        self.r = ((self.c_P - self.c_F) / self.c_F) if self.c_F else 0.0
-
-        # Exergoeconomic factor
-        Z = self.Z_costs
-        denom = Z + self.C_D if self.C_D else Z
-        self.f = (Z / denom) if denom != 0.0 else 0.0
-
-        # Log the results
-        logging.info(
-            f"Generator '{self.label}' exergoeconomic calculations: "
-            f"C_P={self.C_P:.2f}, C_F={self.C_F:.2f}, C_D={self.C_D:.2f}, "
-            f"c_F={self.c_F:.4f}, c_P={self.c_P:.4f}, r={self.r:.4f}, f={self.f:.4f}"
-        )
-
-    def aux_eqs(self, A, b, counter, T0, equations):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         return [A, b, counter, equations]
+    
+    def exergoeconomic_balance(self, T0):
+        self.C_P = self.outl[0].get("C_TOT", 0)
+        self.C_F = self.inl[0].get("C_TOT", 0)
+        
+        if self.E_P == 0 or self.E_F == 0:
+            raise ValueError(f"E_P or E_F is zero; cannot compute specific costs for component: {self.name}.")
+        
+        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F
+        self.C_D = self.c_F * self.E_D   # Ensure that self.E_D is computed beforehand.
+        self.r = (self.C_P - self.C_F) / self.C_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else 0

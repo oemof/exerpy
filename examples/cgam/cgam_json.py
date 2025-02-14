@@ -41,18 +41,18 @@ exa = ExergoeconomicAnalysis(ean)
 
 Exe_Eco_Costs = {
     # Component Investment Costs (currency/h)
-    "CC_Z": 1000.0,  
-    "AC_Z": 500.0,         
-    "GEN_Z": 750.0,         
-    "APH_Z": 600.0,
-    "EV_Z": 800.0,
-    "PH_Z": 900.0,         
-    "EXP_Z": 1200.0,
+    "CC_Z": 477.94,  
+    "AC_Z": 54.33,         
+    "GEN_Z": 10.0,         
+    "APH_Z": 47.59,
+    "EV_Z": 20.00,
+    "PH_Z": 27.49,         
+    "EXP_Z": 72.55,
 
     # Connection Fixed Costs (currency/W)
-    "1_c": 0.001,  # air input
-    "10_c": 15.0,  # fuel input
-    "8_c": 30.0,  # water inlet
+    "1_c": 0.0,  # air input
+    "10_c": 4.0,  # fuel input
+    "8_c": 0.0,  # water inlet
 }
 
 exergoeco_analysis = ExergoeconomicAnalysis(ean)

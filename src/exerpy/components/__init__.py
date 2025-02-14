@@ -2,6 +2,7 @@ from .combustion.base import CombustionChamber
 from .heat_exchanger.condenser import Condenser
 from .heat_exchanger.base import HeatExchanger
 from .heat_exchanger.simple import SimpleHeatExchanger
+from .helpers.cycle_closer import CycleCloser
 from .nodes.deaerator import Deaerator
 from .nodes.drum import Drum
 from .nodes.mixer import Mixer

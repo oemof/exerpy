@@ -125,7 +125,7 @@ class CombustionChamber(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0, equations):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the combustion chamber.
         
@@ -133,25 +133,7 @@ class CombustionChamber(Component):
         to enforce auxiliary cost relations for the mechanical and chemical cost components.
         
         It assumes the component has at least two inlet streams (e.g. air and fuel)
-        and one outlet stream. The equations are constructed as follows:
-        
-        Mechanical cost row:
-            If the outlet and both inlets have nonzero mechanical exergy (e_M):
-                - Coefficient for outlet: -1/e_M (outlet)
-                - Coefficient for inlet 1: +1/e_M (inlet 1) scaled by its mass fraction
-                - Coefficient for inlet 2: +1/e_M (inlet 2) scaled by its mass fraction
-            Else:
-                - Set the outlet's cost coefficient to 1.
-        
-        Chemical cost row:
-            If the outlet and both inlets have nonzero chemical exergy (e_CH):
-                - Coefficient for outlet: -1/e_CH (outlet)
-                - Coefficient for inlet 1: +1/e_CH (inlet 1) scaled by its mass fraction
-                - Coefficient for inlet 2: +1/e_CH (inlet 2) scaled by its mass fraction
-            Else, if one of the inlets has zero chemical exergy:
-                - Set that inlet's cost coefficient to 1.
-        
-        The right-hand side entries for these auxiliary equations are set to zero.
+        and one outlet stream.
         
         Parameters
         ----------
@@ -162,9 +144,11 @@ class CombustionChamber(Component):
         counter : int
             The current row index in the matrix.
         T0 : float
-            Ambient temperature (provided for consistency, not used here).
+            Ambient temperature.
         equations : list or dict
-            Data structure for storing equation labels (e.g., self.equations).
+            Data structure for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy is enabled.
         
         Returns
         -------
@@ -174,7 +158,14 @@ class CombustionChamber(Component):
             The updated right-hand-side vector.
         counter : int
             The updated row index (counter + 2).
+        equations : list or dict
+            Updated structure with equation labels.
         """
+        # For the combustion chamber, chemical exergy is mandatory.
+        if not chemical_exergy_enabled:
+            raise ValueError("Chemical exergy is mandatory for the combustion chamber!",
+                             "Please make sure that your exergy analysis consider the chemical exergy.")
+
         # Convert inlet and outlet dictionaries to lists for ordered access.
         inlets = list(self.inl.values())
         outlets = list(self.outl.values())
@@ -204,3 +195,18 @@ class CombustionChamber(Component):
         b[counter+1] = 0
         
         return [A, b, counter + 2, equations]
+
+    def exergoeconomic_balance(self, T0):
+        self.C_P = self.outl[0]["C_T"] - (
+                self.inl[0]["C_T"] + self.inl[1]["C_T"]
+        )
+        self.C_F = (
+                self.inl[0]["C_CH"] + self.inl[1]["C_CH"] -
+                self.outl[0]["C_CH"] + self.inl[0]["C_M"] +
+                self.inl[1]["C_M"] - self.outl[0]["C_M"]
+        )
+        self.c_F = self.C_F / self.E_F
+        self.c_P = self.C_P / self.E_P
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D)

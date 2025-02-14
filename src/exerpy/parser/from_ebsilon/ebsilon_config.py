@@ -205,7 +205,7 @@ non_thermodynamic_unit_operators = [
     67,  # Condenser with Measurement Input- outdated!
     69,  # Controller (external set value and switch)
     77,  # Calculator
-    80,  # Separator (logical)
+    # 80,  # Separator (logical) is considered a thermodynamic component
     93,  # Kernel Scripting
     105, # Library Specification
     108, # Elementary Analyzer
@@ -842,6 +842,7 @@ grouped_components = {
     "Mixer": [3, 37, 38, 49, 60, 102, 141, 161],
     "Splitter": [4, 17, 18, 52, 109, 140, 157],
     "Separator": [19, 99],
+    "CycleCloser": [80]
 }
 
 # Connector mapping rules for different component types
@@ -989,6 +990,10 @@ connector_mapping = {
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet cold stream (if present)
+    },
+    80:  { # Separator (logical)
+        1: 0,  # Inlet
+        2: 0,  # Outlet 1
     },
     90: {  # Reaction Zone of Steam Generator
         1: 2,  # Inlet secondary flue gas

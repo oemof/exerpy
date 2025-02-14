@@ -228,7 +228,7 @@ class HeatExchanger(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0, equations):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
             if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
@@ -287,7 +287,7 @@ class HeatExchanger(Component):
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = f"aux_f_rule_hot_{self.name}"
         # Case 2: All temperatures <= T0.
-        elif all([c["T"] <= T0 for c in self.inl + self.outl]):
+        elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = f"aux_f_rule_cold_{self.name}"
         # Case 3: Mixed temperatures: inl[0]["T"] > T0 and outl[1]["T"] > T0, while outl[0]["T"] <= T0 and inl[1]["T"] <= T0.
@@ -315,16 +315,54 @@ class HeatExchanger(Component):
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = f"aux_f_rule_hot_{self.name}"
         
-        # Mechanical and chemical equations are always set.
+        # Mechanical equations (always added)
         set_equal(A, counter + 1, self.inl[0], self.outl[0], "M")
         set_equal(A, counter + 2, self.inl[1], self.outl[1], "M")
-        set_equal(A, counter + 3, self.inl[0], self.outl[0], "CH")
-        set_equal(A, counter + 4, self.inl[1], self.outl[1], "CH")
-        equations[counter +1] = f"aux_equality_mech_{self.outl[0]["name"]}"
-        equations[counter +2] = f"aux_equality_mech_{self.outl[1]["name"]}"
-        equations[counter +3] = f"aux_equality_chem_{self.outl[0]["name"]}"
-        equations[counter +4] = f"aux_equality_chem_{self.outl[1]["name"]}"
+        equations[counter + 1] = f"aux_equality_mech_{self.outl[0]['name']}"
+        equations[counter + 2] = f"aux_equality_mech_{self.outl[1]['name']}"
+        
+        # Only add chemical auxiliary equations if chemical exergy is enabled.
+        if chemical_exergy_enabled:
+            set_equal(A, counter + 3, self.inl[0], self.outl[0], "CH")
+            set_equal(A, counter + 4, self.inl[1], self.outl[1], "CH")
+            equations[counter + 3] = f"aux_equality_chem_{self.outl[0]['name']}"
+            equations[counter + 4] = f"aux_equality_chem_{self.outl[1]['name']}"
+            num_aux_eqs = 5
+        else:
+            # Skip chemical auxiliary equations.
+            num_aux_eqs = 3
 
-        for i in range(5):
+        for i in range(num_aux_eqs):
             b[counter + i] = 0
-        return [A, b, counter + 5, equations]
+
+        return A, b, counter + num_aux_eqs, equations
+
+    def exergoeconomic_balance(self, T0):
+        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+            self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
+                self.inl[1]["C_M"] - self.outl[1]["C_M"])
+        elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+            self.C_P = self.outl[0]["C_T"] - self.inl[0]["C_T"]
+            self.C_F = self.inl[1]["C_PH"] - self.outl[1]["C_PH"] + (
+                self.inl[0]["C_M"] - self.outl[0]["C_M"])
+        elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
+              self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
+            self.C_P = self.outl[0]["C_T"] + self.outl[1]["C_T"]
+            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
+                self.outl[0]["C_M"] + self.outl[1]["C_M"])
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+              self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
+            self.C_P = self.outl[0]["C_T"]
+            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
+               self.outl[1]["C_PH"] + self.outl[0]["C_M"])
+        else:
+            self.C_P = self.outl[1]["C_T"]
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
+                self.inl[1]["C_PH"] - self.outl[1]["C_M"])
+
+        self.c_F = self.C_F / self.E_F
+        self.c_P = self.C_P / self.E_P
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D)

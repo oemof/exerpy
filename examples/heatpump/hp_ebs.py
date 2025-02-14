@@ -30,23 +30,25 @@ loss = {
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
+ean.export_to_json('examples/heatpump/hp_ebs.json')
 
-component_costs = {
-    "COMP": 500.0,  # in "Compressor": {"COMP": ...}
-    "FAN": 400.0,   # in "Compressor": {"FAN": ...}
-    "COND": 600.0,  # in "HeatExchanger": {"COND": ...}
-    "EVA": 500.0,   # in "HeatExchanger": {"EVA": ...}
-    "MOT1": 100.0,  # in "Motor": {"MOT1": ...}
-    "MOT2": 100.0,  # in "Motor": {"MOT2": ...}
-    "MOT3": 50.0,   # in "Motor": {"MOT3": ...}
-    "PUMP": 200.0,  # in "Pump":   {"PUMP": ...}
-    "VAL": 20.0     # in "Valve":  {"VAL":  ...}
-    # add or change the cost rates as desired
+Exe_Eco_Costs = {
+    "COMP_Z": 500.0,  
+    "FAN_Z": 400.0,   
+    "COND_Z": 600.0,  
+    "EVA_Z": 500.0,   
+    "MOT1_Z": 100.0,  
+    "MOT2_Z": 100.0,  
+    "MOT3_Z": 50.0,  
+    "PUMP_Z": 200.0, 
+    "VAL_Z": 1.0,
+    "11_c": 1.0,
+    "21_c": 1.0,
 }
 
+# Initialize Exergoeconomic Analysis with existing exergy analysis
+exergoeco_analysis = ExergoeconomicAnalysis(ean)
 
-'''eco = ExergoeconomicAnalysis(ean, component_costs)
-eco.run()
-
-df_results = eco.results()
-print(df_results)'''
+# Run the exergoeconomic analysis with cost inputs
+exergoeco_analysis.run(Exe_Eco_Costs=Exe_Eco_Costs, Tamb=ean.Tamb)
+exergoeco_analysis.exergoeconomic_results()

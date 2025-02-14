@@ -145,39 +145,120 @@ class Compressor(Component):
         )
 
 
-    def aux_eqs(self, A, b, counter, T0, equations):
-        # c_in_ch = c_out_ch
-        # delta c_therm = delta c_mech   # alt: c_out_th - c_in_th = c_out_mech - c_in_mech  ->  c_out_th - c_in_th - c_out_mech + c_in_mech = 0
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """
+        Auxiliary equations for the compressor.
+        
+        This function sets up auxiliary equations that enforce:
+        (i) equality of chemical cost between the inlet and outlet (c_in_CH = c_out_CH), and
+        (ii) a relationship between the thermal and mechanical cost differences.
+        
+        The compressor uses a p‐rule (if both inlet and outlet temperatures exceed T0)
+        or an f‐rule (if not) to relate the inlet and outlet thermal and mechanical cost
+        coefficients. These coefficients are computed using the differences in thermal 
+        (dET = e_T,out − e_T,in) and mechanical (dEM = e_M,out − e_M,in) exergy.
+        
+        If chemical exergy is enabled (chemical_exergy_enabled is True), one row is added 
+        for chemical cost equality and one row for the combined thermal/mechanical relation.
+        Otherwise, only the thermal/mechanical equation is added.
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the matrix.
+        T0 : float
+            Ambient temperature.
+        equations : list or dict
+            Data structure for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
+        equations : list or dict
+            Updated structure with equation labels.
+        """
+        # --- Chemical equality equation (row added only if enabled) ---
+        if chemical_exergy_enabled:
+            # Set the chemical cost equality:
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["e_CH"]) if self.outl[0]["e_CH"] != 0 else 1
+            equations[counter] = f"aux_equality_chem_{self.outl[0]['name']}"
+            chem_row = 1
+        else:
+            chem_row = 0
 
-        A[counter+0, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
-        A[counter+0, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else 1
-        equations[counter+0] = f"aux_equality_chem_{self.outl[0]["name"]}"
-
+        # --- Thermal/Mechanical cost equation ---
+        # Compute differences in thermal and mechanical exergy:
         dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
         dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
-
-        if self.inl[0]["T"] > T0 and  self.outl[0]["T"] > T0:
+        
+        # The row for the thermal/mechanical equation:
+        row_index = counter + chem_row
+        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
             if dET != 0 and dEM != 0:
-                A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/dET
-                A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/dET
-                A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
-                A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
-                equations[counter+1] = f"aux_p_rule_{self.name}"
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / dET
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / dET
+                A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
+                A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+                equations[row_index] = f"aux_p_rule_{self.name}"
             else:
-                logging.warning("case that thermal or mechanical exergy at pump outlet doesn't change is not implemented in exergoeconomics yet")
-
-        elif self.inl[0]["T"] <= T0 and  self.outl[0]["T"] > T0:
-            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
-            A[counter+1, self.inl[0]["CostVar_index"]["M"]] = 1/dEM
-            A[counter+1, self.outl[0]["CostVar_index"]["M"]] = -1/dEM
-            equations[counter+1] = f"aux_p_rule_{self.name}"
-
+                logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
+        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
+            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+            A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
+            A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+            equations[row_index] = f"aux_p_rule_{self.name}"
         else:
-            A[counter+1, self.inl[0]["CostVar_index"]["T"]] = -1/self.inl[0]["e_T"]
-            A[counter+1, self.outl[0]["CostVar_index"]["T"]] = 1/self.outl[0]["e_T"]
-            equations[counter+1] = f"aux_f_rule_{self.name}"
+            A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["e_T"]
+            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+            equations[row_index] = f"aux_f_rule_{self.name}"
+        
+        # Set the right-hand side entry for the thermal/mechanical row to zero.
+        b[row_index] = 0
 
-        for i in range(2):
-            b[counter+i]=0
+        # Update the counter accordingly.
+        if chemical_exergy_enabled:
+            new_counter = counter + 2
+        else:
+            new_counter = counter + 1
 
-        return [A, b, counter+2, equations]
+        return A, b, new_counter, equations
+
+    def exergoeconomic_balance(self, T0):
+        # Retrieve the cost of power from the inlet stream of kind "power"
+        power_cost = None
+        for stream in self.inl.values():
+            if stream.get("kind") == "power":
+                power_cost = stream.get("C_TOT")
+                break
+        if power_cost is None:
+            logging.error("No inlet power stream found to determine power cost (C_TOT).")
+            raise ValueError("No inlet power stream found for exergoeconomic_balance.")
+
+        # Compute product and fuel costs depending on inlet/outlet temperatures relative to T0.
+        if self.inl[0]["T"] >= T0 and self.outl[0]["T"] >= T0:
+            self.C_P = self.outl[0]["C_PH"] - self.inl[0]["C_PH"]
+            self.C_F = power_cost
+        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
+            self.C_P = self.outl[0]["C_T"] + (self.outl[0]["C_M"] - self.inl[0]["C_M"])
+            self.C_F = power_cost + self.inl[0]["C_T"]
+        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] <= T0:
+            self.C_P = self.outl[0]["C_M"] - self.inl[0]["C_M"]
+            self.C_F = power_cost + (self.inl[0]["C_T"] - self.outl[0]["C_T"])
+
+        self.c_F = self.C_F / self.E_F
+        self.c_P = self.C_P / self.E_P
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.C_P - self.C_F) / self.C_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D)

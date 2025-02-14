@@ -5,20 +5,16 @@ import logging
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
-from exerpy import ExergyAnalysis
+from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 # Define the path to the Ebsilon model file
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'hp_tespy.json'))
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'hp_ebs.json'))
 
 # Initialize the exergy analysis with the simulation path
 ean = ExergyAnalysis.from_json(model_path)
 
 fuel = {
-    "inputs": [
-        'power input__motor_of_COMP',
-        'power input__motor_of_FAN',
-        'power input__motor_of_PUMP'
-    ],
+    "inputs": ['E1', 'E2', 'E3'],
     "outputs": []
 }
 
@@ -34,3 +30,27 @@ loss = {
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
+
+Exe_Eco_Costs = {
+    "COMP_Z": 500.0,  
+    "FAN_Z": 400.0,   
+    "COND_Z": 600.0,  
+    "EVA_Z": 500.0,   
+    "MOT1_Z": 100.0,  
+    "MOT2_Z": 100.0,  
+    "MOT3_Z": 50.0,  
+    "PUMP_Z": 200.0, 
+    "VAL_Z": 1.0,
+    "SEP_Z": 0.0,
+    "11_c": 1.0,
+    "21_c": 1.0,
+    "E1_c": 40.0,
+}
+
+
+# Initialize Exergoeconomic Analysis with existing exergy analysis
+exergoeco_analysis = ExergoeconomicAnalysis(ean)
+
+# Run the exergoeconomic analysis with cost inputs
+exergoeco_analysis.run(Exe_Eco_Costs=Exe_Eco_Costs, Tamb=ean.Tamb)
+exergoeco_analysis.exergoeconomic_results()

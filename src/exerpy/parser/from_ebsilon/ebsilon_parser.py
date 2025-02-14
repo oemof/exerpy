@@ -82,12 +82,12 @@ class EbsilonModelParser:
             # Run the simulation
             self.model.SimulateNew()
             error_count = calc_errors.Count
-            logging.info(f"Simulation has {error_count} error(s)")
+            logging.warning(f"Simulation has {error_count} warning(s).")
             # Log each error if any exist
             if error_count > 0:
                 for i in range(1, error_count + 1):
                     error = calc_errors.Item(i)
-                    logging.warning(f"Error {i}: {error.Description}")
+                    logging.warning(f"Warning {i}: {error.Description}")
         except Exception as e:
             logging.error(f"Failed during simulation: {e}")
             raise

@@ -88,5 +88,18 @@ class Motor(Component):
         )
 
     
-    def aux_eqs(self, A, b, counter, T0, equations):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         return [A, b, counter, equations]
+    
+    def exergoeconomic_balance(self, T0):
+        self.C_P = self.outl[0].get("C_TOT", 0)
+        self.C_F = self.inl[0].get("C_TOT", 0)
+        
+        if self.E_P == 0 or self.E_F == 0:
+            raise ValueError(f"E_P or E_F is zero; cannot compute specific costs for component: {self.name}.")
+        
+        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F
+        self.C_D = self.c_F * self.E_D   # Ensure that self.E_D is computed beforehand.
+        self.r = (self.C_P - self.C_F) / self.C_F
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else 0

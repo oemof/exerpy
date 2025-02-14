@@ -46,6 +46,29 @@
                 "label": "FAN"
             }
         },
+        "CycleCloser": {
+            "SEP": {
+                "name": "SEP",
+                "type": "Separator (logical)",
+                "type_index": 80,
+                "eta_s": null,
+                "eta_mech": null,
+                "eta_el": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": null,
+                "kA_unit": "W / K",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": null,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
+            }
+        },
         "HeatExchanger": {
             "COND": {
                 "name": "COND",
@@ -437,7 +460,7 @@
             "source_connector": 0,
             "target_component": "SEP",
             "target_component_type": 80,
-            "target_connector": 1,
+            "target_connector": 0,
             "fluid_type": "2PhaseLiquid",
             "fluid_type_id": 15,
             "m": 11.054518415570048,
@@ -469,7 +492,7 @@
             "kind": "material",
             "source_component": "SEP",
             "source_component_type": 80,
-            "source_connector": 2,
+            "source_connector": 0,
             "target_component": "VAL",
             "target_component_type": 14,
             "target_connector": 0,

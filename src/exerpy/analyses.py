@@ -3,6 +3,7 @@ import pandas as pd
 import json
 from tabulate import tabulate
 from .components.component import component_registry
+from .components.helpers.cycle_closer import CycleCloser
 from .functions import add_chemical_exergy, add_total_exergy_flow
 import os
 import logging
@@ -734,11 +735,14 @@ class ExergoeconomicAnalysis:
         """
         # --- Component Costs ---
         for comp_name, comp in self.components.items():
-            cost_key = f"{comp_name}_Z"
-            if cost_key in Exe_Eco_Costs:
-                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert €/h to €/s
+            if isinstance(comp, CycleCloser):
+                continue
             else:
-                raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
+                cost_key = f"{comp_name}_Z"
+                if cost_key in Exe_Eco_Costs:
+                    comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert €/h to €/s
+                else:
+                    raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
@@ -797,18 +801,20 @@ class ExergoeconomicAnalysis:
             to the provided cost (C_TOT or the cost breakdown for material streams).
         
         A connection is treated as an inlet stream if its source_component is either
-        missing or not among the valid system components.
+        missing or not among the system components at all.
         """
         num_vars = self.num_variables
         A = np.zeros((num_vars, num_vars))
         b = np.zeros(num_vars)
         counter = 0
 
-        # Get the set of valid component names.
-        valid_components = {comp.name for comp in self.components.values()}
+        # Filter out CycleCloser instances, keeping the component objects.
+        valid_components = [comp for comp in self.components.values() if not isinstance(comp, CycleCloser)]
+        # Create a set of valid component names for cost balance comparisons.
+        valid_component_names = {comp.name for comp in valid_components}
 
         # 1. Cost balance equations for productive components.
-        for comp in self.components.values():
+        for comp in valid_components:
             for conn in self.connections.values():
                 # Check if the connection is linked to a valid component.
                 # If the connection's target is the component, it is an inlet (add +1).
@@ -832,9 +838,10 @@ class ExergoeconomicAnalysis:
         has_power_outlet = any(conn.get("target_component") is None for conn in power_conns)
 
         for conn in self.connections.values():
-            # A connection is treated as an inlet if its source_component is missing (or not valid)
-            # and its target_component is valid.
-            if not (conn.get("source_component") in valid_components) and (conn.get("target_component") in valid_components):
+            # A connection is treated as an inlet if its source_component is missing or not part of the system
+            # and its target_component is among the valid components.
+            if (conn.get("source_component") is None or conn.get("source_component") not in self.components) \
+                    and (conn.get("target_component") in valid_component_names):
                 kind = conn.get("kind", "material")
                 if kind == "material":
                     if self.chemical_exergy_enabled:
@@ -865,13 +872,13 @@ class ExergoeconomicAnalysis:
                         counter += 1
                     else:
                         continue
-        
+
         # 3. Auxiliary equations for the equality of the specific costs 
         # of all power flows at the input or output of the system.
         power_conns = [conn for conn in self.connections.values() 
                     if conn.get("kind") == "power" and 
-                    (conn.get("source_component") not in valid_components or conn.get("target_component") not in valid_components) and not
-                    (conn.get("source_component") not in valid_components and conn.get("target_component") not in valid_components)]
+                    (conn.get("source_component") not in valid_component_names or conn.get("target_component") not in valid_component_names) and not
+                    (conn.get("source_component") not in valid_component_names and conn.get("target_component") not in valid_component_names)]
 
         # Only add auxiliary equations if there is more than one power connection.
         if len(power_conns) > 1:
@@ -885,7 +892,6 @@ class ExergoeconomicAnalysis:
                 b[counter] = 0
                 self.equations[counter] = f"aux_power_eq_{ref['name']}_{conn['name']}"
                 counter += 1
-
 
         # 4. Auxiliary equations.
         # These equations are needed because we have more variables than components.
@@ -903,6 +909,8 @@ class ExergoeconomicAnalysis:
         # TODO: Implement the equations for dissipative components.
 
         return A, b
+
+
 
 
     def solve_exergoeconomic_analysis(self, Tamb):

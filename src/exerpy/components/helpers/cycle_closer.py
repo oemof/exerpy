@@ -73,13 +73,13 @@ class CycleCloser(Component):
         # Mechanical cost equality equation:
         A[counter, self.inl[0]["CostVar_index"]["M"]] = (1 / self.inl[0]["e_M"]) if self.inl[0]["e_M"] != 0 else 1
         A[counter, self.outl[0]["CostVar_index"]["M"]] = (-1 / self.outl[0]["e_M"]) if self.outl[0]["e_M"] != 0 else -1
-        equations[counter] = f"aux_cyclecloser_mech_{self.name}"
+        equations[counter] = f"aux_cyclecloser_mech"
         b[counter] = 0
 
         # Thermal cost equality equation:
         A[counter+1, self.inl[0]["CostVar_index"]["T"]] = (1 / self.inl[0]["e_T"]) if self.inl[0]["e_T"] != 0 else 1
         A[counter+1, self.outl[0]["CostVar_index"]["T"]] = (-1 / self.outl[0]["e_T"]) if self.outl[0]["e_T"] != 0 else -1
-        equations[counter+1] = f"aux_cyclecloser_therm_{self.name}"
+        equations[counter+1] = f"aux_cyclecloser_thermal"
         b[counter+1] = 0
 
         counter += 2

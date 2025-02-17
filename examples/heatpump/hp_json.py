@@ -29,7 +29,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
 
 Exe_Eco_Costs = {
     "COMP_Z": 500.0,  
@@ -41,7 +40,6 @@ Exe_Eco_Costs = {
     "MOT3_Z": 50.0,  
     "PUMP_Z": 200.0, 
     "VAL_Z": 1.0,
-    "SEP_Z": 0.0,
     "11_c": 1.0,
     "21_c": 1.0,
     "E1_c": 40.0,

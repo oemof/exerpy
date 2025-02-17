@@ -29,7 +29,6 @@ loss = {
 }
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
 ean.export_to_json('examples/heatpump/hp_ebs.json')
 
 Exe_Eco_Costs = {
@@ -44,6 +43,7 @@ Exe_Eco_Costs = {
     "VAL_Z": 1.0,
     "11_c": 1.0,
     "21_c": 1.0,
+    "E1_c": 40.0,
 }
 
 # Initialize Exergoeconomic Analysis with existing exergy analysis

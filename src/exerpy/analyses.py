@@ -118,14 +118,17 @@ class ExergyAnalysis:
         # Perform exergy balance for each individual component in the system
         total_component_E_D = 0.0
         for component_name, component in self.components.items():
-            # Calculate E_F, E_D, E_P
-            component.calc_exergy_balance(self.Tamb, self.pamb)
-            # Calculate y and y* for each component
-            component.y = component.E_D / self.E_F if component.E_D is not None else None
-            component.y_star = component.E_D / self.E_D if component.E_D is not None else None
-            # Calculate the total exergy destruction with the system based on components' E_D
-            if component.E_D is not None:
-                total_component_E_D += component.E_D
+            if component.__class__.__name__ == "CycleCloser":
+                continue
+            else:
+                # Calculate E_F, E_D, E_P
+                component.calc_exergy_balance(self.Tamb, self.pamb)
+                # Calculate y and y* for each component
+                component.y = component.E_D / self.E_F if component.E_D is not None else None
+                component.y_star = component.E_D / self.E_D if component.E_D is not None else None
+                # Calculate the total exergy destruction with the system based on components' E_D
+                if component.E_D is not None:
+                    total_component_E_D += component.E_D
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
@@ -681,6 +684,7 @@ class ExergoeconomicAnalysis:
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
         for conn in self.connections.values():
+            conn['name'] = conn.get('label', 'Unknown')
             is_part_of_the_system = (conn.get("source_component") in valid_components) or \
                                     (conn.get("target_component") in valid_components)
             if not is_part_of_the_system:

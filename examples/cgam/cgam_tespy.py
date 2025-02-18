@@ -36,7 +36,7 @@ tur = Turbine('EXP')
 
 eva = HeatExchanger('EV')
 eco = HeatExchanger('PH')
-dr = Drum('drum')
+dr = Drum('DRUM')
 
 c1 = Connection(amb, 'out1', cmp, 'in1', label='1')
 c2 = Connection(cmp, 'out1', aph, 'in2', label='2')
@@ -112,7 +112,7 @@ p0 = 101300
 T0 = 298.15
 
 
-from exerpy import ExergyAnalysis
+from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 
 ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib='Ahrendts')
@@ -146,3 +146,27 @@ ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/cgam/cgam_tespy.json")
 df_component_results.to_csv("examples/cgam/cgam_components_tespy.csv")
+
+Exe_Eco_Costs = {
+    # Component Investment Costs (currency/h)
+    "CC_Z": 68.0,  
+    "AC_Z": 753.0,         
+    "generator_of_EXP_Z": 10.0,         
+    "APH_Z": 181.0,
+    "EV_Z": 149.0,
+    "DRUM_Z": 10.0,
+    "PH_Z": 100.0,         
+    "EXP_Z": 753.0,
+    "motor_of_AC_Z": 0.0,  # this component does not exist in reality but is used in the TESPy model (why?)
+
+    # Connection Fixed Costs (currency/W)
+    "1_c": 0.0,  # air input
+    "10_c": 4.57,  # fuel input
+    "8_c": 0.0,  # water inlet
+}
+
+exergoeco_analysis = ExergoeconomicAnalysis(ean)
+
+# Run the exergoeconomic analysis with cost inputs
+exergoeco_analysis.run(Exe_Eco_Costs=Exe_Eco_Costs, Tamb=ean.Tamb, )
+exergoeco_analysis.exergoeconomic_results()

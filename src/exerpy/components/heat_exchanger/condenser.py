@@ -129,8 +129,8 @@ class Condenser(Component):
         # Thermal fuel rule on hot stream: c_T_in0 = c_T_out0.
         def set_thermal_f_hot(A, row):
             if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                A[row, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["e_T"]
-                A[row, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["e_T"]
+                A[row, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["E_T"]
+                A[row, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["E_T"]
             elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
                 A[row, self.inl[0]["CostVar_index"]["T"]] = 1
             elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
@@ -142,8 +142,8 @@ class Condenser(Component):
         # Thermal fuel rule on cold stream: c_T_in1 = c_T_out1.
         def set_thermal_f_cold(A, row):
             if self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
-                A[row, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["e_T"]
-                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+                A[row, self.inl[1]["CostVar_index"]["T"]] = 1 / self.inl[1]["E_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["E_T"]
             elif self.inl[1]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
                 A[row, self.inl[1]["CostVar_index"]["T"]] = 1
             elif self.inl[1]["e_T"] != 0 and self.outl[1]["e_T"] == 0:
@@ -155,8 +155,8 @@ class Condenser(Component):
         # Thermal product rule: Equate the two outlet thermal costs (c_T_out0 = c_T_out1).
         def set_thermal_p_rule(A, row):
             if self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] != 0:
-                A[row, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
-                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["e_T"]
+                A[row, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+                A[row, self.outl[1]["CostVar_index"]["T"]] = -1 / self.outl[1]["E_T"]
             elif self.outl[0]["e_T"] == 0 and self.outl[1]["e_T"] != 0:
                 A[row, self.outl[0]["CostVar_index"]["T"]] = 1
             elif self.outl[0]["e_T"] != 0 and self.outl[1]["e_T"] == 0:

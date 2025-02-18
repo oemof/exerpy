@@ -172,18 +172,18 @@ class CombustionChamber(Component):
         
         # --- Mechanical cost auxiliary equation ---
         if (outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0):
-            A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["e_M"]
-            A[counter, inlets[0]["CostVar_index"]["M"]] = (1 / inlets[0]["e_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            A[counter, inlets[1]["CostVar_index"]["M"]] = (1 / inlets[1]["e_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+            A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
+            A[counter, inlets[0]["CostVar_index"]["M"]] = (1 / inlets[0]["E_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+            A[counter, inlets[1]["CostVar_index"]["M"]] = (1 / inlets[1]["E_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
         else:  # pressure can only decrease in the combustion chamber (case with p_inlet = p0 and p_outlet < p0 NOT considered)
             A[counter, outlets[0]["CostVar_index"]["M"]] = 1
         equations[counter] = f"aux_mixing_mech_{self.outl[0]["name"]}"
         
         # --- Chemical cost auxiliary equation ---
         if (outlets[0]["e_CH"] != 0 and inlets[0]["e_CH"] != 0 and inlets[1]["e_CH"] != 0):
-            A[counter+1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["e_CH"]
-            A[counter+1, inlets[0]["CostVar_index"]["CH"]] = (1 / inlets[0]["e_CH"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            A[counter+1, inlets[1]["CostVar_index"]["CH"]] = (1 / inlets[1]["e_CH"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+            A[counter+1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["E_CH"]
+            A[counter+1, inlets[0]["CostVar_index"]["CH"]] = (1 / inlets[0]["E_CH"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+            A[counter+1, inlets[1]["CostVar_index"]["CH"]] = (1 / inlets[1]["E_CH"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
         elif inlets[0]["e_CH"] == 0:
             A[counter+1, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:

@@ -191,8 +191,8 @@ class Compressor(Component):
         # --- Chemical equality equation (row added only if enabled) ---
         if chemical_exergy_enabled:
             # Set the chemical cost equality:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_CH"]) if self.inl[0]["e_CH"] != 0 else 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["e_CH"]) if self.outl[0]["e_CH"] != 0 else 1
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else 1
             equations[counter] = f"aux_equality_chem_{self.outl[0]['name']}"
             chem_row = 1
         else:
@@ -200,8 +200,8 @@ class Compressor(Component):
 
         # --- Thermal/Mechanical cost equation ---
         # Compute differences in thermal and mechanical exergy:
-        dET = self.outl[0]["e_T"] - self.inl[0]["e_T"]
-        dEM = self.outl[0]["e_M"] - self.inl[0]["e_M"]
+        dET = self.outl[0]["E_T"] - self.inl[0]["E_T"]
+        dEM = self.outl[0]["E_M"] - self.inl[0]["E_M"]
         
         # The row for the thermal/mechanical equation:
         row_index = counter + chem_row
@@ -215,13 +215,13 @@ class Compressor(Component):
             else:
                 logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
             A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
             A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
             equations[row_index] = f"aux_p_rule_{self.name}"
         else:
-            A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["e_T"]
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["e_T"]
+            A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
+            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
             equations[row_index] = f"aux_f_rule_{self.name}"
         
         # Set the right-hand side entry for the thermal/mechanical row to zero.

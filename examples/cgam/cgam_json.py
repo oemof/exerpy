@@ -51,7 +51,7 @@ Exe_Eco_Costs = {
 
     # Connection Fixed Costs (currency/W)
     "1_c": 0.0,  # air input
-    "10_c": 4.0,  # fuel input
+    "10_c": 4.57,  # fuel input
     "8_c": 0.0,  # water inlet
 }
 

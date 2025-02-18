@@ -85,7 +85,7 @@ nw.print_results()
 p0 = 101300
 T0 = 283.15
 
-from exerpy import ExergyAnalysis
+from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0)
@@ -123,3 +123,26 @@ ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/heatpump/hp_tespy.json")
 df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")
+
+Exe_Eco_Costs = {
+    "COMP_Z": 500.0,  
+    "FAN_Z": 150.0,   
+    "COND_Z": 600.0,  
+    "EVA_Z": 500.0,   
+    "motor_of_FAN_Z": 30.0,  
+    "motor_of_COMP_Z": 30.0,  
+    "motor_of_PUMP_Z": 4.0,  
+    "PUMP_Z": 7.0, 
+    "VAL_Z": 1.0,
+    "11_c": 0.0,
+    "21_c": 0.01,
+    "power input__motor_of_COMP_c": 5.0,
+}
+
+
+# Initialize Exergoeconomic Analysis with existing exergy analysis
+exergoeco_analysis = ExergoeconomicAnalysis(ean)
+
+# Run the exergoeconomic analysis with cost inputs
+exergoeco_analysis.run(Exe_Eco_Costs=Exe_Eco_Costs, Tamb=ean.Tamb)
+exergoeco_analysis.exergoeconomic_results()

@@ -191,8 +191,8 @@ class Valve(Component):
         elif self.outl[0]["T"] <= T0:
             # --- Mechanical cost equation (always added) ---
             if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["e_M"]
-                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
             elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
                 A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
             elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
@@ -204,8 +204,8 @@ class Valve(Component):
             
             if chemical_exergy_enabled:
                 # --- Chemical cost equation (conditionally added) ---
-                A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1)
-                A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["e_CH"] if self.outl[0]["e_CH"] != 0 else -1)
+                A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1)
+                A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["E_CH"] if self.outl[0]["e_CH"] != 0 else -1)
                 equations[counter+1] = f"aux_valve_chem_{self.outl[0]['name']}"
                 # Set right-hand side for both rows.
                 b[counter] = 0

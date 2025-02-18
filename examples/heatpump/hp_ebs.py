@@ -41,9 +41,9 @@ Exe_Eco_Costs = {
     "MOT3_Z": 50.0,  
     "PUMP_Z": 200.0, 
     "VAL_Z": 1.0,
-    "11_c": 1.0,
-    "21_c": 1.0,
-    "E1_c": 40.0,
+    "11_c": 0.0,
+    "21_c": 0.01,
+    "E1_c": 5.0,
 }
 
 # Initialize Exergoeconomic Analysis with existing exergy analysis

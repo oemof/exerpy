@@ -216,11 +216,11 @@ class Deaerator(Component):
         # --- Chemical cost auxiliary equation (conditionally added) ---
         if chemical_exergy_enabled:
             if self.outl[0]["e_CH"] != 0:
-                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["e_CH"]
+                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["E_CH"]
                 # Iterate over inlet streams for chemical mixing.
                 for inlet in self.inl.values():
                     if inlet["e_CH"] != 0:
-                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (self.outl[0]["m"] * inlet["e_CH"])
+                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (self.outl[0]["m"] * inlet["E_CH"])
                     else:
                         A[counter, inlet["CostVar_index"]["CH"]] = 1
             else:
@@ -235,11 +235,11 @@ class Deaerator(Component):
         # --- Mechanical cost auxiliary equation ---
         mech_row = 0  # This row will always be added.
         if self.outl[0]["e_M"] != 0:
-            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["e_M"]
+            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
             # Iterate over inlet streams for mechanical mixing.
             for inlet in self.inl.values():
                 if inlet["e_M"] != 0:
-                    A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (self.outl[0]["m"] * inlet["e_M"])
+                    A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (self.outl[0]["m"] * inlet["E_M"])
                 else:
                     A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
         else:

@@ -204,29 +204,29 @@ class Turbine(Component):
 
                 # --- Thermal exergy equation ---
                 A[counter + row_offset, self.inl[0]["CostVar_index"]["T"]] = (
-                    1 / self.inl[0]["e_T"] if self.inl[0]["e_T"] != 0 else 1
+                    1 / self.inl[0]["E_T"] if self.inl[0]["e_T"] != 0 else 1
                 )
                 A[counter + row_offset, outlet["CostVar_index"]["T"]] = (
-                    -1 / outlet["e_T"] if outlet["e_T"] != 0 else -1
+                    -1 / outlet["E_T"] if outlet["e_T"] != 0 else -1
                 )
                 equations[counter + row_offset] = f"aux_f_rule_{outlet['name']}"
 
                 # --- Mechanical exergy equation ---
                 A[counter + row_offset + 1, self.inl[0]["CostVar_index"]["M"]] = (
-                    1 / self.inl[0]["e_M"] if self.inl[0]["e_M"] != 0 else 1
+                    1 / self.inl[0]["E_M"] if self.inl[0]["e_M"] != 0 else 1
                 )
                 A[counter + row_offset + 1, outlet["CostVar_index"]["M"]] = (
-                    -1 / outlet["e_M"] if outlet["e_M"] != 0 else -1
+                    -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
                 )
                 equations[counter + row_offset + 1] = f"aux_f_rule_{outlet['name']}"
 
                 # --- Chemical exergy equation (conditionally added) ---
                 if chemical_exergy_enabled:
                     A[counter + row_offset + 2, self.inl[0]["CostVar_index"]["CH"]] = (
-                        1 / self.inl[0]["e_CH"] if self.inl[0]["e_CH"] != 0 else 1
+                        1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1
                     )
                     A[counter + row_offset + 2, outlet["CostVar_index"]["CH"]] = (
-                        -1 / outlet["e_CH"] if outlet["e_CH"] != 0 else -1
+                        -1 / outlet["E_CH"] if outlet["e_CH"] != 0 else -1
                     )
                     equations[counter + row_offset + 2] = f"aux_f_rule_{outlet['name']}"
             

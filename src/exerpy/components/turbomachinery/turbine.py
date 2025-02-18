@@ -288,8 +288,8 @@ class Turbine(Component):
         ValueError
             If required cost values are missing.
         """
-        # Sum the cost of all inlet power streams.
-        C_power_in = sum(stream.get("C_TOT", 0) for stream in self.inl.values() if stream.get("kind") == "power")
+        # Sum the cost of all outlet power streams.
+        C_power_out = sum(stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power")
         # Assume a single primary inlet for material cost properties.
         inlet = self.inl[0]
         # Filter material outlets and sum their cost components.
@@ -300,17 +300,17 @@ class Turbine(Component):
 
         # Case 1: Both inlet and first outlet above ambient.
         if inlet["T"] >= T0 and self.outl[0]["T"] >= T0:
-            self.C_P = C_power_in
+            self.C_P = C_power_out
             self.C_F = inlet.get("C_PH", 0) - sum_C_PH_out
 
         # Case 2: Inlet above ambient and outlet at or below ambient.
         elif inlet["T"] > T0 and self.outl[0]["T"] <= T0:
-            self.C_P = C_power_in + sum_C_T_out
+            self.C_P = C_power_out + sum_C_T_out
             self.C_F = inlet.get("C_T", 0) + (inlet.get("C_M", 0) - sum_C_M_out)
 
         # Case 3: Both inlet and outlet at or below ambient.
         elif inlet["T"] <= T0 and self.outl[0]["T"] <= T0:
-            self.C_P = C_power_in + (sum_C_T_out - inlet.get("C_T", 0))
+            self.C_P = C_power_out + (sum_C_T_out - inlet.get("C_T", 0))
             self.C_F = inlet.get("C_M", 0) - sum_C_M_out
 
         else:

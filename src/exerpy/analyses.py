@@ -46,6 +46,9 @@ class ExergyAnalysis:
         self.E_F = 0.0
         self.E_P = 0.0
         self.E_L = 0.0
+        self.E_F_dict = E_F
+        self.E_P_dict = E_P
+        self.E_L_dict = E_L
 
         for ex_flow in [E_F, E_P, E_L]:
             for connections in ex_flow.values():
@@ -643,7 +646,7 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None, required_component
 
 
 class ExergoeconomicAnalysis:
-    def __init__(self, exergy_analysis_instance):
+    def __init__(self, exergy_analysis_instance, currency="EUR"):
         r"""
         Initialize the ExergoeconomicAnalysis with an existing ExergyAnalysis instance.
 
@@ -656,9 +659,13 @@ class ExergoeconomicAnalysis:
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
         self.chemical_exergy_enabled = exergy_analysis_instance.chemical_exergy_enabled
+        self.E_F_dict = exergy_analysis_instance.E_F_dict
+        self.E_P_dict = exergy_analysis_instance.E_P_dict
+        self.E_L_dict = exergy_analysis_instance.E_L_dict
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
+        self.currency = currency  # EUR is default currency for cost calculations	
 
     def initialize_cost_variables(self):
         """
@@ -716,7 +723,7 @@ class ExergoeconomicAnalysis:
         Assign given component and connection costs from the user input dictionary.
 
         For components:
-        - Look for a key "<component_name>_Z" and assign it (converted from €/h to €/s).
+        - Look for a key "<component_name>_Z" and assign it (converted from currency/h to currency/s).
         If not provided, raise a ValueError.
 
         For connections:
@@ -730,8 +737,8 @@ class ExergoeconomicAnalysis:
         - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
         
         Cost conversions:
-        - For components: from €/h to €/s (divide by 3600).
-        - For connections: from €/GJ to €/J (multiply by 1e-9).
+        - For components: from currency/h to currency/s (divide by 3600).
+        - For connections: from currency/GJ to currency/J (multiply by 1e-9).
         """
         # --- Component Costs ---
         for comp_name, comp in self.components.items():
@@ -740,7 +747,7 @@ class ExergoeconomicAnalysis:
             else:
                 cost_key = f"{comp_name}_Z"
                 if cost_key in Exe_Eco_Costs:
-                    comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert €/h to €/s
+                    comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
                 else:
                     raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
@@ -764,7 +771,7 @@ class ExergoeconomicAnalysis:
 
             # Assign cost if provided.
             if cost_key in Exe_Eco_Costs:
-                # Convert cost from €/GJ to €/J.
+                # Convert cost from currency/GJ to currency/J.
                 c_TOT = Exe_Eco_Costs[cost_key] * 1e-9
                 conn["c_TOT"] = c_TOT
 
@@ -945,6 +952,7 @@ class ExergoeconomicAnalysis:
                         conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
                         conn["c_CH"] = C_solution[conn["CostVar_index"]["CH"]] / conn.get("E", 1)
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
+                        conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
                     else:
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"]
                         conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
@@ -952,11 +960,86 @@ class ExergoeconomicAnalysis:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
 
-        # Step 4: Update the exergoeconomic balance of each component
+        # Step 4: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
                 comp.exergoeconomic_balance(self.exergy_analysis.Tamb)
 
+        # Step 5: Distribute the cost of loss streams to the product streams.
+        # For each loss stream (provided in E_L_dict), its C_TOT is distributed among the product streams (in E_P_dict)
+        # in proportion to their exergy (E). After the distribution the loss stream's C_TOT is set to zero.
+        loss_streams = self.E_L_dict.get("inputs", [])
+        product_streams = self.E_P_dict.get("inputs", [])
+        for loss_name in loss_streams:
+            loss_conn = self.connections.get(loss_name)
+            if loss_conn is None:
+                continue
+            loss_cost = loss_conn.get("C_TOT", 0)
+            # If there is no cost assigned to this loss stream, skip it.
+            if not loss_cost:
+                continue
+            # Calculate the total exergy of the product streams.
+            total_E = 0
+            for prod_name in product_streams:
+                prod_conn = self.connections.get(prod_name)
+                if prod_conn is None:
+                    continue
+                total_E += prod_conn.get("E", 0)
+            # Avoid division by zero.
+            if total_E == 0:
+                continue
+            # Distribute the loss cost to each product stream proportionally to its exergy.
+            for prod_name in product_streams:
+                prod_conn = self.connections.get(prod_name)
+                if prod_conn is None:
+                    continue
+                prod_E = prod_conn.get("E", 0)
+                share = loss_cost * (prod_E / total_E)
+                prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
+                prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
+            # Set the loss stream's cost to zero.
+            loss_conn["C_TOT"] = 0
+            loss_conn["c_TOT"] = 0
+            if loss_conn.get("kind") == "material":
+                loss_conn["C_T"] = 0
+                loss_conn["C_M"] = 0
+                if self.chemical_exergy_enabled:
+                    loss_conn["C_CH"] = 0
+
+        # Step 6: Compute system-level cost variables using the E_F, E_P, and E_L dictionaries.
+        # Compute total fuel cost (C_F_total) from fuel streams.
+        C_F_total = 0.0
+        for conn_name in self.E_F_dict.get("inputs", []):
+            conn = self.connections.get(conn_name, {})
+            C_F_total += conn.get("C_TOT", 0)
+        for conn_name in self.E_F_dict.get("outputs", []):
+            conn = self.connections.get(conn_name, {})
+            C_F_total -= conn.get("C_TOT", 0)
+
+        # Compute total product cost (C_P_total) from product streams.
+        C_P_total = 0.0
+        for conn_name in self.E_P_dict.get("inputs", []):
+            conn = self.connections.get(conn_name, {})
+            C_P_total += conn.get("C_TOT", 0)
+        for conn_name in self.E_P_dict.get("outputs", []):
+            conn = self.connections.get(conn_name, {})
+            C_P_total -= conn.get("C_TOT", 0)
+
+        # Compute the sum of all Z costs (Z_total) from all components except CycleCloser.
+        Z_total = 0.0
+        for comp in self.exergy_analysis.components.values():
+            # Sum Z_costs from all non-CycleCloser components, converting from currency/s to currency/h.
+            if comp.__class__.__name__ != "CycleCloser":
+                Z_total += getattr(comp, "Z_costs", 0) * 3600
+
+        # Store the system-level costs in the exergy analysis instance.
+        self.system_costs = {
+            "C_F": C_F_total,
+            "C_P": C_P_total,
+            "Z": Z_total
+        }
+
+        return exergy_cost_matrix, exergy_cost_vector
 
     def run(self, Exe_Eco_Costs, Tamb):
         """
@@ -982,32 +1065,99 @@ class ExergoeconomicAnalysis:
         This function first obtains the exergy analysis results tables (for components,
         material connections, and non-material connections) by calling the exergy_results()
         method on the underlying exergy analysis with print_results=False. It then adds new
-        columns with the cost data. The cost values are computed internally in [€/s] and are
-        converted to [€/h] (multiplied by 3600) for display.
+        columns with the cost data. The cost values are computed internally in [currency/s] and are
+        converted to [currency/h] (multiplied by 3600) for display.
         
         For material connections, the following columns are added:
-        - C^T [€/h]
-        - C^M [€/h]
-        - C^CH [€/h]
-        - C^TOT [€/h]
+        - C^T [currency/h]
+        - C^M [currency/h]
+        - C^CH [currency/h]
+        - C^TOT [currency/h]
         For heat/power connections, only the column:
-        - C^TOT [€/h]
+        - C^TOT [currency/h]
         is added.
         
         Returns
         -------
         tuple of pandas.DataFrame
-            (df_component_results, df_material_connection_results, df_non_material_connection_results)
-            with added cost columns.
+            (df_component_results, df_material_connection_results_part1, 
+            df_material_connection_results_part2, df_non_material_connection_results)
         """
         # Retrieve the base exergy results without printing them
         df_comp, df_mat, df_non_mat = self.exergy_analysis.exergy_results(print_results=False)
         
-        # For material connections, add cost columns (convert from €/s to €/h by multiplying by 3600)
+        # -------------------------
+        # Add new cost columns to the component results table.
+        # We assume that each component (except CycleCloser, which is already excluded)
+        # has attributes: C_F, C_P, C_D, and Z_cost (all in currency/s), which we convert to currency/h.
+        C_F_list = []
+        C_P_list = []
+        C_D_list = []
+        Z_cost_list = []
+        f_list = []
+        
+        # Iterate over the component DataFrame rows. The "Component" column contains the key.
+        for idx, row in df_comp.iterrows():
+            comp_name = row["Component"]
+            if comp_name != "TOT":
+                comp = self.components.get(comp_name, None)
+                if comp is not None:
+                    C_F_list.append(getattr(comp, "C_F", 0) * 3600)
+                    C_P_list.append(getattr(comp, "C_P", 0) * 3600)
+                    C_D_list.append(getattr(comp, "C_D", 0) * 3600)
+                    Z_cost_list.append(getattr(comp, "Z_costs", 0) * 3600)
+                    f_list.append(getattr(comp, "f", 0) * 100)
+                else:
+                    C_F_list.append(np.nan)
+                    C_P_list.append(np.nan)
+                    C_D_list.append(np.nan)
+                    Z_cost_list.append(np.nan)
+                    f_list.append(np.nan)
+            else:
+                # We'll update the TOT row using system-level values later.
+                C_F_list.append(np.nan)
+                C_P_list.append(np.nan)
+                C_D_list.append(np.nan)
+                Z_cost_list.append(np.nan)
+                f_list.append(np.nan)
+        
+        # Add the new columns to the component DataFrame.
+        df_comp[f"C_F [{self.currency}/h]"] = C_F_list
+        df_comp[f"C_P [{self.currency}/h]"] = C_P_list
+        df_comp[f"C_D [{self.currency}/h]"] = C_D_list
+        df_comp[f"Z [{self.currency}/h]"] = Z_cost_list
+        df_comp[f"C_D+Z [{self.currency}/h]"] = df_comp[f"C_D [{self.currency}/h]"] + df_comp[f"Z [{self.currency}/h]"]
+        df_comp[f"f [%]"] = f_list
+
+        # Update the TOT row with system-level values using .loc.
+        df_comp.loc["TOT", f"C_F [{self.currency}/h]"] = self.system_costs.get("C_F", np.nan) * 3600
+        df_comp.loc["TOT", f"C_P [{self.currency}/h]"] = self.system_costs.get("C_P", np.nan) * 3600
+        df_comp.loc["TOT", f"Z [{self.currency}/h]"]   = self.system_costs.get("Z", np.nan)
+        df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = (
+            df_comp.loc["TOT", f"C_D [{self.currency}/h]"] +
+            df_comp.loc["TOT", f"Z [{self.currency}/h]"]
+        )
+
+        df_comp[f"c_F [{self.currency}/GJ]"] = df_comp[f"C_F [{self.currency}/h]"] / df_comp["E_F [kW]"] * 1e6 / 3600
+        df_comp[f"c_P [{self.currency}/GJ]"] = df_comp[f"C_P [{self.currency}/h]"] / df_comp["E_P [kW]"] * 1e6 / 3600
+
+        df_comp.loc["TOT", f"C_D [{self.currency}/h]"] = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"] * df_comp.loc["TOT", f"E_D [kW]"] / 1e6 * 3600
+        df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = df_comp.loc["TOT", f"C_D [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]	
+
+
+        # -------------------------
+        # Add cost columns to material connections.
+        # -------------------------
+        # Uppercase cost columns (in currency/h)
         C_T_list = []
         C_M_list = []
         C_CH_list = []
         C_TOT_list = []
+        # Lowercase cost columns (in GJ/{currency})
+        c_T_list = []
+        c_M_list = []
+        c_CH_list = []
+        c_TOT_list = []
         
         for idx, row in df_mat.iterrows():
             conn_name = row['Connection']
@@ -1018,44 +1168,116 @@ class ExergoeconomicAnalysis:
                 C_M = conn_data.get("C_M", None)
                 C_CH = conn_data.get("C_CH", None)
                 C_TOT = conn_data.get("C_TOT", None)
+                c_T = conn_data.get("c_T", None)
+                c_M = conn_data.get("c_M", None)
+                c_CH = conn_data.get("c_CH", None)
+                c_TOT = conn_data.get("c_TOT", None)
                 C_T_list.append(C_T * 3600 if C_T is not None else None)
                 C_M_list.append(C_M * 3600 if C_M is not None else None)
                 C_CH_list.append(C_CH * 3600 if C_CH is not None else None)
                 C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
+                c_T_list.append(c_T * 1e9 if c_T is not None else None)
+                c_M_list.append(c_M * 1e9 if c_M is not None else None)
+                c_CH_list.append(c_CH * 1e9 if c_CH is not None else None)
+                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
             elif kind in {"heat", "power"}:
                 # For non-material streams in the material table, only C^TOT is defined.
                 C_T_list.append(np.nan)
                 C_M_list.append(np.nan)
                 C_CH_list.append(np.nan)
+                c_T_list.append(np.nan)
+                c_M_list.append(np.nan)
+                c_CH_list.append(np.nan)
                 C_TOT = conn_data.get("C_TOT", None)
                 C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
+                c_TOT = conn_data.get("C_TOT", None)
+                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
             else:
                 C_T_list.append(np.nan)
                 C_M_list.append(np.nan)
                 C_CH_list.append(np.nan)
                 C_TOT_list.append(np.nan)
+                c_T_list.append(np.nan)
+                c_M_list.append(np.nan)
+                c_CH_list.append(np.nan)
+                c_TOT_list.append(np.nan)
         
-        df_mat["C^T [€/h]"] = C_T_list
-        df_mat["C^M [€/h]"] = C_M_list
-        df_mat["C^CH [€/h]"] = C_CH_list
-        df_mat["C^TOT [€/h]"] = C_TOT_list
-        
-        # For non-material connections, add the total cost column (converted to €/h)
+        df_mat[f"C^T [{self.currency}/h]"] = C_T_list
+        df_mat[f"C^M [{self.currency}/h]"] = C_M_list
+        df_mat[f"C^CH [{self.currency}/h]"] = C_CH_list
+        df_mat[f"C^TOT [{self.currency}/h]"] = C_TOT_list
+        df_mat[f"c^T [GJ/{self.currency}]"] = c_T_list
+        df_mat[f"c^M [GJ/{self.currency}]"] = c_M_list
+        df_mat[f"c^CH [GJ/{self.currency}]"] = c_CH_list
+        df_mat[f"c^TOT [GJ/{self.currency}]"] = c_TOT_list
+
+        # -------------------------
+        # Add cost columns to non-material connections.
+        # -------------------------
         C_TOT_non_mat = []
+        c_TOT_non_mat = []
         for idx, row in df_non_mat.iterrows():
             conn_name = row["Connection"]
             conn_data = self.connections.get(conn_name, {})
             C_TOT = conn_data.get("C_TOT", None)
             C_TOT_non_mat.append(C_TOT * 3600 if C_TOT is not None else None)
-        df_non_mat["C^TOT [€/h]"] = C_TOT_non_mat
+            c_TOT = conn_data.get("c_TOT", None)
+            c_TOT_non_mat.append(c_TOT * 1e9 if c_TOT is not None else None)
+        df_non_mat[f"C^TOT [{self.currency}/h]"] = C_TOT_non_mat
+        df_non_mat[f"c^TOT [GJ/{self.currency}]"] = c_TOT_non_mat        
 
+        # -------------------------
+        # Split the material connections into two tables according to your specifications.
+        # -------------------------
+        # df_mat1: Columns from mass flow until e^CH.
+        df_mat1 = df_mat[[
+            "Connection",
+            "m [kg/s]",
+            "T [°C]",
+            "p [bar]",
+            "h [kJ/kg]",
+            "s [J/kgK]",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]"
+        ]].copy()
+        
+        # df_mat2: Columns from E onward, plus the uppercase and lowercase cost columns.
+        df_mat2 = df_mat[[
+            "Connection",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]",
+            f"C^T [{self.currency}/h]",
+            f"C^M [{self.currency}/h]",
+            f"C^CH [{self.currency}/h]",
+            f"C^TOT [{self.currency}/h]",
+            f"c^T [GJ/{self.currency}]",
+            f"c^M [GJ/{self.currency}]",
+            f"c^CH [GJ/{self.currency}]",
+            f"c^TOT [GJ/{self.currency}]"
+        ]].copy()
+
+        # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
+        df_mat1.dropna(axis=1, how='all', inplace=True)
+        df_mat2.dropna(axis=1, how='all', inplace=True)
+        df_non_mat.dropna(axis=1, how='all', inplace=True)
+        
+        # -------------------------
+        # Print the four tables if requested.
+        # -------------------------
         if print_results:
-            print("\nExergoeconomic Analysis - Material Connection Results:")
-            print(tabulate(df_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print("\nExergoeconomic Analysis - Component Results:")
+            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print("\nExergoeconomic Analysis - Material Connection Results (exergy data):")
+            print(tabulate(df_mat1.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print("\nExergoeconomic Analysis - Material Connection Results (cost data):")
+            print(tabulate(df_mat2.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
             print("\nExergoeconomic Analysis - Non-Material Connection Results:")
             print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
-            print("\nExergoeconomic Analysis - Component Results (unchanged):")
-            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
         
-        return df_comp, df_mat, df_non_mat
-
+        return df_comp, df_mat1, df_mat2, df_non_mat

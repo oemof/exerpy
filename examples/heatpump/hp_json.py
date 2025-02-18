@@ -32,13 +32,13 @@ ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 
 Exe_Eco_Costs = {
     "COMP_Z": 500.0,  
-    "FAN_Z": 400.0,   
+    "FAN_Z": 150.0,   
     "COND_Z": 600.0,  
     "EVA_Z": 500.0,   
-    "MOT1_Z": 100.0,  
-    "MOT2_Z": 100.0,  
-    "MOT3_Z": 50.0,  
-    "PUMP_Z": 200.0, 
+    "MOT1_Z": 30.0,  
+    "MOT2_Z": 30.0,  
+    "MOT3_Z": 4.0,  
+    "PUMP_Z": 7.0, 
     "VAL_Z": 1.0,
     "11_c": 1.0,
     "21_c": 1.0,

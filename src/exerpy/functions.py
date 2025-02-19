@@ -567,5 +567,17 @@ fluid_property_data = {
         'units': {
             'W / K': 1, 'kW / K': 1e3, 'MW / K': 1e6,
             'W/K': 1, 'kW/K': 1e3, 'MW/K': 1e6},
+    },
+    'A': {
+        'text': 'area',
+        'SI_unit': 'm2',
+        'units': {'m2': 1, 'cm2': 1e-4, 'mm2': 1e-6,
+                  'm²': 1, 'cm²': 1e-4, 'mm²': 1e-6},
+    },
+    'VM': {
+        'text': 'volume flow',
+        'SI_unit': 'm3 / s',
+        'units': {'m3 / s': 1, 'l / s': 1e-3, 'l/s': 1e-3, 
+                  'm³/s': 1, 'l/min': 1 / 60e3, 'l/h': 1 / 3.6e6},
     }
 }

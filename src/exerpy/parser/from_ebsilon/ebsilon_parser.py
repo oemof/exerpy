@@ -249,6 +249,15 @@ class EbsilonModelParser:
                         ) if hasattr(pipe_cast, 'X') and pipe_cast.X.Value is not None else None
                     ),
                     'x_unit': fluid_property_data['x']['SI_unit'],
+
+                    'VM': (
+                        convert_to_SI(
+                            'VM',
+                            pipe_cast.VM.Value,
+                            unit_id_to_string.get(pipe_cast.VM.Dimension, "Unknown")
+                        ) if hasattr(pipe_cast, 'VM') and pipe_cast.VM.Value is not None else None
+                    ),
+                    'VM_unit': fluid_property_data['VM']['SI_unit'],
                 })
 
                 # Add the mechanical and thermal specific exergies
@@ -396,6 +405,11 @@ class EbsilonModelParser:
                     if hasattr(comp_cast, 'KA') and comp_cast.KA.Value is not None else None
                 ),
                 'kA_unit': fluid_property_data['kA']['SI_unit'],
+                'A': (
+                    comp_cast.A.Value
+                    if hasattr(comp_cast, 'A') and comp_cast.A.Value is not None else None
+                ),
+                'A_unit': fluid_property_data['A']['SI_unit'],
                 'mass_flow_1': (
                     convert_to_SI(
                         'm',

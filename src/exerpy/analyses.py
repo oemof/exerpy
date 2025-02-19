@@ -684,7 +684,8 @@ class ExergoeconomicAnalysis:
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
         for conn in self.connections.values():
-            conn['name'] = conn.get('label', 'Unknown')
+            if not conn['name']:
+                conn['name'] = conn.get('label', 'Unknown')
             is_part_of_the_system = (conn.get("source_component") in valid_components) or \
                                     (conn.get("target_component") in valid_components)
             if not is_part_of_the_system:
@@ -922,8 +923,6 @@ class ExergoeconomicAnalysis:
         return A, b
 
 
-
-
     def solve_exergoeconomic_analysis(self, Tamb):
         """
         Solve the exergoeconomic cost balance equations.
@@ -936,7 +935,7 @@ class ExergoeconomicAnalysis:
             C_solution = np.linalg.solve(exergy_cost_matrix, exergy_cost_vector)
         except np.linalg.LinAlgError:
             raise ValueError(f"Exergoeconomic system is singular and cannot be solved. "
-                             f"Provided equations: {len(self.equations)}, provided variables: {len(self.variables)}")
+                             f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}")
 
         # Step 3: Assign solutions to connections
         for conn_name, conn in self.connections.items():
@@ -1147,6 +1146,7 @@ class ExergoeconomicAnalysis:
 
         df_comp.loc["TOT", f"C_D [{self.currency}/h]"] = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"] * df_comp.loc["TOT", f"E_D [kW]"] / 1e6 * 3600
         df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = df_comp.loc["TOT", f"C_D [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]	
+        df_comp.loc["TOT", f"f [%]"] = df_comp.loc["TOT", f"Z [{self.currency}/h]"] / (df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]) * 100
 
 
         # -------------------------
@@ -1285,3 +1285,130 @@ class ExergoeconomicAnalysis:
             print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
         
         return df_comp, df_mat1, df_mat2, df_non_mat
+
+
+class EconomicAnalysis:
+    """
+    A class to perform economic analysis of a power plant using the total revenue requirement method.
+    
+    Attributes
+    ----------
+    tau : float
+        Full load hours of the plant (hours/year).
+    i_eff : float
+        Effective rate of return (yearly based).
+    n : int
+        Lifetime of the plant (years).
+    r_n : float
+        Nominal escalation rate (yearly based).
+    """
+    
+    def __init__(self, pars):
+        """
+        Initialize the EconomicAnalysis with plant parameters provided in a dictionary.
+        
+        Parameters
+        ----------
+        pars : dict
+            Dictionary containing the following keys:
+                - 'tau': Full load hours of the plant (hours/year).
+                - 'i_eff': Effective rate of return (yearly based).
+                - 'n': Lifetime of the plant (years).
+                - 'r_n': Nominal escalation rate (yearly based).
+        """
+        self.tau = pars['tau']
+        self.i_eff = pars['i_eff']
+        self.n = pars['n']
+        self.r_n = pars['r_n']
+
+    def compute_crf(self):
+        """
+        Compute the Capital Recovery Factor (CRF) using the effective rate of return.
+        
+        Returns
+        -------
+        float
+            The capital recovery factor.
+        
+        Notes
+        -----
+        CRF = i_eff * (1 + i_eff)**n / ((1 + i_eff)**n - 1)
+        """
+        return self.i_eff * (1 + self.i_eff)**self.n / ((1 + self.i_eff)**self.n - 1)
+    
+    def compute_celf(self):
+        """
+        Compute the Cost Escalation Levelization Factor (CELF) for repeating expenditures.
+        
+        Returns
+        -------
+        float
+            The cost escalation levelization factor.
+        
+        Notes
+        -----
+        k = (1 + r_n) / (1 + i_eff)
+        CELF = ((1 - k**n) / (1 - k)) * CRF
+        """
+        k = (1 + self.r_n) / (1 + self.i_eff)
+        return (1 - k**self.n) / (1 - k) * self.compute_crf()
+
+    def compute_levelized_investment_cost(self, total_PEC):
+        """
+        Compute the levelized investment cost (annualized investment cost).
+        
+        Parameters
+        ----------
+        total_PEC : float
+            Total purchasing equipment cost (PEC) across all components.
+        
+        Returns
+        -------
+        float
+            Levelized investment cost (currency/year).
+        """
+        return total_PEC * self.compute_crf()
+    
+    def compute_component_costs(self, PEC_list, OMC_relative):
+        """
+        Compute the cost rates (in currency per hour) for each component.
+        
+        The operating and maintenance cost (OMC) for each component is 
+        specified as a fraction of its PEC for the first year. The total first-year OMC is 
+        computed by summing the individual OMC values, levelized using CELF, and then 
+        allocated back to each component in proportion to its PEC.
+        
+        Parameters
+        ----------
+        PEC_list : list of float
+            The purchasing equipment cost (PEC) of each component (in currency).
+        OMC_relative : list of float
+            For each component, the first-year OM cost as a fraction of its PEC.
+        
+        Returns
+        -------
+        tuple of lists of float
+            A tuple containing three lists:
+                - Z_CC: Investment cost rate per component (currency/hour)
+                - Z_OM: Operating and maintenance (OM) cost rate per component (currency/hour)
+                - Z_total: Total cost rate per component (currency/hour)
+        """
+        total_PEC = sum(PEC_list)
+        # Levelize total investment cost and allocate proportionally.
+        levelized_investment_cost = self.compute_levelized_investment_cost(total_PEC)
+        Z_CC = [(levelized_investment_cost * pec / total_PEC) / self.tau for pec in PEC_list]
+        
+        # Compute first-year OMC for each component as a fraction of PEC.
+        first_year_OMC = [frac * pec for frac, pec in zip(OMC_relative, PEC_list)]
+        total_first_year_OMC = sum(first_year_OMC)
+        
+        # Levelize the total operating and maintenance cost.
+        celf_value = self.compute_celf()
+        levelized_om_cost = total_first_year_OMC * celf_value
+        
+        # Allocate the levelized OM cost to each component in proportion to its PEC.
+        Z_OM = [(levelized_om_cost * pec / total_PEC) / self.tau for pec in PEC_list]
+        
+        # Total cost rate per component.
+        Z_total = [zcc + zom for zcc, zom in zip(Z_CC, Z_OM)]
+        return Z_CC, Z_OM, Z_total

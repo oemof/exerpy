@@ -26,7 +26,7 @@ class ExergyAnalysis:
         self.chemical_exergy_enabled = chemical_exergy_enabled
 
         # Convert the parsed data into components
-        self.components = _construct_components(component_data, connection_data)
+        self.components = _construct_components(component_data, connection_data, Tamb)
         self.connections = connection_data
 
     def analyse(self, E_F, E_P, E_L={}) -> None:
@@ -530,7 +530,7 @@ class ExergyAnalysis:
         return export
 
 
-def _construct_components(component_data, connection_data):
+def _construct_components(component_data, connection_data, Tamb):
     components = {}  # Initialize a dictionary to store created components
 
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
@@ -568,6 +568,24 @@ def _construct_components(component_data, connection_data):
                 if conn_info['source_component'] == component_name:
                     source_connector_idx = conn_info['source_connector']  # Use 0-based indexing
                     component.outl[source_connector_idx] = conn_info  # Assign outlet stream
+
+            # --- NEW: Automatically mark Valve components as dissipative ---
+            # Here we assume that if a Valve's first inlet and first outlet have temperatures (key "T")
+            # above the ambient temperature (Tamb), it is dissipative.
+            if component_type == "Valve":
+                try:
+                    # Grab the temperature from the first inlet and outlet
+                    T_in = list(component.inl.values())[0].get("T", None)
+                    T_out = list(component.outl.values())[0].get("T", None)
+                    if T_in is not None and T_out is not None and T_in > Tamb and T_out > Tamb:
+                        component.is_dissipative = True
+                    else:
+                        component.is_dissipative = False
+                except Exception as e:
+                    logging.warning(f"Could not evaluate dissipativity for Valve '{component_name}': {e}")
+                    component.is_dissipative = False
+            else:
+                component.is_dissipative = False
 
             # Store the component in the dictionary
             components[component_name] = component
@@ -712,6 +730,15 @@ class ExergoeconomicAnalysis:
                         self.variables[str(col_number)]     = f"C_{conn['name']}_T"
                         self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
                         col_number += 2
+                    # Check if this connection's target is a dissipative component.
+                    target = conn.get("target_component")
+                    if target in valid_components:
+                        comp = self.exergy_analysis.components.get(target)
+                        if comp is not None and getattr(comp, "is_dissipative", False):
+                            # Add an extra index for the dissipative cost difference.
+                            conn["CostVar_index"]["dissipative"] = col_number
+                            self.variables[str(col_number)] = "dissipative"
+                            col_number += 1
                 # For non-material streams (e.g., heat, power), assign one index.
                 elif kind in ("heat", "power"):
                     conn["CostVar_index"] = {"exergy": col_number}
@@ -839,9 +866,12 @@ class ExergoeconomicAnalysis:
                         A[counter, col] = -1  # Outgoing costs
                 self.equations[counter] = f"Z_costs_{comp.name}"  # Store the equation name
             
-            # Set the right-hand side to -Z_costs (investment costs)
-            b[counter] = -getattr(comp, "Z_costs", 1)
-            counter += 1
+            # For productive components: C_in - C_out = -Z_costs.
+            if getattr(comp, "is_dissipative", False):
+                continue
+            else:
+                b[counter] = -getattr(comp, "Z_costs", 1)
+                counter += 1
 
         # 2. Inlet stream equations.
         # Gather all power connections.
@@ -918,7 +948,13 @@ class ExergoeconomicAnalysis:
                 logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
 
         # 5. Dissipative components:
-        # TODO: Implement the equations for dissipative components.
+        # For each component marked as dissipative, we either call a dedicated dis_eqs method
+        # or add a default cost balance equation.
+        for comp in self.components.values():
+            if getattr(comp, "is_dissipative", False):
+                if hasattr(comp, "dis_eqs") and callable(comp.dis_eqs):
+                    # Let the component provide its own modifications for the cost matrix.
+                    A, b, counter, self.equations = comp.dis_eqs(A, b, counter, Tamb, self.equations)
 
         return A, b
 
@@ -945,24 +981,38 @@ class ExergoeconomicAnalysis:
             else:
                 kind = conn.get("kind")
                 if kind == "material":
+                    # Retrieve mass flow and specific exergy values
+                    m_val = conn.get("m", 1)         # mass flow [kg/s]
+                    e_T = conn.get("e_T", 0)         # thermal specific exergy [kJ/kg]
+                    e_M = conn.get("e_M", 0)         # mechanical specific exergy [kJ/kg]
+                    E_T = m_val * e_T                # thermal exergy flow [kW]
+                    E_M = m_val * e_M                # mechanical exergy flow [kW]
+
                     conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
-                    conn["c_T"] = conn["C_T"] / conn.get("E", 1)
+                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else np.nan
+
                     conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
-                    conn["c_M"] = conn["C_M"] / conn.get("E", 1)
+                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else np.nan
+
                     conn["C_PH"] = conn["C_T"] + conn["C_M"]
-                    conn["c_PH"] = conn["C_PH"] / conn.get("E", 1)
+                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else np.nan
+
                     if self.chemical_exergy_enabled:
+                        e_CH = conn.get("e_CH", 0)   # chemical specific exergy [kJ/kg]
+                        E_CH = m_val * e_CH         # chemical exergy flow [kW]
                         conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
-                        conn["c_CH"] = C_solution[conn["CostVar_index"]["CH"]] / conn.get("E", 1)
+                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else np.nan
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
-                        conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
+                        total_E = E_T + E_M + E_CH
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
                     else:
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"]
-                        conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
+                        total_E = E_T + E_M
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
-
+                    
         # Step 4: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
@@ -1009,7 +1059,33 @@ class ExergoeconomicAnalysis:
                 if self.chemical_exergy_enabled:
                     loss_conn["C_CH"] = 0
 
-        # Step 6: Compute system-level cost variables using the E_F, E_P, and E_L dictionaries.
+        # Step 6: Distribute the dissipative cost differences
+        # For each material connection that carries a dissipative cost variable,
+        # distribute its solved value to the product streams in proportion to their exergy.
+        for conn in self.connections.values():
+            if conn.get("kind") == "material" and "dissipative" in conn["CostVar_index"]:
+                C_diss = C_solution[conn["CostVar_index"]["dissipative"]]
+                # Skip if C_diss is zero or undefined.
+                if not C_diss:
+                    continue
+                total_E = 0
+                for prod_name in product_streams:
+                    prod_conn = self.connections.get(prod_name)
+                    if prod_conn is None:
+                        continue
+                    total_E += prod_conn.get("E", 0)
+                if total_E == 0:
+                    continue
+                for prod_name in product_streams:
+                    prod_conn = self.connections.get(prod_name)
+                    if prod_conn is None:
+                        continue
+                    prod_E = prod_conn.get("E", 0)
+                    share = C_diss * (prod_E / total_E)
+                    prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
+                    prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
+
+        # Step 7: Compute system-level cost variables using the E_F, E_P, and E_L dictionaries.
         # Compute total fuel cost (C_F_total) from fuel streams.
         C_F_total = 0.0
         for conn_name in self.E_F_dict.get("inputs", []):

@@ -19,8 +19,8 @@ fuel = {
 }
 
 product = {
-    "inputs": ['22'],
-    "outputs": ['21']
+    "inputs": ['42'],
+    "outputs": ['41']
 }
 
 loss = {

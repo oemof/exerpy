@@ -187,13 +187,8 @@ class Valve(Component):
             The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
         """
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-            # --- Mechanical cost equation (always added) ---
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = (1 / self.inl[0]["e_M"]
-                                                            if self.inl[0]["e_M"] != 0 else 1)
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = (-1 / self.outl[0]["e_M"]
-                                                            if self.outl[0]["e_M"] != 0 else 1)
-            equations[counter] = f"aux_equality_mech_{self.outl[0]['name']}_in_{self.name}"
-            b[counter] = 0
+            logging.warning("This case is not implemented. The Valve should be trated as dissipative!")
+
         elif self.outl[0]["T"] <= T0:
             # --- Mechanical cost equation (always added) ---
             if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
@@ -207,29 +202,102 @@ class Valve(Component):
                 A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
                 A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
             equations[counter] = f"aux_{self.name}_mech_{self.outl[0]['name']}"
+            b[counter] = 0
+            counter += 1
         else:
             msg = ('Exergy balance of a valve, where outlet temperature is larger than inlet temperature is not implemented.')
             logging.warning(msg)
             
         if chemical_exergy_enabled:
             # --- Chemical cost equation (conditionally added) ---
-            A[counter+1, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1)
-            A[counter+1, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["E_CH"] if self.outl[0]["e_CH"] != 0 else -1)
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1)
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["E_CH"] if self.outl[0]["e_CH"] != 0 else -1)
             equations[counter+1] = f"aux_{self.name}_chem_{self.outl[0]['name']}"
             # Set right-hand side for both rows.
-            b[counter] = 0
-            b[counter+1] = 0
-            counter += 2
-        else:
-            # Only mechanical row is added.
             b[counter] = 0
             counter += 1
         
         return A, b, counter, equations
     
+    def dis_eqs(self, A, b, counter, Tamb, equations, chemical_exergy_enabled=False):
+        """
+        Constructs the cost equations for a dissipative Valve.
+        
+        This implementation adds:
+        1. A thermal difference row,
+        2. A mechanical difference row,
+        3. An extra overall cost balance row that enforces:
+        
+                (C_in,thermal - C_out,thermal)
+            + (C_in,mechanical - C_out,mechanical)
+            + [if chemical_exergy_enabled: (C_in,chemical - C_out,chemical)]
+            - C_diff = - Z_costs
+            
+        Here, C_diff is the extra variable allocated (under the key "dissipative").
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row counter in the matrix.
+        Tamb : float
+            Ambient temperature (not used explicitly here).
+        equations : dict
+            Dictionary to store equation labels.
+        chemical_exergy_enabled : bool, optional
+            Flag indicating whether to include chemical exergy terms (default is False).
+        
+        Returns
+        -------
+        tuple: (A, b, new_counter, equations)
+        """
+        # --- Thermal difference row ---
+        if self.inl[0].get("E_T", 0) != 0 and self.outl[0].get("E_T", 0) != 0:
+            A[counter, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["E_T"]
+            A[counter, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["E_T"]
+        else:
+            A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
+            A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
+        b[counter] = 0
+        equations[counter] = f"diss_valve_thermal_{self.label}"
+        counter += 1
+
+        # --- Mechanical difference row ---
+        if self.inl[0].get("E_M", 0) != 0 and self.outl[0].get("E_M", 0) != 0:
+            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
+            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
+        else:
+            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+        b[counter] = 0
+        equations[counter] = f"diss_valve_mechanical_{self.label}"
+        counter += 1
+
+        # --- Extra overall cost balance row ---
+        # This row enforces:
+        #   (C_in,thermal - C_out,thermal) + (C_in,mechanical - C_out,mechanical)
+        # + (if chemical_exergy_enabled: C_in,chemical - C_out,chemical) - C_diff = - Z_costs
+        A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
+        A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
+        A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+        A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+        if chemical_exergy_enabled:
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
+        # Subtract the extra variable for dissipative cost difference:
+        A[counter, self.inl[0]["CostVar_index"]["dissipative"]] = -1
+        b[counter] = -self.Z_costs
+        equations[counter] = f"diss_valve_balance_{self.label}"
+        counter += 1
+
+        return A, b, counter, equations
+
     def exergoeconomic_balance(self, T0):
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-            self.C_F = np.nan
+            self.C_F = self.inl[0]['C_PH'] - self.outl[0]['C_PH']
             self.C_P = np.nan
             # dissipative
         elif self.outl[0]["T"] <= T0 and self.inl[0]["T"] > T0:

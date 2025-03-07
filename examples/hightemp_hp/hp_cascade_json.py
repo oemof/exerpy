@@ -19,6 +19,16 @@ CEPCI_2013 = 567.3
 CEPCI_2023 = 797.9
 CEPCI_factor = CEPCI_2023 / CEPCI_2013
 
+# Define default values for electricity price and full load hours.
+default_elec_price = 40.0   # cent/kWh
+default_tau = 5500          # hours/year
+
+# Define economic parameters.
+r_n = 0.02                  # Cost elevation rate
+i_eff = 0.08                # Interest rate
+n = 20                      # Number of years
+omc_relative = 0.03         # Relative operation and maintenance costs (compared to PEC)
+
 # Boolean flag to decide if sensitivity analysis should be performed.
 perform_sensitivity_analysis = False  # Set to False to run a single default case.
 
@@ -112,19 +122,50 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     
     econ_pars = {
         'tau': tau,
-        'i_eff': 0.08,
-        'n': 25,
-        'r_n': 0.02
+        'i_eff': i_eff,
+        'n': n,
+        'r_n': r_n
     }
     components_order = list(PEC_computed.keys())
     PEC_list = [PEC_computed[comp] for comp in components_order]
     # Multiply each PEC by 4.16 to obtain TCI.
     TCI_list = [pec * 4.16 for pec in PEC_list]
-    OMC_relative = [0.03 if pec > 0 else 0.0 for pec in TCI_list]
+    OMC_relative = [omc_relative if pec > 0 else 0.0 for pec in TCI_list]
     
     econ_analysis = EconomicAnalysis(econ_pars)
-    _, _, Z_total = econ_analysis.compute_component_costs(TCI_list, OMC_relative)
-    
+    Z_CC, Z_OMC, Z_total = econ_analysis.compute_component_costs(TCI_list, OMC_relative)
+
+    # Create a DataFrame to display PEC, TCI, annual OMC, and Z for each component
+    component_costs_df = pd.DataFrame({
+        'Component': components_order,
+        'PEC [EUR]': [round(pec, 2) for pec in PEC_list],
+        'CC [EUR]': [round(tci, 2) for tci in TCI_list],
+        'Z_CC [EUR/h]': [round(z_cc, 2) for z_cc in Z_CC],
+        'Z_OMC [EUR/h]': [round(omc, 2) for omc in Z_OMC],
+        'Z [EUR/h]': [round(z, 2) for z in Z_total]
+    })
+
+    # Calculate totals
+    total_pec = sum(PEC_list)
+    total_tci = sum(TCI_list)
+    total_z_cc = sum(Z_CC)
+    total_z_omc = sum(Z_OMC)
+    total_z = sum(Z_total)
+
+    # Add a total row
+    component_costs_df.loc[len(component_costs_df)] = [
+        'TOTAL', 
+        round(total_pec, 2), 
+        round(total_tci, 2), 
+        round(total_z_cc, 2), 
+        round(total_z_omc, 2),
+        round(total_z, 2)
+    ]
+
+    # Print the component costs table without separators
+    print("\nComponent Investment Costs (Year 2023):")
+    print(tabulate(component_costs_df, headers="keys", tablefmt="psql", floatfmt=".2f"))
+
     # Build the exergoeconomic cost dictionary.
     Exe_Eco_Costs = {}
     for comp, z in zip(components_order, Z_total):
@@ -214,8 +255,6 @@ if perform_sensitivity_analysis:
     print(tabulate(CP_df.reset_index(), headers="keys", tablefmt="psql", floatfmt=".3f"))
 else:
     # If sensitivity analysis is disabled, run the analysis for a single default case.
-    default_elec_price = 40.0  # cent/kWh
-    default_tau = 5500         # hours/year
     print(f"\n --- Exergoeconomic analysis for the case with electricity price = {default_elec_price} cent/kWh and tau = {default_tau} hours/year --- \n")
     df_comp, df_mat1, df_mat2, df_non_mat = run_exergoeco_analysis(default_elec_price, default_tau)
     

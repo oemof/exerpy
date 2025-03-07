@@ -1050,14 +1050,8 @@ class ExergoeconomicAnalysis:
                 share = loss_cost * (prod_E / total_E)
                 prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
                 prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
-            # Set the loss stream's cost to zero.
-            loss_conn["C_TOT"] = 0
-            loss_conn["c_TOT"] = 0
-            if loss_conn.get("kind") == "material":
-                loss_conn["C_T"] = 0
-                loss_conn["C_M"] = 0
-                if self.chemical_exergy_enabled:
-                    loss_conn["C_CH"] = 0
+            # The cost of the loss streams are not set to zero to show 
+            # them in the table, but they are attributed to the product streams. 
 
         # Step 6: Distribute the dissipative cost differences
         # For each material connection that carries a dissipative cost variable,
@@ -1085,7 +1079,7 @@ class ExergoeconomicAnalysis:
                     prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
                     prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
 
-        # Step 7: Compute system-level cost variables using the E_F, E_P, and E_L dictionaries.
+        # Step 7: Compute system-level cost variables using the E_F and E_P dictionaries.
         # Compute total fuel cost (C_F_total) from fuel streams.
         C_F_total = 0.0
         for conn_name in self.E_F_dict.get("inputs", []):
@@ -1103,6 +1097,8 @@ class ExergoeconomicAnalysis:
         for conn_name in self.E_P_dict.get("outputs", []):
             conn = self.connections.get(conn_name, {})
             C_P_total -= conn.get("C_TOT", 0)
+
+        # The total loss cost is assigned to the product already, so we don't need to consider it here.
 
         # Compute the sum of all Z costs (Z_total) from all components except CycleCloser.
         Z_total = 0.0

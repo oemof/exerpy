@@ -748,8 +748,6 @@ class ExergoeconomicAnalysis:
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
 
-
-
     def assign_user_costs(self, Exe_Eco_Costs):
         r"""
         Assign given component and connection costs from the user input dictionary.
@@ -854,17 +852,20 @@ class ExergoeconomicAnalysis:
 
         # 1. Cost balance equations for productive components.
         for comp in valid_components:
-            for conn in self.connections.values():
-                # Check if the connection is linked to a valid component.
-                # If the connection's target is the component, it is an inlet (add +1).
-                if conn.get("target_component") == comp.name:
-                    for key, col in conn["CostVar_index"].items():
-                        A[counter, col] = 1  # Incoming costs
-                # If the connection's source is the component, it is an outlet (subtract -1).
-                elif conn.get("source_component") == comp.name:
-                    for key, col in conn["CostVar_index"].items():
-                        A[counter, col] = -1  # Outgoing costs
-                self.equations[counter] = f"Z_costs_{comp.name}"  # Store the equation name
+            if not getattr(comp, "is_dissipative", False):
+            # Assign the row index for the cost balance equation to this component.
+                comp.exergy_cost_line = counter
+                for conn in self.connections.values():
+                    # Check if the connection is linked to a valid component.
+                    # If the connection's target is the component, it is an inlet (add +1).
+                    if conn.get("target_component") == comp.name:
+                        for key, col in conn["CostVar_index"].items():
+                            A[counter, col] = 1  # Incoming costs
+                    # If the connection's source is the component, it is an outlet (subtract -1).
+                    elif conn.get("source_component") == comp.name:
+                        for key, col in conn["CostVar_index"].items():
+                            A[counter, col] = -1  # Outgoing costs
+                    self.equations[counter] = f"Z_costs_{comp.name}"  # Store the equation name
             
             # For productive components: C_in - C_out = -Z_costs.
             if getattr(comp, "is_dissipative", False):
@@ -939,22 +940,26 @@ class ExergoeconomicAnalysis:
         # These equations are needed because we have more variables than components.
         # For each productive component call its auxiliary equation routine, if available.
         for comp in self.components.values():
-            if hasattr(comp, "aux_eqs") and callable(comp.aux_eqs):
-                # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
-                # and return the updated (A, b, counter).
-                A, b, counter, self.equations = comp.aux_eqs(A, b, counter, Tamb, self.equations, self.chemical_exergy_enabled)
+            if getattr(comp, "is_dissipative", False):
+                continue
             else:
-                # If no auxiliary equations are provided.
-                logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
+                if hasattr(comp, "aux_eqs") and callable(comp.aux_eqs):
+                    # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
+                    # and return the updated (A, b, counter).
+                    A, b, counter, self.equations = comp.aux_eqs(A, b, counter, Tamb, self.equations, self.chemical_exergy_enabled)
+                else:
+                    # If no auxiliary equations are provided.
+                    logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
 
         # 5. Dissipative components:
-        # For each component marked as dissipative, we either call a dedicated dis_eqs method
-        # or add a default cost balance equation.
+        # Now, for each dissipative component, call its dis_eqs() method.
+        # This will build an equation that integrates the dissipative cost difference (C_diff)
+        # into the overall cost balance (i.e. it charges the component’s Z_costs accordingly).
         for comp in self.components.values():
             if getattr(comp, "is_dissipative", False):
                 if hasattr(comp, "dis_eqs") and callable(comp.dis_eqs):
                     # Let the component provide its own modifications for the cost matrix.
-                    A, b, counter, self.equations = comp.dis_eqs(A, b, counter, Tamb, self.equations)
+                    A, b, counter, self.equations = comp.dis_eqs(A, b, counter, Tamb, self.equations, self.chemical_exergy_enabled, list(self.components.values()))
 
         return A, b
 
@@ -1053,33 +1058,7 @@ class ExergoeconomicAnalysis:
             # The cost of the loss streams are not set to zero to show 
             # them in the table, but they are attributed to the product streams. 
 
-        # Step 6: Distribute the dissipative cost differences
-        # For each material connection that carries a dissipative cost variable,
-        # distribute its solved value to the product streams in proportion to their exergy.
-        for conn in self.connections.values():
-            if conn.get("kind") == "material" and "dissipative" in conn["CostVar_index"]:
-                C_diss = C_solution[conn["CostVar_index"]["dissipative"]]
-                # Skip if C_diss is zero or undefined.
-                if not C_diss:
-                    continue
-                total_E = 0
-                for prod_name in product_streams:
-                    prod_conn = self.connections.get(prod_name)
-                    if prod_conn is None:
-                        continue
-                    total_E += prod_conn.get("E", 0)
-                if total_E == 0:
-                    continue
-                for prod_name in product_streams:
-                    prod_conn = self.connections.get(prod_name)
-                    if prod_conn is None:
-                        continue
-                    prod_E = prod_conn.get("E", 0)
-                    share = C_diss * (prod_E / total_E)
-                    prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
-                    prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
-
-        # Step 7: Compute system-level cost variables using the E_F and E_P dictionaries.
+        # Step 6: Compute system-level cost variables using the E_F and E_P dictionaries.
         # Compute total fuel cost (C_F_total) from fuel streams.
         C_F_total = 0.0
         for conn_name in self.E_F_dict.get("inputs", []):

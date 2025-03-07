@@ -187,7 +187,7 @@ class Valve(Component):
             The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
         """
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-            logging.warning("This case is not implemented. The Valve should be trated as dissipative!")
+            logging.warning("This case is not implemented. The Valve should be treated as dissipative!")
 
         elif self.outl[0]["T"] <= T0:
             # --- Mechanical cost equation (always added) ---
@@ -218,22 +218,18 @@ class Valve(Component):
             counter += 1
         
         return A, b, counter, equations
-    
-    def dis_eqs(self, A, b, counter, Tamb, equations, chemical_exergy_enabled=False):
-        """
-        Constructs the cost equations for a dissipative Valve.
-        
-        This implementation adds:
-        1. A thermal difference row,
-        2. A mechanical difference row,
-        3. An extra overall cost balance row that enforces:
-        
-                (C_in,thermal - C_out,thermal)
-            + (C_in,mechanical - C_out,mechanical)
-            + [if chemical_exergy_enabled: (C_in,chemical - C_out,chemical)]
-            - C_diff = - Z_costs
             
-        Here, C_diff is the extra variable allocated (under the key "dissipative").
+    def dis_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled=False, all_components=None):
+        """
+        Constructs the cost equations for a dissipative Valve in ExerPy,
+        distributing the valve’s extra cost difference (C_diff) to all other productive 
+        components (non-dissipative and non-CycleCloser) in proportion to their exergy destruction (E_D)
+        and adding an extra overall cost balance row that enforces:
+        
+            (C_in,T - C_out,T) + (C_in,M - C_out,M) - C_diff = - Z_costs
+        
+        In this formulation, the unknown cost variable in the "dissipative" column (i.e. C_diff)
+        is solved for, ensuring the valve’s cost balance.
         
         Parameters
         ----------
@@ -242,20 +238,29 @@ class Valve(Component):
         b : numpy.ndarray
             The current right-hand-side vector.
         counter : int
-            The current row counter in the matrix.
-        Tamb : float
-            Ambient temperature (not used explicitly here).
+            The current row index in the cost matrix.
+        T0 : float
+            Ambient temperature (not explicitly used here).
         equations : dict
-            Dictionary to store equation labels.
+            Dictionary mapping row indices to equation labels.
         chemical_exergy_enabled : bool, optional
-            Flag indicating whether to include chemical exergy terms (default is False).
+            Flag indicating whether chemical exergy is considered. (Ignored here.)
+        all_components : list, optional
+            Global list of all component objects; if not provided, defaults to [].
         
         Returns
         -------
-        tuple: (A, b, new_counter, equations)
+        tuple
+            Updated (A, b, counter, equations).
+        
+        Notes
+        -----
+        - It is assumed that each inlet/outlet stream’s CostVar_index dictionary has keys:
+        "T" (thermal), "M" (mechanical), and "dissipative" (the extra unknown).
+        - self.Z_costs is the known cost rate (in currency/s) for the valve.
         """
         # --- Thermal difference row ---
-        if self.inl[0].get("E_T", 0) != 0 and self.outl[0].get("E_T", 0) != 0:
+        if self.inl[0].get("E_T", 0) and self.outl[0].get("E_T", 0):
             A[counter, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["E_T"]
             A[counter, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["E_T"]
         else:
@@ -266,7 +271,7 @@ class Valve(Component):
         counter += 1
 
         # --- Mechanical difference row ---
-        if self.inl[0].get("E_M", 0) != 0 and self.outl[0].get("E_M", 0) != 0:
+        if self.inl[0].get("E_M", 0) and self.outl[0].get("E_M", 0):
             A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
             A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
         else:
@@ -276,24 +281,44 @@ class Valve(Component):
         equations[counter] = f"diss_valve_mechanical_{self.label}"
         counter += 1
 
+        # --- Distribution of dissipative cost difference to other components based on E_D ---
+        if all_components is None:
+            all_components = []
+        # Serving components: all productive components (excluding self, any dissipative, and CycleCloser)
+        serving = [comp for comp in all_components 
+                if comp is not self 
+                and not getattr(comp, "dissipative", False) 
+                and comp.__class__.__name__ != "CycleCloser"]
+        total_E_D = sum(getattr(comp, "E_D", 0) for comp in serving)
+        diss_col = self.inl[0]["CostVar_index"].get("dissipative")
+        if diss_col is None:
+            logging.warning(f"No 'dissipative' column allocated for {self.label}.")
+        else:
+            if total_E_D == 0:
+                # Fall back to equal distribution if total exergy destruction is zero.
+                for comp in serving:
+                    A[comp.exergy_cost_line, diss_col] += 1 / len(serving) if len(serving) > 0 else 0
+            else:
+                for comp in serving:
+                    weight = getattr(comp, "E_D", 0) / total_E_D
+                    A[comp.exergy_cost_line, diss_col] += weight
+
         # --- Extra overall cost balance row ---
         # This row enforces:
-        #   (C_in,thermal - C_out,thermal) + (C_in,mechanical - C_out,mechanical)
-        # + (if chemical_exergy_enabled: C_in,chemical - C_out,chemical) - C_diff = - Z_costs
+        #   (C_in,T - C_out,T) + (C_in,M - C_out,M) - C_diff = - Z_costs
         A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
         A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
         A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
         A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
-        if chemical_exergy_enabled:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
-        # Subtract the extra variable for dissipative cost difference:
+        # Subtract the unknown dissipative cost difference:
         A[counter, self.inl[0]["CostVar_index"]["dissipative"]] = -1
         b[counter] = -self.Z_costs
         equations[counter] = f"diss_valve_balance_{self.label}"
         counter += 1
 
         return A, b, counter, equations
+
+
 
     def exergoeconomic_balance(self, T0):
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
@@ -309,7 +334,7 @@ class Valve(Component):
             self.C_F = self.inl[0]["C_M"] - self.outl[0]["C_M"]
         else:
             msg = ('Exergy balance of a valve, where outlet temperature is '
-                   'larger than inlet temperature is not implmented.')
+                'larger than inlet temperature is not implmented.')
             logging.warning(msg)
             self.C_P = np.nan
             self.C_F = np.nan

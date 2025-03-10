@@ -1148,6 +1148,7 @@ class ExergoeconomicAnalysis:
         C_P_list = []
         C_D_list = []
         Z_cost_list = []
+        r_list = [] 
         f_list = []
         
         # Iterate over the component DataFrame rows. The "Component" column contains the key.
@@ -1161,12 +1162,14 @@ class ExergoeconomicAnalysis:
                     C_D_list.append(getattr(comp, "C_D", 0) * 3600)
                     Z_cost_list.append(getattr(comp, "Z_costs", 0) * 3600)
                     f_list.append(getattr(comp, "f", 0) * 100)
+                    r_list.append(getattr(comp, "r", 0) * 100)
                 else:
                     C_F_list.append(np.nan)
                     C_P_list.append(np.nan)
                     C_D_list.append(np.nan)
                     Z_cost_list.append(np.nan)
                     f_list.append(np.nan)
+                    r_list.append(np.nan)
             else:
                 # We'll update the TOT row using system-level values later.
                 C_F_list.append(np.nan)
@@ -1174,6 +1177,7 @@ class ExergoeconomicAnalysis:
                 C_D_list.append(np.nan)
                 Z_cost_list.append(np.nan)
                 f_list.append(np.nan)
+                r_list.append(np.nan)
         
         # Add the new columns to the component DataFrame.
         df_comp[f"C_F [{self.currency}/h]"] = C_F_list
@@ -1182,6 +1186,7 @@ class ExergoeconomicAnalysis:
         df_comp[f"Z [{self.currency}/h]"] = Z_cost_list
         df_comp[f"C_D+Z [{self.currency}/h]"] = df_comp[f"C_D [{self.currency}/h]"] + df_comp[f"Z [{self.currency}/h]"]
         df_comp[f"f [%]"] = f_list
+        df_comp[f"r [%]"] = r_list
 
         # Update the TOT row with system-level values using .loc.
         df_comp.loc["TOT", f"C_F [{self.currency}/h]"] = self.system_costs.get("C_F", np.nan) * 3600
@@ -1197,8 +1202,9 @@ class ExergoeconomicAnalysis:
 
         df_comp.loc["TOT", f"C_D [{self.currency}/h]"] = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"] * df_comp.loc["TOT", f"E_D [kW]"] / 1e6 * 3600
         df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = df_comp.loc["TOT", f"C_D [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]	
-        df_comp.loc["TOT", f"f [%]"] = df_comp.loc["TOT", f"Z [{self.currency}/h]"] / (df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]) * 100
-
+        df_comp.loc["TOT", f"f [%]"] = df_comp.loc["TOT", f"Z [{self.currency}/h]"] / df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] * 100
+        df_comp.loc["TOT", f"r [%]"] = ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]) / 
+                                         df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]) * 100
 
         # -------------------------
         # Add cost columns to material connections.

@@ -35,7 +35,7 @@ perform_sensitivity_analysis = False  # Set to False to run a single default cas
 def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     """
     Reload the exergy analysis from the JSON file, calculate PEC (with cost correction),
-    multiply PEC by 4.16 to obtain the Total Capital Investment (TCI), and run economic
+    multiply PEC by 6.32 to obtain the Total Capital Investment (TCI), and run economic
     and exergoeconomic analyses using the given electricity price and full load hours.
     
     Returns the component results DataFrame and other result DataFrames from the exergoeconomic analysis.
@@ -128,8 +128,8 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     }
     components_order = list(PEC_computed.keys())
     PEC_list = [PEC_computed[comp] for comp in components_order]
-    # Multiply each PEC by 4.16 to obtain TCI.
-    TCI_list = [pec * 4.16 for pec in PEC_list]
+    # Multiply each PEC by 6.32 to obtain TCI.
+    TCI_list = [pec * 6.32 for pec in PEC_list]
     OMC_relative = [omc_relative if pec > 0 else 0.0 for pec in TCI_list]
     
     econ_analysis = EconomicAnalysis(econ_pars)

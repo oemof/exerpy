@@ -89,7 +89,7 @@ class Compressor(Component):
         self.P = None
         self.Z_costs = kwargs.get('Z_costs', 0.0)  # Investment cost rate in currency/h
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the compressor.
 
@@ -102,6 +102,9 @@ class Compressor(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
+
         """
         # Get power flow if not already available
         if self.P is None:
@@ -114,15 +117,27 @@ class Compressor(Component):
 
         # Case 2: Inlet below, outlet above ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) > T0:
-            self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] +
-                        self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M']))
-            self.E_F = abs(self.P) + self.inl[0]['m'] * self.inl[0]['e_T']
+            if split_physical_exergy:
+                self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] +
+                            self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M']))
+                self.E_F = abs(self.P) + self.inl[0]['m'] * self.inl[0]['e_T']
+            else:
+                logging.warning("While dealing with compressor below ambient, "
+                                "physical exergy should be split into thermal and mechanical components!")
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+                self.E_F = abs(self.P)
 
         # Case 3: Both temperatures below ambient
         elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) <= T0:
-            self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
-            self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] -
-                                                        self.outl[0]['e_T'])
+            if split_physical_exergy:
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
+                self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] -
+                                                            self.outl[0]['e_T'])
+            else:
+                logging.warning("While dealing with compressor below ambient, "
+                                "physical exergy should be split into thermal and mechanical components!")
+                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+                self.E_F = abs(self.P)
 
         # Invalid case: outlet temperature smaller than inlet
         else:

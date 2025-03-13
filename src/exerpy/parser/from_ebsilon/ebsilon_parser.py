@@ -38,16 +38,18 @@ class EbsilonModelParser:
     """
     A class to parse Ebsilon models, simulate them, extract data, and write to JSON.
     """
-    def __init__(self, model_path):
+    def __init__(self, model_path, split_physical_exergy=True):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Ebsilon model file.
+            split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
         """
         # check here if ebsilon dependencies are available, raise error if not
 
         self.model_path = model_path
+        self.split_physical_exergy = split_physical_exergy
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model
         self.oc = None  # ObjectCaster for type casting
@@ -260,16 +262,17 @@ class EbsilonModelParser:
                     'VM_unit': fluid_property_data['VM']['SI_unit'],
                 })
 
-                # Add the mechanical and thermal specific exergies
-                e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
-                e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
-
-                connection_data.update({
-                    'e_T': e_T_value,
-                    'e_T_unit': fluid_property_data['e']['SI_unit'],
-                    'e_M': e_M_value,
-                    'e_M_unit': fluid_property_data['e']['SI_unit']
-                })
+                # Add the mechanical and thermal specific exergies unless the flag is set to False
+                if self.split_physical_exergy:
+                    e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
+                    e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
+            
+                    connection_data.update({
+                        'e_T': e_T_value,
+                        'e_T_unit': fluid_property_data['e']['SI_unit'],
+                        'e_M': e_M_value,
+                        'e_M_unit': fluid_property_data['e']['SI_unit']
+                    })
 
                 # Handle mass composition logic for fluids
                 if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
@@ -510,7 +513,7 @@ class EbsilonModelParser:
             raise
 
 
-def run_ebsilon(model_path, output_dir=None):
+def run_ebsilon(model_path, output_dir=None, split_physical_exergy=True):
     """
     Main function to process the Ebsilon model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -534,7 +537,7 @@ def run_ebsilon(model_path, output_dir=None):
         raise FileNotFoundError(error_msg)
 
     # Initialize the Ebsilon model parser with the model file path
-    parser = EbsilonModelParser(model_path)
+    parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
 
     try:
         # Initialize the Ebsilon model within the parser

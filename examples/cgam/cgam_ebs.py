@@ -11,7 +11,7 @@ from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cgam.ebs'))
 
 # Initialize the exergy analysis with the simulation path
-ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
+ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts', split_physical_exergy=True)
 
 fuel = {
     "inputs": ['1', '10'],

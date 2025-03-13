@@ -123,7 +123,7 @@ class SimpleHeatExchanger(Component):
         r"""Initialize simple heat exchanger component with given parameters."""
         super().__init__(**kwargs)
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the simple heat exchanger.
 
@@ -136,6 +136,8 @@ class SimpleHeatExchanger(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Raises
         ------
@@ -167,16 +169,30 @@ class SimpleHeatExchanger(Component):
         # Case 1: Heat is released (Q < 0)
         if Q < 0:
             if inlet['T'] >= T0 and outlet['T'] >= T0:
-                self.E_P = np.nan if getattr(self, 'dissipative', False) else inlet['m'] * (inlet['e_T'] - outlet['e_T'])
+                if split_physical_exergy:
+                    self.E_P = np.nan if getattr(self, 'dissipative', False) else inlet['m'] * (inlet['e_T'] - outlet['e_T'])
+                else:
+                    self.E_P = np.nan if getattr(self, 'dissipative', False) else inlet['m'] * (inlet['e_PH'] - outlet['e_PH'])
                 self.E_F = inlet['m'] * (inlet['e_PH'] - outlet['e_PH'])
+
             elif inlet['T'] >= T0 and outlet['T'] < T0:
-                self.E_P = outlet['m'] * outlet['e_T']
-                self.E_F = (inlet['m'] * inlet['e_T'] +
-                           outlet['m'] * outlet['e_T'] +
-                           (inlet['m'] * inlet['e_M'] - outlet['m'] * outlet['e_M']))
+                if split_physical_exergy:
+                    self.E_P = outlet['m'] * outlet['e_T']
+                    self.E_F = (inlet['m'] * inlet['e_T'] + outlet['m'] * outlet['e_T'] +
+                            (inlet['m'] * inlet['e_M'] - outlet['m'] * outlet['e_M']))
+                else:
+                    self.E_P = outlet['m'] * outlet['e_PH']
+                    self.E_F = inlet['m'] * inlet['e_PH']
+
             elif inlet['T'] <= T0 and outlet['T'] <= T0:
-                self.E_P = outlet['m'] * (outlet['e_T'] - inlet['e_T'])
-                self.E_F = self.E_P + inlet['m'] * (inlet['e_M'] - outlet['m'] * outlet['e_M'])
+                if split_physical_exergy:
+                    self.E_P = outlet['m'] * (outlet['e_T'] - inlet['e_T'])
+                    self.E_F = self.E_P + inlet['m'] * (inlet['e_M'] - outlet['m'] * outlet['e_M'])
+                else:
+                    self.E_P = np.nan if getattr(self, 'dissipative', False) else \
+                        outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+                    self.E_F = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+
             else:
                 # Unimplemented corner case
                 logging.warning(
@@ -188,17 +204,31 @@ class SimpleHeatExchanger(Component):
         # Case 2: Heat is added (Q > 0)
         elif Q > 0:
             if inlet['T'] >= T0 and outlet['T'] >= T0:
-                self.E_P = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
-                self.E_F = outlet['m'] * (outlet['e_T'] - inlet['e_T'])
+                if split_physical_exergy:
+                    self.E_P = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+                    self.E_F = outlet['m'] * (outlet['e_T'] - inlet['e_T'])
+                else:
+                    self.E_P = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+                    self.E_F = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
             elif inlet['T'] < T0 and outlet['T'] > T0:
-                self.E_P = outlet['m'] * (outlet['e_T'] + inlet['e_T'])
-                self.E_F = (inlet['m'] * inlet['e_T'] +
-                           (inlet['m'] * inlet['e_M'] - outlet['m'] * outlet['e_M']))
+                if split_physical_exergy:
+                    self.E_P = outlet['m'] * (outlet['e_T'] + inlet['e_T'])
+                    self.E_F = (inlet['m'] * inlet['e_T'] +
+                            (inlet['m'] * inlet['e_M'] - outlet['m'] * outlet['e_M']))
+                else:
+                    self.E_P = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+                    self.E_F = outlet['m'] * (outlet['e_PH'] - inlet['e_PH'])
+
             elif inlet['T'] < T0 and outlet['T'] < T0:
-                self.E_P = np.nan if getattr(self, 'dissipative', False) else \
-                    inlet['m'] * (inlet['e_T'] - outlet['e_T']) + \
-                    (outlet['m'] * outlet['e_M'] - inlet['m'] * inlet['e_M'])
-                self.E_F = inlet['m'] * (inlet['e_T'] - outlet['e_T'])
+                if split_physical_exergy:
+                    self.E_P = np.nan if getattr(self, 'dissipative', False) else \
+                        inlet['m'] * (inlet['e_T'] - outlet['e_T']) + \
+                        (outlet['m'] * outlet['e_M'] - inlet['m'] * inlet['e_M'])
+                    self.E_F = inlet['m'] * (inlet['e_T'] - outlet['e_T'])
+                else:
+                    self.E_P = np.nan if getattr(self, 'dissipative', False) else \
+                        inlet['m'] * (inlet['e_PH'] - outlet['e_PH'])
+                    self.E_F = inlet['m'] * (inlet['e_PH'] - outlet['e_PH'])
             else:
                 logging.warning(
                     "SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?)."

@@ -321,8 +321,14 @@ def add_total_exergy_flow(my_json):
                     conn_data['E'] = conn_data['m'] * conn_data['e_PH']
                     logging.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
                 conn_data['E_PH'] = conn_data['m'] * conn_data['e_PH']
-                conn_data['E_T'] = conn_data['m'] * conn_data['e_T']
-                conn_data['E_M'] = conn_data['m'] * conn_data['e_M']
+                if conn_data.get('e_T') is not None:
+                    conn_data['E_T'] = conn_data['m'] * conn_data['e_T']
+                else:
+                    logging.info(f"Missing thermal exergy for connection {conn_name}.")
+                if conn_data.get('e_M') is not None:
+                    conn_data['E_M'] = conn_data['m'] * conn_data['e_M']
+                else:
+                    logging.info(f"Missing mechanical exergy for connection {conn_name}.")
             elif conn_data['kind'] == 'power':
                 # For power connections, use the energy flow value directly.
                 conn_data['E'] = conn_data['energy_flow']

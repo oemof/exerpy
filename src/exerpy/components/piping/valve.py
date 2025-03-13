@@ -84,7 +84,7 @@ class Valve(Component):
         r"""Initialize valve component with given parameters."""
         super().__init__(**kwargs)
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the valve.
 
@@ -97,6 +97,8 @@ class Valve(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Raises
         ------
@@ -115,12 +117,31 @@ class Valve(Component):
             self.E_P = np.nan
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         elif T_out <= T0 and T_in > T0:
-            self.E_P = self.inl[0]['m'] * self.outl[0]['e_T']
-            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] + self.inl[0]['e_M'] - 
+            if split_physical_exergy:
+                self.E_P = self.inl[0]['m'] * self.outl[0]['e_T']
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_T'] + self.inl[0]['e_M'] - 
                                         self.outl[0]['e_M'])
+            else:
+                logging.warning(
+                    "Exergy balance of a valve, where outlet temperature is smaller than "
+                    "ambient temperature, is not implemented for non-split physical exergy."
+                    "Valve is treated as dissipative."
+                )
+                self.E_P = np.nan
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
+
         elif T_in <= T0 and T_out <= T0:
-            self.E_P = self.inl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
-            self.E_F = self.inl[0]['m'] * (self.inl[0]['e_M'] - self.outl[0]['e_M'])
+            if split_physical_exergy:
+                self.E_P = self.inl[0]['m'] * (self.outl[0]['e_T'] - self.inl[0]['e_T'])
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_M'] - self.outl[0]['e_M'])
+            else:
+                logging.warning(
+                    "Exergy balance of a valve, where both temperatures are smaller than "
+                    "ambient temperature, is not implemented for non-split physical exergy."
+                    "Valve is treated as dissipative."
+                )
+                self.E_P = np.nan
+                self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         else:
             logging.warning(
                 "Exergy balance of a valve, where outlet temperature is larger than "

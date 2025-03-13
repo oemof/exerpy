@@ -7,7 +7,7 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Drum(Component):
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate exergy balance of a merge.
 
@@ -15,6 +15,10 @@ class Drum(Component):
         ----------
         T0 : float
             Ambient temperature T0 / K.
+        p0 : float
+            Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Note
         ----

@@ -96,7 +96,7 @@ class Deaerator(Component):
         r"""Initialize deaerator component with given parameters."""
         super().__init__(**kwargs)
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the deaerator.
 
@@ -109,6 +109,8 @@ class Deaerator(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Raises
         ------

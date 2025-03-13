@@ -70,7 +70,7 @@ class Turbine(Component):
         super().__init__(**kwargs)
         self.P = None
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the turbine.
 
@@ -83,6 +83,8 @@ class Turbine(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
         """
         # Get power flow if not already available
         if self.P is None:
@@ -96,18 +98,29 @@ class Turbine(Component):
 
         # Case 2: Inlet above, outlet at/below ambient
         elif self.inl[0]['T'] > T0 and self.outl[0]['T'] <= T0:
-            self.E_P = abs(self.P) + self._total_outlet('m', 'e_T')
-            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_T'] +
-                        self.inl[0]['m'] * self.inl[0]['e_M'] -
-                        self._total_outlet('m', 'e_M'))
+            if split_physical_exergy:
+                self.E_P = abs(self.P) + self._total_outlet('m', 'e_T')
+                self.E_F = (self.inl[0]['m'] * self.inl[0]['e_T'] +
+                            self.inl[0]['m'] * self.inl[0]['e_M'] -
+                            self._total_outlet('m', 'e_M'))
+            else:
+                logging.warning("While dealing with expander below ambient, "
+                                "physical exergy should be split into thermal and mechanical components!")
+                self.E_P = np.nan
+                self.E_F = np.nan
 
         # Case 3: Both temperatures at/below ambient
         elif self.inl[0]['T'] <= T0 and self.outl[0]['T'] <= T0:
-            self.E_P = abs(self.P) + (
-                self._total_outlet('m', 'e_T') - self.inl[0]['m'] * self.inl[0]['e_T'])
-            self.E_F = (self.inl[0]['m'] * self.inl[0]['e_M'] -
-                        self._total_outlet('m', 'e_M'))
-
+            if split_physical_exergy:
+                self.E_P = abs(self.P) + (
+                    self._total_outlet('m', 'e_T') - self.inl[0]['m'] * self.inl[0]['e_T'])
+                self.E_F = (self.inl[0]['m'] * self.inl[0]['e_M'] -
+                            self._total_outlet('m', 'e_M'))
+            else:
+                logging.warning("While dealing with expander below ambient, "
+                                "physical exergy should be split into thermal and mechanical components!")
+                self.E_P = np.nan
+                self.E_F = np.nan
         # Invalid case: outlet temperature larger than inlet
         else:
             logging.warning(
@@ -119,6 +132,8 @@ class Turbine(Component):
 
         # Calculate exergy destruction and efficiency
         self.E_D = self.E_F - self.E_P
+        if self.E_F == np.nan:
+            self.E_D = self.inl[0]['m'] * self.inl[0]['e_PH'] - self._total_outlet('m', 'e_PH') - abs(self.P)
         self.epsilon = self.calc_epsilon()
 
         # Log the results

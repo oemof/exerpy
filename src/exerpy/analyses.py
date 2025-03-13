@@ -10,20 +10,31 @@ import logging
 
 
 class ExergyAnalysis:
-    def __init__(self, component_data, connection_data, Tamb, pamb, chemical_exergy_enabled=False) -> None:
+    def __init__(self, component_data, connection_data, Tamb, pamb, chemical_exergy_enabled=False, split_physical_exergy=True) -> None:
         """
         Constructor for ExergyAnalysis. It parses the provided simulation file and prepares it for exergy analysis.
 
         Parameters
         ----------
-        path_of_simulation : str
-            Path to the simulation file (e.g., "my_simulation.ebs" for Ebsilon models).
+        component_data : dict
+            Data of the components.
+        connection_data : dict
+            Data of the connections.
+        Tamb : float
+            Ambient temperature (K).
+        pamb : float
+            Ambient pressure (Pa).
+        chemical_exergy_enabled : bool, optional
+            Flag to enable chemical exergy calculations (default is False).
+        split_physical_exergy : bool, optional
+            Flag to determine if physical exergy should be split into thermal and mechanical exergy (default is False).
         """
         self.Tamb = Tamb
         self.pamb = pamb
         self._component_data = component_data
         self._connection_data = connection_data
         self.chemical_exergy_enabled = chemical_exergy_enabled
+        self.split_physical_exergy = split_physical_exergy
 
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data, Tamb)
@@ -122,7 +133,7 @@ class ExergyAnalysis:
                 continue
             else:
                 # Calculate E_F, E_D, E_P
-                component.calc_exergy_balance(self.Tamb, self.pamb)
+                component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
                 # Calculate y and y* for each component
                 component.y = component.E_D / self.E_F if component.E_D is not None else None
                 component.y_star = component.E_D / self.E_D if component.E_D is not None else None
@@ -279,7 +290,7 @@ class ExergyAnalysis:
 
 
     @classmethod
-    def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None):
+    def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -293,6 +304,10 @@ class ExergyAnalysis:
             Ambient pressure for analysis, default is None.
         simulate : bool, optional
             If True, run the simulation. If False, load existing data from '_parsed.json' file, default is True.
+        chemExLib : str, optional
+            Name of the chemical exergy library (if any).
+        split_physical_exergy : bool, optional
+            If True, separates physical exergy into thermal and mechanical components.
 
         Returns
         -------
@@ -314,7 +329,7 @@ class ExergyAnalysis:
                 logging.info(
                     "Running Ebsilon simulation and generating JSON data."
                 )
-                data = ebs_parser.run_ebsilon(path)
+                data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
                 logging.info("Simulation completed successfully.")
 
         else:
@@ -328,7 +343,7 @@ class ExergyAnalysis:
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib,
             required_component_fields=["name", "type", "type_index"]
         )
-        return cls(data["components"], data["connections"], Tamb, pamb, chemical_exergy_enabled)
+        return cls(data["components"], data["connections"], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
 
     @classmethod
     def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None):

@@ -67,7 +67,7 @@ class CombustionChamber(Component):
         self.Ex_C_col = kwargs.get('Ex_C_col', {})
         self.Z_costs = kwargs.get('Z_costs', 0.0)  # Cost rate in currency/h
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the combustion chamber.
 

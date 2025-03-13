@@ -52,7 +52,7 @@ class Condenser(Component):
         """
         super().__init__(**kwargs)
     
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_pyhsical_exergy) -> None:
         """
         Calculate the exergy balance of the condenser.
 
@@ -65,6 +65,8 @@ class Condenser(Component):
             Reference temperature in Kelvin.
         p0 : float
             Reference pressure in Pascals.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Raises
         ------

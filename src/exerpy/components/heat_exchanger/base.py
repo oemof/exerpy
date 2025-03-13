@@ -126,7 +126,7 @@ class HeatExchanger(Component):
         self.dissipative = False
         super().__init__(**kwargs)
 
-    def calc_exergy_balance(self, T0: float, p0: float) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_pyhsical_exergy) -> None:
         r"""
         Calculate the exergy balance of the heat exchanger.
 
@@ -140,6 +140,8 @@ class HeatExchanger(Component):
             Ambient temperature in :math:`\text{K}`.
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
+        split_physical_exergy : bool
+            Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         Raises
         ------
@@ -168,29 +170,52 @@ class HeatExchanger(Component):
         if not self.dissipative:
             # Case 1: All streams are above the ambient temperature
             if all([stream['T'] >= T0 for stream in all_streams]):
-                self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                    self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                if split_pyhsical_exergy:
+                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                        self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                else:
+                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH'] - self.inl[1]['m'] * self.inl[1]['e_PH']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH']
 
             # Case 2: All streams are below or equal to the ambient temperature
             elif all([stream['T'] <= T0 for stream in all_streams]):
-                self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] - self.inl[0]['m'] * self.inl[0]['e_T']
-                self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'] + (
-                    self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
+                if split_pyhsical_exergy:
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] - self.inl[0]['m'] * self.inl[0]['e_T']
+                    self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'] + (
+                        self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
+                else:
+                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
+                    "physical exergy should be split into thermal and mechanical components!")
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']
+                    self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH']
 
-            # Case 3: Some streams are above and others below ambient temperature
+            # Case 3: Hot stream from above to lower ambient, cold stream from lower to above ambient
             elif (self.inl[0]['T'] > T0 and self.outl[1]['T'] > T0 and
                 self.outl[0]['T'] <= T0 and self.inl[1]['T'] <= T0):
-                self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[1]['m'] * self.outl[1]['e_T']
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
-                    self.outl[0]['m'] * self.outl[0]['e_M'] + self.outl[1]['m'] * self.outl[1]['e_M'])
+                if split_pyhsical_exergy:
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[1]['m'] * self.outl[1]['e_T']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
+                        self.outl[0]['m'] * self.outl[0]['e_M'] + self.outl[1]['m'] * self.outl[1]['e_M'])
+                else:
+                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
+                    "physical exergy should be split into thermal and mechanical components!")
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] + self.outl[1]['m'] * self.outl[1]['e_PH']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH']
 
-            # Case 4: First inlet is above ambient, others below or equal
+            # Case 4: Hot stream inlet above ambient, all others below or equal to ambient
             elif (self.inl[0]['T'] > T0 and self.inl[1]['T'] <= T0 and
                 self.outl[0]['T'] <= T0 and self.outl[1]['T'] <= T0):
-                self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
-                    self.outl[1]['m'] * self.outl[1]['e_PH'] + self.outl[0]['m'] * self.outl[0]['e_M'])
+                if split_pyhsical_exergy:
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
+                        self.outl[1]['m'] * self.outl[1]['e_PH'] + self.outl[0]['m'] * self.outl[0]['e_M'])
+                else:
+                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
+                    "physical exergy should be split into thermal and mechanical components!")
+                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + (
+                        self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
 
             # Case 5: Inlets are higher but outlets are below or equal to ambient
             elif (self.inl[0]['T'] > T0 and self.outl[0]['T'] > T0 and
@@ -199,11 +224,18 @@ class HeatExchanger(Component):
                 self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
                     self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
 
-            # Case 6: One outlet is above ambient, others lower
+            # Case 6: Cold inlet is lower ambient, others higher
             else:
-                self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                    self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                if split_pyhsical_exergy:
+                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                        self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                else:
+                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
+                    "physical exergy should be split into thermal and mechanical components!")
+                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH']
+                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                        self.inl[1]['m'] * self.inl[1]['e_PH'])
 
         else:
             self.E_F = (

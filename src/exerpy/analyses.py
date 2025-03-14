@@ -190,7 +190,7 @@ class ExergyAnalysis:
         return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled)
 
     @classmethod
-    def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None):
+    def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an instance of the ExergyAnalysis class from an Aspen model file.
 
@@ -204,6 +204,8 @@ class ExergyAnalysis:
             Ambient pressure for analysis, default is None.
         simulate : bool, optional
             If True, run the simulation. If False, load existing data from '_parsed.json' file, default is True.
+        split_physical_exergy : bool, optional
+            If True, separates physical exergy into thermal and mechanical components.
 
         Returns
         -------
@@ -286,7 +288,7 @@ class ExergyAnalysis:
             logging.error("Component or connection data is missing or improperly formatted.")
             raise ValueError("Parsed Aspen data is missing required components or connections.")
 
-        return cls(component_data, connection_data, Tamb, pamb, chemical_exergy_enabled)
+        return cls(component_data, connection_data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
 
 
     @classmethod

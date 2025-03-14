@@ -521,6 +521,7 @@ def run_ebsilon(model_path, output_dir=None, split_physical_exergy=True):
     Parameters:
         model_path (str): Path to the Ebsilon model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
+        split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
 
     Returns:
         dict: Parsed data in dictionary format.

@@ -13,14 +13,16 @@ class AspenModelParser:
     """
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
     """
-    def __init__(self, model_path):
+    def __init__(self, model_path, split_physical_exergy=True):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
+            split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
         """
         self.model_path = model_path
+        self.split_physical_exergy = split_physical_exergy
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
@@ -84,10 +86,12 @@ class AspenModelParser:
                     temp_str = temp_node.Elements[0].Name
                     if temp_node.Elements[0].Elements.Count >= 1:
                         pres_str = temp_node.Elements[0].Elements[0].Name
-
-                        # Create the node path templates for property retrieval
-                        h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
-                        hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'
+                        if self.split_physical_exergy:
+                            logging.error("Physical exergy splitting not yet implemented yet for Aspen models!"
+                                          "Please set split_physical_exergy=False.")
+                            '''# Create the node path templates for property retrieval
+                            h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
+                            hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'''
                     else:
                         raise ValueError("Pressure value not found in property set path")
                 else:
@@ -767,7 +771,7 @@ class AspenModelParser:
             raise
 
 
-def run_aspen(model_path, output_dir=None):
+def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
     """
     Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -775,6 +779,7 @@ def run_aspen(model_path, output_dir=None):
     Parameters:
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
+        split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
 
     Returns:
         dict: Parsed data in dictionary format.
@@ -784,7 +789,7 @@ def run_aspen(model_path, output_dir=None):
         logging.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    parser = AspenModelParser(model_path)
+    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy)
 
     try:
         parser.initialize_model()

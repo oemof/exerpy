@@ -146,7 +146,7 @@ class SimpleHeatExchanger(Component):
             exceed the maximum allowed number.
         """      
         # Validate the number of inlets and outlets
-        if not hasattr(self, 'inl') or not hasattr(self, 'outl'):
+        if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 1 or len(self.outl) < 1:
             msg = "SimpleHeatExchanger requires at least one inlet and one outlet as well as one heat flow."
             logging.error(msg)
             raise ValueError(msg)

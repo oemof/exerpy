@@ -414,3 +414,127 @@ def test_run_ebsilon_file_not_found():
     """
     with pytest.raises(FileNotFoundError):
         run_ebsilon("nonexistent.ebs")
+
+# ---------- Ambient Conditions Extraction Tests ----------
+
+# Dummy ambient component for temperature (FTYP == 26)
+class DummyComp46_T:
+    def __init__(self, name, measm_value):
+        self.Name = name
+        self.FTYP = Mock(Value=26)  # 26 indicates ambient temperature setting
+        self.MEASM = Mock(Value=measm_value, Dimension="K")
+    def IsKindOf(self, kind):
+        # For testing, return True for any kind so that parse_model processes this object.
+        return True
+
+# Dummy ambient component for pressure (FTYP == 13)
+class DummyComp46_P:
+    def __init__(self, name, measm_value):
+        self.Name = name
+        self.FTYP = Mock(Value=13)  # 13 indicates ambient pressure setting
+        self.MEASM = Mock(Value=measm_value, Dimension="Pa")
+    def IsKindOf(self, kind):
+        # For testing, return True for any kind so that parse_model processes this object.
+        return True
+
+# Dummy objects container that returns two ambient components.
+class DummyObjectsAmbient:
+    def __init__(self):
+        # Return one dummy component for temperature and one for pressure.
+        self._items = [DummyComp46_T("AmbientT", 300.0), DummyComp46_P("AmbientP", 101325)]
+    @property
+    def Count(self):
+        return len(self._items)
+    def Item(self, index):
+        return self._items[index - 1]
+
+# Dummy model that uses the above objects.
+class DummyModelAmbient:
+    def __init__(self):
+        self.Objects = DummyObjectsAmbient()
+
+# Minimal dummy ObjectCaster: define CastToComp46 to simply return the object.
+class DummyOC:
+    def CastToComp46(self, obj):
+        return obj
+
+@pytest.fixture
+def parser_with_ambient(monkeypatch):
+    """
+    Fixture that returns an EbsilonModelParser instance configured with a dummy model
+    that contains two ambient components (one for temperature and one for pressure).
+    """
+    parser = EbsilonModelParser("dummy.ebs")
+    dummy_model = DummyModelAmbient()
+    monkeypatch.setattr(parser, "model", dummy_model)
+    dummy_oc = DummyOC()
+    monkeypatch.setattr(parser, "oc", dummy_oc)
+    # Override parse_component to simulate ambient extraction:
+    def dummy_parse_component(obj):
+        # Check FTYP value and set ambient conditions accordingly.
+        if hasattr(obj, "FTYP"):
+            if obj.FTYP.Value == 26:
+                parser.Tamb = obj.MEASM.Value
+            elif obj.FTYP.Value == 13:
+                parser.pamb = obj.MEASM.Value
+    monkeypatch.setattr(parser, "parse_component", dummy_parse_component)
+    # Also override parse_connection to do nothing so that ambient objects are not processed as connections.
+    monkeypatch.setattr(parser, "parse_connection", lambda obj: None)
+    return parser
+
+def test_parse_model_with_ambient(parser_with_ambient):
+    """
+    Test that when ambient measuring components are present,
+    parse_model correctly sets both Tamb and pamb.
+    """
+    # This should not raise an error now, since dummy ambient objects are processed.
+    parser_with_ambient.parse_model()
+    assert parser_with_ambient.Tamb == 300.0
+    assert parser_with_ambient.pamb == 101325
+
+# ---------- Data Sorting and JSON Export Tests ----------
+
+def test_get_sorted_data_and_write_to_json(tmp_path):
+    """
+    Test that get_sorted_data returns sorted data and write_to_json writes the correct JSON.
+    """
+    parser = EbsilonModelParser("dummy.ebs")
+    # Manually set dummy data.
+    parser.components_data = {
+        "BGroup": {"CompB": {"name": "CompB", "type": "TypeB"}},
+        "AGroup": {"CompA": {"name": "CompA", "type": "TypeA"}}
+    }
+    parser.connections_data = {
+        "Conn2": {"T": 300},
+        "Conn1": {"T": 350}
+    }
+    parser.Tamb = 298.15
+    parser.pamb = 101325
+    sorted_data = parser.get_sorted_data()
+    # Check that component groups are sorted.
+    assert list(sorted_data["components"].keys()) == ["AGroup", "BGroup"]
+    # And that connections are sorted by key.
+    assert list(sorted_data["connections"].keys()) == ["Conn1", "Conn2"]
+    
+    # Test JSON export.
+    output_file = tmp_path / "sorted_output.json"
+    parser.write_to_json(str(output_file))
+    with open(output_file, "r") as f:
+        written_data = json.load(f)
+    # Check ambient conditions.
+    assert written_data["ambient_conditions"]["Tamb"] == 298.15
+    assert written_data["ambient_conditions"]["pamb"] == 101325
+    # Check that components and connections keys match.
+    assert list(written_data["components"].keys()) == list(sorted_data["components"].keys())
+    assert list(written_data["connections"].keys()) == list(sorted_data["connections"].keys())
+
+
+# ---------- run_ebsilon Error Handling Test ----------
+
+def test_run_ebsilon_missing_file(tmp_path):
+    """
+    Test that run_ebsilon raises a FileNotFoundError if the model file does not exist.
+    """
+    non_existent_file = tmp_path / "nonexistent.ebs"
+    with pytest.raises(FileNotFoundError, match="Model file not found"):
+        run_ebsilon(str(non_existent_file))

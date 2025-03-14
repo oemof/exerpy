@@ -126,7 +126,7 @@ class HeatExchanger(Component):
         self.dissipative = False
         super().__init__(**kwargs)
 
-    def calc_exergy_balance(self, T0: float, p0: float, split_pyhsical_exergy) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the heat exchanger.
 
@@ -170,7 +170,7 @@ class HeatExchanger(Component):
         if not self.dissipative:
             # Case 1: All streams are above the ambient temperature
             if all([stream['T'] >= T0 for stream in all_streams]):
-                if split_pyhsical_exergy:
+                if split_physical_exergy:
                     self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
                         self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
@@ -180,7 +180,7 @@ class HeatExchanger(Component):
 
             # Case 2: All streams are below or equal to the ambient temperature
             elif all([stream['T'] <= T0 for stream in all_streams]):
-                if split_pyhsical_exergy:
+                if split_physical_exergy:
                     self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] - self.inl[0]['m'] * self.inl[0]['e_T']
                     self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'] + (
                         self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
@@ -193,7 +193,7 @@ class HeatExchanger(Component):
             # Case 3: Hot stream from above to lower ambient, cold stream from lower to above ambient
             elif (self.inl[0]['T'] > T0 and self.outl[1]['T'] > T0 and
                 self.outl[0]['T'] <= T0 and self.inl[1]['T'] <= T0):
-                if split_pyhsical_exergy:
+                if split_physical_exergy:
                     self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[1]['m'] * self.outl[1]['e_T']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
                         self.outl[0]['m'] * self.outl[0]['e_M'] + self.outl[1]['m'] * self.outl[1]['e_M'])
@@ -206,7 +206,7 @@ class HeatExchanger(Component):
             # Case 4: Hot stream inlet above ambient, all others below or equal to ambient
             elif (self.inl[0]['T'] > T0 and self.inl[1]['T'] <= T0 and
                 self.outl[0]['T'] <= T0 and self.outl[1]['T'] <= T0):
-                if split_pyhsical_exergy:
+                if split_physical_exergy:
                     self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
                         self.outl[1]['m'] * self.outl[1]['e_PH'] + self.outl[0]['m'] * self.outl[0]['e_M'])
@@ -226,7 +226,7 @@ class HeatExchanger(Component):
 
             # Case 6: Cold inlet is lower ambient, others higher
             else:
-                if split_pyhsical_exergy:
+                if split_physical_exergy:
                     self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
                         self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])

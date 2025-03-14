@@ -52,7 +52,7 @@ class Condenser(Component):
         """
         super().__init__(**kwargs)
     
-    def calc_exergy_balance(self, T0: float, p0: float, split_pyhsical_exergy) -> None:
+    def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         """
         Calculate the exergy balance of the condenser.
 

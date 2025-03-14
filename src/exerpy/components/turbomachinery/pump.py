@@ -103,9 +103,18 @@ class Pump(Component):
         # Get power flow if not already available
         if self.P is None:
             self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])
+            
+        # First, check for the invalid case: outlet temperature smaller than inlet temperature.
+        if self.inl[0]['T'] > self.outl[0]['T']:
+            logging.warning(
+                f"Exergy balance of compressor '{self.label}' where outlet temperature ({self.outl[0]['T']}) "
+                f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
+            )
+            self.E_P = np.nan
+            self.E_F = np.nan
 
         # Case 1: Both temperatures above ambient
-        if round(self.inl[0]['T'], 5) >= T0 and round(self.outl[0]['T'], 5) > T0:
+        elif round(self.inl[0]['T'], 5) >= T0 and round(self.outl[0]['T'], 5) > T0:
             self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
             self.E_F = abs(self.P)
 

@@ -1,3 +1,11 @@
+"""
+Integration tests for the ExergyAnalysis class.
+
+This file contains tests that perform end-to-end verification of the ExergyAnalysis class
+by loading real example files (e.g., cgam_ebs.json) and ensuring that the analysis returns
+expected results. These tests check the integration of file loading, parsing, and calculation.
+"""
+
 import pytest
 import json
 import os
@@ -5,9 +13,9 @@ from exerpy import ExergyAnalysis
 
 @pytest.fixture
 def exergy_analysis():
-    """Set up the ExergyAnalysis object using the data from cgam_parsed.json."""
+    """Set up the ExergyAnalysis object using the data from cgam_ebs.json."""
     # Define the path to the JSON file
-    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples/cgam/cgam_parsed.json'))
+    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples/cgam/cgam_ebs.json'))
 
     # Load the JSON data
     with open(file_path, 'r') as f:

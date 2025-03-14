@@ -121,10 +121,15 @@ class ExergyAnalysis:
         # The rest is counted as total exergy destruction with all components of the system
         self.E_D = self.E_F - self.E_P - self.E_L
 
+        if self.epsilon is not None:
+            eff_str = f"{self.epsilon:.2%}"
+        else:
+            eff_str = "N/A"
         logging.info(
             f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, "
             f"E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, "
-            f"Efficiency = {self.epsilon:.2%}")
+            f"Efficiency = {eff_str}"
+            )
 
         # Perform exergy balance for each individual component in the system
         total_component_E_D = 0.0
@@ -134,10 +139,14 @@ class ExergyAnalysis:
             else:
                 # Calculate E_F, E_D, E_P
                 component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
-                # Calculate y and y* for each component
-                component.y = component.E_D / self.E_F if component.E_D is not None else None
-                component.y_star = component.E_D / self.E_D if component.E_D is not None else None
-                # Calculate the total exergy destruction with the system based on components' E_D
+                # Safely calculate y and y* avoiding division by zero
+                if self.E_F != 0:
+                    component.y = component.E_D / self.E_F
+                    component.y_star = component.E_D / self.E_D if component.E_D is not None else None
+                else:
+                    component.y = None
+                    component.y_star = None
+                # Sum component destruction if available
                 if component.E_D is not None:
                     total_component_E_D += component.E_D
 
@@ -203,7 +212,7 @@ class ExergyAnalysis:
         pamb : float, optional
             Ambient pressure for analysis, default is None.
         simulate : bool, optional
-            If True, run the simulation. If False, load existing data from '_parsed.json' file, default is True.
+            If True, run the simulation. If False, load existing data from '_aspen.json' file, default is True.
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
 
@@ -216,7 +225,7 @@ class ExergyAnalysis:
         # Check if the file is an Aspen file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.bkp':
-            output_path = path.replace('.bkp', '_parsed.json')
+            output_path = path.replace('.bkp', '_aspen.json')
 
             # If simulate is set to False, try to load the existing JSON data
             if not simulate:
@@ -228,7 +237,7 @@ class ExergyAnalysis:
                             logging.info(f"Successfully loaded existing Aspen data from {output_path}.")
                     else:
                         logging.error(
-                            'Skipping the simulation requires a pre-existing file with the ending "_parsed.json". '
+                            'Skipping the simulation requires a pre-existing file with the ending "_aspen.json". '
                             f'File not found at {output_path}.'
                         )
                         raise FileNotFoundError(f'File not found: {output_path}')
@@ -305,7 +314,7 @@ class ExergyAnalysis:
         pamb : float, optional
             Ambient pressure for analysis, default is None.
         simulate : bool, optional
-            If True, run the simulation. If False, load existing data from '_parsed.json' file, default is True.
+            If True, run the simulation. If False, load existing data from '_ebs.json' file, default is True.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -320,7 +329,7 @@ class ExergyAnalysis:
         # Check if the file is an Ebsilon file
         _, file_extension = os.path.splitext(path)
         if file_extension == '.ebs':
-            output_path = path.replace('.ebs', '_parsed.json')
+            output_path = path.replace('.ebs', '_ebs.json')
 
             # If simulate is set to False, try to load the existing JSON data
             if not simulate:

@@ -91,7 +91,7 @@ class Turbine(Component):
             self.P = self._total_outlet('m', 'h') - self.inl[0]['m'] * self.inl[0]['h']
 
         # Case 1: Both temperatures above ambient
-        if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0:
+        if self.inl[0]['T'] >= T0 and self.outl[0]['T'] >= T0 and self.inl[0]['T'] >= self.outl[0]['T']:
             self.E_P = abs(self.P)
             self.E_F = (self.inl[0]['m'] * self.inl[0]['e_PH'] -
                         self._total_outlet('m', 'e_PH'))

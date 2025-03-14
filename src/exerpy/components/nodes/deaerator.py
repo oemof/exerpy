@@ -155,7 +155,10 @@ class Deaerator(Component):
                     self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
 
         # Calculate exergy destruction and efficiency
-        self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_P):
+            self.E_D = self.E_F
+        else:
+            self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
         # Log the results
@@ -164,14 +167,6 @@ class Deaerator(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
-
-        # Log the results
-        logging.info(
-            f"Deaerator exergy balance calculated: "
-            f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
-            f"Efficiency={self.epsilon:.2%}"
-        )
-
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """

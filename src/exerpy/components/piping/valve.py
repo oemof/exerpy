@@ -113,7 +113,7 @@ class Valve(Component):
         T_out = self.outl[0]['T']
 
         # Case-specific exergy calculations
-        if T_in > T0 and T_out > T0:
+        if T_in > T0 and T_out > T0 and T_in > T_out:
             self.E_P = np.nan
             self.E_F = self.inl[0]['m'] * (self.inl[0]['e_PH'] - self.outl[0]['e_PH'])
         elif T_out <= T0 and T_in > T0:

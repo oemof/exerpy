@@ -71,11 +71,19 @@ class Motor(Component):
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         """      
+
+        if self.outl[0]['energy_flow'] > self.inl[0]['energy_flow']:
+            pruduct = self.inl[0]['energy_flow']
+            fuel = self.outl[0]['energy_flow']
+        else:
+            pruduct = self.outl[0]['energy_flow']
+            fuel = self.inl[0]['energy_flow']
+
         # Exergy product is the mechanical power output
-        self.E_P = self.outl[0]['energy_flow']
+        self.E_P = pruduct
         
         # Exergy fuel is the electrical power input
-        self.E_F = self.inl[0]['energy_flow']
+        self.E_F = fuel
         
         # Calculate exergy destruction
         self.E_D = self.E_F - self.E_P

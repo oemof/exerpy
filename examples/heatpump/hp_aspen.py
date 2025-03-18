@@ -11,7 +11,7 @@ from exerpy import ExergyAnalysis
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'hp.bkp'))
 
 # Initialize the exergy analysis with the simulation path
-ean = ExergyAnalysis.from_aspen(model_path)
+ean = ExergyAnalysis.from_aspen(model_path, split_physical_exergy=False)
 
 fuel = {
     "inputs": ['E1', 'E2', 'E3'],

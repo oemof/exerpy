@@ -158,7 +158,7 @@ class ExergyAnalysis:
             logging.info(f"Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
-    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None):
+    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an instance of the ExergyAnalysis class from a tespy network or
         a tespy network export structure.
@@ -195,8 +195,8 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = model.to_exerpy(Tamb, pamb, EXERPY_TESPY_MAPPINGS)
-        data, Tamb, pamb, chemical_exergy_enabled = _process_json(data, Tamb, pamb, chemExLib)
-        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled)
+        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(data, Tamb, pamb, chemExLib, split_physical_exergy)
+        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
 
     @classmethod
     def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -273,7 +273,7 @@ class ExergyAnalysis:
 
         # Calculate the total exergy flow of each component
         try:
-            aspen_data = add_total_exergy_flow(aspen_data)
+            aspen_data = add_total_exergy_flow(aspen_data, split_physical_exergy)
             logging.info("Total exergy flows successfully added to the Aspen data.")
         except Exception as e:
             logging.error(f"Failed to add total exergy flows: {e}")
@@ -350,14 +350,14 @@ class ExergyAnalysis:
                 "an Ebsilon (.ebs) file."
             )
 
-        data, Tamb, pamb, chemical_exergy_enabled = _process_json(
-            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib,
+        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy,
             required_component_fields=["name", "type", "type_index"]
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an ExergyAnalysis instance from a JSON file.
 
@@ -387,10 +387,10 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb, chemical_exergy_enabled = _process_json(
-            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib
+        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )
-        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled)
+        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
 
     def exergy_results(self, print_results=True):
         """
@@ -636,7 +636,7 @@ def _load_json(json_path):
             raise
 
 
-def _process_json(data, Tamb=None, pamb=None, chemExLib=None, required_component_fields=['name']):
+def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, required_component_fields=['name']):
     # Validate required sections
     required_sections = ['components', 'connections', 'ambient_conditions']
     missing_sections = [s for s in required_sections if s not in data]
@@ -685,10 +685,10 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None, required_component
         logging.warning("You haven't provided a chemical exergy library. Chemical exergy values will not be added.")
 
     # Calculate total exergy flows
-    data = add_total_exergy_flow(data)
+    data = add_total_exergy_flow(data, split_physical_exergy)
     logging.info("Added total exergy flows")
 
-    return data, Tamb, pamb, chemical_exergy_enabled
+    return data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy
 
 
 

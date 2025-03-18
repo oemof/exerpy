@@ -13,7 +13,7 @@ from exerpy import ExergyAnalysis
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ccpp.bkp'))
 
 # Initialize the exergy analysis with the simulation path
-ean = ExergyAnalysis.from_aspen(model_path, chemExLib='Ahrendts')
+ean = ExergyAnalysis.from_aspen(model_path, chemExLib='Ahrendts', split_physical_exergy=False)
 
 fuel = {
     "inputs": ['1', '3'],

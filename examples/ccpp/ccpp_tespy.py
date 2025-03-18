@@ -190,7 +190,7 @@ T0 = 288.15
 from exerpy import ExergyAnalysis
 
 
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts")
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
 
 # export of the results for validation
 import json

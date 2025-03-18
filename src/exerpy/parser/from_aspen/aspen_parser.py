@@ -74,37 +74,6 @@ class AspenModelParser:
         """
         Parses the streams (connections) in the Aspen model.
         """
-        try:
-            # Get first stream to extract property set values
-            stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
-            if stream_nodes.Count > 0:
-                first_stream = stream_nodes[0].Name
-                # Extract from property set path
-                temp_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{first_stream}\Output\STRM_UPP\HMX(S,P,T,P)\MIXED\TOTAL')
-
-                if temp_node is not None and temp_node.Elements.Count >= 1:
-                    temp_str = temp_node.Elements[0].Name
-                    if temp_node.Elements[0].Elements.Count >= 1:
-                        pres_str = temp_node.Elements[0].Elements[0].Name
-                        if self.split_physical_exergy:
-                            logging.error("Physical exergy splitting not yet implemented yet for Aspen models!"
-                                          "Please set split_physical_exergy=False.")
-                            '''# Create the node path templates for property retrieval
-                            h0_s0_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T,P)\MIXED\TOTAL\{temp_str}\{pres_str}'
-                            hA_sA_path = fr'\Data\Streams\{{stream_name}}\Output\STRM_UPP\{{prop}}(S,P,T)\MIXED\TOTAL\{temp_str}'''
-                    else:
-                        raise ValueError("Pressure value not found in property set path")
-                else:
-                    raise ValueError("Temperature value not found in property set path")
-            else:
-                raise ValueError("No streams found in the model")
-
-        except Exception as e:
-            logging.error(f"Error extracting property set values: {e}")
-            raise RuntimeError(f"Failed to extract property set values: {e}")
-
-        # Continue with stream parsing...
-
         # Get the stream nodes and their names
         stream_nodes = self.aspen.Tree.FindNode(r'\Data\Streams').Elements
         stream_names = [stream_node.Name for stream_node in stream_nodes]
@@ -184,50 +153,6 @@ class AspenModelParser:
                         ) if self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\SMX_MASS\MIXED') is not None else None
                     ),
                     's_unit': fluid_property_data['s']['SI_unit'],
-                    'h_0': (
-                        convert_to_SI(
-                            'h',
-                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).Value,
-                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='HMX')) is not None else (
-                            logging.warning(f"h_0 node not found for stream {stream_name}"),
-                            None
-                        )[1]
-                    ),
-                    'h_0_unit': fluid_property_data['h']['SI_unit'],
-                    's_0': (
-                        convert_to_SI(
-                            's',
-                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).Value,
-                            self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(h0_s0_path.format(stream_name=stream_name, prop='SMX')) is not None else (
-                            logging.warning(f"s_0 node not found for stream {stream_name}"),
-                            None
-                        )[1]
-                    ),
-                    's_0_unit': fluid_property_data['s']['SI_unit'],
-                    'h_A': (
-                        convert_to_SI(
-                            'h',
-                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).Value,
-                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='HMX')) is not None else (
-                            logging.warning(f"h_A node not found for stream {stream_name}"),
-                            None
-                        )[1]
-                    ),
-                    'h_A_unit': fluid_property_data['h']['SI_unit'],
-                    's_A': (
-                        convert_to_SI(
-                            's',
-                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).Value,
-                            self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')).UnitString
-                        ) if self.aspen.Tree.FindNode(hA_sA_path.format(stream_name=stream_name, prop='SMX')) is not None else (
-                            logging.warning(f"s_A node not found for stream {stream_name}"),
-                            None
-                        )[1]
-                    ),
-                    's_A_unit': fluid_property_data['s']['SI_unit'],
                     'm': (
                         convert_to_SI(
                             'm',
@@ -266,20 +191,6 @@ class AspenModelParser:
                     'mass_composition': {},
                     'molar_composition': {},
                 })
-                try:
-                    connection_data['e_T'] = connection_data['h'] - connection_data['h_A'] - self.Tamb * (connection_data['s'] - connection_data['s_A'])
-                    connection_data['e_T_unit'] = fluid_property_data['e']['SI_unit']
-                except Exception as e:
-                    logging.warning(f"Error in the calculation of e_T for stream {stream_name}: {e}")
-                    connection_data['e_T'] = None
-
-                try:
-                    connection_data['e_M'] = connection_data['h_A'] - connection_data['h_0'] - self.Tamb * (connection_data['s_A'] - connection_data['s_0'])
-                    connection_data['e_M_unit'] = fluid_property_data['e']['SI_unit']
-                except Exception as e:
-                    logging.warning(f"Error in the calculation of e_M for stream {stream_name}: {e}")
-                    connection_data['e_M'] = None
-
                 # Retrieve the fluid names for the stream
                 mole_frac_node = self.aspen.Tree.FindNode(fr'\Data\Streams\{stream_name}\Output\MOLEFRAC\MIXED')
                 if mole_frac_node is not None:

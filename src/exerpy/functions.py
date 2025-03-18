@@ -293,7 +293,7 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
     return my_json
 
 
-def add_total_exergy_flow(my_json):
+def add_total_exergy_flow(my_json, split_physical_exergy):
     """
     Adds the total exergy flow to each connection in the JSON data based on its kind.
     
@@ -344,15 +344,19 @@ def add_total_exergy_flow(my_json):
                     # Retrieve the outlet material streams: those with this component as source.
                     outlet_conns = [c for c in my_json['connections'].values() 
                                     if c.get('source_component') == comp_name and c.get('kind') == 'material']
+                    # Determine which exergy key to use based on the flag.
+                    exergy_key = 'e_T' if split_physical_exergy else 'e_PH'
+
                     if inlet_conns and outlet_conns:
                         # For simplicity, take the first inlet and first outlet.
                         inlet = inlet_conns[0]
                         outlet = outlet_conns[0]
-                        # Calculate the heat exergy difference:
-                        conn_data['E'] = inlet.get('e_T', 0) * inlet.get('m', 0) - outlet.get('e_T', 0) * outlet.get('m', 0)
+                        # Calculate the heat exergy difference using the selected key:
+                        conn_data['E'] = inlet.get(exergy_key, 0) * inlet.get('m', 0) - outlet.get(exergy_key, 0) * outlet.get('m', 0)
                     else:
                         conn_data['E'] = None
                         logging.warning(f"Not enough material connections for heat exchanger {comp_name} for heat exergy calculation.")
+
                 else:
                     conn_data['E'] = None
                     logging.warning(f"Heat connection {conn_name} is not associated with a SimpleHeatExchanger component.")

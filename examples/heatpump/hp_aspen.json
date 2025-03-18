@@ -1,0 +1,550 @@
+{
+    "components": {
+        "Compressor": {
+            "COMP": {
+                "name": "COMP",
+                "type": "Compressor",
+                "eta_s": 0.8,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 894044.6190000001,
+                "P_unit": "W"
+            },
+            "FAN": {
+                "name": "FAN",
+                "type": "Compressor",
+                "eta_s": 0.85,
+                "eta_mech": 1.0,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 705909.531,
+                "P_unit": "W"
+            }
+        },
+        "HeatExchanger": {
+            "COND": {
+                "name": "COND",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            },
+            "EVA": {
+                "name": "EVA",
+                "type": "HeatX",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
+        },
+        "Motor": {
+            "MOT1": {
+                "name": "MOT1",
+                "type": "Motor",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "eta_el": 0.9852216748768474,
+                "multiplier factor": 1.015,
+                "P_el": 716498.174,
+                "P_el_unit": "W",
+                "P_mech": 705909.531,
+                "P_mech_unit": "W"
+            },
+            "MOT2": {
+                "name": "MOT2",
+                "type": "Motor",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "eta_el": 0.9852216748768474,
+                "multiplier factor": 1.015,
+                "P_el": 907455.288,
+                "P_el_unit": "W",
+                "P_mech": 894044.6190000001,
+                "P_mech_unit": "W"
+            },
+            "PUMP-MOTOR": {
+                "name": "PUMP-MOTOR",
+                "type": "Motor",
+                "P_el": 64.8830145,
+                "P_el_unit": "W",
+                "P_mech": 63.9097693,
+                "P_mech_unit": "W",
+                "eta_el": 0.985
+            }
+        },
+        "Pump": {
+            "PUMP": {
+                "name": "PUMP",
+                "type": "Pump",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": 63.9097693,
+                "P_unit": "W"
+            }
+        },
+        "Valve": {
+            "VAL": {
+                "name": "VAL",
+                "type": "Valve",
+                "eta_s": null,
+                "eta_mech": null,
+                "Q": null,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W"
+            }
+        }
+    },
+    "connections": {
+        "11": {
+            "name": "11",
+            "kind": "material",
+            "source_component": null,
+            "source_connector": null,
+            "target_component": "FAN",
+            "target_connector": 0,
+            "T": 283.15,
+            "T_unit": "K",
+            "p": 101299.99999999999,
+            "p_unit": "Pa",
+            "h": -19533.8919,
+            "h_unit": "J / kg",
+            "s": 111.000839,
+            "s_unit": "J / kgK",
+            "m": 251.899858,
+            "m_unit": "kg / s",
+            "energy_flow": 4920584.590000001,
+            "energy_flow_unit": "W",
+            "e_PH": 0.0,
+            "e_PH_unit": "J / kg",
+            "n": 8696.65481,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "N2": 0.755200525,
+                "O2": 0.2313995,
+                "AR": 0.0128999721,
+                "CO2": 0.000500002328
+            },
+            "molar_composition": {
+                "N2": 0.780855926,
+                "O2": 0.209461599,
+                "AR": 0.0093533981,
+                "CO2": 0.0003290776
+            },
+            "E": 0.0,
+            "E_PH": 0.0,
+            "E_unit": "W"
+        },
+        "12": {
+            "name": "12",
+            "kind": "material",
+            "source_component": "FAN",
+            "source_connector": 0,
+            "target_component": "EVA",
+            "target_connector": 0,
+            "T": 285.94131169999997,
+            "T_unit": "K",
+            "p": 104299.99999999999,
+            "p_unit": "Pa",
+            "h": -16731.55,
+            "h_unit": "J / kg",
+            "s": 112.471971,
+            "s_unit": "J / kgK",
+            "m": 251.899858,
+            "m_unit": "kg / s",
+            "energy_flow": 4214675.06,
+            "energy_flow_unit": "W",
+            "e_PH": 2385.79078,
+            "e_PH_unit": "J / kg",
+            "n": 8696.65481,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "N2": 0.755200525,
+                "O2": 0.2313995,
+                "AR": 0.0128999721,
+                "CO2": 0.000500002328
+            },
+            "molar_composition": {
+                "N2": 0.780855926,
+                "O2": 0.209461599,
+                "AR": 0.0093533981,
+                "CO2": 0.0003290776
+            },
+            "E": 600980.3586997092,
+            "E_PH": 600980.3586997092,
+            "E_unit": "W"
+        },
+        "13": {
+            "name": "13",
+            "kind": "material",
+            "source_component": "EVA",
+            "source_connector": 0,
+            "target_component": null,
+            "target_connector": null,
+            "T": 281.14999996999995,
+            "T_unit": "K",
+            "p": 101299.99999999999,
+            "p_unit": "Pa",
+            "h": -21541.5531,
+            "h_unit": "J / kg",
+            "s": 103.885033,
+            "s_unit": "J / kgK",
+            "m": 251.899858,
+            "m_unit": "kg / s",
+            "energy_flow": 5426314.16,
+            "energy_flow_unit": "W",
+            "e_PH": 7.17939228,
+            "e_PH_unit": "J / kg",
+            "n": 8696.65481,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "N2": 0.755200525,
+                "O2": 0.2313995,
+                "AR": 0.0128999721,
+                "CO2": 0.000500002328
+            },
+            "molar_composition": {
+                "N2": 0.780855926,
+                "O2": 0.209461599,
+                "AR": 0.0093533981,
+                "CO2": 0.0003290776
+            },
+            "E": 1808.4878958582963,
+            "E_PH": 1808.4878958582963,
+            "E_unit": "W"
+        },
+        "21": {
+            "name": "21",
+            "kind": "material",
+            "source_component": null,
+            "source_connector": null,
+            "target_component": "PUMP",
+            "target_connector": 0,
+            "T": 343.15,
+            "T_unit": "K",
+            "p": 500000.0,
+            "p_unit": "Pa",
+            "h": -15677470.2,
+            "h_unit": "J / kg",
+            "s": -8473.10955,
+            "s_unit": "J / kgK",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "energy_flow": 156774702.0,
+            "energy_flow_unit": "W",
+            "e_PH": 23740.6226,
+            "e_PH_unit": "J / kg",
+            "n": 555.084351,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "H2O": 1.0
+            },
+            "molar_composition": {
+                "H2O": 1.0
+            },
+            "E": 237406.226,
+            "E_PH": 237406.226,
+            "E_unit": "W"
+        },
+        "22": {
+            "name": "22",
+            "kind": "material",
+            "source_component": "PUMP",
+            "source_connector": 0,
+            "target_component": "COND",
+            "target_connector": 1,
+            "T": 343.1505495,
+            "T_unit": "K",
+            "p": 505000.0,
+            "p_unit": "Pa",
+            "h": -15677463.8,
+            "h_unit": "J / kg",
+            "s": -8473.10583,
+            "s_unit": "J / kgK",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "energy_flow": 156774638.0,
+            "energy_flow_unit": "W",
+            "e_PH": 23745.9589,
+            "e_PH_unit": "J / kg",
+            "n": 555.084351,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "H2O": 1.0
+            },
+            "molar_composition": {
+                "H2O": 1.0
+            },
+            "E": 237459.589,
+            "E_PH": 237459.589,
+            "E_unit": "W"
+        },
+        "23": {
+            "name": "23",
+            "kind": "material",
+            "source_component": "COND",
+            "source_connector": 1,
+            "target_component": null,
+            "target_connector": null,
+            "T": 393.149999,
+            "T_unit": "K",
+            "p": 500000.0,
+            "p_unit": "Pa",
+            "h": -15466895.5,
+            "h_unit": "J / kg",
+            "s": -7900.32831,
+            "s_unit": "J / kgK",
+            "m": 10.0,
+            "m_unit": "kg / s",
+            "energy_flow": 154668955.0,
+            "energy_flow_unit": "W",
+            "e_PH": 72132.3772,
+            "e_PH_unit": "J / kg",
+            "n": 555.084351,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "H2O": 1.0
+            },
+            "molar_composition": {
+                "H2O": 1.0
+            },
+            "E": 721323.772,
+            "E_PH": 721323.772,
+            "E_unit": "W"
+        },
+        "31": {
+            "name": "31",
+            "kind": "material",
+            "source_component": "COND",
+            "source_connector": 0,
+            "target_component": "VAL",
+            "target_connector": 0,
+            "T": 348.1505495,
+            "T_unit": "K",
+            "p": 2295000.0,
+            "p_unit": "Pa",
+            "h": -8883817.93,
+            "h_unit": "J / kg",
+            "s": -4093.48573,
+            "s_unit": "J / kgK",
+            "m": 11.0543686,
+            "m_unit": "kg / s",
+            "energy_flow": 98204998.1,
+            "energy_flow_unit": "W",
+            "e_PH": 10550.028,
+            "e_PH_unit": "J / kg",
+            "n": 82.46524380000001,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "R245FA": 1.0
+            },
+            "molar_composition": {
+                "R245FA": 1.0
+            },
+            "E": 116623.89825232081,
+            "E_PH": 116623.89825232081,
+            "E_unit": "W"
+        },
+        "32": {
+            "name": "32",
+            "kind": "material",
+            "source_component": "VAL",
+            "source_connector": 0,
+            "target_component": "EVA",
+            "target_connector": 1,
+            "T": 275.79006961,
+            "T_unit": "K",
+            "p": 60000.0,
+            "p_unit": "Pa",
+            "h": -8883817.93,
+            "h_unit": "J / kg",
+            "s": -4047.29727,
+            "s_unit": "J / kgK",
+            "m": 11.0543686,
+            "m_unit": "kg / s",
+            "energy_flow": 98204998.1,
+            "energy_flow_unit": "W",
+            "e_PH": -2528.2349,
+            "e_PH_unit": "J / kg",
+            "n": 82.46524380000001,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "R245FA": 1.0
+            },
+            "molar_composition": {
+                "R245FA": 1.0
+            },
+            "E": -27948.04049198414,
+            "E_PH": -27948.04049198414,
+            "E_unit": "W"
+        },
+        "33": {
+            "name": "33",
+            "kind": "material",
+            "source_component": "EVA",
+            "source_connector": 1,
+            "target_component": "COMP",
+            "target_connector": 0,
+            "T": 280.94124173999995,
+            "T_unit": "K",
+            "p": 55000.00000000001,
+            "p_unit": "Pa",
+            "h": -8774210.66,
+            "h_unit": "J / kg",
+            "s": -3644.76666,
+            "s_unit": "J / kgK",
+            "m": 11.0543686,
+            "m_unit": "kg / s",
+            "energy_flow": 96993359.0,
+            "energy_flow_unit": "W",
+            "e_PH": -6897.512,
+            "e_PH_unit": "J / kg",
+            "n": 82.46524380000001,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "R245FA": 1.0
+            },
+            "molar_composition": {
+                "R245FA": 1.0
+            },
+            "E": -76247.6400709232,
+            "E_PH": -76247.6400709232,
+            "E_unit": "W"
+        },
+        "34": {
+            "name": "34",
+            "kind": "material",
+            "source_component": "COMP",
+            "source_connector": 0,
+            "target_component": "COND",
+            "target_connector": 0,
+            "T": 404.67837399999996,
+            "T_unit": "K",
+            "p": 2300000.0,
+            "p_unit": "Pa",
+            "h": -8693333.62,
+            "h_unit": "J / kg",
+            "s": -3604.57112,
+            "s_unit": "J / kgK",
+            "m": 11.0543686,
+            "m_unit": "kg / s",
+            "energy_flow": 96099314.4,
+            "energy_flow_unit": "W",
+            "e_PH": 62598.1621,
+            "e_PH_unit": "J / kg",
+            "n": 82.46524380000001,
+            "n_unit": "mol / s",
+            "mass_composition": {
+                "R245FA": 1.0
+            },
+            "molar_composition": {
+                "R245FA": 1.0
+            },
+            "E": 691983.1575359501,
+            "E_PH": 691983.1575359501,
+            "E_unit": "W"
+        },
+        "E1": {
+            "name": "E1",
+            "kind": "power",
+            "source_component": "MOT1",
+            "source_connector": 0,
+            "target_component": null,
+            "target_connector": null,
+            "energy_flow": 716498.174,
+            "E": 716498.174,
+            "E_unit": "W"
+        },
+        "E2": {
+            "name": "E2",
+            "kind": "power",
+            "source_component": "MOT2",
+            "source_connector": 0,
+            "target_component": null,
+            "target_connector": null,
+            "energy_flow": 907455.288,
+            "E": 907455.288,
+            "E_unit": "W"
+        },
+        "E3": {
+            "name": "E3",
+            "kind": "power",
+            "source_component": "PUMP",
+            "source_connector": null,
+            "target_component": null,
+            "target_connector": null,
+            "energy_flow": 64.8830145,
+            "E": 64.8830145,
+            "E_unit": "W"
+        },
+        "PUMP_ELEC": {
+            "name": "PUMP_ELEC",
+            "kind": "power",
+            "source_component": null,
+            "source_connector": null,
+            "target_component": "PUMP-MOTOR",
+            "target_connector": 0,
+            "energy_flow": 64.8830145,
+            "energy_flow_unit": "W",
+            "E": 64.8830145,
+            "E_unit": "W"
+        },
+        "PUMP_MECH": {
+            "name": "PUMP_MECH",
+            "kind": "power",
+            "source_component": "PUMP-MOTOR",
+            "source_connector": 0,
+            "target_component": "PUMP",
+            "target_connector": 1,
+            "energy_flow": 63.9097693,
+            "energy_flow_unit": "W",
+            "E": 63.9097693,
+            "E_unit": "W"
+        },
+        "W1": {
+            "name": "W1",
+            "kind": "power",
+            "source_component": "FAN",
+            "source_connector": 1,
+            "target_component": "MOT1",
+            "target_connector": 0,
+            "energy_flow": 705909.531,
+            "E": 705909.531,
+            "E_unit": "W"
+        },
+        "W2": {
+            "name": "W2",
+            "kind": "power",
+            "source_component": "COMP",
+            "source_connector": 1,
+            "target_component": "MOT2",
+            "target_connector": 0,
+            "energy_flow": 894044.6190000001,
+            "E": 894044.6190000001,
+            "E_unit": "W"
+        }
+    },
+    "ambient_conditions": {
+        "Tamb": 283.15,
+        "Tamb_unit": "K",
+        "pamb": 101299.99999999999,
+        "pamb_unit": "Pa"
+    }
+}

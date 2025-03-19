@@ -231,6 +231,10 @@ def test_simulate_model(parser):
     parser.model.SimulateNew.assert_called_once()
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_parse_component(parser, mock_component):
     """
     Test component parsing functionality.
@@ -515,7 +519,7 @@ def test_get_sorted_data_and_write_to_json(tmp_path):
     assert list(sorted_data["components"].keys()) == ["AGroup", "BGroup"]
     # And that connections are sorted by key.
     assert list(sorted_data["connections"].keys()) == ["Conn1", "Conn2"]
-    
+
     # Test JSON export.
     output_file = tmp_path / "sorted_output.json"
     parser.write_to_json(str(output_file))

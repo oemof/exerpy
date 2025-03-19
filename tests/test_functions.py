@@ -29,7 +29,7 @@ def realistic_json_data():
     Returns
     -------
     dict
-        Full process simulation data including components and connections with 
+        Full process simulation data including components and connections with
         realistic values from an actual gas turbine simulation.
     """
     return {
@@ -196,7 +196,7 @@ def test_basic_mass_to_molar_conversion():
     """
     mass_fractions = {'O2': 0.21, 'N2': 0.79}
     molar_fractions = mass_to_molar_fractions(mass_fractions)
-    
+
     assert isinstance(molar_fractions, dict)
     assert abs(sum(molar_fractions.values()) - 1.0) < 1e-6
     assert 'O2' in molar_fractions
@@ -214,7 +214,7 @@ def test_basic_molar_to_mass_conversion():
     """
     molar_fractions = {'O2': 0.21, 'N2': 0.79}
     mass_fractions = molar_to_mass_fractions(molar_fractions)
-    
+
     assert isinstance(mass_fractions, dict)
     assert abs(sum(mass_fractions.values()) - 1.0) < 1e-6
     assert 'O2' in mass_fractions
@@ -238,7 +238,7 @@ def test_mass_to_molar_fractions_air(air_composition):
     - Physical reasonableness of results
     """
     molar_fractions = mass_to_molar_fractions(air_composition['mass_composition'])
-    
+
     assert isinstance(molar_fractions, dict)
     assert abs(sum(molar_fractions.values()) - 1.0) < 1e-6
     assert set(molar_fractions.keys()) == set(air_composition['mass_composition'].keys())
@@ -260,7 +260,7 @@ def test_mass_to_molar_fractions_flue_gas(flue_gas_composition):
     - Reasonable CO2 content
     """
     molar_fractions = mass_to_molar_fractions(flue_gas_composition['mass_composition'])
-    
+
     assert isinstance(molar_fractions, dict)
     assert abs(sum(molar_fractions.values()) - 1.0) < 1e-6
     assert abs(molar_fractions['CO2'] - 0.031565) < 1e-6
@@ -276,7 +276,7 @@ def test_fraction_conversion_invalid_substance():
     """
     with pytest.raises(ValueError):
         mass_to_molar_fractions({'InvalidSubstance': 1.0})
-    
+
     with pytest.raises(ValueError):
         molar_to_mass_fractions({'InvalidSubstance': 1.0})
 
@@ -351,18 +351,18 @@ def test_add_chemical_exergy_realistic(realistic_json_data):
     - Power and heat streams unaffected
     """
     result = add_chemical_exergy(realistic_json_data, 298.15, 1.01325, 'Ahrendts')
-    
+
     # Check material connection
     air_conn = result['connections']['1']
     assert 'e_CH' in air_conn
     assert 'e_CH_unit' in air_conn
     assert isinstance(air_conn['e_CH'], float)
-    
+
     # Check flue gas connection
     flue_gas_conn = result['connections']['4']
     assert 'e_CH' in flue_gas_conn
     assert isinstance(flue_gas_conn['e_CH'], float)
-    
+
     # Check power connection (shouldn't have chemical exergy)
     power_conn = result['connections']['2']
     assert 'e_CH' not in power_conn
@@ -370,7 +370,7 @@ def test_add_chemical_exergy_realistic(realistic_json_data):
 def test_chemical_exergy_zero_fractions():
     """
     Test handling of zero mass fractions.
-    
+
     Verifies
     --------
     - Zero mass fractions are handled correctly
@@ -397,7 +397,7 @@ def test_add_chemical_exergy_missing_ambient(realistic_json_data):
     # Create a copy and remove ambient conditions
     data = dict(realistic_json_data)
     data.pop('ambient_conditions')
-    
+
     with pytest.raises(ValueError, match="Ambient temperature .* and pressure .* are required"):
         add_chemical_exergy(data, None, None, 'Ahrendts')
 
@@ -429,18 +429,18 @@ def test_add_total_exergy_flow_realistic(realistic_json_data):
     - Proper handling of different connection kinds
     - Units consistency
     """
-    result = add_total_exergy_flow(realistic_json_data)
-    
+    result = add_total_exergy_flow(realistic_json_data, split_physical_exergy=False)
+
     # Check material streams
     air_conn = result['connections']['1']
     flue_gas_conn = result['connections']['4']
     assert 'E' in air_conn and 'E_unit' in air_conn
     assert 'E' in flue_gas_conn and 'E_unit' in flue_gas_conn
-    
+
     # Check power stream
     power_conn = result['connections']['2']
     assert power_conn['E'] == power_conn['energy_flow']
-    
+
     # Check heat stream
     heat_conn = result['connections']['3']
     assert 'E' in heat_conn
@@ -450,19 +450,19 @@ def test_add_total_exergy_flow_realistic(realistic_json_data):
     # Temperature conversions
     ('T', 25, 'C', 298.15),
     ('T', 77, 'F', 298.15),
-    
+
     # Pressure conversions
     ('p', 1, 'bar', 1e5),
     ('p', 14.7, 'psi', 101325),
-    
+
     # Mass flow conversions
     ('m', 1, 'kg/s', 1),
     ('m', 3600, 'kg/h', 1),
-    
+
     # Enthalpy conversions
     ('h', 1, 'kJ/kg', 1000),        # 1 kJ/kg = 1000 J/kg
     ('h', 0.239, 'kcal/kg', 1000),  # 0.239 kcal/kg ≈ 1000 J/kg
-    
+
     # Entropy conversions
     ('s', 1, 'kJ/kgK', 1000),        # 1 kJ/kgK = 1000 J/kgK
     ('s', 0.239, 'kJ/kg-K', 239)     # 0.239 kJ/kg-K = 239 J/kgK (fixed expected value)
@@ -489,12 +489,12 @@ def test_convert_to_SI(property, value, unit, expected):
     - Mass flow: kg/s, kg/h → kg/s
     - Enthalpy: kJ/kg, kcal/kg → J/kg
     - Entropy: kJ/kgK → J/kgK
-    
+
     Using relative tolerance for larger values (pressure)
     and absolute tolerance for other properties.
     """
     result = convert_to_SI(property, value, unit)
-    
+
     # Use relative tolerance for pressure (large values)
     if property == 'p':
         assert abs(result - expected)/expected < 1e-3  # 0.1% relative tolerance
@@ -511,7 +511,7 @@ def test_convert_to_SI_invalid_property():
 def test_convert_to_SI_warning(caplog):
     """
     Test that appropriate warning is logged for invalid property.
-    
+
     Parameters
     ----------
     caplog : pytest fixture

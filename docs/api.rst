@@ -2,22 +2,22 @@
 API Documentation
 #################
 
-The ExerPy package offers a flexible, Python-based solution for conducting exergy 
-analysis on energy-conversion systems. It supports integration with simulation tools 
-like Ebsilon Professional, Aspen Plus, and TESPy, allowing users to extract detailed 
-data about components and connections. The framework follows a structured workflow 
-that includes data parsing, physical and chemical exergy calculations, and the 
+The ExerPy package offers a flexible, Python-based solution for conducting exergy
+analysis on energy-conversion systems. It supports integration with simulation tools
+like Ebsilon Professional, Aspen Plus, and TESPy, allowing users to extract detailed
+data about components and connections. The framework follows a structured workflow
+that includes data parsing, physical and chemical exergy calculations, and the
 generation of comprehensive exergy analysis results.
 
-This section provides detailed information about the Application Programming 
-Interface (API) of the ExerPy library. The API is divided into two main modules: 
+This section provides detailed information about the Application Programming
+Interface (API) of the ExerPy library. The API is divided into two main modules:
 
 1. **Parsing and Data Preparation**
 2. **Exergy Analysis**
 
 
 *************************************
-1. Model Parsing and Data Preparation 
+1. Model Parsing and Data Preparation
 *************************************
 
 ExerPy supports parsing models from different simulation tools to extract and prepare data for exergy calculations:
@@ -48,9 +48,9 @@ ExerPy supports parsing models from different simulation tools to extract and pr
 
 .. note::
 
-    Note that Ebsilon Professional and Aspen Plus require a valid commercial 
-    license for use. Additionally, while these tools are designed only for 
-    Windows, they can also be operated on macOS or Linus through the use of a 
+    Note that Ebsilon Professional and Aspen Plus require a valid commercial
+    license for use. Additionally, while these tools are designed only for
+    Windows, they can also be operated on macOS or Linus through the use of a
     virtual machine.
 
 ======
@@ -59,7 +59,7 @@ Inputs
 
 This module requires the user to provide the following inputs:
 
-- **Simulation model**: The model file from the supported simulation tools (e.g., Ebsilon Professional :code:`.ebs`, Aspen Plus :code:`.bkp`, TESPy scripts). 
+- **Simulation model**: The model file from the supported simulation tools (e.g., Ebsilon Professional :code:`.ebs`, Aspen Plus :code:`.bkp`, TESPy scripts).
 
 - **Parsing method**: The appropriate method (:code:`from_aspen`, :code:`from_ebsilon` or :code:`from_tespy`) based on the simulation tool used.
 
@@ -71,47 +71,51 @@ Example:
 
 .. code-block:: python
 
+    >>> import pytest
+    >>> from exerpy.parser.from_ebsilon import __ebsilon_path__
+    >>> if __ebsilon_path__ is None:
+    ...     pytest.skip('Skipping test, ebsilon could not be found')
     >>> from exerpy import ExergyAnalysis
     >>> model_path = 'my_model.ebs'
     >>> ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
 
 The parsing process involves the following key steps:
 
-    1. **Initialization and Simulation**: ExerPy initializes the model by connecting 
-    to the chosen simulation tool. If required, it runs the simulation to ensure all 
+    1. **Initialization and Simulation**: ExerPy initializes the model by connecting
+    to the chosen simulation tool. If required, it runs the simulation to ensure all
     the latest data are available.
 
-    2. **Data Extraction**: Extracts detailed information about components and connections, 
+    2. **Data Extraction**: Extracts detailed information about components and connections,
     including properties like temperature, pressure, mass flow, enthalpy, and entropy.
     All data are converted to SI units for consistency.
 
-    3. **Ambient Conditions**: Retrieves or sets ambient conditions (:code:`Tamb` and :code:`pamb`), 
-    essential for exergy calculations. These can be sourced from the model or specified 
+    3. **Ambient Conditions**: Retrieves or sets ambient conditions (:code:`Tamb` and :code:`pamb`),
+    essential for exergy calculations. These can be sourced from the model or specified
     by the user.
 
-    4. **Physical Exergy Calculation**: Imports or calculates mechanical and thermal exergy values 
-    using the extracted properties. This ensures consistency in fluid property models between 
+    4. **Physical Exergy Calculation**: Imports or calculates mechanical and thermal exergy values
+    using the extracted properties. This ensures consistency in fluid property models between
     the simulation and exergy calculations.
 
-    5. **Chemical Exergy Calculation**: Computes chemical exergy based on material 
-    composition, utilizing the Ahrendts reference environment. 
+    5. **Chemical Exergy Calculation**: Computes chemical exergy based on material
+    composition, utilizing the Ahrendts reference environment.
 
-    6. **Data Storage**: Saves the parsed data and exergy calculations into a JSON 
+    6. **Data Storage**: Saves the parsed data and exergy calculations into a JSON
     file for subsequent analysis.
 
-It is possible to provide a JSON file containing the connection and component data 
-in in the appropriate structure and format. This must include the information regarding the physical 
-exergy values (mechanical and thermal), as ExerPy does not compute them autonomously. 
-In this case, the mehtod :code:`from_json` should be used to load the data. The chemical 
-exergy calculation is subsequently conducted based on this provided data and the 
+It is possible to provide a JSON file containing the connection and component data
+in in the appropriate structure and format. This must include the information regarding the physical
+exergy values (mechanical and thermal), as ExerPy does not compute them autonomously.
+In this case, the mehtod :code:`from_json` should be used to load the data. The chemical
+exergy calculation is subsequently conducted based on this provided data and the
 Ahrendts reference environment.
 
 =======
 Outputs
 =======
 
-The output of this first module is a JSON file containing all the extracted data 
-and calculated exergy values. This file serves as the primary input for the 
+The output of this first module is a JSON file containing all the extracted data
+and calculated exergy values. This file serves as the primary input for the
 exergy analysis module.
 
 ******************
@@ -123,7 +127,7 @@ The exergy analysis module provides tools for evaluating system performance at b
     1. **Exergy Analysis of Components**: Evaluates the exergy destruction and efficiency of individual components within the system.
     2. **Exergy Analysis of the Entire System**: Assesses the overall exergy balance, including the exergy of fuel, product, and losses, to determine system-wide efficiency and irreversibilities.
 
-The method for performing the exergy analysis is `analyse`. This method takes the 
+The method for performing the exergy analysis is `analyse`. This method takes the
 parsed data as input and conducts the component exergy analysis based on the specified parameters.
 
 ======
@@ -142,6 +146,9 @@ Example:
 
 .. code-block:: python
 
+    >>> from exerpy.parser.from_ebsilon import __ebsilon_path__
+    >>> if __ebsilon_path__ is None:
+    ...     pytest.skip('Skipping test, ebsilon could not be found')
     >>> from exerpy import ExergyAnalysis
     >>> model_path = 'my_model.ebs'
     >>> ean = ExergyAnalysis.from_ebsilon(model_path)
@@ -149,7 +156,7 @@ Example:
     >>> fuel = {"inputs": ['1'], "outputs": ['3']}
     >>> product = {"inputs": ['E1'], "outputs": ['E2']}
     >>> loss = {"inputs": ['13'], "outputs": ['11']}
-    
+
     >>> ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 
 =======
@@ -177,7 +184,7 @@ The results include the following key parameters:
     - Exergy efficiency (:code:`ε`) in %
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
-for each component and for the entire system. 
+for each component and for the entire system.
 
 
 **************

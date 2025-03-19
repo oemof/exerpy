@@ -4,6 +4,7 @@ import numpy as np
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 
+
 @component_registry
 class Turbine(Component):
     r"""

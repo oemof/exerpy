@@ -396,14 +396,14 @@ class ExergyAnalysis:
         """
         Displays a table of exergy analysis results with columns for E_F, E_P, E_D, and epsilon for each component,
         and additional information for material and non-material connections.
-        
+
         CycleCloser components are excluded from the component results.
-        
+
         Parameters
         ----------
         print_results : bool, optional
             If True, prints the results as tables in the console (default is True).
-        
+
         Returns
         -------
         tuple of pandas.DataFrame
@@ -712,13 +712,13 @@ class ExergoeconomicAnalysis:
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
-        self.currency = currency  # EUR is default currency for cost calculations	
+        self.currency = currency  # EUR is default currency for cost calculations
 
     def initialize_cost_variables(self):
         """
         Assign unique indices to cost-related variables in the matrix system and build a dictionary
         that maps these indices to variable names.
-        
+
         Material streams (kind "material") get three indices (thermal, mechanical, chemical)
         if chemical exergy is enabled; otherwise, they only get two indices (thermal, mechanical).
         Non-material streams (e.g. "heat", "power") get one index, named as "<connection name>_c_tot".
@@ -786,12 +786,12 @@ class ExergoeconomicAnalysis:
         1) Only consider connections of accepted kinds.
         2) If the connection is an input (i.e. has no source_component) and is not a power connection,
         and no cost is provided in Exe_Eco_Costs, raise a ValueError.
-        3) In all other cases (input connections with a provided cost and connections with a source_component 
+        3) In all other cases (input connections with a provided cost and connections with a source_component
         that have an assigned cost), assign the cost as follows:
         - For material connections, assign c_TOT and also assign cost breakdown (c_T, c_M, c_CH)
             and compute C_TOT as c_TOT * (e_T, e_M, e_CH * m).
         - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
-        
+
         Cost conversions:
         - For components: from currency/h to currency/s (divide by 3600).
         - For connections: from currency/GJ to currency/J (multiply by 1e-9).
@@ -815,7 +815,7 @@ class ExergoeconomicAnalysis:
             # Only consider valid connection types
             if kind not in accepted_kinds:
                 continue
-            
+
             cost_key = f"{conn_name}_c"
 
             # Check if the connection is an input (but also not an output)
@@ -848,7 +848,7 @@ class ExergoeconomicAnalysis:
                     # Ensure energy flow "E" is present before computing cost.
                     if "E" not in conn:
                         raise ValueError(f"Energy flow 'E' is missing for {kind} connection '{conn_name}'.")
-                    
+
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
 
@@ -856,13 +856,13 @@ class ExergoeconomicAnalysis:
     def construct_matrix(self, Tamb):
         """
         Constructs the exergoeconomic cost matrix and vector.
-        
+
         This function sets up two blocks of equations:
         1. For each productive component, the cost balance equation:
             (sum of inlet costs) - (sum of outlet costs) + Z_costs = 0.
         2. For each inlet connection, an equation to fix its cost variable
             to the provided cost (C_TOT or the cost breakdown for material streams).
-        
+
         A connection is treated as an inlet stream if its source_component is either
         missing or not among the system components at all.
         """
@@ -892,7 +892,7 @@ class ExergoeconomicAnalysis:
                         for key, col in conn["CostVar_index"].items():
                             A[counter, col] = -1  # Outgoing costs
                     self.equations[counter] = f"Z_costs_{comp.name}"  # Store the equation name
-            
+
             # For productive components: C_in - C_out = -Z_costs.
             if getattr(comp, "is_dissipative", False):
                 continue
@@ -942,10 +942,10 @@ class ExergoeconomicAnalysis:
                     else:
                         continue
 
-        # 3. Auxiliary equations for the equality of the specific costs 
+        # 3. Auxiliary equations for the equality of the specific costs
         # of all power flows at the input or output of the system.
-        power_conns = [conn for conn in self.connections.values() 
-                    if conn.get("kind") == "power" and 
+        power_conns = [conn for conn in self.connections.values()
+                    if conn.get("kind") == "power" and
                     (conn.get("source_component") not in valid_component_names or conn.get("target_component") not in valid_component_names) and not
                     (conn.get("source_component") not in valid_component_names and conn.get("target_component") not in valid_component_names)]
 
@@ -1043,7 +1043,7 @@ class ExergoeconomicAnalysis:
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
-                    
+
         # Step 4: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
@@ -1081,8 +1081,8 @@ class ExergoeconomicAnalysis:
                 share = loss_cost * (prod_E / total_E)
                 prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
                 prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
-            # The cost of the loss streams are not set to zero to show 
-            # them in the table, but they are attributed to the product streams. 
+            # The cost of the loss streams are not set to zero to show
+            # them in the table, but they are attributed to the product streams.
 
         # Step 6: Compute system-level cost variables using the E_F and E_P dictionaries.
         # Compute total fuel cost (C_F_total) from fuel streams.
@@ -1141,13 +1141,13 @@ class ExergoeconomicAnalysis:
     def exergoeconomic_results(self, print_results=True):
         """
         Generate and (optionally) print tables for the exergoeconomic analysis.
-        
+
         This function first obtains the exergy analysis results tables (for components,
         material connections, and non-material connections) by calling the exergy_results()
         method on the underlying exergy analysis with print_results=False. It then adds new
         columns with the cost data. The cost values are computed internally in [currency/s] and are
         converted to [currency/h] (multiplied by 3600) for display.
-        
+
         For material connections, the following columns are added:
         - C^T [currency/h]
         - C^M [currency/h]
@@ -1156,16 +1156,16 @@ class ExergoeconomicAnalysis:
         For heat/power connections, only the column:
         - C^TOT [currency/h]
         is added.
-        
+
         Returns
         -------
         tuple of pandas.DataFrame
-            (df_component_results, df_material_connection_results_part1, 
+            (df_component_results, df_material_connection_results_part1,
             df_material_connection_results_part2, df_non_material_connection_results)
         """
         # Retrieve the base exergy results without printing them
         df_comp, df_mat, df_non_mat = self.exergy_analysis.exergy_results(print_results=False)
-        
+
         # -------------------------
         # Add new cost columns to the component results table.
         # We assume that each component (except CycleCloser, which is already excluded)
@@ -1174,9 +1174,9 @@ class ExergoeconomicAnalysis:
         C_P_list = []
         C_D_list = []
         Z_cost_list = []
-        r_list = [] 
+        r_list = []
         f_list = []
-        
+
         # Iterate over the component DataFrame rows. The "Component" column contains the key.
         for idx, row in df_comp.iterrows():
             comp_name = row["Component"]
@@ -1204,7 +1204,7 @@ class ExergoeconomicAnalysis:
                 Z_cost_list.append(np.nan)
                 f_list.append(np.nan)
                 r_list.append(np.nan)
-        
+
         # Add the new columns to the component DataFrame.
         df_comp[f"C_F [{self.currency}/h]"] = C_F_list
         df_comp[f"C_P [{self.currency}/h]"] = C_P_list
@@ -1227,9 +1227,9 @@ class ExergoeconomicAnalysis:
         df_comp[f"c_P [{self.currency}/GJ]"] = df_comp[f"C_P [{self.currency}/h]"] / df_comp["E_P [kW]"] * 1e6 / 3600
 
         df_comp.loc["TOT", f"C_D [{self.currency}/h]"] = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"] * df_comp.loc["TOT", f"E_D [kW]"] / 1e6 * 3600
-        df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = df_comp.loc["TOT", f"C_D [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]	
+        df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = df_comp.loc["TOT", f"C_D [{self.currency}/h]"] + df_comp.loc["TOT", f"Z [{self.currency}/h]"]
         df_comp.loc["TOT", f"f [%]"] = df_comp.loc["TOT", f"Z [{self.currency}/h]"] / df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] * 100
-        df_comp.loc["TOT", f"r [%]"] = ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]) / 
+        df_comp.loc["TOT", f"r [%]"] = ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]) /
                                          df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]) * 100
 
         # -------------------------
@@ -1245,7 +1245,7 @@ class ExergoeconomicAnalysis:
         c_M_list = []
         c_CH_list = []
         c_TOT_list = []
-        
+
         for idx, row in df_mat.iterrows():
             conn_name = row['Connection']
             conn_data = self.connections.get(conn_name, {})
@@ -1288,7 +1288,7 @@ class ExergoeconomicAnalysis:
                 c_M_list.append(np.nan)
                 c_CH_list.append(np.nan)
                 c_TOT_list.append(np.nan)
-        
+
         df_mat[f"C^T [{self.currency}/h]"] = C_T_list
         df_mat[f"C^M [{self.currency}/h]"] = C_M_list
         df_mat[f"C^CH [{self.currency}/h]"] = C_CH_list
@@ -1311,7 +1311,7 @@ class ExergoeconomicAnalysis:
             c_TOT = conn_data.get("c_TOT", None)
             c_TOT_non_mat.append(c_TOT * 1e9 if c_TOT is not None else None)
         df_non_mat[f"C^TOT [{self.currency}/h]"] = C_TOT_non_mat
-        df_non_mat[f"c^TOT [GJ/{self.currency}]"] = c_TOT_non_mat        
+        df_non_mat[f"c^TOT [GJ/{self.currency}]"] = c_TOT_non_mat
 
         # -------------------------
         # Split the material connections into two tables according to your specifications.
@@ -1330,7 +1330,7 @@ class ExergoeconomicAnalysis:
             "e^M [kJ/kg]",
             "e^CH [kJ/kg]"
         ]].copy()
-        
+
         # df_mat2: Columns from E onward, plus the uppercase and lowercase cost columns.
         df_mat2 = df_mat[[
             "Connection",
@@ -1353,7 +1353,7 @@ class ExergoeconomicAnalysis:
         df_mat1.dropna(axis=1, how='all', inplace=True)
         df_mat2.dropna(axis=1, how='all', inplace=True)
         df_non_mat.dropna(axis=1, how='all', inplace=True)
-        
+
         # -------------------------
         # Print the four tables if requested.
         # -------------------------
@@ -1366,14 +1366,14 @@ class ExergoeconomicAnalysis:
             print(tabulate(df_mat2.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
             print("\nExergoeconomic Analysis - Non-Material Connection Results:")
             print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
-        
+
         return df_comp, df_mat1, df_mat2, df_non_mat
 
 
 class EconomicAnalysis:
     """
     A class to perform economic analysis of a power plant using the total revenue requirement method.
-    
+
     Attributes
     ----------
     tau : float
@@ -1385,11 +1385,11 @@ class EconomicAnalysis:
     r_n : float
         Nominal escalation rate (yearly based).
     """
-    
+
     def __init__(self, pars):
         """
         Initialize the EconomicAnalysis with plant parameters provided in a dictionary.
-        
+
         Parameters
         ----------
         pars : dict
@@ -1407,27 +1407,27 @@ class EconomicAnalysis:
     def compute_crf(self):
         """
         Compute the Capital Recovery Factor (CRF) using the effective rate of return.
-        
+
         Returns
         -------
         float
             The capital recovery factor.
-        
+
         Notes
         -----
         CRF = i_eff * (1 + i_eff)**n / ((1 + i_eff)**n - 1)
         """
         return self.i_eff * (1 + self.i_eff)**self.n / ((1 + self.i_eff)**self.n - 1)
-    
+
     def compute_celf(self):
         """
         Compute the Cost Escalation Levelization Factor (CELF) for repeating expenditures.
-        
+
         Returns
         -------
         float
             The cost escalation levelization factor.
-        
+
         Notes
         -----
         k = (1 + r_n) / (1 + i_eff)
@@ -1439,35 +1439,35 @@ class EconomicAnalysis:
     def compute_levelized_investment_cost(self, total_PEC):
         """
         Compute the levelized investment cost (annualized investment cost).
-        
+
         Parameters
         ----------
         total_PEC : float
             Total purchasing equipment cost (PEC) across all components.
-        
+
         Returns
         -------
         float
             Levelized investment cost (currency/year).
         """
         return total_PEC * self.compute_crf()
-    
+
     def compute_component_costs(self, PEC_list, OMC_relative):
         """
         Compute the cost rates (in currency per hour) for each component.
-        
-        The operating and maintenance cost (OMC) for each component is 
-        specified as a fraction of its PEC for the first year. The total first-year OMC is 
-        computed by summing the individual OMC values, levelized using CELF, and then 
+
+        The operating and maintenance cost (OMC) for each component is
+        specified as a fraction of its PEC for the first year. The total first-year OMC is
+        computed by summing the individual OMC values, levelized using CELF, and then
         allocated back to each component in proportion to its PEC.
-        
+
         Parameters
         ----------
         PEC_list : list of float
             The purchasing equipment cost (PEC) of each component (in currency).
         OMC_relative : list of float
             For each component, the first-year OM cost as a fraction of its PEC.
-        
+
         Returns
         -------
         tuple of lists of float
@@ -1480,18 +1480,18 @@ class EconomicAnalysis:
         # Levelize total investment cost and allocate proportionally.
         levelized_investment_cost = self.compute_levelized_investment_cost(total_PEC)
         Z_CC = [(levelized_investment_cost * pec / total_PEC) / self.tau for pec in PEC_list]
-        
+
         # Compute first-year OMC for each component as a fraction of PEC.
         first_year_OMC = [frac * pec for frac, pec in zip(OMC_relative, PEC_list)]
         total_first_year_OMC = sum(first_year_OMC)
-        
+
         # Levelize the total operating and maintenance cost.
         celf_value = self.compute_celf()
         levelized_om_cost = total_first_year_OMC * celf_value
-        
+
         # Allocate the levelized OM cost to each component in proportion to its PEC.
         Z_OM = [(levelized_om_cost * pec / total_PEC) / self.tau for pec in PEC_list]
-        
+
         # Total cost rate per component.
         Z_total = [zcc + zom for zcc, zom in zip(Z_CC, Z_OM)]
         return Z_CC, Z_OM, Z_total

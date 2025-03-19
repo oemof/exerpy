@@ -296,17 +296,17 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
 def add_total_exergy_flow(my_json, split_physical_exergy):
     """
     Adds the total exergy flow to each connection in the JSON data based on its kind.
-    
+
     For 'material' connections, the exergy is calculated as before.
     For 'power' connections, the energy flow value is used directly.
     For 'heat' connections, if the associated component is of class SimpleHeatExchanger,
     the thermal exergy difference is computed as:
         E = (e_T_in * m_in) - (e_T_out * m_out)
     Otherwise, a warning is logged and E is set to None.
-    
+
     Parameters:
     - my_json: The JSON object containing the components and connections.
-    
+
     Returns:
     - The modified JSON object with added total exergy flow for each connection.
     """
@@ -314,21 +314,26 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
         try:
             if conn_data['kind'] == 'material':
                 # For material connections: E = m * (e^PH + e^CH)
-                if conn_data.get('e_CH') is not None:
-                    conn_data['E'] = conn_data['m'] * (conn_data['e_PH'] + conn_data['e_CH'])
-                    conn_data['E_CH'] = conn_data['m'] * conn_data['e_CH']
-                else:
-                    conn_data['E'] = conn_data['m'] * conn_data['e_PH']
-                    logging.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
                 conn_data['E_PH'] = conn_data['m'] * conn_data['e_PH']
-                if conn_data.get('e_T') is not None:
-                    conn_data['E_T'] = conn_data['m'] * conn_data['e_T']
+                if conn_data.get('e_CH') is not None:
+                    conn_data['E_CH'] = conn_data['m'] * conn_data['e_CH']
+                    conn_data['E'] = conn_data['E_PH'] + conn_data['E_CH']
                 else:
-                    logging.info(f"Missing thermal exergy for connection {conn_name}.")
-                if conn_data.get('e_M') is not None:
-                    conn_data['E_M'] = conn_data['m'] * conn_data['e_M']
-                else:
-                    logging.info(f"Missing mechanical exergy for connection {conn_name}.")
+                    conn_data['E'] = conn_data['E_PH']
+                    logging.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
+                if split_physical_exergy:
+                    if conn_data.get('e_T') is not None:
+                        conn_data['E_T'] = conn_data['m'] * conn_data['e_T']
+                    else:
+                        msg = f"Missing thermal exergy for connection {conn_name}."
+                        logging.error(msg)
+                        raise KeyError(msg)
+                    if conn_data.get('e_M') is not None:
+                        conn_data['E_M'] = conn_data['m'] * conn_data['e_M']
+                    else:
+                        msg = f"Missing mechanical exergy for connection {conn_name}."
+                        logging.error(msg)
+                        raise KeyError(msg)
             elif conn_data['kind'] == 'power':
                 # For power connections, use the energy flow value directly.
                 conn_data['E'] = conn_data['energy_flow']
@@ -339,10 +344,10 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                 # Check if this component belongs to the SimpleHeatExchanger category.
                 if "SimpleHeatExchanger" in my_json['components'] and comp_name in my_json['components']["SimpleHeatExchanger"]:
                     # Retrieve the inlet material streams: those with this component as target.
-                    inlet_conns = [c for c in my_json['connections'].values() 
+                    inlet_conns = [c for c in my_json['connections'].values()
                                    if c.get('target_component') == comp_name and c.get('kind') == 'material']
                     # Retrieve the outlet material streams: those with this component as source.
-                    outlet_conns = [c for c in my_json['connections'].values() 
+                    outlet_conns = [c for c in my_json['connections'].values()
                                     if c.get('source_component') == comp_name and c.get('kind') == 'material']
                     # Determine which exergy key to use based on the flag.
                     exergy_key = 'e_T' if split_physical_exergy else 'e_PH'
@@ -587,7 +592,7 @@ fluid_property_data = {
     'VM': {
         'text': 'volume flow',
         'SI_unit': 'm3 / s',
-        'units': {'m3 / s': 1, 'l / s': 1e-3, 'l/s': 1e-3, 
+        'units': {'m3 / s': 1, 'l / s': 1e-3, 'l/s': 1e-3,
                   'm³/s': 1, 'l/min': 1 / 60e3, 'l/h': 1 / 3.6e6},
     }
 }

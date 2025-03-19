@@ -262,6 +262,10 @@ def test_parse_component(parser, mock_component):
     assert isinstance(parser.Tamb, (int, float))
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_parse_connection(parser, mock_pipe):
     """
     Test connection parsing functionality.
@@ -301,6 +305,10 @@ def test_parse_connection(parser, mock_pipe):
     assert 'fluid_type' in connection_data
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_get_sorted_data(parser):
     """
     Test data sorting functionality.
@@ -338,6 +346,10 @@ def test_get_sorted_data(parser):
     assert list(sorted_data['connections'].keys()) == ['conn1', 'conn2']
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_write_to_json(parser, tmp_path):
     """
     Test JSON file creation and data persistence.
@@ -372,6 +384,10 @@ def test_write_to_json(parser, tmp_path):
     assert loaded_data == test_data
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 @patch('win32com.client.Dispatch')
 def test_run_ebsilon(mock_dispatch, tmp_path):
     """

@@ -40,13 +40,13 @@ class CombustionChamber(Component):
     The exergy analysis considers the following definitions:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \sum_{out} \dot{m}_{out} \cdot e^\mathrm{T}_{out} 
+        \dot{E}_\mathrm{P} &= \sum_{out} \dot{m}_{out} \cdot e^\mathrm{T}_{out}
         + \sum_{out} \dot{m}_{out} \cdot e^\mathrm{M}_{out}
         - \sum_{in} \dot{m}_{in} \cdot e^\mathrm{T}_{in}
         - \sum_{in} \dot{m}_{in} \cdot e^\mathrm{M}_{in}
 
     .. math::
-        \dot{E}_\mathrm{F} &= \sum_{in} \dot{m}_{in} \cdot e^\mathrm{CH}_{in} 
+        \dot{E}_\mathrm{F} &= \sum_{in} \dot{m}_{in} \cdot e^\mathrm{CH}_{in}
         - \sum_{out} \dot{m}_{out} \cdot e^\mathrm{CH}_{out}
 
     The exergetic efficiency is calculated as:
@@ -71,7 +71,7 @@ class CombustionChamber(Component):
         r"""
         Calculate the exergy balance of the combustion chamber.
 
-        Performs exergy balance calculations considering both physical and chemical 
+        Performs exergy balance calculations considering both physical and chemical
         exergy flows. The exergy product is based on physical exergy differences,
         while the exergy fuel is based on chemical exergy differences.
 
@@ -86,28 +86,28 @@ class CombustionChamber(Component):
         ------
         ValueError
             If the required inlet and outlet streams are not properly defined.
-        """      
+        """
         # Check for necessary inlet and outlet data
         if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 2 or len(self.outl) < 1:
             msg = "CombustionChamber requires at least two inlets (air and fuel) and one outlet (exhaust)."
             logging.error(msg)
             raise ValueError(msg)
-        
+
         # Calculate total physical exergy of outlets
         total_E_P_out = sum(outlet['m'] * outlet['e_PH'] for outlet in self.outl.values())
-        
+
         # Calculate total physical exergy of inlets
         total_E_P_in = sum(inlet['m'] * inlet['e_PH'] for inlet in self.inl.values())
-        
+
         # Exergy Product (E_P)
         self.E_P = total_E_P_out - total_E_P_in
-        
+
         # Calculate total chemical exergy of inlets
         total_E_F_in = sum(inlet['m'] * inlet['e_CH'] for inlet in self.inl.values())
-        
+
         # Calculate total chemical exergy of outlets
         total_E_F_out = sum(outlet['m'] * outlet['e_CH'] for outlet in self.outl.values())
-        
+
         # Exergy Fuel (E_F)
         self.E_F = total_E_F_in - total_E_F_out
 
@@ -128,13 +128,13 @@ class CombustionChamber(Component):
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the combustion chamber.
-        
-        This method adds two rows to the cost matrix A and right-hand side vector b 
+
+        This method adds two rows to the cost matrix A and right-hand side vector b
         to enforce auxiliary cost relations for the mechanical and chemical cost components.
-        
+
         It assumes the component has at least two inlet streams (e.g. air and fuel)
         and one outlet stream.
-        
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -149,7 +149,7 @@ class CombustionChamber(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy is enabled.
-        
+
         Returns
         -------
         A : numpy.ndarray
@@ -169,7 +169,7 @@ class CombustionChamber(Component):
         # Convert inlet and outlet dictionaries to lists for ordered access.
         inlets = list(self.inl.values())
         outlets = list(self.outl.values())
-        
+
         # --- Mechanical cost auxiliary equation ---
         if (outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0):
             A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
@@ -177,8 +177,8 @@ class CombustionChamber(Component):
             A[counter, inlets[1]["CostVar_index"]["M"]] = (1 / inlets[1]["E_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
         else:  # pressure can only decrease in the combustion chamber (case with p_inlet = p0 and p_outlet < p0 NOT considered)
             A[counter, outlets[0]["CostVar_index"]["M"]] = 1
-        equations[counter] = f"aux_mixing_mech_{self.outl[0]["name"]}"
-        
+        equations[counter] = f"aux_mixing_mech_{self.outl[0]['name']}"
+
         # --- Chemical cost auxiliary equation ---
         if (outlets[0]["e_CH"] != 0 and inlets[0]["e_CH"] != 0 and inlets[1]["e_CH"] != 0):
             A[counter+1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["E_CH"]
@@ -188,12 +188,12 @@ class CombustionChamber(Component):
             A[counter+1, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:
             A[counter+1, inlets[1]["CostVar_index"]["CH"]] = 1
-        equations[counter+1] = f"aux_mixing_chem_{self.outl[0]["name"]}"
-        
+        equations[counter+1] = f"aux_mixing_chem_{self.outl[0]['name']}"
+
         # Set the right-hand side entries to zero.
         b[counter]   = 0
         b[counter+1] = 0
-        
+
         return [A, b, counter + 2, equations]
 
     def exergoeconomic_balance(self, T0):

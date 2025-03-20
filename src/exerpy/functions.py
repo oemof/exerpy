@@ -267,26 +267,22 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
     # Iterate over each material connection with kind == 'material'
     for conn_name, conn_data in my_json['connections'].items():
         if conn_data['kind'] == 'material':
-            try:
-                # Prefer molar composition if available, otherwise use mass composition
-                molar_composition = conn_data.get('molar_composition', {})
-                mass_composition = conn_data.get('mass_composition', {})
+            # Prefer molar composition if available, otherwise use mass composition
+            molar_composition = conn_data.get('molar_composition', {})
+            mass_composition = conn_data.get('mass_composition', {})
 
-                # Prepare stream data for exergy calculation, prioritizing molar composition
-                if molar_composition:
-                    stream_data = {'molar_composition': molar_composition}
-                    logging.info(f"Using molar composition for connection {conn_name}")
-                else:
-                    stream_data = {'mass_composition': mass_composition}
-                    logging.info(f"Using mass composition for connection {conn_name}")
+            # Prepare stream data for exergy calculation, prioritizing molar composition
+            if molar_composition:
+                stream_data = {'molar_composition': molar_composition}
+                logging.info(f"Using molar composition for connection {conn_name}")
+            else:
+                stream_data = {'mass_composition': mass_composition}
+                logging.info(f"Using mass composition for connection {conn_name}")
 
-                # Add the chemical exergy value
-                conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
-                conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
-                logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
-
-            except Exception as e:
-                logging.error(f"Error calculating chemical exergy for connection {conn_name}: {e}")
+            # Add the chemical exergy value
+            conn_data['e_CH'] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
+            conn_data['e_CH_unit'] = fluid_property_data['e']['SI_unit']
+            logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
         else:
             logging.info(f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['kind']})")
 

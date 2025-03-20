@@ -2,17 +2,17 @@
 ExerPy: Exergy Analysis in Python
 #################################
 
-ExerPy is a Python library designed to perform detailed exergy analysis of 
-energy conversion systems. It builds on the exergy analysis methodology 
-implemented in TESPy, while extending its capabilities to seamlessly integrate 
-with simulation tools such as Ebsilon Professional, Aspen Plus, and TESPy itself. 
-ExerPy enables engineers and researchers to identify inefficiencies and optimize 
-the performance of thermodynamic systems through automated workflows and 
+ExerPy is a Python library designed to perform detailed exergy analysis of
+energy conversion systems. It builds on the exergy analysis methodology
+implemented in TESPy, while extending its capabilities to seamlessly integrate
+with simulation tools such as Ebsilon Professional, Aspen Plus, and TESPy itself.
+ExerPy enables engineers and researchers to identify inefficiencies and optimize
+the performance of thermodynamic systems through automated workflows and
 consistent data handling.
 
-With its advanced features, ExerPy calculates both physical and chemical exergy, 
-allowing users to analyze both individual components and entire systems. This 
-helps to identify where and why exergy losses occur, facilitating strategies to improve 
+With its advanced features, ExerPy calculates both physical and chemical exergy,
+allowing users to analyze both individual components and entire systems. This
+helps to identify where and why exergy losses occur, facilitating strategies to improve
 efficiency, reduce costs, and support sustainable energy usage.
 
 .. image:: /_static/images/logo_exerpy_big.svg
@@ -75,7 +75,7 @@ For more detailed tutorials and examples, see the :ref:`User Guide <installation
 Citation
 ********
 
-If you use ExerPy in your scientific work, please consider citing it to support 
+If you use ExerPy in your scientific work, please consider citing it to support
 ongoing development. You can cite ExerPy using the following BibTeX entry:
 
 .. code::

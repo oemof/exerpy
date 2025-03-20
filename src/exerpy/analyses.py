@@ -537,6 +537,11 @@ class ExergyAnalysis:
             "pamb": self.pamb,
             "pamb_unit": "Pa"
         }
+        export["settings"] = {
+            "split_physical_exergy": self.split_physical_exergy,
+            "chemExLib": self.chemExLib
+        }
+
         return export
 
 

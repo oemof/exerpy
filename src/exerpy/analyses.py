@@ -10,7 +10,7 @@ import logging
 
 
 class ExergyAnalysis:
-    def __init__(self, component_data, connection_data, Tamb, pamb, chemical_exergy_enabled=False, split_physical_exergy=True) -> None:
+    def __init__(self, component_data, connection_data, Tamb, pamb, chemExLib=None, split_physical_exergy=True) -> None:
         """
         Constructor for ExergyAnalysis. It parses the provided simulation file and prepares it for exergy analysis.
 
@@ -33,7 +33,8 @@ class ExergyAnalysis:
         self.pamb = pamb
         self._component_data = component_data
         self._connection_data = connection_data
-        self.chemical_exergy_enabled = chemical_exergy_enabled
+        self.chemExLib = chemExLib
+        self.chemical_exergy_enabled = self.chemExLib is not None
         self.split_physical_exergy = split_physical_exergy
 
         # Convert the parsed data into components
@@ -195,8 +196,8 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = model.to_exerpy(Tamb, pamb, EXERPY_TESPY_MAPPINGS)
-        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(data, Tamb, pamb, chemExLib, split_physical_exergy)
-        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
+        data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib, split_physical_exergy)
+        return cls(data['components'], data['connections'], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
     def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -229,21 +230,17 @@ class ExergyAnalysis:
 
             # If simulate is set to False, try to load the existing JSON data
             if not simulate:
-                try:
-                    if os.path.exists(output_path):
-                        # Load the previously saved parsed JSON data
-                        with open(output_path, 'r') as json_file:
-                            aspen_data = json.load(json_file)
-                            logging.info(f"Successfully loaded existing Aspen data from {output_path}.")
-                    else:
-                        logging.error(
-                            'Skipping the simulation requires a pre-existing file with the ending "_aspen.json". '
-                            f'File not found at {output_path}.'
-                        )
-                        raise FileNotFoundError(f'File not found: {output_path}')
-                except (FileNotFoundError, json.JSONDecodeError) as e:
-                    logging.error(f"Failed to load or decode existing JSON file: {e}")
-                    raise
+                if os.path.exists(output_path):
+                    # Load the previously saved parsed JSON data
+                    with open(output_path, 'r') as json_file:
+                        aspen_data = json.load(json_file)
+                        logging.info(f"Successfully loaded existing Aspen data from {output_path}.")
+                else:
+                    logging.error(
+                        'Skipping the simulation requires a pre-existing file with the ending "_aspen.json". '
+                        f'File not found at {output_path}.'
+                    )
+                    raise FileNotFoundError(f'File not found: {output_path}')
 
             # If simulation is requested, run the Aspen parser
             else:
@@ -260,33 +257,20 @@ class ExergyAnalysis:
         pamb = aspen_data['ambient_conditions'].get('pamb', pamb)
 
         # Add chemical exergy values
-        chemical_exergy_enabled = chemExLib is not None
-        try:
-            if chemExLib is not None:
-                aspen_data = add_chemical_exergy(aspen_data, Tamb, pamb, chemExLib)
-                logging.info("Chemical exergy values successfully added to the Aspen data.")
-            else:
-                logging.info("Chemical exergy values not added: No chemical exergy library provided.")
-        except Exception as e:
-            logging.error(f"Failed to add chemical exergy values: {e}")
-            raise
+        if chemExLib is not None:
+            aspen_data = add_chemical_exergy(aspen_data, Tamb, pamb, chemExLib)
+            logging.info("Chemical exergy values successfully added to the Aspen data.")
+        else:
+            logging.info("Chemical exergy values not added: No chemical exergy library provided.")
 
         # Calculate the total exergy flow of each component
-        try:
-            aspen_data = add_total_exergy_flow(aspen_data, split_physical_exergy)
-            logging.info("Total exergy flows successfully added to the Aspen data.")
-        except Exception as e:
-            logging.error(f"Failed to add total exergy flows: {e}")
-            raise
+        aspen_data = add_total_exergy_flow(aspen_data, split_physical_exergy)
+        logging.info("Total exergy flows successfully added to the Aspen data.")
 
         # Save the generated JSON data
-        try:
-            with open(output_path, 'w') as json_file:
-                json.dump(aspen_data, json_file, indent=4)
-                logging.info(f"Parsed Aspen model and saved JSON data to {output_path}.")
-        except Exception as e:
-            logging.error(f"Failed to save parsed JSON data: {e}")
-            raise
+        with open(output_path, 'w') as json_file:
+            json.dump(aspen_data, json_file, indent=4)
+            logging.info(f"Parsed Aspen model and saved JSON data to {output_path}.")
 
         # Extract component and connection data
         component_data = aspen_data.get("components", {})
@@ -297,7 +281,7 @@ class ExergyAnalysis:
             logging.error("Component or connection data is missing or improperly formatted.")
             raise ValueError("Parsed Aspen data is missing required components or connections.")
 
-        return cls(component_data, connection_data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
+        return cls(component_data, connection_data, Tamb, pamb, chemExLib, split_physical_exergy)
 
 
     @classmethod
@@ -350,11 +334,11 @@ class ExergyAnalysis:
                 "an Ebsilon (.ebs) file."
             )
 
-        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(
+        data, Tamb, pamb = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy,
             required_component_fields=["name", "type", "type_index"]
         )
-        return cls(data["components"], data["connections"], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
+        return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
     def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -387,10 +371,10 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy = _process_json(
+        data, Tamb, pamb = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )
-        return cls(data['components'], data['connections'], Tamb, pamb, chemical_exergy_enabled, split_physical_exergy)
+        return cls(data['components'], data['connections'], Tamb, pamb, chemExLib, split_physical_exergy)
 
     def exergy_results(self, print_results=True):
         """
@@ -553,6 +537,11 @@ class ExergyAnalysis:
             "pamb": self.pamb,
             "pamb_unit": "Pa"
         }
+        export["settings"] = {
+            "split_physical_exergy": self.split_physical_exergy,
+            "chemExLib": self.chemExLib
+        }
+
         return export
 
 
@@ -629,11 +618,7 @@ def _load_json(json_path):
 
     # Load and validate JSON
     with open(json_path, 'r') as file:
-        try:
-            return json.load(file)
-        except json.JSONDecodeError as e:
-            logging.error(f"Invalid JSON format: {e}")
-            raise
+        return json.load(file)
 
 
 def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, required_component_fields=['name']):
@@ -677,7 +662,6 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exe
             raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
 
     # Add chemical exergy if library provided
-    chemical_exergy_enabled = chemExLib is not None
     if chemExLib:
         data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
         logging.info("Added chemical exergy values")
@@ -688,8 +672,7 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exe
     data = add_total_exergy_flow(data, split_physical_exergy)
     logging.info("Added total exergy flows")
 
-    return data, Tamb, pamb, chemical_exergy_enabled, split_physical_exergy
-
+    return data, Tamb, pamb
 
 
 class ExergoeconomicAnalysis:

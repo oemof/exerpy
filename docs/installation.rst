@@ -46,7 +46,19 @@ Installation of ExerPy
             virtualenv -p /usr/bin/python3 your_env_name
             source your_env_name/bin/activate
 
-      3. In terminal type: :code:`pip install exerpy`
+      3. In the active terminal type
+
+         - if you plan to use json input only
+
+         .. code-block:: console
+
+            pip install exerpy
+
+         - if you plan to use tespy
+
+         .. code-block:: console
+
+            pip install exerpy[tespy]
 
       Warning: If you have an older version of virtualenv you should update pip
       :code:`pip install --upgrade pip`.
@@ -73,7 +85,31 @@ Installation of ExerPy
             conda create -n exerpy-env python=3.12
             activate exerpy-env
 
-      4. In the active prompt type: :code:`pip install exerpy`
+      4. In the active prompt
+
+         - if you plan to use json input only
+
+         .. code-block:: console
+
+            pip install exerpy
+
+         - if you plan to use tespy
+
+         .. code-block:: console
+
+            pip install exerpy[tespy]
+
+         - if you plan to use ebsilon
+
+         .. code-block:: console
+
+            pip install exerpy[ebsilon]
+
+         - if you plan to use aspen
+
+         .. code-block:: console
+
+            pip install exerpy[aspen]
 
    .. tab-item:: Developer Version
 

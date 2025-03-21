@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from CoolProp.CoolProp import PropsSI as CPSI
 
 from tespy.networks import Network
@@ -8,6 +6,7 @@ from tespy.components import (
     DiabaticCombustionChamber, Sink, Source
 )
 from tespy.connections import Connection, Bus
+from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 
 nwk = Network(p_unit='bar', T_unit='C')
@@ -106,26 +105,16 @@ power_output.set_attr(P=-30e6)
 c1.set_attr(m=None)
 
 nwk.solve('design')
+
+# assert convergence of calculation
+nwk._convergence_check()
+
 nwk.print_results()
 
 p0 = 101300
 T0 = 298.15
 
-
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
-
-
 ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib='Ahrendts', split_physical_exergy=False)
-
-# export of the results for validation
-import json
-from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
-
-
-json_export = nwk.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
-with open("examples/cgam/cgam_tespy.json", "w", encoding="utf-8") as f:
-    json.dump(json_export, f, indent=2)
-
 
 fuel = {
     "inputs": ['1', '10'],

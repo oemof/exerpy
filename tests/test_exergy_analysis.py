@@ -11,7 +11,6 @@ import pandas as pd
 import numpy as np
 
 import pytest
-import json
 import os
 import logging
 from exerpy import ExergyAnalysis

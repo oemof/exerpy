@@ -1,5 +1,3 @@
-import pandas as pd
-
 from tespy.components import Compressor
 from tespy.components import Condenser
 from tespy.components import CycleCloser
@@ -18,6 +16,8 @@ from tespy.connections import Bus
 from tespy.connections import Connection
 from tespy.connections import Ref
 from tespy.networks import Network
+
+from exerpy import ExergyAnalysis
 
 
 nw = Network(T_unit="C", p_unit="bar")
@@ -91,6 +91,8 @@ c23 = Connection(drum, "out2", superheater, "in2", label="23")
 nw.add_conns(c9, c0, c0a, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
 
 net_power = Bus("net power")
+# gas turbine and compressor efficiencies are different due to differences
+# in the definition of the efficiency, when using a single-shaft system
 net_power.add_comps(
     {"comp": gasturbine, "base": "component", "char": 0.995},
     {"comp": hp_steam_turbine, "base": "component", "char": 0.985},
@@ -114,24 +116,23 @@ c1.set_attr(
         "N2": 0.75051,
         "O2": 0.22993
     },
-    m=10,
+    m=600,
     p=1.013,
     T=15
 )
 c2.set_attr(p=15.51)
-c3.set_attr(fluid={"CH4": 1}, p=Ref(c2, 1, 0), T=15, m=0.3)
+c3.set_attr(fluid={"CH4": 1}, p=Ref(c2, 1, 0), T=15, m=12)
 c4.set_attr(p=15)
 
 c5.set_attr(p=Ref(c6, 1, 0.007))
 c6.set_attr(p=Ref(c7, 1, 0.007))
-c7.set_attr(p=Ref(c8, 1, 0.007))
+c7.set_attr(p=1.013, T=550)
 c8.set_attr(p=1.013)
 
 compressor.set_attr(eta_s=0.9)
 combustion.set_attr(eta=1)
 gasturbine.set_attr(eta_s=0.92)
 superheater.set_attr()
-evaporator.set_attr(ttd_l=10)
 economizer.set_attr()
 heating_condenser.set_attr(Q=-1e6)
 
@@ -141,10 +142,10 @@ lp_steam_turbine.set_attr(eta_s=0.89)
 feed_pump.set_attr(eta_s=0.8)
 condensate_pump.set_attr(eta_s=0.8)
 
-c9.set_attr(fluid={"water": 1}, p=50, T=505)
-c10.set_attr(p=15)
+c9.set_attr(fluid={"water": 1}, p=50, T=505, m0=80)
+c10.set_attr(p=15, m0=10)
 c10a.set_attr(p=10)
-c13.set_attr(p=0.05)
+c13.set_attr(p=0.05, m0=30)
 c14.set_attr(fluid={"water": 1}, p=1.013, T=15)
 c15.set_attr(p=1.013, T=25)
 c16.set_attr(p=0.05)
@@ -160,6 +161,10 @@ c22c.set_attr(p=Ref(c22b, 1, -0.03), h=Ref(c22b, 1, 100))
 c23.set_attr(p=Ref(c9, 1, 0.05))
 
 nw.solve("design")
+
+evaporator.set_attr(ttd_l=10)
+c7.set_attr(T=None, p=None)
+c7.set_attr(p=Ref(c8, 1, 0.007))
 
 c22c.set_attr(h=None)
 drum_pump.set_attr(eta_s=0.8)
@@ -181,25 +186,15 @@ c1.set_attr(m=None)
 net_power.set_attr(P=-300e6)
 nw.solve("design")
 
+# assert convergence of calculation
+nw._convergence_check()
+
 nw.print_results()
 
 p0 = 101300
 T0 = 288.15
 
-
-from exerpy import ExergyAnalysis
-
-
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
-
-# export of the results for validation
-import json
-from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
-
-
-json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
-with open("examples/ccpp/ccpp_tespy.json", "w", encoding="utf-8") as f:
-    json.dump(json_export, f, indent=2)
 
 fuel = {
     "inputs": ['1', '3'],
@@ -228,4 +223,5 @@ loss = {
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
+ean.export_to_json("examples/ccpp/ccpp_tespy.json")
 df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")

@@ -1,6 +1,7 @@
 from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
 from tespy.connections import Connection, Ref, Bus
 from tespy.networks import Network
+from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 
 nw = Network(T_unit="C", p_unit="bar")
@@ -80,25 +81,16 @@ nw.add_busses(
 )
 
 nw.solve("design")
+
+# assert convergence of calculation
+nw._convergence_check()
+
 nw.print_results()
 
 p0 = 101300
 T0 = 283.15
 
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
-
-
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)    
-
-# export of the results for validation
-import json
-from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
-
-
-json_export = nw.to_exerpy(T0, p0, EXERPY_TESPY_MAPPINGS)
-with open("examples/heatpump/hp_tespy.json", "w", encoding="utf-8") as f:
-    json.dump(json_export, f, indent=2)
-
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
 
 fuel = {
     "inputs": [

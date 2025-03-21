@@ -30,7 +30,6 @@ for directory in directories:
         if file.endswith(".json"):
             examples_json[-1][file.removesuffix(".json")] = os.path.join(directory, file)
 
-
 TESTCASES = [
     {c: example[c] for c in case} for example in examples_json
     for case in combinations(example, 2)
@@ -42,8 +41,6 @@ TESTCASES = [
     )
 def test_validate_simulators_connection_data(testcase, caplog):
     simulator_results = []
-
-    logging.error(testcase)
 
     caplog.set_level(logging.INFO)
     logging.info(f"TESTCASE {'-'.join(testcase)}")
@@ -70,8 +67,12 @@ def test_validate_simulators_connection_data(testcase, caplog):
     else:
         columns.append("e_PH")
 
-    df_sim1 = pd.DataFrame.from_dict(sim1._connection_data, orient="index").sort_index()[columns].dropna(how="all")
-    df_sim2 = pd.DataFrame.from_dict(sim2._connection_data, orient="index").sort_index()[columns].dropna(how="all")
+    df_sim1 = pd.DataFrame.from_dict(
+        sim1._connection_data, orient="index"
+    ).sort_index()[columns].dropna(how="all")
+    df_sim2 = pd.DataFrame.from_dict(
+        sim2._connection_data, orient="index"
+    ).sort_index()[columns].dropna(how="all")
 
     overlapping_index = list(
         set(df_sim1.index.tolist()) & set(df_sim2.index.tolist())
@@ -79,11 +80,12 @@ def test_validate_simulators_connection_data(testcase, caplog):
     df_sim1 = df_sim1.loc[overlapping_index].round(6)
     df_sim2 = df_sim2.loc[overlapping_index].round(6)
 
-    # inf means that sim2 has 0 value, comparison does not make sense there?
-    diff_to_sim2 = ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
-    logging.error(df_sim1)
-    logging.error(df_sim2)
-    logging.error(diff_to_sim2)
+    # inf means that sim2 has 0 value, comparison does not make sense there
+    # and sometimes there seem to be NaN values in the dataframes, those are
+    # removed as well
+    diff_to_sim2 = (
+        (df_sim1 - df_sim2) / df_sim2
+    ).abs().replace(np.inf, 0).fillna(0)
     assert (diff_to_sim2 < 1e-2).all().all()
 
 
@@ -92,19 +94,8 @@ def exergy_analysis():
     """Set up the ExergyAnalysis object using the data from cgam_ebs.json."""
     # Define the path to the JSON file
     file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../examples/cgam/cgam_ebs.json'))
-
-    # Load the JSON data
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-
-    # Extract components, connections, Tamb, and pamb
-    components = data['components']
-    connections = data['connections']
-    Tamb = data['ambient_conditions']['Tamb']
-    pamb = data['ambient_conditions']['pamb']
-
     # Return an initialized ExergyAnalysis object
-    return ExergyAnalysis(components, connections, Tamb, pamb)
+    return ExergyAnalysis.from_json(file_path)
 
 
 def test_exergy_analysis_results(exergy_analysis):

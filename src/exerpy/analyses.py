@@ -200,92 +200,54 @@ class ExergyAnalysis:
         return cls(data['components'], data['connections'], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_aspen(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an instance of the ExergyAnalysis class from an Aspen model file.
 
         Parameters
         ----------
         path : str
-            Path to the Aspen file (.bkp format).
+            Path to the Ebsilon file (.bkp format).
         Tamb : float, optional
             Ambient temperature for analysis, default is None.
         pamb : float, optional
             Ambient pressure for analysis, default is None.
-        simulate : bool, optional
-            If True, run the simulation. If False, load existing data from '_aspen.json' file, default is True.
+        chemExLib : str, optional
+            Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
 
         Returns
         -------
         ExergyAnalysis
-            An instance of the ExergyAnalysis class with parsed Aspen data.
+            An instance of the ExergyAnalysis class with parsed Ebsilon data.
         """
-        from .parser.from_aspen import aspen_parser
+
+        from .parser.from_aspen import aspen_parser as aspen_parser
+
         # Check if the file is an Aspen file
         _, file_extension = os.path.splitext(path)
+
         if file_extension == '.bkp':
-            output_path = path.replace('.bkp', '_aspen.json')
-
-            # If simulate is set to False, try to load the existing JSON data
-            if not simulate:
-                if os.path.exists(output_path):
-                    # Load the previously saved parsed JSON data
-                    with open(output_path, 'r') as json_file:
-                        aspen_data = json.load(json_file)
-                        logging.info(f"Successfully loaded existing Aspen data from {output_path}.")
-                else:
-                    logging.error(
-                        'Skipping the simulation requires a pre-existing file with the ending "_aspen.json". '
-                        f'File not found at {output_path}.'
-                    )
-                    raise FileNotFoundError(f'File not found: {output_path}')
-
-            # If simulation is requested, run the Aspen parser
-            else:
-                logging.info("Running Aspen simulation and generating JSON data.")
-                aspen_data = aspen_parser.run_aspen(path)
-                logging.info("Simulation completed successfully.")
+            logging.info("Running Ebsilon simulation and generating JSON data.")
+            data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy)
+            logging.info("Simulation completed successfully.")
 
         else:
             # If the file format is not supported
-            raise ValueError(f"Unsupported file format: {file_extension}. Please provide an Aspen (.bkp) file.")
+            raise ValueError(
+                f"Unsupported file format: {file_extension}. Please provide "
+                "an Ebsilon (.bkp) file."
+            )
 
-        # Retrieve the ambient conditions from the simulation or use provided values
-        Tamb = aspen_data['ambient_conditions'].get('Tamb', Tamb)
-        pamb = aspen_data['ambient_conditions'].get('pamb', pamb)
-
-        # Add chemical exergy values
-        if chemExLib is not None:
-            aspen_data = add_chemical_exergy(aspen_data, Tamb, pamb, chemExLib)
-            logging.info("Chemical exergy values successfully added to the Aspen data.")
-        else:
-            logging.info("Chemical exergy values not added: No chemical exergy library provided.")
-
-        # Calculate the total exergy flow of each component
-        aspen_data = add_total_exergy_flow(aspen_data, split_physical_exergy)
-        logging.info("Total exergy flows successfully added to the Aspen data.")
-
-        # Save the generated JSON data
-        with open(output_path, 'w') as json_file:
-            json.dump(aspen_data, json_file, indent=4)
-            logging.info(f"Parsed Aspen model and saved JSON data to {output_path}.")
-
-        # Extract component and connection data
-        component_data = aspen_data.get("components", {})
-        connection_data = aspen_data.get("connections", {})
-
-        # Validate that required data is present
-        if not component_data or not connection_data:
-            logging.error("Component or connection data is missing or improperly formatted.")
-            raise ValueError("Parsed Aspen data is missing required components or connections.")
-
-        return cls(component_data, connection_data, Tamb, pamb, chemExLib, split_physical_exergy)
-
-
+        data, Tamb, pamb = _process_json(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy,
+            required_component_fields=["name", "type"]
+        )
+        return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
+    
     @classmethod
-    def from_ebsilon(cls, path, simulate=True, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -297,8 +259,6 @@ class ExergyAnalysis:
             Ambient temperature for analysis, default is None.
         pamb : float, optional
             Ambient pressure for analysis, default is None.
-        simulate : bool, optional
-            If True, run the simulation. If False, load existing data from '_ebs.json' file, default is True.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -309,23 +269,16 @@ class ExergyAnalysis:
         ExergyAnalysis
             An instance of the ExergyAnalysis class with parsed Ebsilon data.
         """
+
         from .parser.from_ebsilon import ebsilon_parser as ebs_parser
+
         # Check if the file is an Ebsilon file
         _, file_extension = os.path.splitext(path)
+
         if file_extension == '.ebs':
-            output_path = path.replace('.ebs', '_ebs.json')
-
-            # If simulate is set to False, try to load the existing JSON data
-            if not simulate:
-                data = _load_json(output_path)
-
-            # If simulation is requested, run the simulation
-            else:
-                logging.info(
-                    "Running Ebsilon simulation and generating JSON data."
-                )
-                data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
-                logging.info("Simulation completed successfully.")
+            logging.info("Running Ebsilon simulation and generating JSON data.")
+            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
+            logging.info("Simulation completed successfully.")
 
         else:
             # If the file format is not supported

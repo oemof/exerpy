@@ -30,3 +30,4 @@ loss = {
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
+ean.export_to_json("examples/cgam/cgam_ebs.json")

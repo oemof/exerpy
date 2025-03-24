@@ -32,16 +32,4 @@ loss = {
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
-
-# TODO
-# Open simulation with InitFromArchive2:
-'''
-import win32com.client as win32
-import json
-
-model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'ccpp.apw'))
-aspen = win32.gencache.EnsureDispatch('Apwn.Document')
-aspen.InitFromArchive2(model_path)
-aspen.Engine.Run2()
-
-print(aspen.Tree.FindNode(r'\Data\Streams').Elements)'''
+ean.export_to_json("examples/ccpp/ccpp_aspen.json")

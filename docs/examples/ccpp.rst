@@ -145,6 +145,8 @@ The import of the exerpy dependency is the same for all simulators:
                 :language: python
                 :end-before: [tespy_model_section_end]
 
+        2. **Set up the exergy analysis instance**
+
         After setting up the model, we set up the :code:`ExergyAnalysis`
         instances using the :code:`from_tespy` method. It takes the
         **converged** :code:`tespy.Network` object along with ambient state and
@@ -158,14 +160,44 @@ The import of the exerpy dependency is the same for all simulators:
             set to :code:`False` because ASPEN cannot handle this, and we wanted to
             cross validate the results of the examples for all three simulators.
 
-        2. **Set up the exergy analysis instance**
-
         .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
             :language: python
             :start-after: [tespy_model_section_end]
             :end-before: [exergy_analysis_setup]
 
         3. **Define the exergy flows crossing the system boundaries**
+
+        For this power plant, the exergetic fuel of the system (:code:`E_F`) is
+        the methane flow (:code:`1`) and air flow (:code:`3`), which are the
+        inputs to the combustion process. The exhaust stream (:code:`8`) and
+        the difference between the exergy values of the outlet (:code:`15`) and
+        the inlet cooling water stream (:code:`14`) represent the exergy losses
+        of the system (:code:`E_L`).
+
+        The product exergy (:code:`E_P`) is particulary complicated for this
+        model. There are two things you have to do in tespy:
+
+        a. Add components that generate or consume heat, which is transferred
+           over the system boundaries and therefore required for the analysis
+           to a :code:`Bus`. The :code:`base` keyword should be
+
+           - :code:`"bus"`, in case the component gains energy and
+           - :code:`"component"` in case it produces energy.
+
+        b. Then, you can use the following label:
+
+          - :code:`generator_of_<COMPONENT-LABEL>__<BUS-LABEL>` for the output
+            from a component to outside the system factoring in the specified
+            bus efficiency, and
+          - :code:`<BUS-LABEL>__motor_of_<COMPONENT-LABEL>` for the input from
+            outside of the system to a component inside also factoring in the
+            specified bus efficiency.
+
+        .. attention::
+
+            This is a drop-in adjustment of the tespy export structure to make
+            tespy compatible to the exerpy API. Expect, that the API will be
+            more SIMPLE in a future release of tespy.
 
         .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
             :language: python

@@ -132,8 +132,6 @@ c8.set_attr(p=1.013)
 compressor.set_attr(eta_s=0.9)
 combustion.set_attr(eta=1)
 gasturbine.set_attr(eta_s=0.92)
-superheater.set_attr()
-economizer.set_attr()
 heating_condenser.set_attr(Q=-1e6)
 
 hp_steam_turbine.set_attr(eta_s=0.93)
@@ -181,21 +179,21 @@ c1.set_attr(m=637.8845562751899)
 
 heating_condenser.set_attr(Q=-100e6)
 
-nw.solve("design")
 c1.set_attr(m=None)
 net_power.set_attr(P=-300e6)
+
 nw.solve("design")
 
 # assert convergence of calculation
 nw._convergence_check()
 
 nw.print_results()
-
+# %%[tespy_model_section_end]
 p0 = 101300
 T0 = 288.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
-
+# %%[exergy_analysis_setup]
 fuel = {
     "inputs": ['1', '3'],
     "outputs": []
@@ -220,8 +218,9 @@ loss = {
     "inputs": ['8', '15'],
     "outputs": ['14']
 }
-
+# %%[exergy_analysis_flows]
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/ccpp/ccpp_tespy.json")
 df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")
+# %%[exergy_analysis_results]

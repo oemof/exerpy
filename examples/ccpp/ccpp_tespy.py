@@ -63,8 +63,8 @@ c8 = Connection(economizer, "out1", flue_gas_out, "in1", label="8")
 nw.add_conns(c1, c2, c3, c4, c5, c6, c7, c8)
 
 c9 = Connection(superheater, "out2", cc, "in1", label="9")
-c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="_0")
-c0a = Connection(hp_steam_turbine, "out1", extraction, "in1", label="_??a")
+c0 = Connection(cc, "out1", hp_steam_turbine, "in1", label="0")
+c101 = Connection(hp_steam_turbine, "out1", extraction, "in1", label="101")
 c10 = Connection(extraction, "out1", dea_steam_valve, "in1", label="10")
 c10a = Connection(dea_steam_valve, "out1", deaerator, "in1", label="10a")
 
@@ -88,7 +88,7 @@ c22b = Connection(drum_pump, "out1", evaporator, "in2", label="22b")
 c22c = Connection(evaporator, "out2", drum, "in2", label="22c")
 c23 = Connection(drum, "out2", superheater, "in2", label="23")
 
-nw.add_conns(c9, c0, c0a, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
+nw.add_conns(c9, c0, c101, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
 
 net_power = Bus("net power")
 # gas turbine and compressor efficiencies are different due to differences

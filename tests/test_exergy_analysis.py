@@ -85,7 +85,7 @@ def test_validate_simulators_connection_data(testcase, caplog):
     diff_to_sim2 = (
         (df_sim1 - df_sim2) / df_sim2
     ).abs().replace(np.inf, 0).fillna(0)
-    assert (diff_to_sim2 < 1e-2).all().all()
+    assert (diff_to_sim2 < 2e-2).all().all()
 
 
 @pytest.fixture

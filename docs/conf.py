@@ -34,7 +34,7 @@ extensions = [
 # master_doc = 'contents'
 # names, years, etc
 project = 'ExerPy'
-year = '2024'
+year = '2025'
 author = 'Sergio Tomasinelli'
 copyright = '{0}, {1}'.format(year, author)
 

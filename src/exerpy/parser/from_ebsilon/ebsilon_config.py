@@ -830,16 +830,18 @@ composition_params = [
 
 # Define the component groups via unique labels
 grouped_components = {
-    "Turbine": [6, 23, 34, 56, 57, 122],
+    "Turbine": [6, 23, 56, 57, 58, 68, 122],
     "HeatExchanger": [10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
     "CombustionChamber": [22, 90],
-    "Valve": [2, 14, 39, 42, 59, 68, 133],
+    "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
     "Condenser": [7, 47, 78],
     "Deaerator": [9, 63],
     "SimpleHeatExchanger": [15, 16, 35],
-    "Mixer": [3, 37, 38, 49, 60, 102, 141, 161],
+    "SteamGenerator": [5],
+    "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
+    "FlashTank" : [34],
     "Splitter": [4, 17, 18, 52, 109, 140, 157],
     "Separator": [19, 99],
     "CycleCloser": [80]
@@ -861,13 +863,23 @@ connector_mapping = {
         2: 0,  # Output 1
         3: 1,  # Output 2
     },
+    5: {  # Steam Geenerator
+        1: 0,  # Feed water inlet (high pressure)
+        2: 0,  # Superheated steam outlet (high pressure)
+        3: 1,  # Steam inlet (intermediate pressure)
+        4: 1,  # Superheated steam outlet (intermediate pressure)
+        5: 2,  # Heat source (counted as outlet!!!) 
+        6: 2,  # Water injection (high pressure)
+        7: 3,  # Water injection (intermediate pressure)
+        8: 3,  # Drain / Blow down outlet
+    },
     6: {  # Steam turbine
-        1: 0,  # Connector 1 in Ebsilon is inlet(0)
-        2: 0,  # Connector 2 in Ebsilon is outlet(0)
-        3: 1,  # Connector 3 in Ebsilon is outlet(1): 1st extraction
-        4: 2,  # Connector 4 in Ebsilon is outlet(2): 2nd extraction
-        5: 3,  # Connector 5 in Ebsilon is outlet(3): shaft power from previous stage
-        6: 4,  # Connector 6 in Ebsilon is outlet(4): shaft power to next stage
+        1: 0,  # Steam inlet
+        2: 0,  # Steam outlet 1
+        3: 1,  # Steam outlet 2
+        4: 2,  # Steam outlet 3
+        5: 1,  # Shaft power inlet (from previous stage)
+        6: 3,  # Shaft power outlet (to next stage)
     },
     7: {  # Condenser
         1: 1,  # Inlet cold stream
@@ -897,6 +909,10 @@ connector_mapping = {
     11: {  # Generator
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    13: {  # Piping
+        1: 0,  # Inlet
+        2: 0,  # Outlet
     },
     14: {  # Control valve
         1: 0,  # Inlet
@@ -956,9 +972,27 @@ connector_mapping = {
         3: 0,  # Inlet hot stream
         4: 0,  # Outlet hot stream
     },
+    28: {  # Tank
+        1: 0,  # Main inlet
+        2: 0,  # Main outlet
+        3: 1,  # Substream inlet 1
+        4: 2,  # Substream inlet 2
+        5: 3,  # Substream inlet 3
+        6: 4,  # Substream inlet 4
+        7: 1,  # Substream outlet 1
+        8: 2,  # Substream outlet 2
+        9: 3,  # Substream outlet 3
+        10: 4,  # Substream outlet 4
+    },
     29: {  # Motor
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    34: {  # Flash box
+        1: 0,  # General inlet 
+        2: 0,  # Vaporous outlet
+        3: 1,  # Liquid outlet
+        4: 1,  # Liquid injection inlet
     },
     35: {  # Heat Consumer / Simple Heat Exchanger
         1: 0,  # Inlet (hot) stream
@@ -970,6 +1004,18 @@ connector_mapping = {
         2: 0,  # Outlet
         3: 1,  # Inlet 2
     },
+    38: {  # Water injection (like Mixer)
+        1: 0,  # Inlet 1
+        2: 0,  # Outlet
+        3: 1,  # Inlet 2
+    },
+    51: {  # High Temperature Heat Exchanger
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        3: 0,  # Inlet hot stream
+        4: 0,  # Outlet hot stream
+        5: 2,  # Second outlet hot stream (if present)
+    },
     55: {  # Universal Heat Exchanger
         1: 1,  # Inlet cold stream
         2: 1,  # Outlet cold stream
@@ -977,12 +1023,11 @@ connector_mapping = {
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet hot stream (if present)
     },
-    51: {  # Universal Heat Exchanger
-        1: 1,  # Inlet cold stream
-        2: 1,  # Outlet cold stream
-        3: 0,  # Inlet hot stream
-        4: 0,  # Outlet hot stream
-        5: 2,  # Second outlet hot stream (if present)
+    58: {  # Governing stage (steam turbine)
+        1: 0,  # Steam inlet 
+        2: 0,  # Steam outlet
+        3: 1,  # Shaft power inlet 
+        4: 1,  # Shaft power outlet
     },
     70: {  # Evaporator
         1: 1,  # Inlet cold stream

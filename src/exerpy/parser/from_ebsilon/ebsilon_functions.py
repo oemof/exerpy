@@ -68,6 +68,10 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
         fd.Medium = pipe.FMED.Value
         fdAnalysis = app.NewFluidAnalysis()
 
+    elif fd.FluidType == 17:  # Salt water
+        fd.Medium = pipe.FMED.Value
+        fdAnalysis = app.NewFluidAnalysis()
+
     else:  # flue gas, air etc.
         fd.GasTable = EpGasTable.epGasTableFromSuperiorModel
 

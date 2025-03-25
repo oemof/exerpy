@@ -147,7 +147,7 @@ class EbsilonModelParser:
         non_energetic_fluids = {5, 6}  # Scheduled, Actual
         power_fluids = {9, 10}  # Electric, Shaft
         logic_fluids = 13  # Logic "fluids" for heat and power flows
-        heat_components = {15, 16, 35}  # Components that handle with heat flows as input or output
+        heat_components = {5, 15, 16, 35}  # Components that handle with heat flows as input or output
         power_components = {31}  # Power-summerized with power flows ONLY as output
 
         # ALL EBSILON CONNECTIONS

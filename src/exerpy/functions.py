@@ -337,11 +337,12 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                 # For heat connections, attempt the new calculation.
                 # Identify the associated component (either source or target)
                 comp_name = conn_data['source_component'] or conn_data['target_component']
-                # Check if this component belongs to the SimpleHeatExchanger category.
-                if "SimpleHeatExchanger" in my_json['components'] and comp_name in my_json['components']["SimpleHeatExchanger"]:
+                # Check if the component is either a SimpleHeatExchanger or a SteamGenerator.
+                if ("SimpleHeatExchanger" in my_json['components'] and 
+                        comp_name in my_json['components']["SimpleHeatExchanger"]):
                     # Retrieve the inlet material streams: those with this component as target.
                     inlet_conns = [c for c in my_json['connections'].values()
-                                   if c.get('target_component') == comp_name and c.get('kind') == 'material']
+                                if c.get('target_component') == comp_name and c.get('kind') == 'material']
                     # Retrieve the outlet material streams: those with this component as source.
                     outlet_conns = [c for c in my_json['connections'].values()
                                     if c.get('source_component') == comp_name and c.get('kind') == 'material']
@@ -357,10 +358,39 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                     else:
                         conn_data['E'] = None
                         logging.warning(f"Not enough material connections for heat exchanger {comp_name} for heat exergy calculation.")
+                elif ("SteamGenerator" in my_json['components'] and 
+                    comp_name in my_json['components']["SteamGenerator"]):
+                    # Retrieve material connections for the steam generator.
+                    inlet_conns = [c for c in my_json['connections'].values()
+                                if c.get('target_component') == comp_name and c.get('kind') == 'material']
+                    outlet_conns = [c for c in my_json['connections'].values()
+                                    if c.get('source_component') == comp_name and c.get('kind') == 'material']
+                    if inlet_conns and outlet_conns:
+                        # For the steam generator, group the material connections as follows:
+                        feed_water   = inlet_conns[0]                      # inl[0]: Feed water inlet (HP)
+                        steam_inlet  = inlet_conns[1] if len(inlet_conns) > 1 else {}  # inl[1]: Steam inlet (IP)
+                        superheated_HP = outlet_conns[0]                    # outl[0]: Superheated steam outlet (HP)
+                        superheated_IP = outlet_conns[1] if len(outlet_conns) > 1 else {}  # outl[1]: Superheated steam outlet (IP)
+                        water_inj_HP = inlet_conns[2] if len(inlet_conns) > 2 else {}  # inl[2]: Water injection (HP)
+                        water_inj_IP = inlet_conns[3] if len(inlet_conns) > 3 else {}  # inl[3]: Water injection (IP)
 
+                        exergy_type = 'e_T' if split_physical_exergy else 'e_PH'
+                        # Calculate the contributions based on the new E_F definition:
+                        E_F_HP = superheated_HP.get('m', 0) * superheated_HP.get(exergy_type, 0) - \
+                                feed_water.get('m', 0) * feed_water.get(exergy_type, 0)
+                        E_F_IP = (superheated_IP.get('m', 0) * superheated_IP.get(exergy_type, 0) -
+                                steam_inlet.get('m', 0) * steam_inlet.get(exergy_type, 0))
+                        E_F_w_inj = (water_inj_HP.get('m', 0) * water_inj_HP.get(exergy_type, 0) +
+                                    water_inj_IP.get('m', 0) * water_inj_IP.get(exergy_type, 0))
+                        # Total exergy flow for the heat input (E_TOT) is taken as the exergy fuel E_F:
+                        E_TOT = E_F_HP + E_F_IP - E_F_w_inj
+                        conn_data['E'] = E_TOT
+                    else:
+                        conn_data['E'] = None
+                        logging.warning(f"Not enough material connections for steam generator {comp_name} for heat exergy calculation.")
                 else:
                     conn_data['E'] = None
-                    logging.warning(f"Heat connection {conn_name} is not associated with a SimpleHeatExchanger component.")
+                    logging.warning(f"Heat connection {conn_name} is not associated with a recognized heat exchanger component.")
             elif conn_data['kind'] == 'other':
                 # No exergy flow calculation for 'other' kind.
                 pass

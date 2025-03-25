@@ -11,9 +11,9 @@ class Mixer(Component):
     Class for exergy analysis of mixers.
 
     This class performs exergy analysis calculations for mixers with multiple
-    inlet streams and one outlet stream. The exergy product and fuel definitions
-    vary based on the temperature relationships between inlet streams, outlet
-    stream, and ambient conditions.
+    inlet streams and generally one outlet stream (multiple outlets are possible). 
+    The exergy product and fuel definitions vary based on the temperature 
+    relationships between inlet streams, outlet streams, and ambient conditions.
 
     Parameters
     ----------
@@ -101,7 +101,7 @@ class Mixer(Component):
         Calculate the exergy balance of the mixer.
 
         Performs exergy balance calculations considering the temperature relationships
-        between inlet streams, outlet stream, and ambient conditions.
+        between inlet streams, outlet stream(s), and ambient conditions.
 
         Parameters
         ----------
@@ -117,53 +117,72 @@ class Mixer(Component):
         ValueError
             If the required inlet and outlet streams are not properly defined.
         """
-        # Ensure that the component has both inlet and outlet streams
+        # Ensure that the component has at least two inlets and one outlet.
         if len(self.inl) < 2 or len(self.outl) < 1:
             raise ValueError("Mixer requires at least two inlets and one outlet.")
-
+        
+        # Compute effective outlet state by aggregating all outlet streams.
+        # Assume that all outlets share the same thermodynamic state.
+        outlet_list = list(self.outl.values())
+        first_outlet = outlet_list[0]
+        T_out = first_outlet['T']
+        e_out_PH = first_outlet['e_PH']
+        # Verify that all outlets have the same thermodynamic state.
+        for outlet in outlet_list:
+            if outlet['T'] != T_out or outlet['e_PH'] != e_out_PH:
+                msg = "All outlets in Mixer must have the same thermodynamic state."
+                logging.error(msg)
+                raise ValueError(msg)
+        # Sum the mass of all outlet streams (if needed for further analysis)
+        m_out_total = sum(outlet.get('m', 0) for outlet in outlet_list)
+        
+        # Initialize exergy product and fuel.
         self.E_P = 0
         self.E_F = 0
 
-        # Case 1: Outlet temperature is greater than T0
-        if self.outl[0]['T'] > T0:
+        # Case 1: Outlet temperature is greater than ambient.
+        if T_out > T0:
             for _, inlet in self.inl.items():
-                if inlet['T'] < self.outl[0]['T']:  # Tin < Tout
-                    if inlet['T'] >= T0:  # and Tin >= T0
-                        self.E_P += inlet['m'] * (self.outl[0]['e_PH'] - inlet['e_PH'])
-                    else:  # and Tin < T0
-                        self.E_P += inlet['m'] * self.outl[0]['e_PH']
+                # Case when inlet temperature is lower than outlet temperature.
+                if inlet['T'] < T_out:
+                    if inlet['T'] >= T0:
+                        # Contribution to exergy product from inlets above ambient.
+                        self.E_P += inlet['m'] * (e_out_PH - inlet['e_PH'])
+                    else:  # inlet['T'] < T0
+                        self.E_P += inlet['m'] * e_out_PH
                         self.E_F += inlet['m'] * inlet['e_PH']
-                else:  # Tin > Tout
-                    self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
-
-        # Case 2: Outlet temperature is equal to T0
-        elif self.outl[0]['T'] == T0:
+                else:  # inlet['T'] > T_out
+                    self.E_F += inlet['m'] * (inlet['e_PH'] - e_out_PH)
+        
+        # Case 2: Outlet temperature equals ambient.
+        elif T_out == T0:
             self.E_P = np.nan
             for _, inlet in self.inl.items():
                 self.E_F += inlet['m'] * inlet['e_PH']
-
-        # Case 3: Outlet temperature is less than T0
-        else:
+        
+        # Case 3: Outlet temperature is less than ambient.
+        else:  # T_out < T0
             for _, inlet in self.inl.items():
-                if inlet['T'] > self.outl[0]['T']:  # Tin > Tout
-                    if inlet['T'] >= T0:  # and Tin >= T0
-                        self.E_P += inlet['m'] * self.outl[0]['e_PH']
+                if inlet['T'] > T_out:
+                    if inlet['T'] >= T0:
+                        self.E_P += inlet['m'] * e_out_PH
                         self.E_F += inlet['m'] * inlet['e_PH']
-                    else:  # and Tin < T0
-                        self.E_P += inlet['m'] * (self.outl[0]['e_PH'] - inlet['e_PH'])
-                else:  # Tin < Tout
-                    self.E_F += inlet['m'] * (inlet['e_PH'] - self.outl[0]['e_PH'])
-
-        # Calculate exergy destruction and efficiency
+                    else:  # inlet['T'] < T0
+                        self.E_P += inlet['m'] * (e_out_PH - inlet['e_PH'])
+                else:  # inlet['T'] <= T_out
+                    self.E_F += inlet['m'] * (inlet['e_PH'] - e_out_PH)
+        
+        # Calculate exergy destruction and efficiency.
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
-
-        # Log the results
+        
+        # Log the results.
         logging.info(
             f"Mixer exergy balance calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
-        )
+    )
+
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):

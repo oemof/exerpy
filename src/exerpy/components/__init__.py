@@ -5,10 +5,12 @@ from .heat_exchanger.simple import SimpleHeatExchanger
 from .helpers.cycle_closer import CycleCloser
 from .nodes.deaerator import Deaerator
 from .nodes.drum import Drum
+from .nodes.flash_tank import FlashTank
 from .nodes.mixer import Mixer
 from .piping.valve import Valve
 from .power_machines.generator import Generator
 from .power_machines.motor import Motor
+from .heat_exchanger.steam_generator import SteamGenerator
 from .turbomachinery.turbine import Turbine
 from .turbomachinery.compressor import Compressor
 from .turbomachinery.pump import Pump

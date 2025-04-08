@@ -29,10 +29,9 @@ Examples
       :alt: Combined Cycle Power Plant flowsheet
       :class: only-dark
 
-    SHORT INTROTEXT??
-
+    Combined cycle power plant that integrates gas and steam turbine cycles to 
+    produce 300 MW of net electrical power and 100 MW of thermal power. 
     +++
-    Reference: :cite:`Fritz2024`
 
 .. card::
     :link: examples_heatpump_label
@@ -51,10 +50,9 @@ Examples
       :alt: Heatpump flowsheet
       :class: only-dark
 
-    SHORT INTROTEXT??
+    High-temperature air source heat pump that heats compressed water from 70 °C to 120 °C.
 
     +++
-    Reference: :cite:`Fritz2024`
 
 .. card::
     :link: examples_cgam_label
@@ -73,7 +71,7 @@ Examples
       :alt: CGAM flowsheet
       :class: only-dark
 
-    SHORT INTROTEXT??
+    CGAM Process.
 
     +++
-    Reference: :cite:`Fritz2024`
+    Reference: :cite:`Valero1994`

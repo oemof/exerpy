@@ -1,17 +1,24 @@
 import logging
+from typing import Optional, Any, Union
 
 from CoolProp.CoolProp import PropsSI as CP
 
-from . import __ebsilon_path__
+from . import __ebsilon_available__
+from .utils import require_ebsilon, EpSteamTableStub, EpGasTableStub
 
-if __ebsilon_path__ is not None:
+# Import Ebsilon classes if available
+if __ebsilon_available__:
     from EbsOpen import EpSteamTable, EpGasTable
+else:
+    EpSteamTable = EpSteamTableStub
+    EpGasTable = EpGasTableStub
 
 from exerpy.functions import convert_to_SI
 from .ebsilon_config import unit_id_to_string, substance_mapping
 
 
-def calc_X_from_PT(app, pipe, property, pressure, temperature):
+@require_ebsilon
+def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperature: float) -> Optional[float]:
     """
     Calculate a thermodynamic property (enthalpy or entropy) for a given stream based on pressure and temperature.
 
@@ -108,8 +115,29 @@ def calc_X_from_PT(app, pipe, property, pressure, temperature):
         return None
 
 
-
-def calc_eT(app, pipe, pressure, Tamb, pamb):
+@require_ebsilon
+def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
+    """
+    Calculate the thermal component of physical exergy.
+    
+    Parameters
+    ----------
+    app : Ebsilon application instance
+        The Ebsilon application instance.
+    pipe : Stream object
+        The stream object containing thermodynamic properties.
+    pressure : float
+        The pressure value (in bar).
+    Tamb : float
+        The ambient temperature (in K).
+    pamb : float
+        The ambient pressure (in Pa).
+        
+    Returns
+    -------
+    float
+        The thermal exergy component (in J/kg).
+    """
     h_i = convert_to_SI('h', pipe.H.Value, unit_id_to_string.get(pipe.H.Dimension, "Unknown"))  # in SI unit [J / kg]
     s_i = convert_to_SI('s', pipe.S.Value, unit_id_to_string.get(pipe.S.Dimension, "Unknown"))  # in SI unit [J / kgK]
     h_A = calc_X_from_PT(app, pipe, 'H', pressure, Tamb)  # in SI unit [J / kg]
@@ -118,7 +146,30 @@ def calc_eT(app, pipe, pressure, Tamb, pamb):
 
     return eT
 
-def calc_eM(app, pipe, pressure, Tamb, pamb):
+
+@require_ebsilon
+def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
+    """
+    Calculate the mechanical component of physical exergy.
+    
+    Parameters
+    ----------
+    app : Ebsilon application instance
+        The Ebsilon application instance.
+    pipe : Stream object
+        The stream object containing thermodynamic properties.
+    pressure : float
+        The pressure value (in bar).
+    Tamb : float
+        The ambient temperature (in K).
+    pamb : float
+        The ambient pressure (in Pa).
+        
+    Returns
+    -------
+    float
+        The mechanical exergy component (in J/kg).
+    """
     eM = convert_to_SI('e', pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(app, pipe, pressure, Tamb, pamb)
 
     return eM

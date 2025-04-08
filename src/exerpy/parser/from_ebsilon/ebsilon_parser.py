@@ -7,16 +7,21 @@ simulate them, extract data about components and connections, and write the data
 import os
 import logging
 import json
-
+from typing import Dict, Any, Optional, Union
 
 from exerpy.functions import convert_to_SI, fluid_property_data
-from . import __ebsilon_path__
+from . import __ebsilon_available__, is_ebsilon_available
+from .utils import require_ebsilon, EpFluidTypeStub, EpSteamTableStub, EpGasTableStub, EpCalculationResultStatus2Stub
 
-
-if __ebsilon_path__ is not None:
+# Import Ebsilon classes if available
+if __ebsilon_available__:
     from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
     from win32com.client import Dispatch
-
+else:
+    EpFluidType = EpFluidTypeStub
+    EpSteamTable = EpSteamTableStub
+    EpGasTable = EpGasTableStub
+    EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
 
 from .ebsilon_config import (
     ebs_objects,
@@ -38,29 +43,47 @@ class EbsilonModelParser:
     """
     A class to parse Ebsilon models, simulate them, extract data, and write to JSON.
     """
-    def __init__(self, model_path, split_physical_exergy=True):
+    def __init__(self, model_path: str, split_physical_exergy: bool = True):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Ebsilon model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+            
+        Raises:
+            RuntimeError: If Ebsilon is not available but is required for parsing.
         """
-        # check here if ebsilon dependencies are available, raise error if not
+        # Check if Ebsilon is available
+        if not is_ebsilon_available():
+            logging.warning(
+                "EbsilonModelParser initialized without Ebsilon support. "
+                "EBS environment variable is not set or EbsOpen could not be imported; "
+                "Ebsilon functionality will not be available."
+            )
+            # Raise an error since this parser specifically requires Ebsilon
+            raise RuntimeError(
+                "EbsilonModelParser requires Ebsilon to be available. "
+                "Please set the EBS environment variable to your Ebsilon installation path."
+            )
 
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model
         self.oc = None  # ObjectCaster for type casting
-        self.components_data = {}  # Dictionary to store component data
-        self.connections_data = {}  # Dictionary to store connection data
-        self.Tamb = None  # Ambient temperature
-        self.pamb = None  # Ambient pressure
+        self.components_data: Dict[str, Dict[str, Dict[str, Any]]] = {}  # Dictionary to store component data
+        self.connections_data: Dict[str, Dict[str, Any]] = {}  # Dictionary to store connection data
+        self.Tamb: Optional[float] = None  # Ambient temperature
+        self.pamb: Optional[float] = None  # Ambient pressure
 
+    @require_ebsilon
     def initialize_model(self):
         """
         Initializes the Ebsilon application and opens the specified model.
+        
+        Raises:
+            Exception: If model initialization fails.
         """
         try:
             # Start Ebsilon application via COM Dispatch
@@ -74,9 +97,13 @@ class EbsilonModelParser:
             logging.error(f"Failed to initialize the model: {e}")
             raise
 
+    @require_ebsilon
     def simulate_model(self):
         """
         Simulates the Ebsilon model and logs any calculation errors.
+        
+        Raises:
+            Exception: If model simulation fails.
         """
         try:
             # Prepare to collect calculation errors
@@ -94,9 +121,14 @@ class EbsilonModelParser:
             logging.error(f"Failed during simulation: {e}")
             raise
 
+    @require_ebsilon
     def parse_model(self):
         """
         Parses all objects in the Ebsilon model to extract component and connection data.
+        
+        Raises:
+            ValueError: If ambient conditions are not set.
+            Exception: If model parsing fails.
         """
         try:
             total_objects = self.model.Objects.Count
@@ -130,7 +162,8 @@ class EbsilonModelParser:
             raise
 
 
-    def parse_connection(self, obj):
+    @require_ebsilon
+    def parse_connection(self, obj: Any):
         """
         Parses the connections (pipes) associated with a component.
 
@@ -335,7 +368,8 @@ class EbsilonModelParser:
             logging.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
 
 
-    def parse_component(self, obj):
+    @require_ebsilon
+    def parse_component(self, obj: Any):
         """
         Parses data from a component, including its type and various properties.
 
@@ -468,7 +502,7 @@ class EbsilonModelParser:
                 logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
 
-    def get_sorted_data(self):
+    def get_sorted_data(self) -> Dict[str, Any]:
         """
         Sorts the component and connection data alphabetically by name.
 
@@ -495,12 +529,15 @@ class EbsilonModelParser:
         }
 
 
-    def write_to_json(self, output_path):
+    def write_to_json(self, output_path: str):
         """
         Writes the parsed and sorted data to a JSON file.
 
         Parameters:
             output_path (str): Path where the JSON file will be saved.
+            
+        Raises:
+            Exception: If writing to JSON fails.
         """
         data = self.get_sorted_data()
         try:
@@ -513,7 +550,7 @@ class EbsilonModelParser:
             raise
 
 
-def run_ebsilon(model_path, output_dir=None, split_physical_exergy=True):
+def run_ebsilon(model_path: str, output_dir: Optional[str] = None, split_physical_exergy: bool = True) -> Dict[str, Any]:
     """
     Main function to process the Ebsilon model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -530,6 +567,12 @@ def run_ebsilon(model_path, output_dir=None, split_physical_exergy=True):
         FileNotFoundError: If the model file is not found at the specified path.
         RuntimeError: For any error during model initialization, simulation, parsing, or writing.
     """
+    # Check if Ebsilon is available
+    if not is_ebsilon_available():
+        raise RuntimeError(
+            "Ebsilon functionality is required for running this function. "
+            "Please set the EBS environment variable to your Ebsilon installation path."
+        )
 
     # Check if the model file exists at the specified path
     if not os.path.exists(model_path):
@@ -538,7 +581,12 @@ def run_ebsilon(model_path, output_dir=None, split_physical_exergy=True):
         raise FileNotFoundError(error_msg)
 
     # Initialize the Ebsilon model parser with the model file path
-    parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
+    try:
+        parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
+    except RuntimeError as e:
+        # This will catch the RuntimeError raised in __init__ if Ebsilon is not available
+        logging.error(f"Failed to initialize EbsilonModelParser: {e}")
+        raise
 
     try:
         # Initialize the Ebsilon model within the parser

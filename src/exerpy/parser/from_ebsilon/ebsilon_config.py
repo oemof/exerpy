@@ -5,13 +5,14 @@ This script contains the configuration data used by the Ebsilon model parser,
 including lists of component types, fluid types, fluid composition parameters,
 and groups for sorting components into functional categories.
 """
-from . import __ebsilon_path__
+from . import __ebsilon_available__
+from .utils import EpSubstanceStub
 
-
-if __ebsilon_path__ is not None:
+# Import actual Ebsilon classes if available, otherwise use stubs
+if __ebsilon_available__:
     from EbsOpen import EpSubstance
 else:
-    EpSubstance = None
+    EpSubstance = EpSubstanceStub
 
 # Dictionary mapping Ebsilon component numbers to their label
 ebs_objects = {
@@ -271,7 +272,7 @@ connection_kinds = {
 
 # Dictionary mapping stream substance names to EpSubstance identifiers
 substance_mapping = {}
-if EpSubstance is not None:
+if __ebsilon_available__:
     substance_mapping = {
         "XN2": EpSubstance.epSubstanceN2,
         "XO2": EpSubstance.epSubstanceO2,

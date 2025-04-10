@@ -30,15 +30,15 @@ ExerPy supports parsing models from different simulation tools to extract and pr
       - License type
       - Supported version
       - Operating system
-    * - `Ebsilon Professional <https://www.ebsilon.com/de/>`_
+    * - `Ebsilon Professional <https://www.ebsilon.com/en/>`_
       - A comprehensive tool for simulating and analyzing energy systems, particularly in the field of power plant engineering.
       - Commercial
-      - 17.0
+      - 17.02
       - Windows
     * - `Aspen Plus <https://www.aspentech.com/en/products/engineering/aspen-plus>`_
       - A powerful process simulation software used for designing and optimizing chemical processes.
       - Commercial
-      - 12.1
+      - 14.5
       - Windows
     * - `TESPy <https://tespy.readthedocs.io/en/main/>`_
       - A versatile Python package for simulating thermal energy systems.

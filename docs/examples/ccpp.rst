@@ -8,8 +8,8 @@ This tutorial demonstrates how to perform an exergy analysis of a combined
 cycle power plant using ExerPy. The analysis is carried out with:
 
 - Ebsilon
-- tespy
 - Aspen Plus
+- tespy
 
 The flowsheet of the system is shown below.
 

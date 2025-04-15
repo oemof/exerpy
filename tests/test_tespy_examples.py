@@ -1,8 +1,8 @@
 import os
-import runpy
-import pytest
 import pathlib
+import runpy
 
+import pytest
 
 path = os.path.join(os.path.dirname(__file__), "..", "examples")
 examples = pathlib.Path(path).glob('**/*tespy.py')

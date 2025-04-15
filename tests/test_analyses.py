@@ -6,15 +6,21 @@ including component construction, connection handling, and exergy calculations u
 in-memory and mock data. These tests run quickly and are independent of external files.
 """
 
-import pytest
-import pandas as pd
-import numpy as np
 import json
 import os
-from exerpy.analyses import ExergyAnalysis, _construct_components, _load_json
-from exerpy.components.component import Component, component_registry
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from exerpy.analyses import ExergyAnalysis
+from exerpy.analyses import _construct_components
+from exerpy.analyses import _load_json
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+
 
 # Basic component classes for testing
 @component_registry

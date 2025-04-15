@@ -1,12 +1,15 @@
+import json
+import logging
+import os
+
 import numpy as np
 import pandas as pd
-import json
 from tabulate import tabulate
+
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
-from .functions import add_chemical_exergy, add_total_exergy_flow
-import os
-import logging
+from .functions import add_chemical_exergy
+from .functions import add_total_exergy_flow
 
 
 class ExergyAnalysis:
@@ -182,6 +185,7 @@ class ExergyAnalysis:
         """
         from tespy.networks import Network
         from tespy.networks import load_network
+
         from .parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
         if isinstance(model, str):

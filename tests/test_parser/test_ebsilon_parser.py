@@ -12,11 +12,16 @@ The test suite verifies:
 - Data sorting and JSON export functionality
 """
 
-import pytest
-from unittest.mock import Mock, patch
 import json
-from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser, run_ebsilon
+from unittest.mock import Mock
+from unittest.mock import patch
+
+import pytest
+
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
+from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
+
 
 class MockEpFluidType:
     """Mock class simulating Ebsilon's EpFluidType enumeration."""

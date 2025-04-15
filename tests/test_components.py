@@ -5,8 +5,9 @@ This file contains tests for CombustionChamber, HeatExchanger, and other compone
 The tests verify that each component computes exergy balances correctly and handles errors appropriately.
 """
 
-import pytest
 import numpy as np
+import pytest
+
 from exerpy.components.combustion.base import CombustionChamber
 from exerpy.components.heat_exchanger.base import HeatExchanger
 from exerpy.components.heat_exchanger.condenser import Condenser

@@ -4,12 +4,14 @@ Utilities to check Ebsilon installation.
 This module provides functions to check the Ebsilon installation
 and validate the EBS environment variable.
 """
+import logging
 import os
 import sys
-import logging
-from typing import Tuple, Optional
+from typing import Optional
+from typing import Tuple
 
-from exerpy.parser.from_ebsilon import __ebsilon_path__, __ebsilon_available__
+from exerpy.parser.from_ebsilon import __ebsilon_available__
+from exerpy.parser.from_ebsilon import __ebsilon_path__
 
 
 def check_ebsilon_installation() -> Tuple[bool, Optional[str]]:

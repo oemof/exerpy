@@ -1,20 +1,26 @@
 import logging
-from typing import Optional, Any, Union
+from typing import Any
+from typing import Optional
 
 from CoolProp.CoolProp import PropsSI as CP
 
 from . import __ebsilon_available__
-from .utils import require_ebsilon, EpSteamTableStub, EpGasTableStub
+from .utils import EpGasTableStub
+from .utils import EpSteamTableStub
+from .utils import require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpSteamTable, EpGasTable
+    from EbsOpen import EpGasTable
+    from EbsOpen import EpSteamTable
 else:
     EpSteamTable = EpSteamTableStub
     EpGasTable = EpGasTableStub
 
 from exerpy.functions import convert_to_SI
-from .ebsilon_config import unit_id_to_string, substance_mapping
+
+from .ebsilon_config import substance_mapping
+from .ebsilon_config import unit_id_to_string
 
 
 @require_ebsilon
@@ -119,7 +125,7 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
 def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
     """
     Calculate the thermal component of physical exergy.
-    
+
     Parameters
     ----------
     app : Ebsilon application instance
@@ -132,7 +138,7 @@ def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
         The ambient temperature (in K).
     pamb : float
         The ambient pressure (in Pa).
-        
+
     Returns
     -------
     float
@@ -151,7 +157,7 @@ def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
 def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
     """
     Calculate the mechanical component of physical exergy.
-    
+
     Parameters
     ----------
     app : Ebsilon application instance
@@ -164,7 +170,7 @@ def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
         The ambient temperature (in K).
     pamb : float
         The ambient pressure (in Pa).
-        
+
     Returns
     -------
     float

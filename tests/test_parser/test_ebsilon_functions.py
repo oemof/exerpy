@@ -8,11 +8,17 @@ fluid types, error handling, and exergy computations.
 The test suite uses pytest fixtures to provide mock objects that simulate
 the behavior of the Ebsilon application and its components.
 """
+from unittest.mock import Mock
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
-from exerpy.parser.from_ebsilon.ebsilon_functions import calc_X_from_PT, calc_eT, calc_eM
-from exerpy.parser.from_ebsilon.ebsilon_config import substance_mapping
+
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+from exerpy.parser.from_ebsilon.ebsilon_config import substance_mapping
+from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eM
+from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eT
+from exerpy.parser.from_ebsilon.ebsilon_functions import calc_X_from_PT
+
 
 @pytest.fixture
 def mock_app():

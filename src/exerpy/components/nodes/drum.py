@@ -5,6 +5,7 @@ import numpy as np
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 
+
 @component_registry
 class Drum(Component):
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:

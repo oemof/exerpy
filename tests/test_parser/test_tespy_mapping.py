@@ -1,5 +1,6 @@
-from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 from exerpy.components.component import component_registry
+from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
+
 
 def test_tespy_component_mapping_targets_in_exerpy_components():
     """Test if all mapping targets for tespy are valid exerpy components"""

@@ -3,6 +3,7 @@ import logging
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 
+
 @component_registry
 class Motor(Component):
     r"""

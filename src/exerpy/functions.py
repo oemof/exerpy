@@ -1,10 +1,13 @@
-import CoolProp.CoolProp as CP
-import math
 import json
+import logging
+import math
 import os
 import sys
-import logging
+
+import CoolProp.CoolProp as CP
+
 from exerpy import __datapath__
+
 
 def mass_to_molar_fractions(mass_fractions):
     """

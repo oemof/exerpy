@@ -6,16 +6,16 @@ by loading real example files (e.g., cgam_ebs.json) and ensuring that the analys
 expected results. These tests check the integration of file loading, parsing, and calculation.
 """
 
-from itertools import combinations
-import pandas as pd
-import numpy as np
-
-import pytest
-import os
 import logging
+import os
+from itertools import combinations
+
+import numpy as np
+import pandas as pd
+import pytest
+
 from exerpy import ExergyAnalysis
 from exerpy.analyses import _load_json
-
 
 _basepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../examples/")
 directories = [

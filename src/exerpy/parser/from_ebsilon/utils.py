@@ -1,5 +1,8 @@
 import functools
-from typing import Callable, Any, TypeVar, cast
+from typing import Any
+from typing import Callable
+from typing import TypeVar
+from typing import cast
 
 from exerpy.parser.from_ebsilon import __ebsilon_available__
 

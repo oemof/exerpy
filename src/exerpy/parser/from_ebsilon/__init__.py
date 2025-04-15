@@ -2,7 +2,6 @@ import os
 import sys
 from typing import Optional
 
-
 # Define the path to Ebsilon from environment variable
 __ebsilon_path__ = os.getenv("EBS")
 
@@ -16,6 +15,7 @@ if __ebsilon_path__ is not None:
     try:
         # Try to import EbsOpen
         import EbsOpen
+
         # Set the availability flag to True if import succeeds
         __ebsilon_available__ = True
     except ImportError:

@@ -1,13 +1,13 @@
-import os
-import logging
 import json
+import logging
+import os
 
-from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy.functions import convert_to_SI
+from exerpy.functions import fluid_property_data
 
-from .aspen_config import (
-    grouped_components,
-    connector_mappings,
-)
+from .aspen_config import connector_mappings
+from .aspen_config import grouped_components
+
 
 class AspenModelParser:
     """

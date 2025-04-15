@@ -4,18 +4,31 @@ Ebsilon Model Parser
 This module defines the EbsilonModelParser class, which is used to parse Ebsilon models,
 simulate them, extract data about components and connections, and write the data to a JSON file.
 """
-import os
-import logging
 import json
-from typing import Dict, Any, Optional, Union
+import logging
+import os
+from typing import Any
+from typing import Dict
+from typing import Optional
 
-from exerpy.functions import convert_to_SI, fluid_property_data
-from . import __ebsilon_available__, is_ebsilon_available
-from .utils import require_ebsilon, EpFluidTypeStub, EpSteamTableStub, EpGasTableStub, EpCalculationResultStatus2Stub
+from exerpy.functions import convert_to_SI
+from exerpy.functions import fluid_property_data
+
+from . import __ebsilon_available__
+from . import is_ebsilon_available
+from .utils import EpCalculationResultStatus2Stub
+from .utils import EpFluidTypeStub
+from .utils import EpGasTableStub
+from .utils import EpSteamTableStub
+from .utils import require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpFluidType, EpSteamTable, EpGasTable, EpSubstance, EpCalculationResultStatus2
+    from EbsOpen import EpCalculationResultStatus2
+    from EbsOpen import EpFluidType
+    from EbsOpen import EpGasTable
+    from EbsOpen import EpSteamTable
+    from EbsOpen import EpSubstance
     from win32com.client import Dispatch
 else:
     EpFluidType = EpFluidTypeStub
@@ -23,17 +36,15 @@ else:
     EpGasTable = EpGasTableStub
     EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
 
-from .ebsilon_config import (
-    ebs_objects,
-    non_thermodynamic_unit_operators,
-    fluid_type_index,
-    composition_params,
-    grouped_components,
-    connector_mapping,
-    unit_id_to_string,
-    connection_kinds,
-    two_phase_fluids_mapping
-)
+from .ebsilon_config import composition_params
+from .ebsilon_config import connection_kinds
+from .ebsilon_config import connector_mapping
+from .ebsilon_config import ebs_objects
+from .ebsilon_config import fluid_type_index
+from .ebsilon_config import grouped_components
+from .ebsilon_config import non_thermodynamic_unit_operators
+from .ebsilon_config import two_phase_fluids_mapping
+from .ebsilon_config import unit_id_to_string
 
 # Configure logging to display info-level messages
 logging.basicConfig(level=logging.ERROR)
@@ -50,7 +61,7 @@ class EbsilonModelParser:
         Parameters:
             model_path (str): Path to the Ebsilon model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
-            
+
         Raises:
             RuntimeError: If Ebsilon is not available but is required for parsing.
         """
@@ -81,7 +92,7 @@ class EbsilonModelParser:
     def initialize_model(self):
         """
         Initializes the Ebsilon application and opens the specified model.
-        
+
         Raises:
             Exception: If model initialization fails.
         """
@@ -101,7 +112,7 @@ class EbsilonModelParser:
     def simulate_model(self):
         """
         Simulates the Ebsilon model and logs any calculation errors.
-        
+
         Raises:
             Exception: If model simulation fails.
         """
@@ -125,7 +136,7 @@ class EbsilonModelParser:
     def parse_model(self):
         """
         Parses all objects in the Ebsilon model to extract component and connection data.
-        
+
         Raises:
             ValueError: If ambient conditions are not set.
             Exception: If model parsing fails.
@@ -170,7 +181,8 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_functions import calc_eM, calc_eT
+        from .ebsilon_functions import calc_eM
+        from .ebsilon_functions import calc_eT
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
@@ -299,7 +311,7 @@ class EbsilonModelParser:
                 if self.split_physical_exergy:
                     e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
                     e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
-            
+
                     connection_data.update({
                         'e_T': e_T_value,
                         'e_T_unit': fluid_property_data['e']['SI_unit'],
@@ -535,7 +547,7 @@ class EbsilonModelParser:
 
         Parameters:
             output_path (str): Path where the JSON file will be saved.
-            
+
         Raises:
             Exception: If writing to JSON fails.
         """

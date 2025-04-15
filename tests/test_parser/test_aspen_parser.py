@@ -17,11 +17,15 @@ The test suite verifies:
 - Error handling for a missing model file
 """
 
-import os
 import json
+import os
+from unittest.mock import Mock
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch
-from exerpy.parser.from_aspen.aspen_parser import AspenModelParser, run_aspen
+
+from exerpy.parser.from_aspen.aspen_parser import AspenModelParser
+from exerpy.parser.from_aspen.aspen_parser import run_aspen
 
 # --- DummyCollection class to simulate COM collection behavior ---
 

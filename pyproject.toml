@@ -16,7 +16,7 @@ exclude = ["docs/_build"]
 name = "exerpy"
 dynamic = ["version"]
 description = "Exergy analysis for tabular input data"
-readme = "README.md"
+readme = "README.rst"
 authors = [
     {name = "Sergio Tomasinelli", email = "s.tomasinelli@tu-berlin.de"},
     {name = "Robert Müller", email = "robert.mueller.2@tu-berlin.de"},

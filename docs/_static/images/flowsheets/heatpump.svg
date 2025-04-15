@@ -2,7 +2,7 @@
 <svg
    inkscape:export-ydpi="1012"
    inkscape:export-xdpi="1012"
-   sodipodi:docname="heat_pump.svg"
+   sodipodi:docname="heatpump.svg"
    inkscape:version="1.4 (86a8ad7, 2024-10-11)"
    id="svg8"
    version="1.1"
@@ -67,9 +67,9 @@
      inkscape:document-rotation="0"
      inkscape:current-layer="layer1"
      inkscape:document-units="mm"
-     inkscape:cy="276.25"
-     inkscape:cx="349.75"
-     inkscape:zoom="2"
+     inkscape:cy="291.85832"
+     inkscape:cx="333.57762"
+     inkscape:zoom="2.8284271"
      inkscape:pageshadow="2"
      inkscape:pageopacity="0.0"
      borderopacity="1.0"
@@ -427,6 +427,97 @@
        inkscape:export-xdpi="1012"
        xml:space="preserve"
        style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="186.99997"
+       y="20.000006"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8"
+         x="186.99997"
+         y="20.000006"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">COND</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="186.99997"
+       y="75.000008"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4-6"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8-8"
+         x="186.99997"
+         y="75.000008"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">EVA</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="144.99997"
+       y="4.5414408e-06"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4-6-5"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8-8-7"
+         x="144.99997"
+         y="4.5414408e-06"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">PUMP</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="144.99997"
+       y="49.30024"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4-6-5-6"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8-8-7-1"
+         x="144.99997"
+         y="49.30024"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">VAL</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="189.99997"
+       y="49.297829"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-1"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-7"
+         x="189.99997"
+         y="49.297829"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">COMP</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="199.99997"
+       y="100.00001"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-7"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-6"
+         x="199.99997"
+         y="100.00001"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">FAN</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="219.99997"
+       y="121.73187"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-14"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-23"
+         x="219.99997"
+         y="121.73187"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">MOT1</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
        x="189.99998"
        y="10.000007"
        id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-6"><tspan
@@ -532,5 +623,31 @@
        id="path4652-12-9-60-5-4-2-0-1-2-3"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccc" />
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="227.45947"
+       y="40.000004"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4-6-5-8"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8-8-7-9"
+         x="227.45947"
+         y="40.000004"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">MOT2</tspan></text>
+    <text
+       inkscape:export-ydpi="1012"
+       inkscape:export-xdpi="1012"
+       xml:space="preserve"
+       style="font-size:4.9389px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round"
+       x="144.99997"
+       y="-23.202156"
+       id="text1297-0-9-8-6-9-4-7-6-7-8-6-9-5-3-6-3-8-5-6-3-1-9-4-6-5-8-2"><tspan
+         sodipodi:role="line"
+         id="tspan1295-2-3-0-3-5-7-3-5-0-5-24-7-1-0-9-6-2-2-14-2-6-00-8-8-7-9-7"
+         x="144.99997"
+         y="-23.202156"
+         style="fill:#000000;fill-opacity:1;stroke-width:0.264583;stroke-linecap:round;stroke-linejoin:round">MOT3</tspan></text>
   </g>
 </svg>

@@ -791,5 +791,9 @@
         "Tamb_unit": "K",
         "pamb": 101299.99999999999,
         "pamb_unit": "Pa"
+    },
+    "settings": {
+        "split_physical_exergy": false,
+        "chemExLib": null
     }
 }

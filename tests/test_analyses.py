@@ -14,6 +14,7 @@ import os
 from exerpy.analyses import ExergyAnalysis, _construct_components, _load_json
 from exerpy.components.component import Component, component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
+from exerpy.parser.from_ebsilon import __ebsilon_path__
 
 # Basic component classes for testing
 @component_registry
@@ -205,14 +206,24 @@ def test_exergy_results(exergy_analysis):
     assert "T [°C]" in material_results.columns
     assert "Energy Flow [kW]" in non_material_results.columns
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_from_ebsilon(tmp_path):
     """Test creating instance from Ebsilon file."""
     test_file = tmp_path / "test.ebs"
     test_file.write_text("")
 
     with pytest.raises(FileNotFoundError, match="File not found"):
-        ExergyAnalysis.from_ebsilon(str(test_file), simulate=False)
+        ExergyAnalysis.from_ebsilon(str(test_file))
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_from_ebsilon_load_existing_json(tmp_path):
     """
     Test that the from_ebsilon() method can load existing JSON data when simulate=False.
@@ -222,7 +233,7 @@ def test_from_ebsilon_load_existing_json(tmp_path):
     parsed_json_file = ebsilon_file.replace(".ebs", "_ebs.json")
 
     # Call the method and verify the output
-    analysis = ExergyAnalysis.from_ebsilon(ebsilon_file, simulate=False, Tamb=None, pamb=None)
+    analysis = ExergyAnalysis.from_ebsilon(ebsilon_file, Tamb=None, pamb=None)
     assert isinstance(analysis, ExergyAnalysis)
     assert abs(analysis.Tamb - 298.15) < 1e-5    # Allow small floating-point tolerance
     assert abs(analysis.pamb - 101300) < 1e-5    # Allow small floating-point tolerance
@@ -552,15 +563,15 @@ def test_export_to_json(tmp_path, mock_component_data, mock_connection_data):
     """
     # Create an analysis instance using mock data.
     analysis = ExergyAnalysis(mock_component_data, mock_connection_data, 298.15, 101325)
-    
+
     # Export the analysis to a temporary JSON file.
     output_file = tmp_path / "exported_analysis.json"
     analysis.export_to_json(str(output_file))
-    
+
     # Load the exported JSON data.
     with open(output_file, "r") as f:
         data = json.load(f)
-    
+
     # Check that required keys are present.
     assert "components" in data
     assert "connections" in data
@@ -606,18 +617,18 @@ def test_round_trip_export_import(tmp_path, mock_component_data, mock_connection
     pamb = 101325
     # Create an analysis instance
     analysis_original = ExergyAnalysis(mock_component_data, mock_connection_data, Tamb, pamb)
-    
+
     # Export the analysis to a temporary JSON file.
     export_file = tmp_path / "roundtrip.json"
     analysis_original.export_to_json(str(export_file))
-    
+
     # Reload the analysis from the exported JSON.
     analysis_loaded = ExergyAnalysis.from_json(str(export_file))
-    
+
     # Verify that ambient conditions are preserved.
     assert analysis_loaded.Tamb == pytest.approx(Tamb, rel=1e-5)
     assert analysis_loaded.pamb == pytest.approx(pamb, rel=1e-5)
-    
+
     # Verify that the component data is preserved.
     # (For simplicity, we check that keys match; a deeper check may be implemented if needed.)
     assert analysis_loaded._component_data.keys() == mock_component_data.keys()
@@ -631,7 +642,7 @@ def test_malformed_json_raises(tmp_path):
     # Write a file with invalid JSON content.
     malformed_file = tmp_path / "malformed.json"
     malformed_file.write_text("this is not valid json")
-    
+
     with pytest.raises(Exception) as excinfo:
         _load_json(str(malformed_file))
     # Depending on implementation, the error may be a JSONDecodeError or a custom error.
@@ -684,10 +695,10 @@ def test_results_numerical_conversion(tmp_path):
     E_F = {"inputs": ["1"]}
     E_P = {"inputs": ["2"]}
     analysis.analyse(E_F, E_P)
-    
+
     # Call exergy_results to generate DataFrames.
     comp_results, mat_results, non_mat_results = analysis.exergy_results(print_results=False)
-    
+
     # In the component results DataFrame, the fuel exergy should be converted from W to kW.
     # For our connection "1": 100000 W => 100 kW.
     comp_row = comp_results[comp_results["Component"] == "Comp1"]

@@ -244,13 +244,21 @@ def test_error_handling_in_property_calc(mock_app, mock_pipe):
     result = calc_X_from_PT(mock_app, mock_pipe, 'H', 1e5, 400)
     assert result is None
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_X_from_PT_water(monkeypatch, mock_app, mock_pipe):
     """
     Test calc_X_from_PT for water conditions.
     We simulate a condition where the saturation temperature is high so that the water branch is taken.
     """
     # Override CP so that t_sat is high (e.g., 400 K)
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.CP", lambda *args, **kwargs: 400)
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.CP",
+        lambda *args, **kwargs: 400
+    )
     # Set a return value for PropertyH_OF_PT so that the calculation succeeds.
     mock_app.NewFluidData.return_value.PropertyH_OF_PT.return_value = 1000.0  # kJ/kg
     # Call the function with a temperature (in °C) that, after subtracting 273.15, is lower than 400.
@@ -260,6 +268,11 @@ def test_calc_X_from_PT_water(monkeypatch, mock_app, mock_pipe):
     assert result is not None
     assert result == pytest.approx(1e6, rel=1e-2)
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_X_from_PT_invalid_property(monkeypatch, mock_app, mock_pipe):
     """
     Test that calc_X_from_PT returns None when an invalid property is requested.
@@ -271,11 +284,16 @@ def test_calc_X_from_PT_invalid_property(monkeypatch, mock_app, mock_pipe):
 # Tests for calc_eT and calc_eM
 # -----------------------------------------------
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eT_known(monkeypatch, mock_app, mock_pipe):
     """
     Test calc_eT with known input values.
     We simulate calc_X_from_PT to return predetermined values for h_A and s_A.
-    
+
     Given:
       h_i = pipe.H.Value = 2000 J/kg,
       s_i = pipe.S.Value = 4 J/(kgK),
@@ -292,11 +310,19 @@ def test_calc_eT_known(monkeypatch, mock_app, mock_pipe):
             return 1900.0
         elif prop == 'S':
             return 3.8
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT", dummy_calc_X_from_PT)
-    
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT",
+        dummy_calc_X_from_PT
+    )
+
     result = calc_eT(mock_app, mock_pipe, 1e5, 300, 101325)
     assert result == pytest.approx(40, rel=1e-2)
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eM_known(monkeypatch, mock_app, mock_pipe):
     """
     Test calc_eM with known input values.
@@ -308,11 +334,18 @@ def test_calc_eM_known(monkeypatch, mock_app, mock_pipe):
     then:
       eM should be 460 J/kg.
     """
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_eT",
-                        lambda app, pipe, pressure, Tamb, pamb: 40)
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.calc_eT",
+        lambda app, pipe, pressure, Tamb, pamb: 40
+    )
     result = calc_eM(mock_app, mock_pipe, 1e5, 300, 101325)
     assert result == pytest.approx(460, rel=1e-2)
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eT_error(monkeypatch, mock_app, mock_pipe):
     """
     Test error handling in calc_eT.
@@ -320,16 +353,28 @@ def test_calc_eT_error(monkeypatch, mock_app, mock_pipe):
     """
     def dummy_calc_X_from_PT(app, pipe, prop, pressure, temperature):
         raise Exception("Test error in CP")
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT", dummy_calc_X_from_PT)
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT",
+        dummy_calc_X_from_PT
+    )
     with pytest.raises(Exception, match="Test error in CP"):
         calc_eT(mock_app, mock_pipe, 1e5, 300, 101325)
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_calc_eM_error(monkeypatch, mock_app, mock_pipe):
     """
     Test error handling in calc_eM.
     If calc_eT raises an exception, calc_eM should propagate the error.
     """
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_eT",
-                        lambda app, pipe, pressure, Tamb, pamb: (_ for _ in ()).throw(Exception("Test error in eT")))
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.calc_eT",
+        lambda app, pipe, pressure, Tamb, pamb: (_ for _ in ()).throw(
+            Exception("Test error in eT")
+        )
+    )
     with pytest.raises(Exception, match="Test error in eT"):
         calc_eM(mock_app, mock_pipe, 1e5, 300, 101325)

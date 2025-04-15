@@ -423,6 +423,10 @@ def test_run_ebsilon(mock_dispatch, tmp_path):
         mock_parser.write_to_json.assert_called_once()
 
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_run_ebsilon_file_not_found():
     """
     Test error handling for missing model file.
@@ -502,6 +506,11 @@ def parser_with_ambient(monkeypatch):
     monkeypatch.setattr(parser, "parse_connection", lambda obj: None)
     return parser
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_parse_model_with_ambient(parser_with_ambient):
     """
     Test that when ambient measuring components are present,
@@ -514,6 +523,10 @@ def test_parse_model_with_ambient(parser_with_ambient):
 
 # ---------- Data Sorting and JSON Export Tests ----------
 
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_get_sorted_data_and_write_to_json(tmp_path):
     """
     Test that get_sorted_data returns sorted data and write_to_json writes the correct JSON.
@@ -551,6 +564,11 @@ def test_get_sorted_data_and_write_to_json(tmp_path):
 
 # ---------- run_ebsilon Error Handling Test ----------
 
+
+@pytest.mark.skipif(
+    __ebsilon_path__ is None,
+    reason='Test skipped due to missing ebsilon dependency.'
+)
 def test_run_ebsilon_missing_file(tmp_path):
     """
     Test that run_ebsilon raises a FileNotFoundError if the model file does not exist.

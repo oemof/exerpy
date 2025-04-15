@@ -71,13 +71,13 @@ Installation of ExerPy
    .. tab-item:: Windows
 
       For Windows we recommend using conda as package manager. You can download
-      a lightweight open source variant of conda: "miniforge3".
+      a lightweight open source variant of conda: 'miniforge3'.
 
       1. Download latest
          `miniforge3 <https://github.com/conda-forge/miniforge>`__ for Python
          3.x (64 or 32 bit).
       2. Install miniforge3
-      3. Open "miniforge prompt" to manage your virtual environments. You can
+      3. Open 'miniforge prompt' to manage your virtual environments. You can
          create a new environment and acivate it by
 
          .. code-block:: console
@@ -152,6 +152,6 @@ Additional Setup for Aspen Plus Users
 
 Aspen Plus does not calculate physical exergy by default. Instead, you must define it as a user property in each model. Therefore, select the 'Calculation Options' tab in the 'Setup' folder in the 'Simulation' menu on the left. In the 'Calculations' tab, you will see two fields titled 'Exergy reference environment temperature' and 'Exergy reference environment pressure'. Enter the desired values for the exergy analysis.
 
-Then, select “Property Sets” from the “Simulation” menu on the left. In the “Properties” tab, click the 'Search' button. Search for the 'EXERGYMS' entry and add it. In the 'Units' column next to the 'Physical Properties' column, set 'J/kg' as the unit.
+Then, select 'Property Sets' from the 'Simulation' menu on the left. In the 'Properties' tab, click the 'Search' button. Search for the 'EXERGYMS' entry and add it. In the 'Units' column next to the 'Physical Properties' column, set 'J/kg' as the unit.
 
 Next, select the 'Report Options' tab from the 'Setup' folder in the 'Simulation' menu on the left. Select the 'Stream' tab on the right and click the 'Property Sets' button. Move 'EXERGYMS' from 'Available property sets' to 'Selected property sets' and confirm. Afterward, run the simulation and save it.

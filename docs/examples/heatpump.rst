@@ -37,7 +37,7 @@ The import of the exerpy dependency is the same for all simulators:
 
 .. tab-set::
 
-   .. tab-item:: Ebsilon
+    .. tab-item:: Ebsilon
 
         Download the Ebsilon simulation model here:
         :download:`hp.ebs </../examples/heatpump/hp.ebs>`
@@ -124,10 +124,78 @@ The import of the exerpy dependency is the same for all simulators:
                 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
                 ean.exergy_results()
 
-   .. tab-item:: tespy
+    .. tab-item:: tespy
 
+        For the tespy model we have prepared the code to run the simulation
+        in the dropdown below. To learn how to set up tespy models and what
+        things to be aware of when working with tespy, we kindly refer to the
+        `online documentation of tespy <https://tespy.readthedocs.io>`__.
 
-   .. tab-item:: Aspen Plus
+        .. dropdown:: Code of the tespy model
+
+            .. literalinclude:: /../examples/heatpump/hp_tespy.py
+                :language: python
+                :end-before: [tespy_model_section_end]
+
+        2. **Initialize the Exergy Analysis**
+
+        After setting up the model, we set up the :code:`ExergyAnalysis`
+        instances using the :code:`from_tespy` method. It takes the
+        **converged** :code:`tespy.Network` object along with ambient state and
+        (optionally) the chemical exergy library as inputs.
+
+        .. tip::
+
+            TESPy can handle the splitting of physical exergy into its mechanical
+            and thermal shares, therefore :code:`split_phyiscal_exergy` can
+            always be set to :code:`True` when using tespy. In this instance it is
+            set to :code:`False` because ASPEN cannot handle this, and we wanted to
+            cross validate the results of the examples for all three simulators.
+
+        .. literalinclude:: /../examples/heatpump/hp_tespy.py
+            :language: python
+            :start-after: [tespy_model_section_end]
+            :end-before: [exergy_analysis_setup]
+
+        3. **Define the exergy flows crossing the system boundaries**
+
+        For this plant, the exergetic fuel of the system (:code:`E_F`) is the
+        total input of electrical power through the three motors. The cold air
+        leaving the evaporator on the heat source side is considered a exergy
+        loss of the system (:code:`E_L`), and the change of exergy from the
+        liquid water to steam is considered the exergy product (:code:`E_P`).
+
+        For the fuel exergy (:code:`E_F`) the same structure applies as in the
+        other two examples, when implementing the tespy model:
+
+        a. Add components that generate or consume power or heat, which is
+           transferred over the system boundaries and therefore required for
+           the analysis to a :code:`Bus`. The :code:`base` keyword should be
+
+           - :code:`"bus"`, in case the component gains energy and
+           - :code:`"component"` in case it produces energy.
+
+        b. Then, you can use the following label:
+
+          - :code:`generator_of_<COMPONENT-LABEL>__<BUS-LABEL>` for the output
+            from a component to outside the system factoring in the specified
+            bus efficiency, and
+          - :code:`<BUS-LABEL>__motor_of_<COMPONENT-LABEL>` for the input from
+            outside of the system to a component inside also factoring in the
+            specified bus efficiency.
+
+        .. attention::
+
+            This is a drop-in adjustment of the tespy export structure to make
+            tespy compatible to the exerpy API. Expect, that the API will be
+            more SIMPLE in a future release of tespy.
+
+        .. literalinclude:: /../examples/heatpump/hp_tespy.py
+            :language: python
+            :start-after: [exergy_analysis_setup]
+            :end-before: [exergy_analysis_flows]
+
+    .. tab-item:: Aspen Plus
 
         Download the Aspen simulation model here:
         :download:`hp.bkp </../examples/heatpump/hp.bkp>`
@@ -135,7 +203,7 @@ The import of the exerpy dependency is the same for all simulators:
         2. **Initialize the Exergy Analysis**
 
         Create an instance of the :code:`ExergyAnalysis` class using the :code:`from_aspen` method.
-        This system operates at temperature under the ambient temperature. Therefore it should be 
+        This system operates at temperature under the ambient temperature. Therefore it should be
         good practise to split the physical exergy into its mechanical and thermal parts
         by setting the :code:`split_physical_exergy` parameter to :code:`True`. However, at the moment,
         it is not possible to split the physical exergy into its mechanical and thermal shares
@@ -145,7 +213,7 @@ The import of the exerpy dependency is the same for all simulators:
         .. note::
             At the moment, it is not possible to split the physical exergy into its mechanical and thermal shares
             when using Aspen Plus. Therefore, the :code:`split_physical_exergy` parameter should be always set to :code:`False`
-            when using the :code:`from_aspen` method.        
+            when using the :code:`from_aspen` method.
 
         .. code-block:: python
 

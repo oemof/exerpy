@@ -86,12 +86,12 @@ nw.solve("design")
 nw._convergence_check()
 
 nw.print_results()
-
+# %%[tespy_model_section_end]
 p0 = 101300
 T0 = 283.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
-
+# %%[exergy_analysis_setup]
 fuel = {
     "inputs": [
         'power input__motor_of_COMP',
@@ -110,8 +110,9 @@ loss = {
     "inputs": ['13'],
     "outputs": ['11']
 }
-
+# %%[exergy_analysis_flows]
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/heatpump/hp_tespy.json")
 df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")
+# %%[exergy_analysis_results]

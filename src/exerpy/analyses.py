@@ -245,7 +245,7 @@ class ExergyAnalysis:
             required_component_fields=["name", "type"]
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
-    
+
     @classmethod
     def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
         """
@@ -715,20 +715,28 @@ class ExergoeconomicAnalysis:
         Assign given component and connection costs from the user input dictionary.
 
         For components:
-        - Look for a key "<component_name>_Z" and assign it (converted from currency/h to currency/s).
-        If not provided, raise a ValueError.
+
+        - Look for a key "<component_name>_Z" and assign it (converted from
+          currency/h to currency/s). If not provided, raise a ValueError.
 
         For connections:
+
         1) Only consider connections of accepted kinds.
-        2) If the connection is an input (i.e. has no source_component) and is not a power connection,
-        and no cost is provided in Exe_Eco_Costs, raise a ValueError.
-        3) In all other cases (input connections with a provided cost and connections with a source_component
-        that have an assigned cost), assign the cost as follows:
-        - For material connections, assign c_TOT and also assign cost breakdown (c_T, c_M, c_CH)
-            and compute C_TOT as c_TOT * (e_T, e_M, e_CH * m).
-        - For heat or power connections, only assign c_TOT and compute C_TOT as c_TOT times the energy flow E.
+        2) If the connection is an input (i.e. has no source_component) and is
+           not a power connection, and no cost is provided in Exe_Eco_Costs,
+           raise a ValueError.
+        3) In all other cases (input connections with a provided cost and
+           connections with a source_component that have an assigned cost),
+           assign the cost as follows:
+
+           - For material connections, assign c_TOT and also assign cost
+             breakdown (c_T, c_M, c_CH) and compute C_TOT as c_TOT * (e_T,
+             e_M, e_CH * m).
+           - For heat or power connections, only assign c_TOT and compute C_TOT
+             as c_TOT times the energy flow E.
 
         Cost conversions:
+
         - For components: from currency/h to currency/s (divide by 3600).
         - For connections: from currency/GJ to currency/J (multiply by 1e-9).
         """
@@ -794,13 +802,15 @@ class ExergoeconomicAnalysis:
         Constructs the exergoeconomic cost matrix and vector.
 
         This function sets up two blocks of equations:
-        1. For each productive component, the cost balance equation:
-            (sum of inlet costs) - (sum of outlet costs) + Z_costs = 0.
-        2. For each inlet connection, an equation to fix its cost variable
-            to the provided cost (C_TOT or the cost breakdown for material streams).
 
-        A connection is treated as an inlet stream if its source_component is either
-        missing or not among the system components at all.
+        1. For each productive component, the cost balance equation:
+           (sum of inlet costs) - (sum of outlet costs) + Z_costs = 0.
+        2. For each inlet connection, an equation to fix its cost variable
+           to the provided cost (C_TOT or the cost breakdown for material
+           streams).
+
+        A connection is treated as an inlet stream if its source_component is
+        either missing or not among the system components at all.
         """
         num_vars = self.num_variables
         A = np.zeros((num_vars, num_vars))

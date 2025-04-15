@@ -195,9 +195,10 @@ API References
     :maxdepth: 1
     :glob:
 
-    api/parser.rst
     api/analyses.rst
     api/components.rst
+    api/functions.rst
+    api/parser.rst
 
 
 =====================================================

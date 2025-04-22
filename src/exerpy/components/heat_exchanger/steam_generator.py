@@ -169,10 +169,3 @@ class SteamGenerator(Component):
             f"E_P = {self.E_P:.2f} W, E_F = {self.E_F:.2f} W, "
             f"E_D = {self.E_D:.2f} W, Efficiency = {self.epsilon:.2%}"
         )
-
-
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        logging.error("Auxiliary equations are not implemented for steam generator.")
-
-    def exergoeconomic_balance(self, T0):
-        logging.error("Exergoeconomic balance is not implemented for steam generator.")

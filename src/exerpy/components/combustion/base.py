@@ -9,9 +9,9 @@ from exerpy.components.component import component_registry
 @component_registry
 class CombustionChamber(Component):
     r"""
-    Class for exergy and exergoeconomic analysis of combustion chambers.
+    Class for exergy analysis of combustion chambers.
 
-    This class performs exergy and exergoeconomic analysis calculations for combustion chambers,
+    This class performs exergy analysis calculations for combustion chambers,
     considering both thermal and mechanical exergy flows, as well as chemical exergy flows.
     The exergy product is defined based on thermal and mechanical exergy differences,
     while the exergy fuel is based on chemical exergy differences.
@@ -127,90 +127,3 @@ class CombustionChamber(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
-
-
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
-        Auxiliary equations for the combustion chamber.
-
-        This method adds two rows to the cost matrix A and right-hand side vector b
-        to enforce auxiliary cost relations for the mechanical and chemical cost components.
-
-        It assumes the component has at least two inlet streams (e.g. air and fuel)
-        and one outlet stream.
-
-        Parameters
-        ----------
-        A : numpy.ndarray
-            The current cost matrix.
-        b : numpy.ndarray
-            The current right-hand-side vector.
-        counter : int
-            The current row index in the matrix.
-        T0 : float
-            Ambient temperature.
-        equations : list or dict
-            Data structure for storing equation labels.
-        chemical_exergy_enabled : bool
-            Flag indicating whether chemical exergy is enabled.
-
-        Returns
-        -------
-        A : numpy.ndarray
-            The updated cost matrix.
-        b : numpy.ndarray
-            The updated right-hand-side vector.
-        counter : int
-            The updated row index (counter + 2).
-        equations : list or dict
-            Updated structure with equation labels.
-        """
-        # For the combustion chamber, chemical exergy is mandatory.
-        if not chemical_exergy_enabled:
-            raise ValueError("Chemical exergy is mandatory for the combustion chamber!",
-                             "Please make sure that your exergy analysis consider the chemical exergy.")
-
-        # Convert inlet and outlet dictionaries to lists for ordered access.
-        inlets = list(self.inl.values())
-        outlets = list(self.outl.values())
-
-        # --- Mechanical cost auxiliary equation ---
-        if (outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0):
-            A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
-            A[counter, inlets[0]["CostVar_index"]["M"]] = (1 / inlets[0]["E_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            A[counter, inlets[1]["CostVar_index"]["M"]] = (1 / inlets[1]["E_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-        else:  # pressure can only decrease in the combustion chamber (case with p_inlet = p0 and p_outlet < p0 NOT considered)
-            A[counter, outlets[0]["CostVar_index"]["M"]] = 1
-        equations[counter] = f"aux_mixing_mech_{self.outl[0]['name']}"
-
-        # --- Chemical cost auxiliary equation ---
-        if (outlets[0]["e_CH"] != 0 and inlets[0]["e_CH"] != 0 and inlets[1]["e_CH"] != 0):
-            A[counter+1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["E_CH"]
-            A[counter+1, inlets[0]["CostVar_index"]["CH"]] = (1 / inlets[0]["E_CH"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            A[counter+1, inlets[1]["CostVar_index"]["CH"]] = (1 / inlets[1]["E_CH"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-        elif inlets[0]["e_CH"] == 0:
-            A[counter+1, inlets[0]["CostVar_index"]["CH"]] = 1
-        elif inlets[1]["e_CH"] == 0:
-            A[counter+1, inlets[1]["CostVar_index"]["CH"]] = 1
-        equations[counter+1] = f"aux_mixing_chem_{self.outl[0]['name']}"
-
-        # Set the right-hand side entries to zero.
-        b[counter]   = 0
-        b[counter+1] = 0
-
-        return [A, b, counter + 2, equations]
-
-    def exergoeconomic_balance(self, T0):
-        self.C_P = self.outl[0]["C_T"] - (
-                self.inl[0]["C_T"] + self.inl[1]["C_T"]
-        )
-        self.C_F = (
-                self.inl[0]["C_CH"] + self.inl[1]["C_CH"] -
-                self.outl[0]["C_CH"] + self.inl[0]["C_M"] +
-                self.inl[1]["C_M"] - self.outl[0]["C_M"]
-        )
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
-        self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)

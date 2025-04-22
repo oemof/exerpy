@@ -5,7 +5,7 @@ import logging
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Import the necessary modules and functions from exerpy
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
+from exerpy import ExergyAnalysis
 
 # Define the path to the Ebsilon model file
 model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'cgam_ebs.json'))

@@ -106,21 +106,3 @@ class Component:
             return np.nan
         else:
             return self.E_P / self.E_F
-        
-
-    def exergoeconomic_balance(self, T0):
-        r"""
-        Placeholder method for exergoeconomic balance.
-
-        This method is intentionally empty in the base class.
-        In each child class (e.g. Pump, Turbine, HeatExchanger), you should
-        override it with the logic that calculates the component's
-        exergoeconomic variables, e.g. ``C_F``, ``C_P``, ``C_D``, ``r``, and ``f``.
-
-        Parameters
-        ----------
-        T0 : float
-            Ambient temperature in :math:`\text{K}`.
-        """
-        return
-

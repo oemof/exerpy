@@ -6,7 +6,7 @@ from tespy.components import (
     DiabaticCombustionChamber, Sink, Source
 )
 from tespy.connections import Connection, Bus
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
+from exerpy import ExergyAnalysis
 
 
 nwk = Network(p_unit='bar', T_unit='C')

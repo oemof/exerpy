@@ -1,7 +1,7 @@
 from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
 from tespy.connections import Connection, Ref, Bus
 from tespy.networks import Network
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
+from exerpy import ExergyAnalysis
 
 
 nw = Network(T_unit="C", p_unit="bar")

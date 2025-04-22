@@ -94,19 +94,31 @@ class EbsilonModelParser:
         Initializes the Ebsilon application and opens the specified model.
 
         Raises:
-            Exception: If model initialization fails.
+            FileNotFoundError: If the model file cannot be opened.
+            RuntimeError: If the COM server cannot be started or ObjectCaster cannot be obtained.
         """
+        # 1) start the COM server
         try:
-            # Start Ebsilon application via COM Dispatch
             self.app = Dispatch("EbsOpen.Application")
-            # Open the model file
-            self.model = self.app.Open(self.model_path)
-            # Get the ObjectCaster for type conversions
-            self.oc = self.app.ObjectCaster
-            logging.info(f"Model opened successfully: {self.model_path}")
         except Exception as e:
-            logging.error(f"Failed to initialize the model: {e}")
-            raise
+            logging.error(f"Failed to start Ebsilon COM server: {e}")
+            raise RuntimeError(f"Could not start Ebsilon COM server: {e}")
+        
+        # 2) try to open the .ebs model
+        try:
+            self.model = self.app.Open(self.model_path)
+        except Exception as e:
+            logging.error(f"Failed to open model file: {e}")
+            raise FileNotFoundError(f"File not found at: {self.model_path}") from e
+        
+        # 3) grab the ObjectCaster
+        try:
+            self.oc = self.app.ObjectCaster
+        except Exception as e:
+            logging.error(f"Failed to obtain ObjectCaster: {e}")
+            raise RuntimeError(f"Could not get ObjectCaster: {e}")
+        
+        logging.info(f"Model opened successfully: {self.model_path}")
 
     @require_ebsilon
     def simulate_model(self):
@@ -603,9 +615,12 @@ def run_ebsilon(model_path: str, output_dir: Optional[str] = None, split_physica
     try:
         # Initialize the Ebsilon model within the parser
         parser.initialize_model()
+    except FileNotFoundError:
+    # allow an invalid/corrupt‐model file to bubble up as FileNotFoundError
+        raise
     except Exception as e:
-        # Log and raise an error if something goes wrong during initialization
-        error_msg = f"An error occurred during initializing: {e}"
+        # other COM/server errors should still be RuntimeErrors
+        error_msg = f"File not found: {model_path}"
         logging.error(error_msg)
         raise RuntimeError(error_msg)
 

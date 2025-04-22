@@ -70,14 +70,10 @@ This module requires the user to provide the following inputs:
 Example:
 
 .. code-block:: python
-
-    >>> import pytest
-    >>> from exerpy.parser.from_ebsilon import __ebsilon_path__
-    >>> if __ebsilon_path__ is None:
-    ...     pytest.skip('Skipping test, ebsilon could not be found')
-    >>> from exerpy import ExergyAnalysis
-    >>> model_path = 'my_model.ebs'
-    >>> ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
+ 
+    from exerpy import ExergyAnalysis
+    model_path = 'my_model.ebs'
+    ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
 
 The parsing process involves the following key steps:
 
@@ -146,18 +142,15 @@ Example:
 
 .. code-block:: python
 
-    >>> from exerpy.parser.from_ebsilon import __ebsilon_path__
-    >>> if __ebsilon_path__ is None:
-    ...     pytest.skip('Skipping test, ebsilon could not be found')
-    >>> from exerpy import ExergyAnalysis
-    >>> model_path = 'my_model.ebs'
-    >>> ean = ExergyAnalysis.from_ebsilon(model_path)
+    from exerpy import ExergyAnalysis
+    model_path = 'my_model.ebs'
+    ean = ExergyAnalysis.from_ebsilon(model_path)
 
-    >>> fuel = {"inputs": ['1'], "outputs": ['3']}
-    >>> product = {"inputs": ['E1'], "outputs": ['E2']}
-    >>> loss = {"inputs": ['13'], "outputs": ['11']}
+    fuel = {"inputs": ['1'], "outputs": ['3']}
+    product = {"inputs": ['E1'], "outputs": ['E2']}
+    loss = {"inputs": ['13'], "outputs": ['11']}
 
-    >>> ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+    ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 
 =======
 Outputs
@@ -167,13 +160,13 @@ The results of the exergy analysis can be printed to the console:
 
 .. code-block:: python
 
-    >>> ean.exergy_results()
+    ean.exergy_results()
 
 Alternatively, they can be stored in separate :code:`pandas.DataFrames` for further analysis:
 
 .. code-block:: python
 
-    >>> df_comps, df_material_conns, df_non_material_conns = ean.exergy_results()
+    df_comps, df_material_conns, df_non_material_conns = ean.exergy_results()
 
 The results include the following key parameters:
 

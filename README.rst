@@ -15,7 +15,7 @@ allowing users to analyze both individual components and entire systems. This
 helps to identify where and why exergy losses occur, facilitating strategies to improve
 efficiency, reduce costs, and support sustainable energy usage.
 
-.. figure:: https://raw.githubusercontent.com/oemof/exerpy/refs/heads/main/docs/_static/images/logo_exerpy_big.svg
+.. figure:: https://raw.githubusercontent.com/oemof/exerpy/refs/heads/main/docs/_static/images/logo_exerpy_big.svg?token=GHSAT0AAAAAAC2OTNLQ345REVDX37CIMEH22AIVJ6Q
     :align: center
 
 ************

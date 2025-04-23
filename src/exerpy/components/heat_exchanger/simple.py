@@ -26,11 +26,11 @@ class SimpleHeatExchanger(Component):
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+        Exergy fuel of the component :math:`\dot{E}_\text{F}` in :math:`\text{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
+        Exergy product of the component :math:`\dot{E}_\text{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
+        Exergy destruction of the component :math:`\dot{E}_\text{D}` in :math:`\text{W}`.
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
@@ -42,81 +42,91 @@ class SimpleHeatExchanger(Component):
 
     Notes
     -----
-    The exergy analysis considers three main cases based on heat transfer direction
-    and temperatures relative to ambient temperature :math:`T_0`:
+    The exergy analysis considers three main cases based on heat transfer
+    direction and temperatures relative to ambient temperature :math:`T_0`:
 
     Case 1 - **Heat Release** (:math:`\dot{Q} < 0`):
 
     a) Both temperatures above ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e^\mathrm{T}_\mathrm{in} - 
-        e^\mathrm{T}_\mathrm{out})\\
-        \dot{E}_\mathrm{F} &= \dot{m} \cdot (e^\mathrm{PH}_\mathrm{in} - 
-        e^\mathrm{PH}_\mathrm{out})
+
+        \dot{E}_\text{P} &= \dot{m} \cdot (e^\text{T}_\text{in} -
+        e^\text{T}_\text{out})\\
+        \dot{E}_\text{F} &= \dot{m} \cdot (e^\text{PH}_\text{in} -
+        e^\text{PH}_\text{out})
 
     b) Inlet above, outlet below ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_\mathrm{out} \cdot e^\mathrm{T}_\mathrm{out}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_\mathrm{in} \cdot e^\mathrm{T}_\mathrm{in} + 
-        \dot{m}_\mathrm{out} \cdot e^\mathrm{T}_\mathrm{out} + 
-        (\dot{m}_\mathrm{in} \cdot e^\mathrm{M}_\mathrm{in} - 
-        \dot{m}_\mathrm{out} \cdot e^\mathrm{M}_\mathrm{out})
+
+        \dot{E}_\text{P} &= \dot{m}_\text{out} \cdot e^\text{T}_\text{out}\\
+        \dot{E}_\text{F} &= \dot{m}_\text{in} \cdot e^\text{T}_\text{in} +
+        \dot{m}_\text{out} \cdot e^\text{T}_\text{out} +
+        (\dot{m}_\text{in} \cdot e^\text{M}_\text{in} -
+        \dot{m}_\text{out} \cdot e^\text{M}_\text{out})
 
     c) Both temperatures below ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_\mathrm{out} \cdot 
-        (e^\mathrm{T}_\mathrm{out} - e^\mathrm{T}_\mathrm{in})\\
-        \dot{E}_\mathrm{F} &= \dot{E}_\mathrm{P} + \dot{m}_\mathrm{in} \cdot 
-        (e^\mathrm{M}_\mathrm{in} - e^\mathrm{M}_\mathrm{out})
+
+        \dot{E}_\text{P} &= \dot{m}_\text{out} \cdot
+        (e^\text{T}_\text{out} - e^\text{T}_\text{in})\\
+        \dot{E}_\text{F} &= \dot{E}_\text{P} + \dot{m}_\text{in} \cdot
+        (e^\text{M}_\text{in} - e^\text{M}_\text{out})
 
     Case 2 - **Heat Addition** (:math:`\dot{Q} > 0`):
 
     a) Both temperatures above ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_\mathrm{out} \cdot 
-        (e^\mathrm{PH}_\mathrm{out} - e^\mathrm{PH}_\mathrm{in})\\
-        \dot{E}_\mathrm{F} &= \dot{m}_\mathrm{out} \cdot 
-        (e^\mathrm{T}_\mathrm{out} - e^\mathrm{T}_\mathrm{in})
+
+        \dot{E}_\text{P} &= \dot{m}_\text{out} \cdot
+        (e^\text{PH}_\text{out} - e^\text{PH}_\text{in})\\
+        \dot{E}_\text{F} &= \dot{m}_\text{out} \cdot
+        (e^\text{T}_\text{out} - e^\text{T}_\text{in})
 
     b) Inlet below, outlet above ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_\mathrm{out} \cdot 
-        (e^\mathrm{T}_\mathrm{out} + e^\mathrm{T}_\mathrm{in})\\
-        \dot{E}_\mathrm{F} &= \dot{m}_\mathrm{in} \cdot e^\mathrm{T}_\mathrm{in} + 
-        (\dot{m}_\mathrm{in} \cdot e^\mathrm{M}_\mathrm{in} - 
-        \dot{m}_\mathrm{out} \cdot e^\mathrm{M}_\mathrm{out})
+
+        \dot{E}_\text{P} &= \dot{m}_\text{out} \cdot
+        (e^\text{T}_\text{out} + e^\text{T}_\text{in})\\
+        \dot{E}_\text{F} &= \dot{m}_\text{in} \cdot e^\text{T}_\text{in} +
+        (\dot{m}_\text{in} \cdot e^\text{M}_\text{in} -
+        \dot{m}_\text{out} \cdot e^\text{M}_\text{out})
 
     c) Both temperatures below ambient:
 
     .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_\mathrm{in} \cdot 
-        (e^\mathrm{T}_\mathrm{in} - e^\mathrm{T}_\mathrm{out}) + 
-        (\dot{m}_\mathrm{out} \cdot e^\mathrm{M}_\mathrm{out} - 
-        \dot{m}_\mathrm{in} \cdot e^\mathrm{M}_\mathrm{in})\\
-        \dot{E}_\mathrm{F} &= \dot{m}_\mathrm{in} \cdot 
-        (e^\mathrm{T}_\mathrm{in} - e^\mathrm{T}_\mathrm{out})
 
-    Case 3 - **Dissipative** (it is not possible to specify the exergy product :math:`\dot{E}_\mathrm{P}` for this component):
+        \dot{E}_\text{P} &= \dot{m}_\text{in} \cdot
+        (e^\text{T}_\text{in} - e^\text{T}_\text{out}) +
+        (\dot{m}_\text{out} \cdot e^\text{M}_\text{out} -
+        \dot{m}_\text{in} \cdot e^\text{M}_\text{in})\\
+        \dot{E}_\text{F} &= \dot{m}_\text{in} \cdot
+        (e^\text{T}_\text{in} - e^\text{T}_\text{out})
+
+    Case 3 - **Dissipative** (it is not possible to specify the exergy product
+    :math:`\dot{E}_\text{P}` for this component):
 
     .. math::
-        \dot{E}_\mathrm{P} &= \text{NaN}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_\mathrm{in} \cdot 
-        (e^\mathrm{PH}_\mathrm{in} - e^\mathrm{PH}_\mathrm{out})
+
+        \dot{E}_\text{P} &= \text{NaN}\\
+        \dot{E}_\text{F} &= \dot{m}_\text{in} \cdot
+        (e^\text{PH}_\text{in} - e^\text{PH}_\text{out})
 
     For all cases, the exergy destruction is calculated as:
 
     .. math::
-        \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+
+        \dot{E}_\text{D} = \dot{E}_\text{F} - \dot{E}_\text{P}
 
     Where:
-        - :math:`e^\mathrm{T}`: Thermal exergy
-        - :math:`e^\mathrm{PH}`: Physical exergy
-        - :math:`e^\mathrm{M}`: Mechanical exergy
+
+    - :math:`e^\text{T}`: Thermal exergy
+    - :math:`e^\text{PH}`: Physical exergy
+    - :math:`e^\text{M}`: Mechanical exergy
     """
 
     def __init__(self, **kwargs):
@@ -144,7 +154,7 @@ class SimpleHeatExchanger(Component):
         ValueError
             If the required inlet and outlet streams are not properly defined or
             exceed the maximum allowed number.
-        """      
+        """
         # Validate the number of inlets and outlets
         if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 1 or len(self.outl) < 1:
             msg = "SimpleHeatExchanger requires at least one inlet and one outlet as well as one heat flow."

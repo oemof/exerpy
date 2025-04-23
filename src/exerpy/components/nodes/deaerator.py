@@ -11,9 +11,9 @@ class Deaerator(Component):
     r"""
     Class for exergy analysis of deaerators.
 
-    This class performs exergy analysis calculations for deaerators with multiple 
-    inlet streams and one outlet stream. The exergy product and fuel definitions 
-    vary based on the temperature relationships between inlet streams, outlet 
+    This class performs exergy analysis calculations for deaerators with multiple
+    inlet streams and one outlet stream. The exergy product and fuel definitions
+    vary based on the temperature relationships between inlet streams, outlet
     stream, and ambient conditions.
 
     Parameters
@@ -24,11 +24,11 @@ class Deaerator(Component):
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+        Exergy fuel of the component :math:`\dot{E}_\text{F}` in :math:`\text{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
+        Exergy product of the component :math:`\dot{E}_\text{P}` in :math:`\text{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
+        Exergy destruction of the component :math:`\dot{E}_\text{D}` in :math:`\text{W}`.
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
@@ -40,54 +40,54 @@ class Deaerator(Component):
 
     Notes
     -----
-    The exergy analysis accounts for physical exergy only. The equations for exergy
-    product and fuel are defined based on temperature relationships:
+    The exergy analysis accounts for physical exergy only. The equations for
+    exergy product and fuel are defined based on temperature relationships:
 
     .. math::
 
-        \dot{E}_\mathrm{P} =
+        \dot{E}_\text{P} =
         \begin{cases}
         \begin{cases}
-        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
-        e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} > T_0\\
-        \text{not defined (nan)} & T_\mathrm{out} = T_0\\
+        \sum_i \dot{m}_i \cdot (e_\text{out}^\text{PH} -
+        e_{\text{in,}i}^\text{PH})
+        & T_{\text{in,}i} < T_\text{out} \text{ & }
+        T_{\text{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot e_\text{out}^\text{PH}
+        & T_{\text{in,}i} < T_\text{out} \text{ & }
+        T_{\text{in,}i} < T_0 \\
+        \end{cases} & T_\text{out} > T_0\\
+        \text{not defined (nan)} & T_\text{out} = T_0\\
         \begin{cases}
-        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
-        e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} < T_0\\
+        \sum_i \dot{m}_i \cdot e_\text{out}^\text{PH}
+        & T_{\text{in,}i} > T_\text{out} \text{ & }
+        T_{\text{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot (e_\text{out}^\text{PH} -
+        e_{\text{in,}i}^\text{PH})
+        & T_{\text{in,}i} > T_\text{out} \text{ & }
+        T_{\text{in,}i} < T_0 \\
+        \end{cases} & T_\text{out} < T_0\\
         \end{cases}
 
-        \dot{E}_\mathrm{F} =
+        \dot{E}_\text{F} =
         \begin{cases}
         \begin{cases}
-        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
-        e_\mathrm{out}^\mathrm{PH})
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \\
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} > T_0\\
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_\mathrm{out} = T_0\\
+        \sum_i \dot{m}_i \cdot (e_{\text{in,}i}^\text{PH} -
+        e_\text{out}^\text{PH})
+        & T_{\text{in,}i} > T_\text{out} \\
+        \sum_i \dot{m}_i \cdot e_{\text{in,}i}^\text{PH}
+        & T_{\text{in,}i} < T_\text{out} \text{ & }
+        T_{\text{in,}i} < T_0 \\
+        \end{cases} & T_\text{out} > T_0\\
+        \sum_i \dot{m}_i \cdot e_{\text{in,}i}^\text{PH}
+        & T_\text{out} = T_0\\
         \begin{cases}
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
-        e_\mathrm{out}^\mathrm{PH})
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \\
-        \end{cases} & T_\mathrm{out} < T_0\\
+        \sum_i \dot{m}_i \cdot e_{\text{in,}i}^\text{PH}
+        & T_{\text{in,}i} > T_\text{out} \text{ & }
+        T_{\text{in,}i} \geq T_0 \\
+        \sum_i \dot{m}_i \cdot (e_{\text{in,}i}^\text{PH} -
+        e_\text{out}^\text{PH})
+        & T_{\text{in,}i} < T_\text{out} \\
+        \end{cases} & T_\text{out} < T_0\\
         \end{cases}
 
         \forall i \in \text{deaerator inlets}
@@ -111,13 +111,14 @@ class Deaerator(Component):
         p0 : float
             Ambient pressure in :math:`\text{Pa}`.
         split_physical_exergy : bool
-            Flag indicating whether physical exergy is split into thermal and mechanical components.
+            Flag indicating whether physical exergy is split into thermal and
+            mechanical components.
 
         Raises
         ------
         ValueError
             If the required inlet and outlet streams are not properly defined.
-        """      
+        """
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 1:
             raise ValueError("Deaerator requires at least two inlets and one outlet.")

@@ -296,18 +296,30 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
     """
     Adds the total exergy flow to each connection in the JSON data based on its kind.
 
-    For 'material' connections, the exergy is calculated as before.
-    For 'power' connections, the energy flow value is used directly.
-    For 'heat' connections, if the associated component is of class SimpleHeatExchanger,
-    the thermal exergy difference is computed as:
-        E = (e_T_in * m_in) - (e_T_out * m_out)
+    - For 'material' connections, the exergy is calculated as before.
+    - For 'power' connections, the energy flow value is used directly.
+    - For 'heat' connections, if the associated component is of class
+      SimpleHeatExchanger, the thermal exergy difference is computed as:
+
+      ..math::
+
+          E = (e^\text{T}_\text{in} \cdot \dot m_\text{in})
+          - (e^\text{T}_\text{out} \cdot \dot m_\text{out})
+
     Otherwise, a warning is logged and E is set to None.
 
-    Parameters:
-    - my_json: The JSON object containing the components and connections.
+    Parameters
+    ----------
+    my_json : dict
+        The JSON object containing the components and connections.
+    split_physical_exergy : bool
+        Split physical exergy in mechanical and thermal shares.
 
-    Returns:
-    - The modified JSON object with added total exergy flow for each connection.
+    Returns
+    -------
+    dict
+        The modified JSON object with added total exergy flow for each
+        connection.
     """
     for conn_name, conn_data in my_json['connections'].items():
         try:
@@ -341,7 +353,7 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                 # Identify the associated component (either source or target)
                 comp_name = conn_data['source_component'] or conn_data['target_component']
                 # Check if the component is either a SimpleHeatExchanger or a SteamGenerator.
-                if ("SimpleHeatExchanger" in my_json['components'] and 
+                if ("SimpleHeatExchanger" in my_json['components'] and
                         comp_name in my_json['components']["SimpleHeatExchanger"]):
                     # Retrieve the inlet material streams: those with this component as target.
                     inlet_conns = [c for c in my_json['connections'].values()
@@ -361,7 +373,7 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                     else:
                         conn_data['E'] = None
                         logging.warning(f"Not enough material connections for heat exchanger {comp_name} for heat exergy calculation.")
-                elif ("SteamGenerator" in my_json['components'] and 
+                elif ("SteamGenerator" in my_json['components'] and
                     comp_name in my_json['components']["SteamGenerator"]):
                     # Retrieve material connections for the steam generator.
                     inlet_conns = [c for c in my_json['connections'].values()

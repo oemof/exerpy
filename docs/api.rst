@@ -193,15 +193,3 @@ API References
     api/components.rst
     api/functions.rst
     api/parser.rst
-
-
-=====================================================
-Helpers for documentation (delete before publishing):
-=====================================================
-
-- :py:class:`exerpy.analyses.ExergyAnalysis`: Main class for conducting exergy analysis
-- :py:meth:`exerpy.analyses.ExergyAnalysis.analyse`: Method for performing the analysis
-- :py:func:`exerpy.functions.convert_to_SI`: Utility function for unit conversion
-
-- Internal link: :ref:`start page <exerpy_label>`
-- Documentation: `ExerPy Documentation <https://exerpy.rtfd.io>`__

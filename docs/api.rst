@@ -3,14 +3,14 @@ API Documentation
 #################
 
 The ExerPy package offers a flexible, Python-based solution for conducting exergy
-analysis on energy-conversion systems. It supports integration with simulation tools
-like Ebsilon Professional, Aspen Plus, and TESPy, allowing users to extract detailed
-data about components and connections. The framework follows a structured workflow
+analysis of energy-conversion systems. The current release supports integration with 
+three simulation tools: Ebsilon Professional, Aspen Plus, and TESPy, and allows users to extract detailed simulation
+data of components and connections. The framework follows a structured workflow
 that includes data parsing, physical and chemical exergy calculations, and the
 generation of comprehensive exergy analysis results.
 
 This section provides detailed information about the Application Programming
-Interface (API) of the ExerPy library. The API is divided into two main modules:
+Interface (API) of ExerPy. The API is divided into two main modules:
 
 1. **Parsing and Data Preparation**
 2. **Exergy Analysis**
@@ -50,7 +50,7 @@ ExerPy supports parsing models from different simulation tools to extract and pr
 
     Note that Ebsilon Professional and Aspen Plus require a valid commercial
     license for use. Additionally, while these tools are designed only for
-    Windows, they can also be operated on macOS or Linus through the use of a
+    Windows, they can also be operated on macOS or Linux through the use of a
     virtual machine.
 
 ======
@@ -59,11 +59,11 @@ Inputs
 
 This module requires the user to provide the following inputs:
 
-- **Simulation model**: The model file from the supported simulation tools (e.g., Ebsilon Professional :code:`.ebs`, Aspen Plus :code:`.bkp`, TESPy scripts).
+- **Simulation model**: The model file from the supported simulation tools (e.g., Ebsilon Professional :code:`.ebs`, Aspen Plus :code:`.bkp`, or TESPy scripts).
 
 - **Parsing method**: The appropriate method (:code:`from_aspen`, :code:`from_ebsilon` or :code:`from_tespy`) based on the simulation tool used.
 
-- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`) if they are not defined within the simulation model.
+- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`) if they are not defined within the simulation.
 
 - **Chemical Exergy Library (optional)**: The library used for calculating chemical exergy. Currently only the Ahrendts model is supported.
 
@@ -93,17 +93,18 @@ The parsing process involves the following key steps:
     using the extracted properties. This ensures consistency in fluid property models between
     the simulation and exergy calculations.
 
-    5. **Chemical Exergy Calculation**: Computes chemical exergy based on material
+    5. **Chemical Exergy Calculation**: Calculates chemical exergy based on material
     composition, utilizing the Ahrendts reference environment.
+
 
     6. **Data Storage**: Saves the parsed data and exergy calculations into a JSON
     file for subsequent analysis.
 
 It is possible to provide a JSON file containing the connection and component data
-in in the appropriate structure and format. This must include the information regarding the physical
-exergy values (mechanical and thermal), as ExerPy does not compute them autonomously.
-In this case, the mehtod :code:`from_json` should be used to load the data. The chemical
-exergy calculation is subsequently conducted based on this provided data and the
+in the appropriate structure and format. This file must include information on the physical
+exergy values (mechanical and thermal), as ExerPy does not calculate them autonomously.
+In this case, the method :code:`from_json` should be used to load the data. The chemical
+exergy calculation is then performed based on this provided data and the
 Ahrendts reference environment.
 
 =======
@@ -111,20 +112,20 @@ Outputs
 =======
 
 The output of this first module is a JSON file containing all the extracted data
-and calculated exergy values. This file serves as the primary input for the
+and calculated exergy values. This JSON file serves as the primary input for the
 exergy analysis module.
 
 ******************
 2. Exergy Analysis
 ******************
 
-The exergy analysis module provides tools for evaluating system performance at both component and system levels. Key capabilities include:
+The exergy analysis module provides tools for evaluating system performance at both the component and system levels. Key capabilities include:
 
     1. **Exergy Analysis of Components**: Evaluates the exergy destruction and efficiency of individual components within the system.
     2. **Exergy Analysis of the Entire System**: Assesses the overall exergy balance, including the exergy of fuel, product, and losses, to determine system-wide efficiency and irreversibilities.
 
-The method for performing the exergy analysis is `analyse`. This method takes the
-parsed data as input and conducts the component exergy analysis based on the specified parameters.
+The method used to perform the exergy analysis is `analyse`. This method takes the
+parsed data as input and conducts the component-level exergy analysis based on the specified parameters.
 
 ======
 Inputs
@@ -132,11 +133,11 @@ Inputs
 
 The exergy analysis requires the following inputs from the user:
 
-- **Product exergy** (:code:`E_P`): Dictionary containing the connection IDs that define the product exergy flows. The connection IDs are specified as "inputs" (flows entering the system) and "outputs" (flows leaving the system).
+- **Exergy of the product** (:code:`E_P`): A dictionary containing the connection IDs that define the product exergy flows. The connection IDs are specified as "inputs" (flows entering the system) and "outputs" (flows leaving the system).
 
-- **Fuel exergy** (:code:`E_F`): Dictionary containing the connection IDs that define the fuel exergy flows, similarly structured with "inputs" and "outputs".
+- **Exergy of the fuel** (:code:`E_F`): A dictionary containing the connection IDs that define the fuel exergy flows, similarly structured with "inputs" and "outputs".
 
-- **Loss exergy** (:code:`E_L`): Dictionary specifying the connection IDs for exergy losses. This is optional and defaults to an empty dictionary.
+- **Exergy loss** (:code:`E_L`): A dictionary specifying the connection IDs for exergy losses. This input is optional and defaults to an empty dictionary.
 
 Example:
 
@@ -177,7 +178,7 @@ The results include the following key parameters:
     - Exergy efficiency (:code:`ε`) in %
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
-for each component and for the entire system.
+These values are provided both for each component and for the entire system.
 
 
 **************

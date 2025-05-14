@@ -2,18 +2,17 @@
 ExerPy: Exergy Analysis in Python
 #################################
 
-ExerPy is a Python library designed to perform detailed exergy analysis of
-energy conversion systems. It builds on the exergy analysis methodology
-implemented in TESPy, while extending its capabilities to seamlessly integrate
+ExerPy is a Python library and framework for automated exergy analysis of energy-conversion systems. It builds on the exergy analysis methodology
+implemented in TESPy and extends its capabilities to seamlessly integrate
 with simulation tools such as Ebsilon Professional, Aspen Plus, and TESPy itself.
 ExerPy enables engineers and researchers to identify inefficiencies and optimize
 the performance of thermodynamic systems through automated workflows and
 consistent data handling.
 
-With its advanced features, ExerPy calculates both physical and chemical exergy,
-allowing users to analyze both individual components and entire systems. This
-helps to identify where and why exergy losses occur, facilitating strategies to improve
-efficiency, reduce costs, and support sustainable energy usage.
+With its advanced features, ExerPy accounts for both physical and chemical exergy, automates exergy balances, and
+allows users to perform automated analysis of individual components and entire processes. This
+helps identify where and why exergy losses occur, facilitating strategies to improve
+efficiency, reduce costs, and support sustainable energy use.
 
 .. image:: /_static/images/logo_exerpy_big.svg
    :align: center
@@ -29,8 +28,9 @@ efficiency, reduce costs, and support sustainable energy usage.
 Key Features
 ************
 
-- **Comprehensive Exergy Analysis**: Calculate physical and chemical exergy, perform component-level and system-wide analysis.
-- **Flexible Integration**: Compatible with multiple simulation tools (Ebsilon Professional, Aspen Plus, TESPy).
+- **Automated, User-friendly Analysis**: Minimizes user input and enables automated exergy analysis with minimal human error.
+- **Comprehensive Exergy Analysis**: Calculates physical and chemical exergies for both component- and system-level analyses.
+- **Flexible Integration**: Compatible with multiple simulation tools (Ebsilon Professional, Aspen Plus, TESPy, and user-defined input; other software will be integrated in the future based on user feedback).
 - **Advanced Component Library**: Pre-built components for common energy system elements (turbines, heat exchangers, etc.).
 - **Extensible Architecture**: Easy-to-use framework for implementing custom components and analysis methods.
 - **Robust Data Handling**: Consistent fluid property models and automated data extraction from simulation tools.
@@ -75,8 +75,8 @@ For more detailed tutorials and examples, see the :ref:`User Guide <installation
 Citation
 ********
 
-If you use ExerPy in your scientific work, please consider citing it to support
-ongoing development. You can cite ExerPy using the following BibTeX entry:
+If you use ExerPy in your scientific work, please cite it to support
+ongoing development. Use the following BibTeX entry:
 
 .. code::
 

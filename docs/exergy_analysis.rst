@@ -4,7 +4,7 @@ Exergy Analysis Intro
 
 Exergy analysis is a powerful tool for evaluating and optimizing thermodynamic
 systems. Unlike conventional energy analysis, which focuses on the quantity of
-energy, exergy analysis considers both the quantity and quality of energy,
+energy, exergy analysis considers both the quantity and the quality of energy,
 providing deeper insights into system inefficiencies. This approach helps
 identify where and why irreversibilities occur, enabling engineers and
 researchers to develop strategies for improving efficiency, reducing costs,
@@ -24,17 +24,17 @@ Fundamentals of exergy analysis
 *******************************
 
 Energy is a concept of the first law of thermodynamics. It cannot be destroyed.
-But regarding the design and analysis of thermal systems, the idea that
-something can be destroyed is useful. According to the second law of
+However, when it comes to the design and analysis of thermal systems, the idea that
+something can be destroyed becomes useful. According to the second law of
 thermodynamics, the conversion of heat and internal energy into work is
 limited. This constraint and the idea of destruction are applied to introduce a
 new concept: "Exergy".
 
-Exergy can be destroyed due to irreversibility and is able to describe the
-quality of different energy forms. The difference in quality of different forms
-of energy shall be illustrated by the following example. 1 kJ of electrical
+Exergy can be destroyed due to irreversibilities. It is also able to describe the
+quality of different energy forms. The difference in energy quality can be illustrated by the following example. 1 kJ of electrical
 energy is clearly more valuable than 1 kJ of energy in a glass of water at
 ambient temperature :cite:`Bejan1996`.
+
 
 In literature, exergy is defined as follows:
 
@@ -44,7 +44,7 @@ In literature, exergy is defined as follows:
     two systems is a suitably idealized system called an environment and the
     other is some system of interest, exergy is the maximum theoretical useful
     work (shaft work or electrical work) obtainable as the systems interact to
-    equilibrium, heat transfer occuring with the environment only."*
+    equilibrium, heat transfer occurring with the environment only."*
     :cite:`Bejan1996`
 
 
@@ -52,12 +52,10 @@ In literature, exergy is defined as follows:
 Terminology
 ***********
 
-The definitions and nomenclature of the exergy analysis in TESPy are based on
+The definitions and nomenclature used in the exergy analysis in ExerPy are based on
 :cite:`Tsatsaronis2007`. The exergy destruction ratios are described in more
-detail in :cite:`Bejan1996`. Since the current version of the exergy analysis
-in TESPy only focuses on physical exergy and does not include reaction
-processes yet, chemical exergy is not considered. Changes in kinetic and
-potential exergy are neglected and therefore not considered as well.
+detail in :cite:`Bejan1996`. Changes in kinetic and
+potential exergy are neglected and therefore not considered.
 
 .. list-table:: Terminology
     :widths: 15 20 15 50

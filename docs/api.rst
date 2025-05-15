@@ -3,7 +3,7 @@ API Documentation
 #################
 
 The ExerPy package offers a flexible, Python-based solution for conducting exergy
-analysis of energy-conversion systems. The current release supports integration with 
+analysis of energy-conversion systems. The current release supports integration with
 three simulation tools: Ebsilon Professional, Aspen Plus, and TESPy, and allows users to extract detailed simulation
 data of components and connections. The framework follows a structured workflow
 that includes data parsing, physical and chemical exergy calculations, and the
@@ -30,20 +30,20 @@ ExerPy supports parsing models from different simulation tools to extract and pr
       - License type
       - Supported version
       - Operating system
-    * - `Ebsilon Professional <https://www.ebsilon.com/en/>`_
+    * - `Ebsilon Professional <https://www.ebsilon.com/en/>`__
       - A comprehensive tool for simulating and analyzing energy systems, particularly in the field of power plant engineering.
       - Commercial
       - 17.02
       - Windows
-    * - `Aspen Plus <https://www.aspentech.com/en/products/engineering/aspen-plus>`_
+    * - `Aspen Plus <https://www.aspentech.com/en/products/engineering/aspen-plus>`__
       - A powerful process simulation software used for designing and optimizing chemical processes.
       - Commercial
       - 14.5
       - Windows
-    * - `TESPy <https://tespy.readthedocs.io/en/main/>`_
+    * - `TESPy <https://tespy.readthedocs.io/>`__
       - A versatile Python package for simulating thermal energy systems.
       - Open Source
-      - 0.7.7
+      - 0.7.7 or later
       - Windows, macOS, Linux
 
 .. note::
@@ -70,7 +70,7 @@ This module requires the user to provide the following inputs:
 Example:
 
 .. code-block:: python
- 
+
     from exerpy import ExergyAnalysis
     model_path = 'my_model.ebs'
     ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
@@ -121,8 +121,8 @@ exergy analysis module.
 
 The exergy analysis module provides tools for evaluating system performance at both the component and system levels. Key capabilities include:
 
-    1. **Exergy Analysis of Components**: Evaluates the exergy destruction and efficiency of individual components within the system.
-    2. **Exergy Analysis of the Entire System**: Assesses the overall exergy balance, including the exergy of fuel, product, and losses, to determine system-wide efficiency and irreversibilities.
+1. **Exergy Analysis of Components**: Evaluates the exergy destruction and efficiency of individual components within the system.
+2. **Exergy Analysis of the Entire System**: Assesses the overall exergy balance, including the exergy of fuel, product, and losses, to determine system-wide efficiency and irreversibilities.
 
 The method used to perform the exergy analysis is `analyse`. This method takes the
 parsed data as input and conducts the component-level exergy analysis based on the specified parameters.
@@ -179,7 +179,6 @@ The results include the following key parameters:
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
 These values are provided both for each component and for the entire system.
-
 
 **************
 API References

@@ -36,7 +36,6 @@ Key Features
 - **Robust Data Handling**: Consistent fluid property models and automated data extraction from simulation tools.
 - **Open Source**: MIT licensed, free for academic and commercial use.
 
-
 *********************
 Getting Started
 *********************
@@ -50,10 +49,14 @@ You can install the latest version of ExerPy using pip:
 
     pip install exerpy
 
+For complete installation instructions go to
+:ref:`this page <installation_and_setup_label>`
+
 ===================
 Quick Start Example
 ===================
-Here's a simple example how to perform an exergy analysis using ExerPy:
+Here's a simple example how to perform an exergy analysis using ExerPy with an
+Ebsilon model:
 
 .. code:: python
 
@@ -69,7 +72,8 @@ Here's a simple example how to perform an exergy analysis using ExerPy:
     ean.analyse(E_F=fuel, E_P=product)
     ean.exergy_results()
 
-For more detailed tutorials and examples, see the :ref:`User Guide <installation_and_setup_label>`.
+For more detailed tutorials and examples, see the
+:ref:`Example applications <examples_label>`.
 
 ********
 Citation

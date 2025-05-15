@@ -8,8 +8,8 @@ What can I contribute?
 **********************
 
 ExerPy is developed as an open and free-to-use library by
-`Sergio Tomasinelli, MSc. <https://github.com/sertomas>`__ at the Department of Energy and 
-Climate Protection, Technische Universität Berlin, under the supervision of Prof. Fontina Petrakopoulou. 
+`Sergio Tomasinelli, MSc. <https://github.com/sertomas>`__ at the Department of Energy and
+Climate Protection, Technische Universität Berlin, under the supervision of Prof. Fontina Petrakopoulou.
 The goal is to make the project widely accessible and to establish it as a community-driven
 initiative in the future, as users may request special components or flexible
 implementations of characteristics, or custom equations — basically, whatever the user
@@ -60,7 +60,7 @@ in the following sections. If you have any further questions, feel free to
 contact us. We look forward to hearing from you!
 
 Install the developer version
------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 It is recommended to use
 `virtual environments <https://docs.python.org/3/tutorial/venv.html>`_ for
@@ -91,13 +91,13 @@ branch. Make your changes, commit them, and create a pull request on the oemof/e
 branch.
 
 Collaboration with pull requests
---------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To collaborate, use the pull request functionality of GitHub as described here:
 https://guides.github.com/activities/hello-world/
 
 How to create a pull request
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------
 
 * Fork the oemof repository to your own GitHub account.
 * Change, add or remove code.
@@ -110,7 +110,7 @@ How to create a pull request
 .. _coding_requirements_label:
 
 Generally, the following steps are required when changing, adding or removing code
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------------------------------------------------
 
 * Read the :ref:`style_guidlines_label` and :ref:`naming_conventions_label` and
   follow them.
@@ -122,7 +122,7 @@ Generally, the following steps are required when changing, adding or removing co
 .. _tests_label:
 
 Tests
------
+^^^^^
 
 The tests in ExerPy are divided into two main parts:
 
@@ -130,7 +130,7 @@ The tests in ExerPy are divided into two main parts:
 * software tests (defined in the tests folder).
 
 The tests contain code examples that expect a specific outcome. If the outcome
-matches the expectation, the test passes; if it differs, the test 
+matches the expectation, the test passes; if it differs, the test
 fails. You can run the tests locally by navigating into your local GitHub clone.
 The command :code:`check` tests PEP guidelines, the command :code:`docs`
 tests the documentation build, and the command :code:`py3X` runs the
@@ -159,7 +159,7 @@ We look forward to your inquiry.
 .. _style_guidlines_label:
 
 Issue-Management
-----------------
+^^^^^^^^^^^^^^^^
 
 A good way to communicate with the development team is through issues on GitHub. If you
 discover a bug, want to suggest an enhancement or have a question about a specific
@@ -171,31 +171,29 @@ development problem you’d like to discuss, please create an issue:
 Look at the existing issues to get an idea of how issues are used and structured.
 
 Style guidelines
-----------------
+^^^^^^^^^^^^^^^^
 
 We mostly follow standard guidelines rather than creating our own rules. So if
 anything is not defined in this section, refer to a
 `PEP rule <https://www.python.org/dev/peps/>`_ and follow it.
 
 Docstrings
-^^^^^^^^^^
+----------
 
 We have adopted the numpydoc style for docstrings. See the following
 link for more information:
 `numpy docstrings <https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_numpy.html>`_.
 
-
 Code commenting
-^^^^^^^^^^^^^^^^
+---------------
 
 Code comments include block and inline comments in the source code. They help
 improve understanding of the code and should be used "as much as necessary, as little
 as possible". When writing comments follow the
 `PEP 0008 style guide <https://www.python.org/dev/peps/pep-0008/#comments>`_.
 
-
 PEP8 (Python Style Guide)
-^^^^^^^^^^^^^^^^^^^^^^^^^
+-------------------------
 
 * We adhere to `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_ for all code
   produced in the framework.
@@ -229,10 +227,10 @@ Naming Conventions
 
 
 Using git
----------
+^^^^^^^^^
 
 Branching model
-^^^^^^^^^^^^^^^
+---------------
 
 We mostly follow the Git branching model described by
 `Vincent Driessen <https://nvie.com/posts/a-successful-git-branching-model/>`_.
@@ -244,14 +242,14 @@ Differences are:
 * Release branches are named like ``releases/*``
 
 Commit message
-^^^^^^^^^^^^^^
+--------------
 
 Use this helpful `commit tutorial <https://commit.style/>`_ to
 learn how to write clear and well structured commit messages.
 
 
 Documentation
-----------------
+^^^^^^^^^^^^^
 
 The general implementation-independent documentation, such as installation
 guide, flow charts, and mathematical models, is written in ReStructuredText (rst).

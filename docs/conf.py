@@ -147,4 +147,5 @@ htmlhelp_basename = 'exerpy_doc'
 
 # we can insert links to be ignored by the docs linkcheck
 linkcheck_ignore = [
+    r"https://doi.org*"
 ]

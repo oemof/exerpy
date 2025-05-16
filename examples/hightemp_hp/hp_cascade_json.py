@@ -277,3 +277,46 @@ else:
     print("Investment costs (Z) [EUR/h]:", round(total_Z_cost, 2))
     print("Fuel costs (E1+E2) [EUR/h]:", round(inlet_cost, 2))
     print("Product cost (C_P) [EUR/h]:", round(product_cost, 2))
+
+import matplotlib.pyplot as plt
+
+# ---- before plotting, drop all valves by name ----
+df_plot = df_comp[~df_comp['Component'].str.contains('VAL2')].copy()
+df_plot = df_plot[~df_plot['Component'].str.contains('VAL1')].copy()
+
+# Extract data
+components = df_plot['Component']
+ε_vals      = df_plot['ε [%]']
+f_vals      = df_plot['f [%]']
+Z_vals      = df_plot['Z [EUR/h]']
+
+# Compute marker areas and per-point radii
+max_marker_area = 600    # points^2
+areas = (Z_vals / Z_vals.max()) * max_marker_area
+radii = np.sqrt(areas / np.pi)    # radius in points
+
+# Plot
+plt.figure(figsize=(8, 6))
+plt.scatter(ε_vals, f_vals, s=areas, alpha=0.7, edgecolors='w', color='red')
+
+# Annotate each point to the NE, offset by its radius + a small margin
+for x, y, label, r in zip(ε_vals, f_vals, components, radii):
+    offset = r + 2   # 2 points padding
+    plt.annotate(
+        label,
+        xy=(x, y),
+        xytext=(offset, -offset),
+        textcoords='offset points',
+        ha='left',
+        va='bottom',
+        fontsize=10
+    )
+
+plt.xlabel('Exergetic efficiency [%]')
+plt.ylabel('Exergoeconomic Factor [%]')
+plt.title('Component‐wise Exergoeconomic Analysis')
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.xlim(0, 100)
+plt.ylim(0, 100)
+plt.show()

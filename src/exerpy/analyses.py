@@ -667,9 +667,8 @@ class ExergoeconomicAnalysis:
         valid_components = {comp.name for comp in self.components.values()}
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
-        for conn in self.connections.values():
-            if not conn['name']:
-                conn['name'] = conn.get('label', 'Unknown')
+        for name, conn in self.connections.items():
+            conn["name"] = name  # Add the connection name to the dictionary
             is_part_of_the_system = (conn.get("source_component") in valid_components) or \
                                     (conn.get("target_component") in valid_components)
             if not is_part_of_the_system:
@@ -684,17 +683,17 @@ class ExergoeconomicAnalysis:
                             "M": col_number + 1,
                             "CH": col_number + 2
                         }
-                        self.variables[str(col_number)]     = f"C_{conn['name']}_T"
-                        self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
-                        self.variables[str(col_number + 2)] = f"C_{conn['name']}_CH"
+                        self.variables[str(col_number)]     = f"C_{name}_T"
+                        self.variables[str(col_number + 1)] = f"C_{name}_M"
+                        self.variables[str(col_number + 2)] = f"C_{name}_CH"
                         col_number += 3
                     else:
                         conn["CostVar_index"] = {
                             "T": col_number,
                             "M": col_number + 1
                         }
-                        self.variables[str(col_number)]     = f"C_{conn['name']}_T"
-                        self.variables[str(col_number + 1)] = f"C_{conn['name']}_M"
+                        self.variables[str(col_number)]     = f"C_{name}_T"
+                        self.variables[str(col_number + 1)] = f"C_{name}_M"
                         col_number += 2
                     # Check if this connection's target is a dissipative component.
                     target = conn.get("target_component")
@@ -708,7 +707,7 @@ class ExergoeconomicAnalysis:
                 # For non-material streams (e.g., heat, power), assign one index.
                 elif kind in ("heat", "power"):
                     conn["CostVar_index"] = {"exergy": col_number}
-                    self.variables[str(col_number)] = f"C_{conn['name']}_TOT"
+                    self.variables[str(col_number)] = f"C_{name}_TOT"
                     col_number += 1
 
         # Store the total number of cost variables for later use.
@@ -856,7 +855,7 @@ class ExergoeconomicAnalysis:
         # Set the flag: if any power connection has NO target component, then there is an outlet.
         has_power_outlet = any(conn.get("target_component") is None for conn in power_conns)
 
-        for conn in self.connections.values():
+        for name, conn in self.connections.items():
             # A connection is treated as an inlet if its source_component is missing or not part of the system
             # and its target_component is among the valid components.
             if (conn.get("source_component") is None or conn.get("source_component") not in self.components) \
@@ -871,13 +870,13 @@ class ExergoeconomicAnalysis:
                         idx = conn["CostVar_index"][label]
                         A[counter, idx] = 1  # Fix the cost variable.
                         b[counter] = conn.get(f"C_{label}", conn.get("C_TOT", 0))
-                        self.equations[counter] = f"boundary_stream_costs_{conn['name']}_{label}"
+                        self.equations[counter] = f"boundary_stream_costs_{name}_{label}"
                         counter += 1
                 elif kind == "heat":
                     idx = conn["CostVar_index"]["exergy"]
                     A[counter, idx] = 1
                     b[counter] = conn.get("C_TOT", 0)
-                    self.equations[counter] = f"boundary_stream_costs_{conn['name']}_TOT"
+                    self.equations[counter] = f"boundary_stream_costs_{name}_TOT"
                     counter += 1
                 elif kind == "power":
                     if not has_power_outlet:
@@ -887,7 +886,7 @@ class ExergoeconomicAnalysis:
                         idx = conn["CostVar_index"]["exergy"]
                         A[counter, idx] = 1
                         b[counter] = conn.get("C_TOT", 0)
-                        self.equations[counter] = f"boundary_stream_costs_{conn['name']}_TOT"
+                        self.equations[counter] = f"boundary_stream_costs_{name}_TOT"
                         counter += 1
                     else:
                         continue

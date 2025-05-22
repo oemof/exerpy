@@ -1,4 +1,5 @@
-from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
+from tespy.components import Compressor, Source, Sink, CycleCloser, Pump, Valve
+from tespy.components import MovingBoundaryHeatExchanger as HeatExchanger
 from tespy.connections import Connection, Ref, Bus
 from tespy.networks import Network
 from exerpy import ExergyAnalysis, ExergoeconomicAnalysis, EconomicAnalysis
@@ -8,6 +9,9 @@ import logging
 import pandas as pd
 from tabulate import tabulate
 import numpy as np
+
+from tespy.tools.logger import define_logging
+
 
 nw = Network(T_unit="C", p_unit="bar", h_unit="kJ / kg", m_unit="kg / s", iterinfo=False)
 
@@ -65,7 +69,7 @@ c32.set_attr(p=17.5)
 c33.set_attr(h=364)
 c34.set_attr(p=4.1)
 
-c41.set_attr(fluid={"water": 1}, T=120, p=2, m=1)
+c41.set_attr(fluid={"water": 1}, T=120, x=0, m=1)
 c42.set_attr(h=2706)
 
 comp1.set_attr(eta_s=0.8)
@@ -79,10 +83,19 @@ nw.solve("design")
 
 c21.set_attr(h=None, Td_bp=5)
 c23.set_attr(h=None)
+
+c22.set_attr(p=None)
+c23.set_attr(Td_bp=-5)
+
 c24.set_attr(p=None)
 c31.set_attr(h=None, Td_bp=5)
 c33.set_attr(h=None)
+c34.set_attr(p=None, T=60)
+
 c42.set_attr(h=None, x=1)
+
+c33.set_attr(x=0)
+c32.set_attr(p=None)
 
 air_hx.set_attr(ttd_l=5)
 ihx.set_attr(ttd_l=5)
@@ -132,15 +145,68 @@ i_eff = 0.08                # Interest rate
 n = 20                      # Number of years
 omc_relative = 0.03         # Relative operation and maintenance costs (compared to PEC)
 
+import numpy as np
+
+# %%[exergy_analysis_setup]
+fuel = {
+    "inputs": [
+        'power input__motor_of_COMP1',
+        'power input__motor_of_COMP2'
+    ],
+    "outputs": []
+}
+
+product = {
+    "inputs": ['42'],
+    "outputs": ['41']
+}
+
+loss = {
+    "inputs": ['12'],
+    "outputs": ['11']
+}
+
+epsilon_range = []
+COP_range = []
+T_range = np.arange(50, 81, 5)
+for T in T_range:
+    c34.set_attr(T=T)
+    nw.solve("design")
+    Q_out = c42.m.val * (c42.h.val - c41.h.val)
+    COP2 = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val*1e-3)
+    COP1 = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val*1e-3)
+    COP = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val*1e-3)
+    COP_range.append(COP)
+
+    print("Q = ", round(Q_out, 1), "kW")
+    print("COP = ", round(COP, 3))
+    print("COP1 = ", round(COP1, 3))
+    print("COP2 = ", round(COP2, 3))
+
+    ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+    # %%[exergy_analysis_flows]
+    ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+    define_logging(screen_level=logging.ERROR)
+    # df_component_results, _, df_network_results = ean.exergy_results(print_results=False)
+    # ean.export_to_json("examples/hightemp_hp/hp_cascade_tespy.json")
+    epsilon_range.append(ean.epsilon)
+
+from matplotlib import pyplot as plt
+
+fig, ax = plt.subplots(2)
+
+ax[0].plot(T_range, COP_range)
+ax[1].plot(T_range, epsilon_range)
+plt.show()
 # %% Exergoeconomic analysis
 def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     """
     Reload the exergy analysis from the JSON file, calculate PEC (with cost correction),
     multiply PEC by 6.32 to obtain the Total Capital Investment (TCI), and run economic
     and exergoeconomic analyses using the given electricity price and full load hours.
-    
+
     Returns the component results DataFrame and other result DataFrames from the exergoeconomic analysis.
-    
+
     Parameters
     ----------
     elec_price_cent_kWh : float
@@ -150,8 +216,9 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     """
     # Reload a virgin exergy analysis.
     ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
-    
+
     # Define exergy streams.
+    # %%[exergy_analysis_setup]
     fuel = {
         "inputs": [
             'power input__motor_of_COMP1',
@@ -169,11 +236,11 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
         "inputs": ['12'],
         "outputs": ['11']
     }
-    
+
     # Run the exergy analysis.
     ean.analyse(E_F=fuel, E_P=product, E_L=loss)
     ean.exergy_results(print_results=True)
-    
+
     # 1) Seed with every Exerpy component at zero cost
     PEC_computed = { comp.name: 0.0 for comp in ean.components.values() }
 
@@ -205,22 +272,22 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
             else:
                 PEC = 0.0
             PEC_computed[name] = PEC
-        
+
         # --- Compressors (and Fans) ---
         elif comp.__class__.__name__ == "Compressor":
             VM = comp.inl[0].property_data['v'].val
             PEC = 19850 * ((VM * 3600) / 279.8)**0.73
             PEC *= CEPCI_factor  # Adjust PEC cost.
             PEC_computed[name] = PEC
-        
+
         # --- Valves ---
         elif comp.__class__.__name__ == "Valve":
             PEC_computed[name] = 0.0
-        
+
         # --- Other components ---
         else:
             PEC_computed[name] = 0.0
-    
+
     '''# Process Motors using the specific correlation for electrical input power.
     for comp in ean.components.values():
         if isinstance(comp, Motor):
@@ -233,7 +300,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
             else:
                 PEC = 0.0
             PEC_computed[name] = PEC'''
-    
+
     # ------------------------------
     # Economic Analysis
     # ------------------------------
@@ -241,7 +308,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     # 1 kWh = 3.6 MJ and 1 GJ = 277.78 kWh.
     elec_cost_eur_per_kWh = elec_price_cent_kWh / 100.0
     elec_cost_eur_per_GJ = elec_cost_eur_per_kWh * 277.78
-    
+
     econ_pars = {
         'tau': tau,
         'i_eff': i_eff,
@@ -253,7 +320,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     # Multiply each PEC by 6.32 to obtain TCI.
     TCI_list = [pec * 6.32 for pec in PEC_list]
     OMC_relative = [omc_relative if pec > 0 else 0.0 for pec in TCI_list]
-    
+
     econ_analysis = EconomicAnalysis(econ_pars)
     Z_CC, Z_OMC, Z_total = econ_analysis.compute_component_costs(TCI_list, OMC_relative)
 
@@ -276,10 +343,10 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
 
     # Add a total row
     component_costs_df.loc[len(component_costs_df)] = [
-        'TOTAL', 
-        round(total_pec, 2), 
-        round(total_tci, 2), 
-        round(total_z_cc, 2), 
+        'TOTAL',
+        round(total_pec, 2),
+        round(total_tci, 2),
+        round(total_z_cc, 2),
         round(total_z_omc, 2),
         round(total_z, 2)
     ]
@@ -295,7 +362,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     Exe_Eco_Costs["11_c"] = 0.0
     Exe_Eco_Costs["41_c"] = 0.0
     Exe_Eco_Costs["power input__motor_of_COMP1_c"] = elec_cost_eur_per_GJ
-    
+
     # ------------------------------
     # Exergoeconomic Analysis
     # ------------------------------
@@ -303,7 +370,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
     exergoeco_analysis.run(Exe_Eco_Costs=Exe_Eco_Costs, Tamb=ean.Tamb)
     # Unpack four DataFrames; we only use the component results.
     df_comp, df_mat1, df_mat2, df_non_mat = exergoeco_analysis.exergoeconomic_results()
-    
+
     return df_comp, df_mat1, df_mat2, df_non_mat
 
 print(f"\n --- Exergoeconomic analysis for the case with electricity price = {default_elec_price} cent/kWh and tau = {default_tau} hours/year --- \n")

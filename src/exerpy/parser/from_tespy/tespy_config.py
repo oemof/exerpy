@@ -1,6 +1,7 @@
 EXERPY_TESPY_MAPPINGS = {
     "SteamTurbine": "Turbine",
     "HeatExchanger": "HeatExchanger",
+    "MovingBoundaryHeatExchanger": "HeatExchanger",
     "Desuperheater": "HeatExchanger",
     "Condenser": "Condenser",
     "SimpleHeatExchanger": "SimpleHeatExchanger",

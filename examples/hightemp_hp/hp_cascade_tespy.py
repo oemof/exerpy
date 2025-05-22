@@ -126,8 +126,8 @@ print("COP2 = ", round(COP2, 3))
 nw._convergence_check()
 
 # %% ambient conditions
-p0 = c11.T.val * 1e5
-T0 = c11.p.val + 273.15
+p0 = c11.p.val * 1e5
+T0 = c11.T.val + 273.15
 
 # %% economic parameters
 # Define the CEPCI values for cost correction.

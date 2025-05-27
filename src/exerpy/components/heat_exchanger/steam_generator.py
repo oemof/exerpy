@@ -56,7 +56,7 @@ class SteamGenerator(Component):
     The exergy destruction and efficiency are then given by:
 
     .. math::
-        \dot{E}_D = \dot{E}_F - \dot{E}_P \quad\text{and}\quad \varepsilon = \frac{\dot{E}_P}{\dot{E}_F}
+        \dot{E}_D = \dot{E}_F - \dot{E}_P \quad\mathrm{and}\quad \varepsilon = \frac{\dot{E}_P}{\dot{E}_F}
 
     Parameters
     ----------
@@ -66,11 +66,11 @@ class SteamGenerator(Component):
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_F` in :math:`\text{W}`.
+        Exergy fuel of the component :math:`\dot{E}_F` in :math:`\mathrm{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_P` in :math:`\text{W}`.
+        Exergy product of the component :math:`\dot{E}_P` in :math:`\mathrm{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_D` in :math:`\text{W}`.
+        Exergy destruction of the component :math:`\dot{E}_D` in :math:`\mathrm{W}`.
     epsilon : float
         Exergetic efficiency :math:`\varepsilon`.
     inl : dict

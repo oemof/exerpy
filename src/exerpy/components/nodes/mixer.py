@@ -24,11 +24,11 @@ class Mixer(Component):
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\mathrm{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\mathrm{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\mathrm{W}`.
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
@@ -50,20 +50,20 @@ class Mixer(Component):
         \begin{cases}
         \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
         e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} \geq T_0 \\
         \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} < T_0 \\
         \end{cases} & T_\mathrm{out} > T_0\\
-        \text{not defined (nan)} & T_\mathrm{out} = T_0\\
+        \mathrm{not defined (nan)} & T_\mathrm{out} = T_0\\
         \begin{cases}
         \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} \geq T_0 \\
         \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
         e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} < T_0 \\
         \end{cases} & T_\mathrm{out} < T_0\\
         \end{cases}
@@ -75,14 +75,14 @@ class Mixer(Component):
         e_\mathrm{out}^\mathrm{PH})
         & T_{\mathrm{in,}i} > T_\mathrm{out} \\
         \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} < T_0 \\
         \end{cases} & T_\mathrm{out} > T_0\\
         \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
         & T_\mathrm{out} = T_0\\
         \begin{cases}
         \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \text{ & }
+        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
         T_{\mathrm{in,}i} \geq T_0 \\
         \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
         e_\mathrm{out}^\mathrm{PH})
@@ -90,7 +90,7 @@ class Mixer(Component):
         \end{cases} & T_\mathrm{out} < T_0\\
         \end{cases}
 
-        \forall i \in \text{mixer inlets}
+        \forall i \in \mathrm{mixer inlets}
     """
 
     def __init__(self, **kwargs):
@@ -107,9 +107,9 @@ class Mixer(Component):
         Parameters
         ----------
         T0 : float
-            Ambient temperature in :math:`\text{K}`.
+            Ambient temperature in :math:`\mathrm{K}`.
         p0 : float
-            Ambient pressure in :math:`\text{Pa}`.
+            Ambient pressure in :math:`\mathrm{Pa}`.
         split_physical_exergy : bool
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 

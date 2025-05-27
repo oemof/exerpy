@@ -17,7 +17,7 @@ class Drum(Component):
         T0 : float
             Ambient temperature T0 / K.
         p0 : float
-            Ambient pressure in :math:`\text{Pa}`.
+            Ambient pressure in :math:`\mathrm{Pa}`.
         split_physical_exergy : bool
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 

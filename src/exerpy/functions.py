@@ -296,18 +296,28 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
     """
     Adds the total exergy flow to each connection in the JSON data based on its kind.
 
-    For 'material' connections, the exergy is calculated as before.
-    For 'power' connections, the energy flow value is used directly.
-    For 'heat' connections, if the associated component is of class SimpleHeatExchanger,
-    the thermal exergy difference is computed as:
-        E = (e_T_in * m_in) - (e_T_out * m_out)
+    - For 'material' connections, the exergy is calculated as before.
+    - For 'power' connections, the energy flow value is used directly.
+    - For 'heat' connections, if the associated component is of class
+      SimpleHeatExchanger, the thermal exergy difference is computed as:
+      ..math::
+          E = (e^\mathrm{T}_\mathrm{in} \cdot \dot m_\mathrm{in})
+          - (e^\mathrm{T}_\mathrm{out} \cdot \dot m_\mathrm{out})
+
     Otherwise, a warning is logged and E is set to None.
 
-    Parameters:
-    - my_json: The JSON object containing the components and connections.
+    Parameters
+    ----------
+    my_json : dict
+        The JSON object containing the components and connections.
+    split_physical_exergy : bool
+        Split physical exergy in mechanical and thermal shares.
 
-    Returns:
-    - The modified JSON object with added total exergy flow for each connection.
+    Returns
+    -------
+    dict
+        The modified JSON object with added total exergy flow for each
+        connection.
     """
     for conn_name, conn_data in my_json['connections'].items():
         try:

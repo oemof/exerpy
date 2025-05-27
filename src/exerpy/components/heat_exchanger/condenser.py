@@ -80,13 +80,13 @@ class Condenser(Component):
 
         - **Exergy Loss (E_L)**:
             \[
-            E_L = \dot{m}_{\text{out,1}} \cdot (e_{\text{PH,out,1}} - e_{\text{PH,in,1}})
+            E_L = \dot{m}_{\mathrm{out,1}} \cdot (e_{\mathrm{PH,out,1}} - e_{\mathrm{PH,in,1}})
             \]
             Represents the exergy loss due to heat transfer from the process.
 
         - **Exergy Destruction (E_D)**:
             \[
-            E_D = \dot{m}_{\text{out,0}} \cdot (e_{\text{PH,in,0}} - e_{\text{PH,out,0}}) - E_L
+            E_D = \dot{m}_{\mathrm{out,0}} \cdot (e_{\mathrm{PH,in,0}} - e_{\mathrm{PH,out,0}}) - E_L
             \]
             Accounts for the irreversibilities and losses in the condenser.
 

@@ -24,11 +24,11 @@ class Valve(Component):
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\text{W}`.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\mathrm{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\text{W}`.
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\mathrm{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\text{W}`.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\mathrm{W}`.
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
@@ -47,7 +47,7 @@ class Valve(Component):
 
         \dot{E}_\mathrm{P} =
         \begin{cases}
-        \text{not defined (nan)}
+        \mathrm{not defined (nan)}
         & T_\mathrm{in}, T_\mathrm{out} > T_0\\
         \dot{m} \cdot e_\mathrm{out}^\mathrm{T}
         & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
@@ -71,8 +71,8 @@ class Valve(Component):
 
     .. math::
         \dot{E}_\mathrm{D} = \begin{cases}
-        \dot{E}_\mathrm{F} & \text{if } \dot{E}_\mathrm{P} = \text{nan}\\
-        \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P} & \text{otherwise}
+        \dot{E}_\mathrm{F} & \mathrm{if } \dot{E}_\mathrm{P} = \mathrm{nan}\\
+        \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P} & \mathrm{otherwise}
         \end{cases}
 
     Where:
@@ -95,9 +95,9 @@ class Valve(Component):
         Parameters
         ----------
         T0 : float
-            Ambient temperature in :math:`\text{K}`.
+            Ambient temperature in :math:`\mathrm{K}`.
         p0 : float
-            Ambient pressure in :math:`\text{Pa}`.
+            Ambient pressure in :math:`\mathrm{Pa}`.
         split_physical_exergy : bool
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 

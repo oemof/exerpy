@@ -1084,7 +1084,7 @@ class ExergoeconomicAnalysis:
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
         self.solve_exergoeconomic_analysis(Tamb)
-        print("Exergoeconomic analysis completed successfully.")
+        logging.info(f"Exergoeconomic analysis completed successfully.")
 
 
     def exergoeconomic_results(self, print_results=True):

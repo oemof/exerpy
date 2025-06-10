@@ -289,7 +289,7 @@ class Valve(Component):
             A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
             A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
         b[counter] = 0
-        equations[counter] = f"diss_valve_thermal_{self.label}"
+        equations[counter] = f"diss_valve_thermal_{self.name}"
         counter += 1
 
         # --- Mechanical difference row ---
@@ -300,7 +300,7 @@ class Valve(Component):
             A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
             A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
         b[counter] = 0
-        equations[counter] = f"diss_valve_mechanical_{self.label}"
+        equations[counter] = f"diss_valve_mechanical_{self.name}"
         counter += 1
 
         # --- Distribution of dissipative cost difference to other components based on E_D ---
@@ -314,7 +314,7 @@ class Valve(Component):
         total_E_D = sum(getattr(comp, "E_D", 0) for comp in serving)
         diss_col = self.inl[0]["CostVar_index"].get("dissipative")
         if diss_col is None:
-            logging.warning(f"No 'dissipative' column allocated for {self.label}.")
+            logging.warning(f"No 'dissipative' column allocated for {self.name}.")
         else:
             if total_E_D == 0:
                 # Fall back to equal distribution if total exergy destruction is zero.
@@ -335,7 +335,7 @@ class Valve(Component):
         # Subtract the unknown dissipative cost difference:
         A[counter, self.inl[0]["CostVar_index"]["dissipative"]] = -1
         b[counter] = -self.Z_costs
-        equations[counter] = f"diss_valve_balance_{self.label}"
+        equations[counter] = f"diss_valve_balance_{self.name}"
         counter += 1
 
         return A, b, counter, equations

@@ -115,12 +115,12 @@ class Compressor(Component):
         # First, check for the invalid case: outlet temperature smaller than inlet temperature.
         if self.inl[0]['T'] > self.outl[0]['T']:
             logging.warning(
-                f"Exergy balance of compressor '{self.label}' where outlet temperature ({self.outl[0]['T']}) "
+                f"Exergy balance of compressor '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
                 f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
             )
             self.E_P = np.nan
             self.E_F = np.nan
-            
+
         # Case 1: Both temperatures above ambient
         elif round(self.inl[0]['T'], 5) >= T0 and round(self.outl[0]['T'], 5) > T0:
             self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
@@ -153,7 +153,7 @@ class Compressor(Component):
         # Invalid case: outlet temperature smaller than inlet
         else:
             logging.warning(
-                f"Exergy balance of compressor '{self.label}' where outlet temperature is smaller "
+                f"Exergy balance of compressor '{self.name}' where outlet temperature is smaller "
                 "than inlet temperature is not implemented."
             )
             self.E_P = np.nan
@@ -165,7 +165,7 @@ class Compressor(Component):
 
         # Log the results
         logging.info(
-            f"Compressor '{self.label}' exergy balance calculated: "
+            f"Compressor '{self.name}' exergy balance calculated: "
             f"E_P={self.E_P:.2f} W, E_F={self.E_F:.2f} W, E_D={self.E_D:.2f} W, "
             f"Efficiency={self.epsilon:.2%}"
         )

@@ -521,9 +521,7 @@ def _construct_components(component_data, connection_data, Tamb):
                 continue
 
             # Instantiate the component with its attributes
-            kwargs = component_information
-            kwargs["label"] = component_name  # Use the component's name as the label
-            component = component_class(**kwargs)
+            component = component_class(**component_information)
 
             # Initialize empty dictionaries for inlets and outlets
             component.inl = {}

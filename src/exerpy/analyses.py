@@ -1057,14 +1057,26 @@ class ExergoeconomicAnalysis:
         for comp in self.exergy_analysis.components.values():
             # Sum Z_costs from all non-CycleCloser components, converting from currency/s to currency/h.
             if comp.__class__.__name__ != "CycleCloser":
-                Z_total += getattr(comp, "Z_costs", 0) * 3600
+                Z_total += getattr(comp, "Z_costs", 0)
+
+        # convert the costs to currency/h
+        C_F_total *= 3600
+        C_P_total *= 3600
+        Z_total *= 3600
 
         # Store the system-level costs in the exergy analysis instance.
         self.system_costs = {
-            "C_F": C_F_total,
-            "C_P": C_P_total,
-            "Z": Z_total
+            "C_F": float(C_F_total),
+            "C_P": float(C_P_total),
+            "Z": float(Z_total)
         }
+
+        # Check cost balance and raise error if violated
+        if abs(self.system_costs["C_P"] - self.system_costs["C_F"] - self.system_costs["Z"]) > 1e-4:
+            raise ValueError(
+                f"Exergoeconomic cost balance not satisfied: C_P ({self.system_costs['C_P']:.6f}) ≠ "
+                f"C_F ({self.system_costs['C_F']:.6f}) + Z ({self.system_costs['Z']:.6f})"
+            )
 
         return exergy_cost_matrix, exergy_cost_vector
 
@@ -1162,8 +1174,8 @@ class ExergoeconomicAnalysis:
         df_comp[f"r [%]"] = r_list
 
         # Update the TOT row with system-level values using .loc.
-        df_comp.loc["TOT", f"C_F [{self.currency}/h]"] = self.system_costs.get("C_F", np.nan) * 3600
-        df_comp.loc["TOT", f"C_P [{self.currency}/h]"] = self.system_costs.get("C_P", np.nan) * 3600
+        df_comp.loc["TOT", f"C_F [{self.currency}/h]"] = self.system_costs.get("C_F", np.nan)
+        df_comp.loc["TOT", f"C_P [{self.currency}/h]"] = self.system_costs.get("C_P", np.nan)
         df_comp.loc["TOT", f"Z [{self.currency}/h]"]   = self.system_costs.get("Z", np.nan)
         df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] = (
             df_comp.loc["TOT", f"C_D [{self.currency}/h]"] +

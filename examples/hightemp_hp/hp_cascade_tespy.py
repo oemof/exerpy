@@ -81,12 +81,12 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, print_results=False):
         PEC = 0.0  # Default PEC
         # --- Heat Exchangers ---
         if comp.__class__.__name__ == "HeatExchanger" or comp.__class__.__name__ == "MovingBoundaryHeatExchanger":
-            kA = comp.kA.val if hasattr(comp.kA, "val") else getattr(comp, "kA", 0.0)
-            if kA:
+            UA = comp.UA.val if hasattr(comp.UA, "val") else getattr(comp, "UA", 0.0)
+            if UA:
                 k = k_lookup.get(name)
                 if k is None:
                     raise KeyError(f"No k-value defined for heat exchanger '{name}'")
-                A = kA / k
+                A = UA / k
                 PEC = 15526 * (A / 42)**0.8 * CEPCI_factor
             else:
                 PEC = 0.0

@@ -251,15 +251,15 @@ c32.set_attr(p=17.5)
 c33.set_attr(h=364)
 c34.set_attr(p=4.1)
 
-c41.set_attr(fluid={"water": 1}, T=120, x=0, m=1)
+c41.set_attr(fluid={"water": 1}, p=2, x=0, m=1)
 c42.set_attr(h=2706)
 
 comp1.set_attr(eta_s=0.8)
 comp2.set_attr(eta_s=0.8)
 
-steam_gen.set_attr(pr1=1, pr2=1)
-air_hx.set_attr(pr1=1, pr2=1)
-ihx.set_attr(pr1=1, pr2=1)
+steam_gen.set_attr(pr1=0.95, pr2=1)
+air_hx.set_attr(pr1=1, pr2=0.95)
+ihx.set_attr(pr1=0.95, pr2=0.95)
 
 nw.solve("design")
 
@@ -357,6 +357,7 @@ for T in T_range:
     # 1) update evaporator temperature and solve TESPy
     c34.set_attr(T=T)
     nw.solve("design")
+    nw.print_results()
 
     # 2) compute COP and exergetic efficiency
     COP = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val * 1e-3)
@@ -482,4 +483,4 @@ def plot_all_components(metric_prefix, ylabel=None):
 
 # fire off all four at once:
 plot_all_components('Z',      'Z [EUR/h]')
-plt.show() 
+plt.show()

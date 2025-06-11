@@ -18,5 +18,6 @@ EXERPY_TESPY_MAPPINGS = {
     "Merge": "Mixer",
     "Generator": "Generator",
     "Motor": "Motor",
-    "Drum": "Drum"
+    "Drum": "Drum",
+    "CycleCloser": "CycleCloser",
 }

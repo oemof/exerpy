@@ -22,8 +22,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "COMP1"
+                "energy_flow_1": null
             },
             "COMP2": {
                 "name": "COMP2",
@@ -46,8 +45,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "COMP2"
+                "energy_flow_1": null
             }
         },
         "CycleCloser": {
@@ -72,8 +70,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "SEP1"
+                "energy_flow_1": null
             },
             "SEP2": {
                 "name": "SEP2",
@@ -96,8 +93,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "SEP2"
+                "energy_flow_1": null
             }
         },
         "HeatExchanger": {
@@ -122,35 +118,10 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 231.34217787840487,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "AIR_HX"
+                "energy_flow_1": null
             },
-            "EVA": {
-                "name": "EVA",
-                "type": "Evaporator with Steam Drum",
-                "type_index": 70,
-                "eta_s": 0.8,
-                "eta_mech": null,
-                "eta_el": null,
-                "eta_cc": null,
-                "lamb": null,
-                "Q": 2201557.920518595,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "kA": 364.00852218176976,
-                "kA_unit": "W / K",
-                "A": 315.4740525575338,
-                "A_unit": "m2",
-                "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
-                "mass_flow_3": 18.332563584252245,
-                "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "EVA"
-            },
-            "INT_HX": {
-                "name": "INT_HX",
+            "IHX": {
+                "name": "IHX",
                 "type": "Universal Heat Exchanger",
                 "type_index": 55,
                 "eta_s": null,
@@ -170,8 +141,30 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": 9.16,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "INT_HX"
+                "energy_flow_1": null
+            },
+            "STEAM_GEN": {
+                "name": "STEAM_GEN",
+                "type": "Evaporator with Steam Drum",
+                "type_index": 70,
+                "eta_s": 0.8,
+                "eta_mech": null,
+                "eta_el": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": 2201557.920518595,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": 364.00852218176976,
+                "kA_unit": "W / K",
+                "A": 315.4740525575338,
+                "A_unit": "m2",
+                "mass_flow_1": null,
+                "mass_flow_1_unit": "W",
+                "mass_flow_3": 18.332563584252245,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null
             }
         },
         "Motor": {
@@ -196,8 +189,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 428086.10957934224,
-                "label": "MOT1"
+                "energy_flow_1": 428086.10957934224
             },
             "MOT2": {
                 "name": "MOT2",
@@ -220,8 +212,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 626593.9964805628,
-                "label": "MOT2"
+                "energy_flow_1": 626593.9964805628
             }
         },
         "Valve": {
@@ -246,8 +237,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "VAL1"
+                "energy_flow_1": null
             },
             "VAL2": {
                 "name": "VAL2",
@@ -270,8 +260,7 @@
                 "mass_flow_1_unit": "W",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "label": "VAL2"
+                "energy_flow_1": null
             }
         }
     },
@@ -313,8 +302,8 @@
                 "N2": 0.7552,
                 "O2": 0.2314
             },
-            "E": 0.0001978032289629537,
             "E_PH": 0.0001978032289629537,
+            "E": 0.0001978032289629537,
             "E_T": 0.00019774631980985246,
             "E_M": 5.690915310122646e-08,
             "E_unit": "W"
@@ -356,8 +345,8 @@
                 "N2": 0.7552,
                 "O2": 0.2314
             },
-            "E": 10029.534272815752,
             "E_PH": 10029.534272815752,
+            "E": 10029.534272815752,
             "E_T": 10029.534276151473,
             "E_M": -3.3357198307102755e-06,
             "E_unit": "W"
@@ -365,7 +354,7 @@
         "20": {
             "name": "20",
             "kind": "material",
-            "source_component": "INT_HX",
+            "source_component": "IHX",
             "source_component_type": 55,
             "source_connector": 0,
             "target_component": "SEP2",
@@ -396,8 +385,8 @@
             "mass_composition": {
                 "R245FA": 1
             },
-            "E": 77307.48765884181,
             "E_PH": 77307.48765884181,
+            "E": 77307.48765884181,
             "E_T": 42821.61790700992,
             "E_M": 34485.869751831895,
             "E_unit": "W"
@@ -436,8 +425,8 @@
             "mass_composition": {
                 "R245FA": 1
             },
-            "E": -34998.38257728186,
             "E_PH": -34998.38257728186,
+            "E": -34998.38257728186,
             "E_T": 343.4696066702439,
             "E_M": -35341.852183952105,
             "E_unit": "W"
@@ -448,7 +437,7 @@
             "source_component": "COMP1",
             "source_component_type": 24,
             "source_connector": 0,
-            "target_component": "INT_HX",
+            "target_component": "IHX",
             "target_component_type": 55,
             "target_connector": 0,
             "fluid_type": "2PhaseGaseous",
@@ -476,8 +465,8 @@
             "mass_composition": {
                 "R245FA": 1
             },
-            "E": 315289.7301496399,
             "E_PH": 315289.7301496399,
+            "E": 315289.7301496399,
             "E_T": 280797.0925347926,
             "E_M": 34492.63761484732,
             "E_unit": "W"
@@ -516,8 +505,8 @@
             "mass_composition": {
                 "R245FA": 1
             },
-            "E": 77307.48468630329,
             "E_PH": 77307.48468630329,
+            "E": 77307.48468630329,
             "E_T": 42821.61493447224,
             "E_M": 34485.869751831044,
             "E_unit": "W"
@@ -556,8 +545,8 @@
             "mass_composition": {
                 "R245FA": 1
             },
-            "E": 7809.27914361478,
             "E_PH": 7809.27914361478,
+            "E": 7809.27914361478,
             "E_T": 41179.21545007769,
             "E_M": -33369.93630646291,
             "E_unit": "W"
@@ -565,7 +554,7 @@
         "30": {
             "name": "30",
             "kind": "material",
-            "source_component": "EVA",
+            "source_component": "STEAM_GEN",
             "source_component_type": 70,
             "source_connector": 0,
             "target_component": "SEP1",
@@ -596,8 +585,8 @@
             "mass_composition": {
                 "R1233ZD": 1
             },
-            "E": 431333.1759577111,
             "E_PH": 431333.1759577111,
+            "E": 431333.1759577111,
             "E_T": 386428.51379686774,
             "E_M": 44904.662160843356,
             "E_unit": "W"
@@ -605,7 +594,7 @@
         "31": {
             "name": "31",
             "kind": "material",
-            "source_component": "INT_HX",
+            "source_component": "IHX",
             "source_component_type": 55,
             "source_connector": 1,
             "target_component": "COMP2",
@@ -636,8 +625,8 @@
             "mass_composition": {
                 "R1233ZD": 1
             },
-            "E": 487364.6103285695,
             "E_PH": 487364.6103285695,
+            "E": 487364.6103285695,
             "E_T": 461631.35645213566,
             "E_M": 25733.253876433842,
             "E_unit": "W"
@@ -648,7 +637,7 @@
             "source_component": "COMP2",
             "source_component_type": 24,
             "source_connector": 0,
-            "target_component": "EVA",
+            "target_component": "STEAM_GEN",
             "target_component_type": 70,
             "target_connector": 0,
             "fluid_type": "2PhaseGaseous",
@@ -676,8 +665,8 @@
             "mass_composition": {
                 "R1233ZD": 1
             },
-            "E": 1013864.0325546261,
             "E_PH": 1013864.0325546261,
+            "E": 1013864.0325546261,
             "E_T": 968887.7261360848,
             "E_M": 44976.30641854135,
             "E_unit": "W"
@@ -716,8 +705,8 @@
             "mass_composition": {
                 "R1233ZD": 1
             },
-            "E": 431333.1759577113,
             "E_PH": 431333.1759577113,
+            "E": 431333.1759577113,
             "E_T": 386428.51379686774,
             "E_M": 44904.66216084356,
             "E_unit": "W"
@@ -728,7 +717,7 @@
             "source_component": "VAL2",
             "source_component_type": 14,
             "source_connector": 0,
-            "target_component": "INT_HX",
+            "target_component": "IHX",
             "target_component_type": 55,
             "target_connector": 1,
             "fluid_type": "2PhaseLiquid",
@@ -756,8 +745,8 @@
             "mass_composition": {
                 "R1233ZD": 1
             },
-            "E": 290135.7825676089,
             "E_PH": 290135.7825676089,
+            "E": 290135.7825676089,
             "E_T": 264388.1576762105,
             "E_M": 25747.624891398398,
             "E_unit": "W"
@@ -768,7 +757,7 @@
             "source_component": "INPUT2",
             "source_component_type": 1,
             "source_connector": 1,
-            "target_component": "EVA",
+            "target_component": "STEAM_GEN",
             "target_component_type": 70,
             "target_connector": 1,
             "fluid_type": "Water",
@@ -796,8 +785,8 @@
             "mass_composition": {
                 "H2O": 1
             },
-            "E": 59036.30443081005,
             "E_PH": 59036.30443081005,
+            "E": 59036.30443081005,
             "E_T": 58937.429278881056,
             "E_M": 98.87515192899446,
             "E_unit": "W"
@@ -805,7 +794,7 @@
         "42": {
             "name": "42",
             "kind": "material",
-            "source_component": "EVA",
+            "source_component": "STEAM_GEN",
             "source_component_type": 70,
             "source_connector": 1,
             "target_component": null,
@@ -836,8 +825,8 @@
             "mass_composition": {
                 "H2O": 1
             },
-            "E": 619904.2449605195,
             "E_PH": 619904.2449605195,
+            "E": 619904.2449605195,
             "E_T": 619805.36980383,
             "E_M": 98.87515668943524,
             "E_unit": "W"
@@ -990,5 +979,9 @@
         "Tamb_unit": "K",
         "pamb": 101299.99999999999,
         "pamb_unit": "Pa"
+    },
+    "settings": {
+        "split_physical_exergy": true,
+        "chemExLib": null
     }
 }

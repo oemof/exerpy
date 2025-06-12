@@ -13,12 +13,42 @@ pio.renderers.default = 'browser'
 from tabulate import tabulate
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.patches as patches
 
 import logging
 logging.disable(logging.CRITICAL)
 
+import matplotlib as mpl
 
-def run_exergoeco_analysis(elec_price_cent_kWh, tau, print_results=False):
+mpl.rcParams['font.family'] = 'Aptos (body)'
+
+mpl.rcParams['font.size'] = 14
+
+mpl.rcParams['axes.titlesize']     = 16   # title text
+mpl.rcParams['axes.labelsize']     = 14   # x/y axis labels
+mpl.rcParams['xtick.labelsize']    = 12   # x-tick labels
+mpl.rcParams['ytick.labelsize']    = 12   # y-tick labels
+mpl.rcParams['legend.fontsize']    = 12   # legend text
+mpl.rcParams['figure.titlesize']   = 18   # figure suptitle, if used
+
+component_colors = {
+    # compressors (blue tones)
+    "COMP1":      "#98c4ec",
+    "COMP2":      "#4198c7",
+    # motors (cyan tones)
+    "MOT1":       "#ebd543",
+    "MOT2":       "#d4bf35",
+    # valves (orange tones)
+    "VAL1":       "#35886a",
+    "VAL2":       "#63be9c",
+    # heat exchangers (green/red tones)
+    "AIR_HX":     "#f47051",
+    "IHX":        "#d45e43",
+    "STEAM_GEN":  "#b14c36",
+}
+
+
+def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, print_results=False, **kwargs):
     """
     Reload the exergy analysis from the JSON file, calculate PEC (with cost correction),
     multiply PEC by 6.32 to obtain the Total Capital Investment (TCI), and run economic
@@ -66,7 +96,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, print_results=False):
     # 2) Build a lookup of TESPy objects by label for quick access
     tespy_by_label = nw.comps["object"].to_dict()
 
-    # 3) Your heat‐exchanger k‐values
+    # 3) Heat‐exchanger k‐values
     k_lookup = {
         "AIR_HX":    48.387,
         "IHX":      750.000,
@@ -189,9 +219,11 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, print_results=False):
 
     return df_comp, df_mat1, df_mat2, df_non_mat, PEC_list, TCI_list, components_order
 
-#########################
 # Main script starts here
-#########################
+
+##################################################
+# 1. TESPy Simulation of High-Temperature Heat Pump
+##################################################
 
 nw = Network(T_unit="C", p_unit="bar", h_unit="kJ / kg", m_unit="kg / s", iterinfo=False)
 
@@ -239,7 +271,7 @@ nw.add_conns(c41, c42)
 # Simulation with starting values
 
 c11.set_attr(fluid={"Ar": 0.0129, "CO2": 0.0005, "N2": 0.7552, "O2": 0.2314}, T=20, p=1.013)
-c12.set_attr(T=15)
+c12.set_attr(T=Ref(c11, 1, -5))
 
 c21.set_attr(fluid={"R245FA": 1}, h=417)
 c22.set_attr(p=6.4)
@@ -343,123 +375,113 @@ loss = {
     "outputs": ['11']
 }
 
-import numpy as np
-import pandas as pd
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-
-##################################################
-# 1. Sensitivity Analysis & Exergoeconomic Loop
-##################################################
+####################################################
+#  2. Sensitivity Analysis & Exergoeconomic Analysis
+####################################################
 
 # define range of evaporator outlet temperatures T34 [°C]
-T_range = np.arange(54, 81, 2)
+SENS_VAR    = 'T34' # e.g. 'T34', 'tau', 'i_eff', 'elec_price', 'ambient temperature'
+SENS_VALUES = np.arange(50, 81, 2)  # the array of values you want to sweep
 
-# initialize container for all results
-results = {}
+def apply_sensitivity(var_name, value):
+    if var_name == 'T34':
+        c34.set_attr(T=value)
+    elif var_name == 'ambient temperature':
+        c11.set_attr(T=value)
+    elif var_name == 'tau':
+        return {'tau': value}
+    elif var_name == 'i_eff':
+        return {'i_eff': value/100}
+    elif var_name == 'elec_price':
+        return {'elec_price': value}
+    else:
+        raise ValueError(f"Unknown sensitivity var {var_name!r}")
 
-for T in T_range:
-    # step 1: update evaporator temperature and solve the TESPy network
-    c34.set_attr(T=T)
-    nw.solve("design")
-    nw.print_results()
 
-    # step 2: compute COP and exergetic efficiency ε
-    COP = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val * 1e-3)
-    COP2 = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val*1e-3)
-    COP1 = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val*1e-3)
-    ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
-    ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-    eps = ean.epsilon
+def run_sensitivity_analysis(var_name, values):
+    results = {}
+    for v in values:
+        # 1) apply the change and collect any overrides
+        extra_pars = apply_sensitivity(var_name, v) or {}
 
-    # step 2b: capture total exergy flows (fuel, product, losses)
-    EF_tot = ean.E_F       # total fuel exergy [kW]
-    EP_tot = ean.E_P       # total product exergy [kW]
-    EL_tot = ean.E_L       # total exergy losses [kW]
-    ED_tot = EF_tot - EP_tot - EL_tot   # exergy destruction [kW]
+        # 2) merge defaults with overrides
+        pars = dict(
+            elec_price_cent_kWh=default_elec_price,
+            tau=default_tau,
+            n=n,
+            i_eff=i_eff
+        )
+        # map our sensitivity keys to function args
+        if 'elec_price' in extra_pars:
+            pars['elec_price_cent_kWh'] = extra_pars['elec_price']
+        if 'tau' in extra_pars:
+            pars['tau'] = extra_pars['tau']
+        if 'i_eff' in extra_pars:
+            pars['i_eff'] = extra_pars['i_eff']
 
-    # step 3: run exergoeconomic analysis, retrieve PEC and TCI lists
-    df_comp, df_mat1, df_mat2, df_non_mat, PEC_list, TCI_list, comps = \
-        run_exergoeco_analysis(default_elec_price, default_tau, print_results=False)
+        # 3) re-solve
+        nw.solve('design')
 
-    # extract system-level costs
-    cP_tot = df_comp.loc[df_comp['Component'] == 'TOT', 'c_P [EUR/GJ]'].iloc[0]
-    Z_tot  = df_comp.loc[df_comp['Component'] == 'TOT', 'Z [EUR/h]'].iloc[0]
+        # 4) collect network‐level metrics
+        COP   = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val * 1e-3)
+        COP2  = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val     * 1e-3)
+        COP1  = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val     * 1e-3)
+        ean   = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+        ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+        eps   = ean.epsilon
+        EF_tot, EP_tot, EL_tot = ean.E_F, ean.E_P, ean.E_L
+        ED_tot = EF_tot - EP_tot - EL_tot
 
-    # step 4: seed result dict with global metrics
-    res = {
-        'COP': COP,
-        'COP1': COP1,
-        'COP2': COP2,
-        'epsilon': eps,
-        'c_P': cP_tot,
-        'Z_tot': Z_tot,
-        'EP_tot': EP_tot,
-        'ED_tot': ED_tot,
-    }
+        # 5) run exergo-economic with all parameters
+        df_comp, df_mat1, df_mat2, df_non_mat, PEC_list, TCI_list, comps = \
+            run_exergoeco_analysis(**pars, print_results=False)
 
-    # add module costs (TCI) for each component and total
-    for comp, tci in zip(comps, TCI_list):
-        res[f"TCI_{comp}"] = tci
-    res["TCI_total"] = sum(TCI_list)
+        # 6) extract system-level costs
+        cP_tot = df_comp.loc[df_comp['Component']=='TOT','c_P [EUR/GJ]'].iloc[0]
+        Z_tot  = df_comp.loc[df_comp['Component']=='TOT','Z [EUR/h]'].iloc[0]
 
-    # step 5: collect connection properties (m, p, T) for each stream
-    for lbl, row in nw.conns.iterrows():
-        conn = row['object']
-        res[f"m_{lbl}"] = conn.m.val
-        res[f"p_{lbl}"] = conn.p.val
-        res[f"T_{lbl}"] = conn.h.val
+        # 7) seed result dict with global metrics
+        res = {
+            'COP': COP,
+            'COP1': COP1,
+            'COP2': COP2,
+            'epsilon': eps,
+            'c_P': cP_tot,
+            'Z_tot': Z_tot,
+            'EP_tot': EP_tot,
+            'ED_tot': ED_tot,
+        }
 
-    # step 6: flatten component-level exergoeconomic outputs into res
-    for _, row in df_comp.iterrows():
-        comp = row['Component']
-        for col in df_comp.columns:
-            if col == 'Component':
-                continue
-            key = f"{col}_{comp}".replace(' ', '_').replace('[','').replace(']','').replace('/','per')
-            res[key] = row[col]
+        # 8) add module costs (TCI) and network connections, component-level econ
+        for comp, tci in zip(comps, TCI_list):
+            res[f"TCI_{comp}"] = tci
+        res['TCI_total'] = sum(TCI_list)
+        for lbl, row in nw.conns.iterrows():
+            conn = row['object']
+            res[f"m_{lbl}"] = conn.m.val
+            res[f"p_{lbl}"] = conn.p.val
+            res[f"T_{lbl}"] = conn.h.val
+        for _, row in df_comp.iterrows():
+            comp = row['Component']
+            for col in df_comp.columns:
+                if col == 'Component': continue
+                key = f"{col}_{comp}".replace(' ', '_').replace('[','').replace(']','').replace('/','per')
+                res[key] = row[col]
 
-    # step 7: store entry
-    results[T] = res
+        results[v] = res
 
-# once loop is finished, build DataFrame
-df = pd.DataFrame.from_dict(results, orient='index')
-df.index.name = 'T34'
+    return pd.DataFrame.from_dict(results, orient='index')
 
-import matplotlib as mpl
+df = run_sensitivity_analysis(SENS_VAR, SENS_VALUES)
 
-mpl.rcParams['font.family'] = 'Aptos (body)'
 
-# 1. Base font size for all text
-mpl.rcParams['font.size'] = 14
+#####################
+# 3. Plots of Results
+#####################
 
-# 2. You can also adjust specific elements:
-mpl.rcParams['axes.titlesize']     = 16   # title text
-mpl.rcParams['axes.labelsize']     = 14   # x/y axis labels
-mpl.rcParams['xtick.labelsize']    = 12   # x-tick labels
-mpl.rcParams['ytick.labelsize']    = 12   # y-tick labels
-mpl.rcParams['legend.fontsize']    = 12   # legend text
-mpl.rcParams['figure.titlesize']   = 18   # figure suptitle, if used
+unit = {'T34':'[°C]', 'ambient temperature':'[°C]', 'tau':'[h/a]', 'i_eff':'[%/a]', 'elec_price':'[cent/kWh]'}[SENS_VAR]
 
-component_colors = {
-    # compressors (blue tones)
-    "COMP1":      "#98c4ec",
-    "COMP2":      "#4198c7",
-    # motors (cyan tones)
-    "MOT1":       "#ebd543",
-    "MOT2":       "#d4bf35",
-    # valves (orange tones)
-    "VAL1":       "#35886a",
-    "VAL2":       "#63be9c",
-    # heat exchangers (green/red tones)
-    "AIR_HX":     "#f47051",
-    "IHX":        "#d45e43",
-    "STEAM_GEN":  "#b14c36",
-}
-
-##################################################
-# 2. Interactive Plotly Dropdown for All Metrics
-##################################################
+# 1. Interactive Plotly Line Chart
 
 '''fig = go.Figure()
 for i, col in enumerate(df.columns):
@@ -489,15 +511,13 @@ fig.update_layout(
         xanchor='left', yanchor='top'
     )],
     title=f'{df.columns[0]} vs. T34',
-    xaxis_title='T34 [°C]',
+    xaxis_title=f"{SENS_VAR} {unit}",
     yaxis_title=df.columns[0]
 )
 fig.show()'''
 
 
-##################################################
-# 3. Normalized Scatter Plot
-##################################################
+# 2. Normalized Scatter Plot
 
 # plot Z_tot/EP_tot vs. ED_tot/EP_tot
 x = df['ED_tot'] / df['EP_tot']
@@ -509,35 +529,14 @@ ax.yaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
 plt.figure(figsize=(8,4))
 plt.scatter(x, y, marker='o', color='black', s=50, linewidth=0.5)
 plt.xlabel(r'$E_{D,\text{tot}}/E_{P,\text{tot}}$ [-]')
-plt.ylabel(r'$\dot{Z}_{\text{tot}}/E_{P,\text{tot}}$ [EUR/GJ$_\mathrm{ex}$]')
+plt.ylabel(r'$\dot{Z}_{\text{tot}}/E_{P,\text{tot}}$ [€/GJ$_\mathrm{ex}$]')
 plt.title('Normalized investmenet costs and exergy destruction')
 plt.grid(True)
 plt.tight_layout()
-plt.savefig("examples/hightemp_hp/normalized_scatter.png", dpi=300)
-
-##################################################
-# 4. Component Line Plots (Helper)
-##################################################
-
-def plot_all_components(metric_prefix, ylabel=None):
-    cols = [c for c in df.columns if c.startswith(metric_prefix + '_')]
-    plt.figure(figsize=(7,5))
-    for col in cols:
-        comp = col.split('_',1)[1]
-        plt.plot(df.index, df[col], 'o-', label=comp)
-    plt.xlabel('T34 [°C]')
-    plt.ylabel(ylabel or metric_prefix)
-    plt.title(f"{metric_prefix} for all components")
-    plt.legend(loc='best', fontsize='small', ncol=2)
-    plt.grid(True)
-    plt.tight_layout()
-
-# example: plot_all_components('Z', 'Z [EUR/h]')
+plt.savefig(f"examples/hightemp_hp/plots/plot_normalized_scatter_{SENS_VAR}.png", dpi=300)
 
 
-#####################################################
-# 5. Stacked Bar Chart: Z per Component + COP Overlay
-#####################################################
+# 3. Stacked Bar Chart: Z per Component + COP Overlay
 
 # select Z columns, exclude totals and valves
 prefix = "Z_EURperh_"
@@ -571,9 +570,9 @@ plot_df.plot(
     legend=False,
     zorder=1
 )
-ax1.set_xlabel(r"$T_{34}$ [°C]")
-ax1.set_ylabel(r"$\dot{Z}$ [EUR/h]")
-ax1.set_ylim(0, 300)
+ax1.set_xlabel(f"{SENS_VAR} {unit}")
+ax1.set_ylabel(r"$\dot{Z}$ [€/h]")
+ax1.set_ylim(0, plot_df.sum(axis=1).max() * 1.3)
 ax1.tick_params(axis="x", rotation=0)
 ax1.set_xticks(x)
 ax1.set_xticklabels(plot_df.index.astype(str))
@@ -590,7 +589,7 @@ ax2.plot(
     zorder=10
 )
 ax2.set_ylabel(r"COP [-]")
-ax2.set_ylim(1.2, 2.2)
+ax2.set_ylim(0, df["COP"].max()*1.1)
 
 # 3) combined legend
 bars_handles, bars_labels = ax1.get_legend_handles_labels()
@@ -604,73 +603,73 @@ ax1.legend(
 )
 
 plt.tight_layout()
-plt.savefig("examples/hightemp_hp/investment_columns.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_investment_columns_{SENS_VAR}.png", dpi=300)
 
 
-##################################################
-# 6. 5×1 Vertical Multipanel: TCI & Metrics
-##################################################
+# 4. 5×1 Vertical Multipanel: TCI & Metrics
 
 t       = df.index.astype(int)
-tci1    = df["TCI_COMP1"]
-tci2    = df["TCI_COMP2"]
-tci_tot = df["TCI_total"]
+tci1    = df["TCI_COMP1"]*1e-6
+tci2    = df["TCI_COMP2"]*1e-6
+tci_tot = df["TCI_total"]*1e-6
 cop = df["COP"]
 cop1 = df["COP1"]
 cop2 = df["COP2"]
 cP_tot  = df["c_P"]
 zdz_tot = df["C_D+Z_EURperh_TOT"]  # combined Z + cost destruction
 
-fig, axs = plt.subplots(5, 1, sharex=True, figsize=(6, 12))
+fig, axs = plt.subplots(5, 1, sharex=True, figsize=(5, 12))
 
 # (1) Investment costs of compressors
 axs[0].plot(t, tci1, marker="o", label="COMP1", color=component_colors["COMP1"])
 axs[0].plot(t, tci2, marker="s", label="COMP2", color=component_colors["COMP2"])
-axs[0].set_ylabel("TCI [EUR]")
+axs[0].set_ylabel("TCI [M€]")
 axs[0].set_title("Investment costs of the compressors")
 axs[0].legend(loc="best")
+min_val = min(tci1.min(), tci2.min())
+max_val = max(tci1.max(), tci2.max())
+axs[0].set_ylim(min_val * 0.95, max_val * 1.05)
 axs[0].grid(True)
 
 # (2) Total investment cost
 axs[1].plot(t, tci_tot, marker="o", color='black')
-axs[1].set_ylabel("TCI [EUR]")
+axs[1].set_ylabel("TCI [M€]")
 axs[1].set_title("Total capital investment")
+axs[1].set_ylim(tci_tot.min() * 0.99, tci_tot.max() * 1.01)
 axs[1].grid(True)
 
 # (3) Exergetic efficiency (%)
-axs[2].plot(t, cop1, marker="o", label="upper cycle", color='blue')
-axs[2].plot(t, cop2, marker="s", label="lower cycle", color='red')
-axs[2].plot(t, cop, marker="o", label="total", color='black')
-axs[2].set_ylim(1.8, 6.2)
+axs[2].plot(t, cop1, marker="o", label=r"COP$_\text{upper cycle}$", color='blue')
+axs[2].plot(t, cop2, marker="s", label=r"COP$_\text{lower cycle}$", color='red')
+axs[2].plot(t, cop, marker="o", label=r"COP$_\text{tot}$", color='black')
+axs[2].set_ylim(1.5, 7.0)
 axs[2].set_ylabel("COP [-]") 
 axs[2].set_title("COP")
 axs[2].yaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
-axs[2].legend(loc="best", ncol=3)
+axs[2].legend(loc="best", ncol=2)
 axs[2].grid(True)
 
-# (4) Product cost c_P [EUR/GJ]
+# (4) Product cost c_P [€/GJ]
 axs[3].plot(t, cP_tot, marker="o", color='black')
-axs[3].set_ylabel(r"$c_P$ [EUR/GJ$_\mathrm{ex}$]")
+axs[3].set_ylabel(r"$c_P$ [€/GJ$_\mathrm{ex}$]")
 axs[3].set_title("Specific product cost")
 axs[3].grid(True)
 
 # (5) Combined Z + cost destruction
 axs[4].plot(t, zdz_tot, marker="o", color='black')
-axs[4].set_ylabel(r"$\dot{Z} + \dot{C}_D$ [EUR/h]")
+axs[4].set_ylabel(r"$\dot{Z} + \dot{C}_D$ [€/h]")
 axs[4].set_title(r"$\dot{Z} + \dot{C}_D$ of the system")
 axs[4].grid(True)
 
 # shared x-axis label with LaTeX subscript and degree symbol
-axs[4].set_xlabel(r"$T_{34}\;[^\circ\mathrm{C}]$")
+axs[4].set_xlabel(f"{SENS_VAR} {unit}")
 axs[4].tick_params(axis="x", rotation=0)
 
 plt.tight_layout()
-plt.savefig("examples/hightemp_hp/multiplot.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_multiplot_{SENS_VAR}.png", dpi=300)
 
 
-##################################################
-# 7. Bar Chart of Exergy Destruction + ε Overlay
-##################################################
+# 5. Bar Chart of Exergy Destruction + ε Overlay
 
 # select Z columns, exclude totals and valves
 prefix = "E_D_kW_"
@@ -704,9 +703,9 @@ plot_df.plot(
     legend=False,
     zorder=1
 )
-ax1.set_xlabel(r"$T_{34}$ [°C]")
+ax1.set_xlabel(f"{SENS_VAR} {unit}")
 ax1.set_ylabel(r"Exergy destruction $\dot{E}_D$ [kW]")
-ax1.set_ylim(0, 700)
+ax1.set_ylim(0, plot_df.sum(axis=1).max() * 1.3)
 ax1.tick_params(axis="x", rotation=0)
 ax1.set_xticks(x)
 ax1.set_xticklabels(plot_df.index.astype(str))
@@ -723,7 +722,7 @@ ax2.plot(
     zorder=10
 )
 ax2.set_ylabel(r"Exergetic efficiency $\varepsilon$ [%]")
-ax2.set_ylim(40, 53)
+ax2.set_ylim(df["epsilon"].min()*100*0.3, df["epsilon"].max()*100*1.1)
 
 # 3) combined legend
 bars_handles, bars_labels = ax1.get_legend_handles_labels()
@@ -737,4 +736,87 @@ ax1.legend(
 )
 
 plt.tight_layout()
-plt.savefig("examples/hightemp_hp/ed_columns.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_ed_columns_{SENS_VAR}.png", dpi=300)
+
+
+'''# 6. Double‐Variable Sensitivity: ambient temperature vs. T34 c_P
+
+# define the two ranges (you can adjust the step or limits as desired)
+amb_range  = np.arange(0, 25, 2)   # ambient temperature [°C]
+t34_range  = np.arange(50, 87, 2)   # T34 [°C]
+
+double_results = []
+for T_amb in amb_range:
+    for T34_val in t34_range:
+        # 1) apply both changes
+        c11.set_attr(T=T_amb)
+        c34.set_attr(T=T34_val)
+
+        # 2) re‐solve the network
+        nw.solve('design')
+
+        # 3) run exergo‐economic analysis with default econ params
+        pars = dict(
+            elec_price_cent_kWh=default_elec_price,
+            tau=default_tau,
+            n=n,
+            i_eff=i_eff
+        )
+        df_comp, *_ = run_exergoeco_analysis(**pars, print_results=False)
+
+        # 4) extract the total specific product cost [€/GJ]
+        mask = df_comp['Component'].isin(['TOTAL', 'TOT'])
+        if mask.any():
+            cP_tot = df_comp.loc[mask, 'c_P [EUR/GJ]'].iloc[0]
+        else:
+            cP_tot = df_comp['c_P [EUR/GJ]'].iloc[-1]
+
+        # 5) record
+        double_results.append({
+            'ambient_temp': T_amb,
+            'T34':           T34_val,
+            'c_P':           cP_tot
+        })
+
+# assemble into a DataFrame
+df_double = pd.DataFrame(double_results)
+
+# pivot into a matrix for plotting
+pivot = df_double.pivot(index='T34', columns='ambient_temp', values='c_P')
+
+# 6) heatmap via pcolormesh
+X, Y = np.meshgrid(pivot.columns.values, pivot.index.values)
+Z     = pivot.values
+
+fig, ax = plt.subplots(figsize=(5,5))
+pcm = ax.pcolormesh(X, Y, Z, shading='auto')
+plt.colorbar(pcm, label=r"$c_P$ [€/GJ$_\mathrm{ex}$]", pad=0.02)
+
+# find the index of the min in each column
+min_row_indices = np.nanargmin(Z, axis=0)
+
+# compute one cell's width & height
+cell_width  = pivot.columns.values[1] - pivot.columns.values[0]
+cell_height = pivot.index.values[1]   - pivot.index.values[0]
+
+# draw a rectangle around each minimal cell
+for col_idx, row_idx in enumerate(min_row_indices):
+    # lower-left corner of that cell
+    x0 = pivot.columns.values[col_idx] - cell_width/2
+    y0 = pivot.index.values[row_idx]   - cell_height/2
+    
+    rect = patches.Rectangle(
+        (x0, y0),
+        cell_width, cell_height,
+        fill=False,
+        edgecolor='black',  
+        linewidth=2
+    )
+    ax.add_patch(rect)
+
+ax.set_title('Specific product cost')
+ax.set_xlabel('Ambient temperature [°C]')
+ax.set_ylabel(r'$T_{34}$ [°C]')
+
+plt.tight_layout()
+plt.savefig("examples/hightemp_hp/plots/heatmap_double_sensitivity_with_minima.png", dpi=300)'''

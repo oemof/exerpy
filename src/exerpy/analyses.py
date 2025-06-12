@@ -184,12 +184,11 @@ class ExergyAnalysis:
             Instance of the ExergyAnalysis class.
         """
         from tespy.networks import Network
-        from tespy.networks import load_network
 
         from .parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
         if isinstance(model, str):
-            model = load_network(model)
+            model = Network.from_json(model)
         elif isinstance(model, Network):
             pass
         else:

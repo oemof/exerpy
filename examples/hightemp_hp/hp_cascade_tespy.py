@@ -33,18 +33,18 @@ mpl.rcParams['figure.titlesize']   = 18   # figure suptitle, if used
 
 component_colors = {
     # compressors (blue tones)
-    "COMP1":      "#98c4ec",
-    "COMP2":      "#4198c7",
+    "COMP1":      "#118cff",
+    "COMP2":      "#8bbeec",
     # motors (cyan tones)
-    "MOT1":       "#ebd543",
-    "MOT2":       "#d4bf35",
+    "MOT1":       "#ceb200",
+    "MOT2":       "#f5e57b",
     # valves (orange tones)
-    "VAL1":       "#35886a",
-    "VAL2":       "#63be9c",
+    "VAL1":       "#009c63",
+    "VAL2":       "#73d4b1",
     # heat exchangers (green/red tones)
-    "AIR_HX":     "#f47051",
-    "IHX":        "#d45e43",
-    "STEAM_GEN":  "#b14c36",
+    "AIR_HX":     "#d3291d",
+    "IHX":        "#e44f44",
+    "STEAM_GEN":  "#ff7e7e",
 }
 
 
@@ -618,7 +618,7 @@ cop2 = df["COP2"]
 cP_tot  = df["c_P"]
 zdz_tot = df["C_D+Z_EURperh_TOT"]  # combined Z + cost destruction
 
-fig, axs = plt.subplots(5, 1, sharex=True, figsize=(5, 12))
+fig, axs = plt.subplots(5, 1, sharex=True, figsize=(5, 14))
 
 # (1) Investment costs of compressors
 axs[0].plot(t, tci1, marker="o", label="COMP1", color=component_colors["COMP1"])
@@ -820,3 +820,129 @@ ax.set_ylabel(r'$T_{34}$ [°C]')
 
 plt.tight_layout()
 plt.savefig("examples/hightemp_hp/plots/heatmap_double_sensitivity_with_minima.png", dpi=300)'''
+
+# 7. Combined Figure: Z + Exergy Destruction + Efficiencies
+
+# Z per component
+prefix_z = "Z_EURperh_"
+z_cols = [
+    c for c in df.columns
+    if c.startswith(prefix_z) and not any(x in c for x in ("_TOT", "VAL1", "VAL2"))
+]
+rename_map_z = {}
+for col in z_cols:
+    if "motor_of_COMP1" in col:
+        rename_map_z[col] = "MOT1"
+    elif "motor_of_COMP2" in col:
+        rename_map_z[col] = "MOT2"
+    else:
+        rename_map_z[col] = col.replace(prefix_z, "")
+plot_df_z = df[z_cols].rename(columns=rename_map_z)
+
+# Exergy destruction per component
+prefix_ed = "E_D_kW_"
+ed_cols = [
+    c for c in df.columns
+    if c.startswith(prefix_ed) and not c.endswith("_TOT")
+]
+rename_map_ed = {}
+for col in ed_cols:
+    if "motor_of_COMP1" in col:
+        rename_map_ed[col] = "MOT1"
+    elif "motor_of_COMP2" in col:
+        rename_map_ed[col] = "MOT2"
+    else:
+        rename_map_ed[col] = col.replace(prefix_ed, "")
+plot_df_ed = df[ed_cols].rename(columns=rename_map_ed)
+
+# === Reorder stacks from bottom to top ===
+desired_order = [
+    "AIR_HX", "COMP1", "MOT1", "VAL1", "IHX",
+    "COMP2", "MOT2", "VAL2", "STEAM_GEN"
+]
+# Filter to columns that exist
+order_z = [c for c in desired_order if c in plot_df_z.columns]
+order_ed = [c for c in desired_order if c in plot_df_ed.columns]
+
+plot_df_z = plot_df_z[order_z]
+plot_df_ed = plot_df_ed[order_ed]
+
+# === Build combined figure ===
+fig, (ax_z, ax_ed) = plt.subplots(
+    2, 1,
+    figsize=(7, 7),
+    sharex=True,
+    gridspec_kw={"height_ratios": [1, 1]}
+)
+
+# Add overall title
+fig.suptitle("Capital cost and exergy destruction of the components", fontsize=14)
+# adjust layout to make room for title
+plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+x = np.arange(len(plot_df_z))
+bar_width = 0.8
+
+# ---- Top: Z + COP ----
+plot_df_z.plot(
+    kind="bar", stacked=True,
+    ax=ax_z, width=bar_width,
+    color=[component_colors[c] for c in plot_df_z.columns],
+    legend=False, zorder=1
+)
+ax_z.set_ylabel(r"$\dot{Z}$ [€/h]")
+
+# draw black separators at VAL1→IHX boundary
+cumsum_ed = plot_df_z.cumsum(axis=1)
+if "MOT1" in cumsum_ed.columns:
+    y_vals = cumsum_ed["MOT1"]
+    for xi, yi in zip(x, y_vals):
+        ax_z.hlines(yi,
+                     xi - bar_width/2 + 0.02,
+                     xi + bar_width/2 - 0.02,
+                     color="black",
+                     linestyle="--",
+                     linewidth=1,
+                     zorder=5)
+
+# ---- Bottom: Exergy destruction + ε ----
+plot_df_ed.plot(
+    kind="bar", stacked=True,
+    ax=ax_ed, width=bar_width,
+    color=[component_colors[c] for c in plot_df_ed.columns],
+    legend=False, zorder=1
+)
+ax_ed.set_xlabel(f"{SENS_VAR} {unit}")
+ax_ed.set_ylabel(r"$\dot{E}_D$ [kW]")
+
+# draw black separators at VAL1→IHX boundary
+cumsum_ed = plot_df_ed.cumsum(axis=1)
+if "VAL1" in cumsum_ed.columns:
+    y_vals = cumsum_ed["VAL1"]
+    for xi, yi in zip(x, y_vals):
+        ax_ed.hlines(yi,
+                     xi - bar_width/2 + 0.02,
+                     xi + bar_width/2 - 0.02,
+                     color="black",
+                     linestyle="--",
+                     linewidth=1,
+                     zorder=5)
+
+# X-axis ticks only on bottom
+ax_ed.set_xticks(x)
+ax_ed.set_xticklabels(plot_df_z.index.astype(str), rotation=0)
+
+# ---- Legend from lower plot ----
+bars, bar_labels = ax_ed.get_legend_handles_labels()
+
+handles = (bars)[::-1]
+labels  = (bar_labels)[::-1]
+ax_z.legend(
+    handles, labels,
+    title="Component",
+    bbox_to_anchor=(1.01, 0.5),
+    loc="center left"
+)
+
+plt.tight_layout()
+plt.savefig(f"examples/hightemp_hp/plots/combined_Z_ED_{SENS_VAR}.png", dpi=300)

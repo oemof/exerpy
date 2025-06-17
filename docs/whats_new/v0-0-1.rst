@@ -3,6 +3,12 @@ v0.0.1 (launch date)
 
 Initial release of ExerPy.
 
+The exergy analysis module is fully functional and allows for comprehensive
+exergy analysis of thermal systems.
+
+The exergoeconomic analysis module is in an early stage and will be further developed
+and tested in future releases.
+
 Contributors
 ############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
@@ -10,3 +16,7 @@ Contributors
 - Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__)
 
 Thanks to Prof. Dr.-Ing. Fontina Petrakopoulou for the support and guidance.
+
+A relevant part of the code for the exergoeconomic analysis is based on the work of
+Friederike Roßberg (`@FriederikeTUB <https://github.com/FriederikeTUB/tespy-friederike>`__)
+and has been adapted to fit the ExerPy framework.

@@ -172,7 +172,93 @@ class SteamGenerator(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        logging.error("Auxiliary equations are not implemented for steam generator.")
+        """
+        Auxiliary equations for the steam generator.
+        
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
+        
+        (1) c_T(heat_source)/E_F = c_T(HP_outlet)/E_T(HP) + c_T(IP_outlet)/E_T(IP)
+            - P-principle: thermal exergy costs from heat source are distributed to steam outlets
+            
+        (2) 1/E_M_in(HP) * C_M_in(HP) - 1/E_M_out(HP) * C_M_out(HP) = 0
+            - F-principle: specific mechanical exergy costs equalized between HP inlet/outlet
+            
+        (3) 1/E_M_in(IP) * C_M_in(IP) - 1/E_M_out(IP) * C_M_out(IP) = 0
+            - F-principle: specific mechanical exergy costs equalized between IP inlet/outlet
+            
+        (4-5) Chemical exergy cost equations (if enabled) for HP and IP streams
+            - F-principle: specific chemical exergy costs equalized between inlets/outlets
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the matrix.
+        T0 : float
+            Ambient temperature.
+        equations : dict
+            Dictionary for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
+        """
 
     def exergoeconomic_balance(self, T0):
-        logging.error("Exergoeconomic balance is not implemented for steam generator.")
+        """
+        Perform exergoeconomic balance calculations for the steam generator.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
+        # 1) Product cost rate: HP and IP steam net physical exergy costs, minus injection
+        C_P_hp = (self.outl[0]['m'] * self.outl[0]['C_PH']
+                  - self.inl[0]['m'] * self.inl[0]['C_PH'])
+        C_P_ip = 0.0
+        if 1 in self.outl and 1 in self.inl:
+            C_P_ip = (self.outl[1]['m'] * self.outl[1]['C_PH']
+                      - self.inl[1]['m'] * self.inl[1]['C_PH'])
+        # Subtract water injection costs
+        C_P_w = 0.0
+        if 3 in self.inl:
+            C_P_w += self.inl[3]['m'] * self.inl[3]['C_PH']
+        if 4 in self.inl:
+            C_P_w += self.inl[4]['m'] * self.inl[4]['C_PH']
+        self.C_P = C_P_hp + C_P_ip - C_P_w
+
+        # 2) Fuel cost rate: cost of heat exergy stream
+        self.C_F = self.inl[2]['C_T']
+
+        # 3) Specific costs and destruction cost
+        self.c_F = self.C_F / self.E_F if self.E_F != 0 else float('nan')
+        self.c_P = self.C_P / self.E_P if self.E_P != 0 else float('nan')
+        self.C_D = self.C_F - self.C_P
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F != 0 else float('nan')
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else float('nan')

@@ -172,18 +172,22 @@ class Deaerator(Component):
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the deaerator.
-
-        This function adds auxiliary rows to the cost matrix A and the right-hand side vector b 
-        to enforce cost relations for the chemical and mechanical cost components.
         
-        For the chemical cost equation:
-        - If chemical exergy is enabled and the outlet (self.outl[0]) has nonzero chemical exergy (e_CH),
-            then for each inlet the coefficient is set proportionally to its mass fraction and the inverse of its e_CH.
-        - If the outlet's chemical exergy is zero, or if chemical exergy is not enabled,
-            a fallback coefficient of 1 is assigned.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
         
-        For the mechanical cost equation:
-        - The coefficients are set based on the outlet’s mechanical exergy (e_M) and the inlet mass fractions.
+        (1) Mixing equation for chemical exergy costs (if enabled):
+            - The outlet's specific chemical exergy cost is calculated as a mass-weighted 
+              average of the inlet streams' specific chemical exergy costs
+            - This enforces proper chemical exergy cost distribution through the deaerator
+        
+        (2) Mixing equation for mechanical exergy costs:
+            - The outlet's specific mechanical exergy cost is calculated as a mass-weighted
+              average of the inlet streams' specific mechanical exergy costs
+            - This ensures mechanical exergy costs are properly conserved in the mixing process
+            
+        Both equations implement the proportionality rule for mixing processes where
+        the outlet's specific costs should reflect the contribution of each inlet stream.
         
         Parameters
         ----------
@@ -195,11 +199,11 @@ class Deaerator(Component):
             The current row index in the matrix.
         T0 : float
             Ambient temperature (provided for consistency; not used in this function).
-        equations : list or dict
-            Data structure for storing equation labels.
+        equations : dict
+            Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
-
+        
         Returns
         -------
         A : numpy.ndarray
@@ -208,8 +212,8 @@ class Deaerator(Component):
             The updated right-hand-side vector.
         counter : int
             The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
-        equations : list or dict
-            Updated structure with equation labels.
+        equations : dict
+            Updated dictionary with equation labels.
         """
         # --- Chemical cost auxiliary equation (conditionally added) ---
         if chemical_exergy_enabled:
@@ -257,6 +261,26 @@ class Deaerator(Component):
         return A, b, counter, equations
 
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the deaerator.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         self.C_P = 0
         self.C_F = 0
         if self.outl[0]["T"] > T0:

@@ -172,16 +172,24 @@ class Turbine(Component):
         """
         Auxiliary equations for the turbine.
         
-        This function sets up auxiliary equations for each material outlet of the turbine, provided
-        that the inlet (self.inl[0]) and the first outlet (self.outl[0]) have temperatures above T0.
-        For each material outlet with kind "material", the function adds:
-        - A thermal exergy equation,
-        - A mechanical exergy equation,
-        - And, if chemical_exergy_enabled is True, a chemical exergy equation.
-        Thus, each material outlet adds 3 rows if chemical exergy is enabled, or 2 rows otherwise.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
         
-        After processing the material outlets, the function adds auxiliary equations for shaft power 
-        equality for power outlets (those with kind "power" that have both a source and a target).
+        For each material outlet (when inlet and first outlet are above ambient temperature T0):
+        
+        (1) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
+            - F-principle: specific thermal exergy costs equalized between inlet and each outlet
+            
+        (2) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+            - F-principle: specific mechanical exergy costs equalized between inlet and each outlet
+            
+        (3) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0 (if chemical_exergy_enabled)
+            - F-principle: specific chemical exergy costs equalized between inlet and each outlet
+        
+        For power outlets (with both source and target components):
+        
+        (4) 1/E_ref * C_ref - 1/E_out * C_out = 0
+            - P-principle: specific power exergy costs equalized across all power outlets
         
         Parameters
         ----------
@@ -273,7 +281,7 @@ class Turbine(Component):
 
     def exergoeconomic_balance(self, T0):
         """
-        Calculate the exergoeconomic balance for the turbine.
+        Perform exergoeconomic balance calculations for the turbine.
 
         The turbine may have multiple power outputs and multiple material outputs. In this
         function the cost of power is computed as the sum of C_TOT from all inlet streams of kind "power".

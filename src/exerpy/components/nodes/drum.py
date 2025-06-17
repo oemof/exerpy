@@ -51,6 +51,46 @@ class Drum(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """
+        Auxiliary equations for the drum.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
+        (1-2) Chemical exergy cost equations (if enabled)
+            - F-principle: specific chemical exergy costs equalized between inlet and both outlets
+            - First equation balances inlet with outlet 0
+            - Second equation balances inlet with outlet 1
+        (3) Thermal exergy cost equation
+            - P-principle: specific thermal exergy costs are equalized between both outlets
+        (4) Mechanical exergy cost equation
+            - P-principle: specific mechanical exergy costs are equalized between both outlets
+        (5) Thermal-Mechanical coupling for outlet 0
+            - P-principle: thermal and mechanical specific costs must be equal at outlet 0
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the matrix.
+        T0 : float
+            Ambient temperature.
+        equations : dict
+            Dictionary for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
+        """
+
         # --- Chemical cost auxiliary equations ---
         if chemical_exergy_enabled:
             # Equation 1: Balance between inlet 0 and outlet 0 for chemical exergy

@@ -115,6 +115,55 @@ class Condenser(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """
+        Auxiliary equations for the condenser.
+        
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
+        
+        (1) Thermal auxiliary equation based on temperature cases:
+            - Case 1 (T > T0): c_T(hot_inlet)/E_T(hot_in) = c_T(hot_outlet)/E_T(hot_out)
+              F-principle: specific thermal exergy costs equalized in hot stream
+            - Case 2 (T <= T0): c_T(cold_inlet)/E_T(cold_in) = c_T(cold_outlet)/E_T(cold_out)
+              F-principle: specific thermal exergy costs equalized in cold stream
+            - Case 3 (mixed temperatures): c_T(hot_outlet)/E_T(hot_out) = c_T(cold_outlet)/E_T(cold_out)
+              P-principle: equal specific costs of thermal exergy in outlets
+            
+        (2) c_M(hot_inlet)/E_M(hot_in) = c_M(hot_outlet)/E_M(hot_out)
+            - F-principle: specific mechanical exergy costs equalized in hot stream
+            
+        (3) c_M(cold_inlet)/E_M(cold_in) = c_M(cold_outlet)/E_M(cold_out)
+            - F-principle: specific mechanical exergy costs equalized in cold stream
+            
+        (4-5) Chemical exergy cost equations (if enabled) for hot and cold streams
+            - F-principle: specific chemical exergy costs equalized between inlets/outlets
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the matrix.
+        T0 : float
+            Ambient temperature.
+        equations : dict
+            Dictionary for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
+        """
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
             if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
@@ -224,6 +273,26 @@ class Condenser(Component):
         return A, b, counter + num_aux_eqs, equations
     
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the condenser.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
             self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (

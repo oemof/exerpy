@@ -260,41 +260,50 @@ class SimpleHeatExchanger(Component):
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
-        Auxiliary equations for the Simple Heat Exchanger.
-
-        This function enforces the cost balance:
-            C_in - C_out + Z = 0,
-        by setting:
-        (i) a thermal cost relation that depends on the heat transfer direction,
-            and (ii) equality for the mechanical cost (c_M_in = c_M_out),
-            and (iii) equality for the chemical cost (c_CH_in = c_CH_out)
-            if chemical exergy is enabled.
-
+        Auxiliary equations for the simple heat exchanger.
+        
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
+        
+        (1) Thermal exergy cost equation:
+            - For heat release (T_in > T_out > T0): F-principle is applied
+              1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
+            - For heat addition (T_in < T_out > T0): P-principle is applied
+              1/ΔE_T * (C_T_out - C_T_in) = 1/ΔE_M * (C_M_out - C_M_in)
+        
+        (2) Mechanical exergy cost equation:
+            1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+            - F-principle: specific mechanical exergy costs equalized between inlet/outlet
+            
+        (3) Chemical exergy cost equation (if enabled):
+            1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+            - F-principle: specific chemical exergy costs equalized between inlet/outlet
+        
         Parameters
         ----------
         A : numpy.ndarray
-            Cost matrix.
+            The current cost matrix.
         b : numpy.ndarray
-            Right-hand-side vector.
+            The current right-hand-side vector.
         counter : int
-            Current row index.
+            The current row index in the matrix.
         T0 : float
             Ambient temperature.
-        equations : list or dict
-            Data structure for storing equation labels.
+        equations : dict
+            Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
-            Flag to include chemical exergy equations.
-
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
         Returns
         -------
         A : numpy.ndarray
-            Updated cost matrix.
+            The updated cost matrix.
         b : numpy.ndarray
-            Updated right-hand-side vector.
+            The updated right-hand-side vector.
         counter : int
-            Updated row index.
-        equations : list or dict
-            Updated structure with equation labels.
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
         """
         # --- Thermal cost equation (row counter) ---
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:

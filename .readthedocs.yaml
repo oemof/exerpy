@@ -1,12 +1,15 @@
-version: 1
+version: 2
+
 sphinx:
   configuration: docs/conf.py
+
 python:
   install:
     - method: pip
       path: .
       extra_requirements:
         - dev
+
 build:
   tools:
     python: "3.13"

@@ -790,7 +790,7 @@ Z     = pivot.values
 
 fig, ax = plt.subplots(figsize=(5,5))
 pcm = ax.pcolormesh(X, Y, Z, shading='auto')
-plt.colorbar(pcm, label=r"$c_P$ [€/GJ$_\mathrm{ex}$]", pad=0.02)
+plt.colorbar(pcm, label=r"$c_P$ [€/GJ$_{ex}$]", pad=0.02)
 
 # find the index of the min in each column
 min_row_indices = np.nanargmin(Z, axis=0)

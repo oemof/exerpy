@@ -850,8 +850,8 @@ def test_motor_missing_outlet_raises(motor):
 
 @pytest.fixture
 def compressor():
-    """Return a fresh Compressor instance with a label for logging."""
-    return Compressor(label="TestCompressor", Z_costs=1000)
+    """Return a fresh Compressor instance with a name for logging."""
+    return Compressor(name="TestCompressor", Z_costs=1000)
 
 def test_compressor_case1_above_ambient(compressor):
     """
@@ -961,7 +961,7 @@ def test_compressor_invalid_case(compressor):
 @pytest.fixture
 def pump():
     """Return a new Pump instance."""
-    return Pump(label="Pump1")
+    return Pump(name="Pump1")
 
 def test_pump_case1_above_ambient(pump):
     """
@@ -1061,8 +1061,8 @@ def test_pump_invalid_case(pump):
 
 @pytest.fixture
 def turbine():
-    """Return a new Turbine instance with a label for logging."""
-    return Turbine(label="Turbine1")
+    """Return a new Turbine instance with a name for logging."""
+    return Turbine(name="Turbine1")
 
 def test_turbine_case1(turbine):
     """

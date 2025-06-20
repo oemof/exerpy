@@ -89,6 +89,7 @@ ongoing development. Use the following BibTeX entry:
     @software{ExerPy,
          author = {Tomasinelli, Sergio and Witte, Francesco and Müller, Robert},
          title = {{ExerPy}: Exergy Analysis in Python},
+         note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou}
          url = {https://github.com/oemof/exerpy},
          version = {0.0.1},
          year = {2025}

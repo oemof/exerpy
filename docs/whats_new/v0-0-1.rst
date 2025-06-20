@@ -1,4 +1,4 @@
-v0.0.1 (launch date)
+v0.0.1 (20.06.2025)
 ++++++++++++++++++++++
 
 Initial release of ExerPy.
@@ -9,14 +9,16 @@ exergy analysis of thermal systems.
 The exergoeconomic analysis module is in an early stage and will be further developed
 and tested in future releases.
 
-Contributors
-############
-- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
-- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)
-- Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__)
+Developers
+##########
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__) — Lead Developer
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__) — Contributor
+- Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__) — Contributor
 
-Thanks to Prof. Dr.-Ing. Fontina Petrakopoulou for the support and guidance.
+Supervision
+###########
+- Prof. Dr.-Ing. Fontina Petrakopoulou — Project Supervisor
 
-A relevant part of the code for the exergoeconomic analysis is based on the work of
-Friederike Roßberg (`@FriederikeTUB <https://github.com/FriederikeTUB/tespy-friederike>`__)
-and has been adapted to fit the ExerPy framework.
+Acknowledgements
+################
+This project incorporates code originally developed by Friederike Roßberg (`@FriederikeTUB <https://github.com/FriederikeTUB/tespy-friederike>`__)

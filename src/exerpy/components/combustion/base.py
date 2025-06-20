@@ -132,13 +132,20 @@ class CombustionChamber(Component):
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the combustion chamber.
-
-        This method adds two rows to the cost matrix A and right-hand side vector b
-        to enforce auxiliary cost relations for the mechanical and chemical cost components.
-
-        It assumes the component has at least two inlet streams (e.g. air and fuel)
-        and one outlet stream.
-
+        
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
+        
+        (1) For mechanical exergy:
+            - When all streams have non-zero mechanical exergy:
+              c_M(outlet)/E_M(outlet) = weighted average of inlet specific mechanical exergy costs
+            - When pressure can only decrease: c_M(outlet) is directly set
+            
+        (2) For chemical exergy:
+            - When all streams have non-zero chemical exergy:
+              c_CH(outlet)/E_CH(outlet) = weighted average of inlet specific chemical exergy costs
+            - When an inlet has zero chemical exergy: its specific cost is directly set
+        
         Parameters
         ----------
         A : numpy.ndarray
@@ -149,11 +156,11 @@ class CombustionChamber(Component):
             The current row index in the matrix.
         T0 : float
             Ambient temperature.
-        equations : list or dict
+        equations : dict or list
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy is enabled.
-
+        
         Returns
         -------
         A : numpy.ndarray
@@ -162,8 +169,13 @@ class CombustionChamber(Component):
             The updated right-hand-side vector.
         counter : int
             The updated row index (counter + 2).
-        equations : list or dict
+        equations : dict or list
             Updated structure with equation labels.
+            
+        Raises
+        ------
+        ValueError
+            If chemical exergy is not enabled, which is mandatory for combustion chambers.
         """
         # For the combustion chamber, chemical exergy is mandatory.
         if not chemical_exergy_enabled:
@@ -201,6 +213,26 @@ class CombustionChamber(Component):
         return [A, b, counter + 2, equations]
 
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the combustion chamber.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         self.C_P = self.outl[0]["C_T"] - (
                 self.inl[0]["C_T"] + self.inl[1]["C_T"]
         )

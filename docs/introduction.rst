@@ -14,6 +14,8 @@ allows users to perform automated analysis of individual components and entire p
 helps identify where and why exergy losses occur, facilitating strategies to improve
 efficiency, reduce costs, and support sustainable energy use.
 
+ExerPy is part of the Open Energy Modelling Framework `oemof <https://oemof.org/>`_.
+
 .. image:: /_static/images/logo_exerpy_big.svg
    :align: center
    :class: only-light
@@ -85,11 +87,11 @@ ongoing development. Use the following BibTeX entry:
 .. code::
 
     @software{ExerPy,
-         author = {Your Name and Collaborators},
+         author = {Tomasinelli, Sergio and Witte, Francesco and Müller, Robert},
          title = {{ExerPy}: Exergy Analysis in Python},
-         url = {https://github.com/tba},
+         url = {https://github.com/oemof/exerpy},
          version = {0.0.1},
-         year = {2024}
+         year = {2025}
     }
 
 *******

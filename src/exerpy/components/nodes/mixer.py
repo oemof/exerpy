@@ -189,18 +189,19 @@ class Mixer(Component):
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the mixer.
-
-        This function adds auxiliary rows to the cost matrix A and the right-hand side vector b 
-        to enforce cost relations for the chemical and mechanical cost components.
         
-        For the chemical cost equation:
-        - If chemical exergy is enabled and the outlet (self.outl[0]) has nonzero chemical exergy (e_CH),
-            then for each inlet the coefficient is set proportionally to its mass fraction and the inverse of its e_CH.
-        - If the outlet's chemical exergy is zero, or if chemical exergy is not enabled,
-            a fallback coefficient of 1 is assigned.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
         
-        For the mechanical cost equation:
-        - The coefficients are set based on the outlet’s mechanical exergy (e_M) and the inlet mass fractions.
+        (1) Chemical exergy cost equation (if enabled):
+            - F-principle: The specific chemical exergy cost of the outlet stream is calculated as 
+              the weighted average of the specific chemical exergy costs of the inlet streams.
+            - For inlets with zero chemical exergy, their specific costs are directly transferred.
+        
+        (2) Mechanical exergy cost equation:
+            - F-principle: The specific mechanical exergy cost of the outlet stream is calculated as
+              the weighted average of the specific mechanical exergy costs of the inlet streams.
+            - For inlets with zero mechanical exergy, their specific costs are directly transferred.
         
         Parameters
         ----------
@@ -274,6 +275,26 @@ class Mixer(Component):
         return A, b, counter, equations
     
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the mixer.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         self.C_P = 0
         self.C_F = 0
         if self.outl[0]["T"] > T0:

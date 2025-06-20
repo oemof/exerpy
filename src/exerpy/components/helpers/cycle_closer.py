@@ -33,7 +33,7 @@ class CycleCloser(Component):
     
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
-        Auxiliary equations for the CycleCloser.
+        Auxiliary equations for the cycle closer.
         
         This function adds two rows to the cost matrix A and the right-hand side vector b to enforce 
         the following auxiliary cost relations:
@@ -87,6 +87,14 @@ class CycleCloser(Component):
         return A, b, counter, equations
     
     def exergoeconomic_balance(self, T0):
+        """
+        Placeholder for exergoeconomic balance calculations.
+        
+        The CycleCloser component is not considered in exergoeconomic analysis
+        and all calculations are skipped. NaN values are assigned to all
+        exergoeconomic parameters.
+        """
+
         self.C_P = np.nan
         self.C_F = np.nan   
         self.c_F = np.nan 

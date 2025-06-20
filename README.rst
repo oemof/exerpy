@@ -74,11 +74,11 @@ ongoing development. You can cite ExerPy using the following BibTeX entry:
 .. code::
 
     @software{ExerPy,
-         author = {Your Name and Collaborators},
+         author = {Tomasinelli, Sergio and Witte, Francesco and Müller, Robert},
          title = {{ExerPy}: Exergy Analysis in Python},
-         url = {https://github.com/tba},
+         url = {https://github.com/oemof/exerpy},
          version = {0.0.1},
-         year = {2024}
+         year = {2025}
     }
 
 *******

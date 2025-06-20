@@ -16,6 +16,7 @@
     installation
     examples
     exergy_analysis
+    exergoeconomic_analysis
     contribute
     zliterature
 

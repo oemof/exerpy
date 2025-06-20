@@ -13,6 +13,68 @@ from .functions import add_total_exergy_flow
 
 
 class ExergyAnalysis:
+    """
+    This class performs exergy analysis on energy system models from various simulation tools.
+    It parses input data, constructs component objects, calculates exergy flows,
+    and provides a comprehensive exergy balance for the overall system and individual components.
+    The class supports importing data from TESPy, Aspen, Ebsilon, or directly from JSON files.
+
+    Attributes
+    ----------
+    Tamb : float
+        Ambient temperature in K for reference environment.
+    pamb : float
+        Ambient pressure in Pa for reference environment.
+    _component_data : dict
+        Raw component data from the input model.
+    _connection_data : dict
+        Raw connection data from the input model.
+    chemExLib : object, optional
+        Chemical exergy library for chemical exergy calculations.
+    chemical_exergy_enabled : bool
+        Flag indicating if chemical exergy calculations are enabled.
+    split_physical_exergy : bool
+        Flag indicating if physical exergy is split into thermal and mechanical components.
+    components : dict
+        Dictionary of component objects constructed from input data.
+    connections : dict
+        Dictionary of connection data with exergy values.
+    E_F : float
+        Total fuel exergy for the overall system in W.
+    E_P : float
+        Total product exergy for the overall system in W.
+    E_L : float
+        Total loss exergy for the overall system in W.
+    E_D : float
+        Total exergy destruction for the overall system in W.
+    E_F_dict : dict
+        Dictionary specifying fuel connections.
+    E_P_dict : dict
+        Dictionary specifying product connections.
+    E_L_dict : dict
+        Dictionary specifying loss connections.
+    epsilon : float
+        Overall exergy efficiency of the system.
+
+    Methods
+    -------
+    analyse(E_F, E_P, E_L={})
+        Performs exergy analysis based on specified fuel, product, and loss definitions.
+    from_tespy(model, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
+        Creates an instance from a TESPy network model.
+    from_aspen(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
+        Creates an instance from an Aspen model file.
+    from_ebsilon(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
+        Creates an instance from an Ebsilon model file.
+    from_json(json_path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
+        Creates an instance from a JSON file containing system data.
+    exergy_results(print_results=True)
+        Displays and returns tables of exergy analysis results.
+    export_to_json(output_path)
+        Exports the model and analysis results to a JSON file.
+    _serialize()
+    """
+
     def __init__(self, component_data, connection_data, Tamb, pamb, chemExLib=None, split_physical_exergy=True) -> None:
         """
         Constructor for ExergyAnalysis. It parses the provided simulation file and prepares it for exergy analysis.
@@ -478,12 +540,41 @@ class ExergyAnalysis:
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 
     def export_to_json(self, output_path):
+        """
+        Export the model to a JSON file.
+        
+        Parameters
+        ----------
+        output_path : str
+            Path where the JSON file will be saved.
+        
+        Returns
+        -------
+        None
+            The model is saved to the specified path.
+        
+        Notes
+        -----
+        This method serializes the model using the internal _serialize method
+        and writes the resulting data to a JSON file with indentation.
+        """
         data = self._serialize()
         with open(output_path, 'w') as json_file:
             json.dump(data, json_file, indent=4)
             logging.info(f"Model exported to JSON file: {output_path}.")
 
     def _serialize(self):
+        """
+        Serializes the analysis data into a dictionary for export.
+        Returns
+        -------
+        export : dict
+            Dictionary containing serialized data with the following structure:
+            - components: Component data
+            - connections: Connection data
+            - ambient_conditions: Ambient temperature and pressure with units
+            - settings: Analysis settings including exergy splitting mode and chemical exergy library
+        """
         export = {}
         export["components"] = self._component_data
         export["connections"] = self._connection_data
@@ -502,6 +593,27 @@ class ExergyAnalysis:
 
 
 def _construct_components(component_data, connection_data, Tamb):
+    """
+    Constructs component instances from component and connection data.
+    Parameters
+    ----------
+    component_data : dict
+        Dictionary containing component data organized by type.
+        Format: {component_type: {component_name: {parameters}}}
+    connection_data : dict
+        Dictionary containing connection information between components.
+        Each connection contains source and target component information.
+    Tamb : float
+        Ambient temperature, used for determining if a valve is dissipative.
+    Returns
+    -------
+    dict
+        Dictionary of instantiated components, with component names as keys.
+    Notes
+    -----
+    Skips components of type 'Splitter'. For valves, automatically determines if they
+    are dissipative by comparing inlet and outlet temperatures to ambient temperature.
+    """
     components = {}  # Initialize a dictionary to store created components
 
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
@@ -563,6 +675,25 @@ def _construct_components(component_data, connection_data, Tamb):
 
 
 def _load_json(json_path):
+    """
+    Load and validate a JSON file.
+    Parameters
+    ----------
+    json_path : str
+        Path to the JSON file to load.
+    Returns
+    -------
+    dict
+        The loaded JSON content.
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist.
+    ValueError
+        If the file does not have a .json extension.
+    json.JSONDecodeError
+        If the file content is not valid JSON.
+    """
     # Check file existence and extension
     if not os.path.exists(json_path):
         raise FileNotFoundError(f"File not found: {json_path}")
@@ -576,6 +707,32 @@ def _load_json(json_path):
 
 
 def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, required_component_fields=['name']):
+    """Process JSON data to prepare it for exergy analysis.
+    This function validates the data structure, ensures all required fields are present,
+    and enriches the data with chemical exergy and total exergy flow calculations.
+    Parameters
+    ----------
+    data : dict
+        Dictionary containing system data with components, connections and ambient conditions
+    Tamb : float, optional
+        Ambient temperature in K, overrides the value in data if provided
+    pamb : float, optional
+        Ambient pressure in Pa, overrides the value in data if provided
+    chemExLib : dict, optional
+        Chemical exergy library for reference values
+    split_physical_exergy : bool, default=True
+        Whether to split physical exergy into thermal and mechanical parts
+    required_component_fields : list, default=['name']
+        List of fields that must be present in each component
+    Returns
+    -------
+    tuple
+        (processed_data, ambient_temperature, ambient_pressure)
+    Raises
+    ------
+    ValueError
+        If required sections or fields are missing, or if data structure is invalid
+    """
     # Validate required sections
     required_sections = ['components', 'connections', 'ambient_conditions']
     missing_sections = [s for s in required_sections if s not in data]
@@ -630,14 +787,72 @@ def _process_json(data, Tamb=None, pamb=None, chemExLib=None, split_physical_exe
 
 
 class ExergoeconomicAnalysis:
+    """"
+    This class performs exergoeconomic analysis on a previously completed exergy analysis.
+    It takes the results from an ExergyAnalysis instance and builds upon them
+    to conduct a complete exergoeconomic analysis. It constructs and solves a system
+    of linear equations to determine the costs (both total and specific) associated
+    with each exergy stream in the system, and calculates various exergoeconomic indicators
+    for each component.
+
+    Attributes
+    ----------
+    exergy_analysis : ExergyAnalysis
+        The exergy analysis instance used as the basis for calculations.
+    connections : dict
+        Dictionary of all energy/material connections in the system.
+    components : dict
+        Dictionary of all components in the system.
+    chemical_exergy_enabled : bool
+        Flag indicating if chemical exergy is considered in calculations.
+    E_F_dict : dict
+        Dictionary mapping fuel streams to components.
+    E_P_dict : dict
+        Dictionary mapping product streams to components.
+    E_L_dict : dict
+        Dictionary mapping loss streams to components.
+    num_variables : int
+        Number of cost variables in the exergoeconomic equations.
+    variables : dict
+        Dictionary mapping variable indices to variable names.
+    equations : dict
+        Dictionary mapping equation indices to equation types.
+    currency : str
+        Currency symbol used in cost reporting.
+    system_costs : dict
+        Dictionary of system-level costs after analysis.
+
+    Methods
+    -------
+    initialize_cost_variables()
+        Defines and indexes all cost variables in the system.
+    assign_user_costs(Exe_Eco_Costs)
+        Assigns user-defined costs to components and input streams.
+    construct_matrix(Tamb)
+        Constructs the linear equation system for exergoeconomic analysis.
+    solve_exergoeconomic_analysis(Tamb)
+        Solves the cost equations and assigns results to connections and components.
+    run(Exe_Eco_Costs, Tamb)
+        Executes the complete exergoeconomic analysis workflow.
+    exergoeconomic_results(print_results=True)
+        Displays and returns tables of exergoeconomic analysis results.
+    """
+
     def __init__(self, exergy_analysis_instance, currency="EUR"):
-        r"""
-        Initialize the ExergoeconomicAnalysis with an existing ExergyAnalysis instance.
+        """
+        Initialize an economic analysis for an exergy analysis.
 
         Parameters
         ----------
         exergy_analysis_instance : ExergyAnalysis
-            An instance of the ExergyAnalysis class containing components and connections.
+            Instance of ExergyAnalysis that has already performed exergy calculations.
+        currency : str, optional
+            Currency symbol for cost calculations, by default "EUR".
+
+        Notes
+        -----
+        This class inherits all exergy analysis results from the provided instance
+        and prepares data structures for economic equations and cost variables.
         """
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
@@ -653,12 +868,20 @@ class ExergoeconomicAnalysis:
 
     def initialize_cost_variables(self):
         """
-        Assign unique indices to cost-related variables in the matrix system and build a dictionary
-        that maps these indices to variable names.
+        Initialize cost variables for the exergoeconomic analysis.
 
-        Material streams (kind "material") get three indices (thermal, mechanical, chemical)
-        if chemical exergy is enabled; otherwise, they only get two indices (thermal, mechanical).
-        Non-material streams (e.g. "heat", "power") get one index, named as "<connection name>_c_tot".
+        This method assigns unique indices to each cost variable in the matrix system
+        and populates a dictionary mapping these indices to variable names.
+        
+        For material streams, separate indices are assigned for thermal, mechanical,
+        and chemical exergy components when chemical exergy is enabled (otherwise only
+        thermal and mechanical). For non-material streams (heat, power), a single index
+        is assigned for the total exergy cost.
+        
+        Notes
+        -----
+        The assigned indices are used for constructing the cost balance equations
+        in the matrix system that will be solved to find all cost variables.
         """
         col_number = 0
         valid_components = {comp.name for comp in self.components.values()}
@@ -711,34 +934,27 @@ class ExergoeconomicAnalysis:
         self.num_variables = col_number
 
     def assign_user_costs(self, Exe_Eco_Costs):
-        r"""
-        Assign given component and connection costs from the user input dictionary.
+        """
+        Assign component and connection costs from user input dictionary.
 
-        For components:
+        Parameters
+        ----------
+        Exe_Eco_Costs : dict
+            Dictionary containing cost assignments for components and connections.
+            Format for components: "<component_name>_Z": cost_value [currency/h]
+            Format for connections: "<connection_name>_c": cost_value [currency/GJ]
 
-        - Look for a key "<component_name>_Z" and assign it (converted from
-          currency/h to currency/s). If not provided, raise a ValueError.
+        Raises
+        ------
+        ValueError
+            If a component cost is missing or if a required input connection cost is not provided.
 
-        For connections:
-
-        1) Only consider connections of accepted kinds.
-        2) If the connection is an input (i.e. has no source_component) and is
-           not a power connection, and no cost is provided in Exe_Eco_Costs,
-           raise a ValueError.
-        3) In all other cases (input connections with a provided cost and
-           connections with a source_component that have an assigned cost),
-           assign the cost as follows:
-
-           - For material connections, assign c_TOT and also assign cost
-             breakdown (c_T, c_M, c_CH) and compute C_TOT as c_TOT * (e_T,
-             e_M, e_CH * m).
-           - For heat or power connections, only assign c_TOT and compute C_TOT
-             as c_TOT times the energy flow E.
-
-        Cost conversions:
-
-        - For components: from currency/h to currency/s (divide by 3600).
-        - For connections: from currency/GJ to currency/J (multiply by 1e-9).
+        Notes
+        -----
+        Component costs are converted from [currency/h] to [currency/s].
+        Connection costs are converted from [currency/GJ] to [currency/J].
+        Material connections receive c_T, c_M, c_CH cost breakdowns.
+        Heat and power connections receive only c_TOT values.
         """
         # --- Component Costs ---
         for comp_name, comp in self.components.items():
@@ -799,18 +1015,28 @@ class ExergoeconomicAnalysis:
 
     def construct_matrix(self, Tamb):
         """
-        Constructs the exergoeconomic cost matrix and vector.
-
-        This function sets up two blocks of equations:
-
-        1. For each productive component, the cost balance equation:
-           (sum of inlet costs) - (sum of outlet costs) + Z_costs = 0.
-        2. For each inlet connection, an equation to fix its cost variable
-           to the provided cost (C_TOT or the cost breakdown for material
-           streams).
-
-        A connection is treated as an inlet stream if its source_component is
-        either missing or not among the system components at all.
+        Construct the exergoeconomic cost matrix and vector.
+        
+        Parameters
+        ----------
+        Tamb : float
+            Ambient temperature in Kelvin.
+            
+        Returns
+        -------
+        tuple
+            A tuple containing:
+            - A: numpy.ndarray - The coefficient matrix for the linear equation system
+            - b: numpy.ndarray - The right-hand side vector for the linear equation system
+            
+        Notes
+        -----
+        This method constructs a system of linear equations that includes:
+        1. Cost balance equations for each productive component
+        2. Equations for inlet streams to fix their costs based on provided values
+        3. Auxiliary equations for power flows
+        4. Custom auxiliary equations from each component
+        5. Special equations for dissipative components
         """
         num_vars = self.num_variables
         A = np.zeros((num_vars, num_vars))
@@ -938,7 +1164,33 @@ class ExergoeconomicAnalysis:
 
     def solve_exergoeconomic_analysis(self, Tamb):
         """
-        Solve the exergoeconomic cost balance equations.
+        Solve the exergoeconomic cost balance equations and assign the results to connections and components.
+        
+        Parameters
+        ----------
+        Tamb : float
+            Ambient temperature in Kelvin.
+            
+        Returns
+        -------
+        tuple
+            (exergy_cost_matrix, exergy_cost_vector) - The coefficient matrix and right-hand side vector used 
+            in the linear equation system.
+            
+        Raises
+        ------
+        ValueError
+            If the exergoeconomic system is singular or if the cost balance is not satisfied.
+            
+        Notes
+        -----
+        This method performs the following steps:
+        1. Constructs the exergoeconomic cost matrix
+        2. Solves the system of linear equations
+        3. Assigns cost solutions to connections
+        4. Calculates component exergoeconomic indicators
+        5. Distributes loss stream costs to product streams
+        6. Computes system-level cost variables
         """
         # Step 1: Construct the cost matrix
         exergy_cost_matrix, exergy_cost_vector = self.construct_matrix(Tamb)
@@ -1082,13 +1334,22 @@ class ExergoeconomicAnalysis:
     def run(self, Exe_Eco_Costs, Tamb):
         """
         Execute the full exergoeconomic analysis.
-
+        
         Parameters
         ----------
         Exe_Eco_Costs : dict
             Dictionary containing cost assignments for components and connections.
+            Format for components: "<component_name>_Z": cost_value [currency/h]
+            Format for connections: "<connection_name>_c": cost_value [currency/GJ]
         Tamb : float
             Ambient temperature in Kelvin.
+            
+        Notes
+        -----
+        This method performs the complete exergoeconomic analysis by:
+        1. Initializing cost variables for all components and streams
+        2. Assigning user-defined costs to components and boundary streams
+        3. Solving the system of exergoeconomic equations
         """
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
@@ -1098,28 +1359,19 @@ class ExergoeconomicAnalysis:
 
     def exergoeconomic_results(self, print_results=True):
         """
-        Generate and (optionally) print tables for the exergoeconomic analysis.
+        Displays tables of exergoeconomic analysis results with columns for costs and economic parameters for each component,
+        and additional cost information for material and non-material connections.
 
-        This function first obtains the exergy analysis results tables (for components,
-        material connections, and non-material connections) by calling the exergy_results()
-        method on the underlying exergy analysis with print_results=False. It then adds new
-        columns with the cost data. The cost values are computed internally in [currency/s] and are
-        converted to [currency/h] (multiplied by 3600) for display.
-
-        For material connections, the following columns are added:
-        - C^T [currency/h]
-        - C^M [currency/h]
-        - C^CH [currency/h]
-        - C^TOT [currency/h]
-        For heat/power connections, only the column:
-        - C^TOT [currency/h]
-        is added.
+        Parameters
+        ----------
+        print_results : bool, optional
+            If True, prints the results as tables in the console (default is True).
 
         Returns
         -------
         tuple of pandas.DataFrame
-            (df_component_results, df_material_connection_results_part1,
-            df_material_connection_results_part2, df_non_material_connection_results)
+            (df_component_results, df_material_connection_results_part1, df_material_connection_results_part2, df_non_material_connection_results)
+            with the exergoeconomic analysis results.
         """
         # Retrieve the base exergy results without printing them
         df_comp, df_mat, df_non_mat = self.exergy_analysis.exergy_results(print_results=False)
@@ -1330,7 +1582,16 @@ class ExergoeconomicAnalysis:
 
 class EconomicAnalysis:
     """
-    A class to perform economic analysis of a power plant using the total revenue requirement method.
+    Perform economic analysis of a power plant using the total revenue requirement method.
+
+    Parameters
+    ----------
+    pars : dict
+        Dictionary containing the following keys:
+        - tau: Full load hours of the plant (hours/year)
+        - i_eff: Effective rate of return (yearly based)
+        - n: Lifetime of the plant (years)
+        - r_n: Nominal escalation rate (yearly based)
 
     Attributes
     ----------
@@ -1347,15 +1608,15 @@ class EconomicAnalysis:
     def __init__(self, pars):
         """
         Initialize the EconomicAnalysis with plant parameters provided in a dictionary.
-
+        
         Parameters
         ----------
         pars : dict
             Dictionary containing the following keys:
-                - 'tau': Full load hours of the plant (hours/year).
-                - 'i_eff': Effective rate of return (yearly based).
-                - 'n': Lifetime of the plant (years).
-                - 'r_n': Nominal escalation rate (yearly based).
+            - tau: Full load hours of the plant (hours/year)
+            - i_eff: Effective rate of return (yearly based)
+            - n: Lifetime of the plant (years)
+            - r_n: Nominal escalation rate (yearly based)
         """
         self.tau = pars['tau']
         self.i_eff = pars['i_eff']
@@ -1365,7 +1626,7 @@ class EconomicAnalysis:
     def compute_crf(self):
         """
         Compute the Capital Recovery Factor (CRF) using the effective rate of return.
-
+        
         Returns
         -------
         float
@@ -1380,7 +1641,7 @@ class EconomicAnalysis:
     def compute_celf(self):
         """
         Compute the Cost Escalation Levelization Factor (CELF) for repeating expenditures.
-
+        
         Returns
         -------
         float
@@ -1397,12 +1658,12 @@ class EconomicAnalysis:
     def compute_levelized_investment_cost(self, total_PEC):
         """
         Compute the levelized investment cost (annualized investment cost).
-
+        
         Parameters
         ----------
         total_PEC : float
             Total purchasing equipment cost (PEC) across all components.
-
+            
         Returns
         -------
         float
@@ -1412,27 +1673,22 @@ class EconomicAnalysis:
 
     def compute_component_costs(self, PEC_list, OMC_relative):
         """
-        Compute the cost rates (in currency per hour) for each component.
-
-        The operating and maintenance cost (OMC) for each component is
-        specified as a fraction of its PEC for the first year. The total first-year OMC is
-        computed by summing the individual OMC values, levelized using CELF, and then
-        allocated back to each component in proportion to its PEC.
-
+        Compute the cost rates for each component.
+        
         Parameters
         ----------
         PEC_list : list of float
             The purchasing equipment cost (PEC) of each component (in currency).
         OMC_relative : list of float
             For each component, the first-year OM cost as a fraction of its PEC.
-
+            
         Returns
         -------
-        tuple of lists of float
-            A tuple containing three lists:
-                - Z_CC: Investment cost rate per component (currency/hour)
-                - Z_OM: Operating and maintenance (OM) cost rate per component (currency/hour)
-                - Z_total: Total cost rate per component (currency/hour)
+        tuple
+            (Z_CC, Z_OM, Z_total) where:
+            - Z_CC: List of investment cost rates per component (currency/hour)
+            - Z_OM: List of operating and maintenance cost rates per component (currency/hour)
+            - Z_total: List of total cost rates per component (currency/hour)
         """
         total_PEC = sum(PEC_list)
         # Levelize total investment cost and allocate proportionally.

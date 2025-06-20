@@ -261,6 +261,35 @@ class HeatExchanger(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """Set up auxiliary equations for heat exchanger exergy cost analysis.
+        This method constructs auxiliary equations for thermal, mechanical, and chemical
+        exergy costs in a heat exchanger. It considers different thermal cases based on the
+        temperatures of the streams relative to the reference temperature T0.
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Coefficient matrix for the linear equation system.
+        b : numpy.ndarray
+            Right-hand side vector of the linear equation system.
+        counter : int
+            Current row counter in the linear equation system.
+        T0 : float
+            Reference temperature for exergy calculations.
+        equations : dict
+            Dictionary to store equation descriptions.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy analysis is enabled.
+        Returns
+        -------
+        A : numpy.ndarray
+            Updated coefficient matrix.
+        b : numpy.ndarray
+            Updated right-hand side vector.
+        counter : int
+            Updated row counter.
+        equations : dict
+            Updated dictionary of equation descriptions.
+        """
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
             if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
@@ -370,6 +399,26 @@ class HeatExchanger(Component):
         return A, b, counter + num_aux_eqs, equations
 
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the general heat exchanger.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
             self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (

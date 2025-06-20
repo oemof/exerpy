@@ -172,17 +172,21 @@ class Valve(Component):
         """
         Auxiliary equations for the valve.
         
-        This function enforces cost balance in a valve by adding a mechanical cost equation,
-        and—if chemical exergy is enabled—a chemical cost equation. The valve is assumed
-        to have one inlet and one outlet stream.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
         
-        The mechanical cost equation is constructed as follows:
-        - If both the inlet and outlet have nonzero mechanical exergy (e_M), 
-            the coefficients are set as 1/e_M for the inlet and -1/e_M for the outlet.
-        - Otherwise, fallback values (typically 1) are assigned.
+        For T_in > T0 and T_out > T0:
+            - Valve is treated as dissipative (warning issued)
         
-        The chemical cost equation (added only if chemical_exergy_enabled is True) is constructed
-        analogously using e_CH.
+        For T_out <= T0:
+            (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+                - F-principle: specific mechanical exergy costs equalized between inlet/outlet
+                - If E_M is zero for either stream, appropriate fallback coefficients are used
+        
+        When chemical_exergy_enabled is True:
+            (2) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+                - F-principle: specific chemical exergy costs equalized between inlet/outlet
+                - If E_CH is zero for either stream, appropriate fallback coefficients are used
         
         Parameters
         ----------
@@ -191,11 +195,11 @@ class Valve(Component):
         b : numpy.ndarray
             The current right-hand-side vector.
         counter : int
-            The current row index.
+            The current row index in the matrix.
         T0 : float
             Ambient temperature.
-        equations : list or dict
-            Data structure for storing equation labels.
+        equations : dict
+            Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
         
@@ -206,7 +210,9 @@ class Valve(Component):
         b : numpy.ndarray
             The updated right-hand-side vector.
         counter : int
-            The updated row index (increased by 2 if chemical exergy is enabled, or by 1 otherwise).
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
         """
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
             logging.warning("This case is not implemented. The Valve should be treated as dissipative!")
@@ -343,6 +349,26 @@ class Valve(Component):
 
 
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the valve.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
             self.C_F = self.inl[0]['C_PH'] - self.outl[0]['C_PH']
             self.C_P = np.nan

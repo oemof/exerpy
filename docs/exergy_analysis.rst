@@ -1,6 +1,6 @@
-#####################
-Exergy Analysis Intro
-#####################
+###############
+Exergy Analysis
+###############
 
 Exergy analysis is a powerful tool for evaluating and optimizing thermodynamic
 systems. Unlike conventional energy analysis, which focuses on the quantity of
@@ -62,10 +62,10 @@ potential exergy are neglected and therefore not considered.
     :header-rows: 1
     :class: tight-table
 
-    * - variable
-      - name
-      - symbol
-      - description
+    * - Variable
+      - Name
+      - Symbol
+      - Description
     * - :code:`e_PH`, :code:`E_PH`
       - (specific) physical exergy
       - :math:`e^\mathrm{PH}`, :math:`E^\mathrm{PH}`

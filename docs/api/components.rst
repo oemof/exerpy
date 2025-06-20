@@ -42,6 +42,26 @@ SimpleHeatExchanger
     :show-inheritance:
 
 
+*********
+Condenser
+*********
+
+.. automodule:: exerpy.components.heat_exchanger.condenser
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+**************
+SteamGenerator
+**************
+
+.. automodule:: exerpy.components.heat_exchanger.steam_generator
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 *******
 Turbine
 *******

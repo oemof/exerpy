@@ -107,7 +107,7 @@ class Pump(Component):
         # First, check for the invalid case: outlet temperature smaller than inlet temperature.
         if self.inl[0]['T'] > self.outl[0]['T']:
             logging.warning(
-                f"Exergy balance of compressor '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
+                f"Exergy balance of pump '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
                 f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
             )
             self.E_P = np.nan
@@ -167,18 +167,26 @@ class Pump(Component):
         """
         Auxiliary equations for the pump.
         
-        This function sets up auxiliary equations that enforce:
-        (i) equality of chemical cost between the inlet and outlet (c_in_CH = c_out_CH), and
-        (ii) a relationship between the thermal and mechanical cost differences.
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the following auxiliary cost relations:
         
-        The pump uses a p‐rule (if both inlet and outlet temperatures exceed T0)
-        or an f‐rule (if not) to relate the inlet and outlet thermal and mechanical cost
-        coefficients. These coefficients are computed using the differences in thermal 
-        (dET = e_T,out − e_T,in) and mechanical (dEM = e_M,out − e_M,in) exergy.
-        
-        If chemical exergy is enabled (chemical_exergy_enabled is True), one row is added 
-        for chemical cost equality and one row for the combined thermal/mechanical relation.
-        Otherwise, only the thermal/mechanical equation is added.
+        (1) Chemical exergy cost equation (if enabled):
+            1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+            - F-principle: specific chemical exergy costs equalized between inlet/outlet
+            
+        (2) Thermal/Mechanical exergy cost equations (based on temperature conditions):
+            
+            Case 1 (T_in > T0, T_out > T0):
+            1/dET * C_T_out - 1/dET * C_T_in - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
+            - P-principle: relates inlet/outlet thermal and mechanical exergy costs
+            
+            Case 2 (T_in ≤ T0, T_out > T0):
+            1/E_T_out * C_T_out - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
+            - P-principle: relates outlet thermal and inlet/outlet mechanical exergy costs
+            
+            Case 3 (T_in ≤ T0, T_out ≤ T0):
+            1/E_T_out * C_T_out - 1/E_T_in * C_T_in = 0
+            - F-principle: specific thermal exergy costs equalized between inlet/outlet
         
         Parameters
         ----------
@@ -254,6 +262,26 @@ class Pump(Component):
         return A, b, new_counter, equations
 
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the pump.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         # Retrieve the cost of power from the inlet stream of kind "power"
         power_cost = None
         for stream in self.inl.values():

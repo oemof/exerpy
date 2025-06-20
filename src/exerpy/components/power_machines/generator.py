@@ -95,9 +95,66 @@ class Generator(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        """
+        Auxiliary equations for the generator.
+        
+        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
+        the auxiliary cost relations for the generator. Since the generator converts mechanical
+        or thermal energy to electrical energy, the auxiliary equations typically enforce:
+        
+        - No additional auxiliary equations are needed for generators as electrical energy 
+          is pure exergy and the cost balance equations are sufficient.
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the matrix.
+        T0 : float
+            Ambient temperature.
+        equations : dict
+            Dictionary for storing equation labels.
+        chemical_exergy_enabled : bool
+            Flag indicating whether chemical exergy auxiliary equations should be added.
+        
+        Returns
+        -------
+        A : numpy.ndarray
+            The updated cost matrix.
+        b : numpy.ndarray
+            The updated right-hand-side vector.
+        counter : int
+            The updated row index.
+        equations : dict
+            Updated dictionary with equation labels.
+        """
+        
         return [A, b, counter, equations]
     
     def exergoeconomic_balance(self, T0):
+        """
+        Perform exergoeconomic balance calculations for the generator.
+        
+        This method calculates various exergoeconomic parameters including:
+        - Cost rates of product (C_P) and fuel (C_F)
+        - Specific cost of product (c_P) and fuel (c_F)
+        - Cost rate of exergy destruction (C_D)
+        - Relative cost difference (r)
+        - Exergoeconomic factor (f)
+        
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature
+            
+        Notes
+        -----
+        The exergoeconomic balance considers thermal (T), chemical (CH),
+        and mechanical (M) exergy components for the inlet and outlet streams.
+        """
         self.C_P = self.outl[0].get("C_TOT", 0)
         self.C_F = self.inl[0].get("C_TOT", 0)
         

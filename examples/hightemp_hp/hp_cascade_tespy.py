@@ -335,7 +335,7 @@ print("COP1 = ", round(COP1, 3))
 print("COP2 = ", round(COP2, 3))
 
 # assert convergence of calculation
-nw._convergence_check()
+nw.assert_convergence()
 
 # ambient conditions
 p0 = c11.p.val * 1e5

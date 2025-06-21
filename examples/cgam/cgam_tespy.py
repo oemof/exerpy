@@ -107,7 +107,7 @@ c1.set_attr(m=None)
 nwk.solve('design')
 
 # assert convergence of calculation
-nwk._convergence_check()
+nwk.assert_convergence()
 
 nwk.print_results()
 # %%[tespy_model_section_end]

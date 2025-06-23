@@ -9,8 +9,7 @@
                 "Q": 0.0,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "CC"
+                "P_unit": "W"
             }
         },
         "Compressor": {
@@ -22,8 +21,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 241855557.0,
-                "P_unit": "W",
-                "label": "COMP"
+                "P_unit": "W"
             }
         },
         "Generator": {
@@ -36,8 +34,7 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 0.986,
-                "label": "GEN1"
+                "eta_el": 0.986
             },
             "GEN2": {
                 "name": "GEN2",
@@ -48,8 +45,7 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 0.986,
-                "label": "GEN2"
+                "eta_el": 0.986
             }
         },
         "HeatExchanger": {
@@ -61,8 +57,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "COND"
+                "P_unit": "W"
             },
             "ECO": {
                 "name": "ECO",
@@ -72,8 +67,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "ECO"
+                "P_unit": "W"
             },
             "EVA": {
                 "name": "EVA",
@@ -83,8 +77,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "EVA"
+                "P_unit": "W"
             },
             "SH": {
                 "name": "SH",
@@ -94,8 +87,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "SH"
+                "P_unit": "W"
             }
         },
         "Mixer": {
@@ -107,8 +99,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "DEA"
+                "P_unit": "W"
             },
             "MIX": {
                 "name": "MIX",
@@ -118,8 +109,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "MIX"
+                "P_unit": "W"
             }
         },
         "Motor": {
@@ -130,8 +120,7 @@
                 "P_el_unit": "W",
                 "P_mech": 37618.299,
                 "P_mech_unit": "W",
-                "eta_el": 0.985,
-                "label": "PUMP1-MOTOR"
+                "eta_el": 0.985
             },
             "PUMP2-MOTOR": {
                 "name": "PUMP2-MOTOR",
@@ -140,8 +129,7 @@
                 "P_el_unit": "W",
                 "P_mech": 455789.52900000004,
                 "P_mech_unit": "W",
-                "eta_el": 0.985,
-                "label": "PUMP2-MOTOR"
+                "eta_el": 0.985
             }
         },
         "Pump": {
@@ -153,8 +141,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 37618.299,
-                "P_unit": "W",
-                "label": "PUMP1"
+                "P_unit": "W"
             },
             "PUMP2": {
                 "name": "PUMP2",
@@ -164,8 +151,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 455789.52900000004,
-                "P_unit": "W",
-                "label": "PUMP2"
+                "P_unit": "W"
             }
         },
         "SimpleHeatExchanger": {
@@ -177,8 +163,7 @@
                 "Q": -99999999.6,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "HC"
+                "P_unit": "W"
             }
         },
         "Splitter": {
@@ -202,8 +187,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 493411205.0,
-                "P_unit": "W",
-                "label": "GT"
+                "P_unit": "W"
             },
             "ST1": {
                 "name": "ST1",
@@ -213,8 +197,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 27457049.900000002,
-                "P_unit": "W",
-                "label": "ST1"
+                "P_unit": "W"
             },
             "ST2": {
                 "name": "ST2",
@@ -224,8 +207,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 25754970.5,
-                "P_unit": "W",
-                "label": "ST2"
+                "P_unit": "W"
             }
         }
     },

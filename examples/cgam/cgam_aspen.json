@@ -9,8 +9,7 @@
                 "Q": 0.0,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "COMB"
+                "P_unit": "W"
             }
         },
         "Compressor": {
@@ -22,8 +21,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 29665814.099999998,
-                "P_unit": "W",
-                "label": "AC"
+                "P_unit": "W"
             }
         },
         "Generator": {
@@ -36,8 +34,7 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 1.0,
-                "label": "GEN"
+                "eta_el": 1.0
             }
         },
         "HeatExchanger": {
@@ -49,8 +46,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "APH"
+                "P_unit": "W"
             },
             "EV": {
                 "name": "EV",
@@ -60,8 +56,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "EV"
+                "P_unit": "W"
             },
             "PH": {
                 "name": "PH",
@@ -71,8 +66,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W",
-                "label": "PH"
+                "P_unit": "W"
             }
         },
         "Turbine": {
@@ -84,8 +78,7 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 59665814.1,
-                "P_unit": "W",
-                "label": "EXP"
+                "P_unit": "W"
             }
         }
     },

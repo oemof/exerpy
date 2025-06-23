@@ -34,13 +34,13 @@ mpl.rcParams['figure.titlesize']   = 18   # figure suptitle, if used
 component_colors = {
     # compressors (blue tones)
     "COMP1":      "#118cff",
-    "COMP2":      "#8bbeec",
+    "COMP2":      "#118cff",
     # motors (cyan tones)
     "MOT1":       "#ceb200",
-    "MOT2":       "#f5e57b",
+    "MOT2":       "#ceb200",
     # valves (orange tones)
     "VAL1":       "#009c63",
-    "VAL2":       "#73d4b1",
+    "VAL2":       "#009c63",
     # heat exchangers (green/red tones)
     "AIR_HX":     "#d3291d",
     "IHX":        "#e44f44",
@@ -48,7 +48,7 @@ component_colors = {
 }
 
 
-def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, print_results=False, **kwargs):
+def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, Tamb, print_results=False, **kwargs):
     """
     Reload the exergy analysis from the JSON file, calculate PEC (with cost correction),
     multiply PEC by 6.32 to obtain the Total Capital Investment (TCI), and run economic
@@ -64,7 +64,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, print_results=False,
         Full load hours (hours/year).
     """
     # Reload a virgin exergy analysis.
-    ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+    ean = ExergyAnalysis.from_tespy(nw, Tamb+273.15, pamb*1e5, split_physical_exergy=True)
 
     # Define exergy streams.
 
@@ -335,11 +335,11 @@ print("COP1 = ", round(COP1, 3))
 print("COP2 = ", round(COP2, 3))
 
 # assert convergence of calculation
-nw._convergence_check()
+# nw._convergence_check()
 
 # ambient conditions
-p0 = c11.p.val * 1e5
-T0 = c11.T.val + 273.15
+pamb = c11.p.val
+Tamb = c11.T.val
 
 # economic parameters
 # Define the CEPCI values for cost correction.
@@ -380,11 +380,12 @@ loss = {
 ####################################################
 
 # define range of evaporator outlet temperatures T34 [°C]
-SENS_VAR    = 'T34' # e.g. 'T34', 'tau', 'i_eff', 'elec_price', 'ambient temperature'
+SENS_VAR    = r'$T_{34}$' # e.g. f'T_{34}', 'tau', 'i_eff', 'elec_price', 'ambient temperature'
+SENS_VAR_savefig = 'T34'  # e.g. 'T34', 'tau', 'i_eff', 'elec_price', 'ambient temperature'
 SENS_VALUES = np.arange(50, 81, 2)  # the array of values you want to sweep
 
 def apply_sensitivity(var_name, value):
-    if var_name == 'T34':
+    if var_name == r'$T_{34}$':
         c34.set_attr(T=value)
     elif var_name == 'ambient temperature':
         c11.set_attr(T=value)
@@ -409,7 +410,8 @@ def run_sensitivity_analysis(var_name, values):
             elec_price_cent_kWh=default_elec_price,
             tau=default_tau,
             n=n,
-            i_eff=i_eff
+            i_eff=i_eff,
+            Tamb=Tamb,
         )
         # map our sensitivity keys to function args
         if 'elec_price' in extra_pars:
@@ -426,7 +428,7 @@ def run_sensitivity_analysis(var_name, values):
         COP   = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val * 1e-3)
         COP2  = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val     * 1e-3)
         COP1  = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val     * 1e-3)
-        ean   = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+        ean   = ExergyAnalysis.from_tespy(nw, Tamb+273.15, pamb*1e5, split_physical_exergy=True)
         ean.analyse(E_F=fuel, E_P=product, E_L=loss)
         eps   = ean.epsilon
         EF_tot, EP_tot, EL_tot = ean.E_F, ean.E_P, ean.E_L
@@ -479,7 +481,7 @@ df = run_sensitivity_analysis(SENS_VAR, SENS_VALUES)
 # 3. Plots of Results
 #####################
 
-unit = {'T34':'[°C]', 'ambient temperature':'[°C]', 'tau':'[h/a]', 'i_eff':'[%/a]', 'elec_price':'[cent/kWh]'}[SENS_VAR]
+unit = {r'$T_{34}$':'[°C]', 'ambient temperature':'[°C]', 'tau':'[h/a]', 'i_eff':'[%/a]', 'elec_price':'[cent/kWh]'}[SENS_VAR]
 
 # 1. Interactive Plotly Line Chart
 
@@ -533,7 +535,7 @@ plt.ylabel(r'$\dot{Z}_{\text{tot}}/E_{P,\text{tot}}$ [€/GJ$_\mathrm{ex}$]')
 plt.title('Normalized investmenet costs and exergy destruction')
 plt.grid(True)
 plt.tight_layout()
-plt.savefig(f"examples/hightemp_hp/plots/plot_normalized_scatter_{SENS_VAR}.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_normalized_scatter_{SENS_VAR_savefig}.png", dpi=300)
 
 
 # 3. Stacked Bar Chart: Z per Component + COP Overlay
@@ -603,7 +605,7 @@ ax1.legend(
 )
 
 plt.tight_layout()
-plt.savefig(f"examples/hightemp_hp/plots/plot_investment_columns_{SENS_VAR}.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_investment_columns_{SENS_VAR_savefig}.png", dpi=300)
 
 
 # 4. 5×1 Vertical Multipanel: TCI & Metrics
@@ -617,25 +619,26 @@ cop1 = df["COP1"]
 cop2 = df["COP2"]
 cP_tot  = df["c_P"]
 zdz_tot = df["C_D+Z_EURperh_TOT"]  # combined Z + cost destruction
+epsilon = df["epsilon"]
 
 fig, axs = plt.subplots(5, 1, sharex=True, figsize=(5, 14))
 
-# (1) Investment costs of compressors
-axs[0].plot(t, tci1, marker="o", label="COMP1", color=component_colors["COMP1"])
-axs[0].plot(t, tci2, marker="s", label="COMP2", color=component_colors["COMP2"])
+# (1) Total investment cost
+axs[0].plot(t, tci_tot, marker="o", color='black')
 axs[0].set_ylabel("TCI [M€]")
-axs[0].set_title("Investment costs of the compressors")
-axs[0].legend(loc="best")
-min_val = min(tci1.min(), tci2.min())
-max_val = max(tci1.max(), tci2.max())
-axs[0].set_ylim(min_val * 0.95, max_val * 1.05)
+axs[0].set_title("Total capital investment")
+axs[0].set_ylim(tci_tot.min() * 0.99, tci_tot.max() * 1.01)
 axs[0].grid(True)
 
-# (2) Total investment cost
-axs[1].plot(t, tci_tot, marker="o", color='black')
+# (2) Investment costs of compressors
+axs[1].plot(t, tci1, marker="o", label="COMP1", color=component_colors["COMP1"])
+axs[1].plot(t, tci2, marker="s", label="COMP2", color=component_colors["COMP2"])
 axs[1].set_ylabel("TCI [M€]")
-axs[1].set_title("Total capital investment")
-axs[1].set_ylim(tci_tot.min() * 0.99, tci_tot.max() * 1.01)
+axs[1].set_title("Investment costs of the compressors")
+axs[1].legend(loc="best")
+min_val = min(tci1.min(), tci2.min())
+max_val = max(tci1.max(), tci2.max())
+axs[1].set_ylim(min_val * 0.95, max_val * 1.05)
 axs[1].grid(True)
 
 # (3) Exergetic efficiency (%)
@@ -655,10 +658,10 @@ axs[3].set_ylabel(r"$c_P$ [€/GJ$_\mathrm{ex}$]")
 axs[3].set_title("Specific product cost")
 axs[3].grid(True)
 
-# (5) Combined Z + cost destruction
-axs[4].plot(t, zdz_tot, marker="o", color='black')
-axs[4].set_ylabel(r"$\dot{Z} + \dot{C}_D$ [€/h]")
-axs[4].set_title(r"$\dot{Z} + \dot{C}_D$ of the system")
+# (5) epsilon
+axs[4].plot(t, epsilon*100, marker="o", color='black')
+axs[4].set_ylabel(r"$\varepsilon$ [%]")
+axs[4].set_title(r"Exergetic efficiency")
 axs[4].grid(True)
 
 # shared x-axis label with LaTeX subscript and degree symbol
@@ -666,7 +669,7 @@ axs[4].set_xlabel(f"{SENS_VAR} {unit}")
 axs[4].tick_params(axis="x", rotation=0)
 
 plt.tight_layout()
-plt.savefig(f"examples/hightemp_hp/plots/plot_multiplot_{SENS_VAR}.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_multiplot_{SENS_VAR_savefig}.png", dpi=300)
 
 
 # 5. Bar Chart of Exergy Destruction + ε Overlay
@@ -736,20 +739,20 @@ ax1.legend(
 )
 
 plt.tight_layout()
-plt.savefig(f"examples/hightemp_hp/plots/plot_ed_columns_{SENS_VAR}.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/plot_ed_columns_{SENS_VAR_savefig}.png", dpi=300)
 
 
 '''# 6. Double‐Variable Sensitivity: ambient temperature vs. T34 c_P
 
 # define the two ranges (you can adjust the step or limits as desired)
-amb_range  = np.arange(0, 25, 2)   # ambient temperature [°C]
+amb_range  = np.arange(1, 26, 2)   # ambient temperature [°C]
 t34_range  = np.arange(50, 87, 2)   # T34 [°C]
 
 double_results = []
-for T_amb in amb_range:
+for Tamb in amb_range:
     for T34_val in t34_range:
         # 1) apply both changes
-        c11.set_attr(T=T_amb)
+        c11.set_attr(T=Tamb)
         c34.set_attr(T=T34_val)
 
         # 2) re‐solve the network
@@ -760,7 +763,8 @@ for T_amb in amb_range:
             elec_price_cent_kWh=default_elec_price,
             tau=default_tau,
             n=n,
-            i_eff=i_eff
+            i_eff=i_eff,
+            Tamb=Tamb
         )
         df_comp, *_ = run_exergoeco_analysis(**pars, print_results=False)
 
@@ -773,9 +777,10 @@ for T_amb in amb_range:
 
         # 5) record
         double_results.append({
-            'ambient_temp': T_amb,
+            'ambient_temp':  Tamb,
             'T34':           T34_val,
-            'c_P':           cP_tot
+            'c_P':           cP_tot,
+            'epsilon':       df_comp.loc[df_comp['Component']=='TOT', 'ε [%]'].iloc[0]
         })
 
 # assemble into a DataFrame
@@ -788,7 +793,7 @@ pivot = df_double.pivot(index='T34', columns='ambient_temp', values='c_P')
 X, Y = np.meshgrid(pivot.columns.values, pivot.index.values)
 Z     = pivot.values
 
-fig, ax = plt.subplots(figsize=(5,5))
+fig, ax = plt.subplots(figsize=(5,4))
 pcm = ax.pcolormesh(X, Y, Z, shading='auto')
 plt.colorbar(pcm, label=r"$c_P$ [€/GJ$_{ex}$]", pad=0.02)
 
@@ -819,7 +824,51 @@ ax.set_xlabel('Ambient temperature [°C]')
 ax.set_ylabel(r'$T_{34}$ [°C]')
 
 plt.tight_layout()
-plt.savefig("examples/hightemp_hp/plots/heatmap_double_sensitivity_with_minima.png", dpi=300)'''
+plt.savefig("examples/hightemp_hp/plots/heatmap_double_sensitivity_with_minima.png", dpi=300)
+
+# --- Build epsilon‐pivot ---
+# (make sure you collected 'epsilon' for each (Tamb, T34) in double_results)
+pivot_eps = df_double.pivot(index='T34', columns='ambient_temp', values='epsilon')
+
+# Meshgrid for plotting
+X_eps, Y_eps = np.meshgrid(pivot_eps.columns.values, pivot_eps.index.values)
+Z_eps     = pivot_eps.values   # convert to percent
+
+# --- Plot ε heatmap ---
+fig, ax = plt.subplots(figsize=(5,4))
+pcm = ax.pcolormesh(X_eps, Y_eps, Z_eps, shading='auto')
+cbar = plt.colorbar(pcm, ax=ax, pad=0.02)
+
+# find the index of the max in each column
+max_row_indices = np.nanargmax(Z_eps, axis=0)
+
+# compute one cell's width & height
+cell_width  = pivot_eps.columns.values[1] - pivot_eps.columns.values[0]
+cell_height = pivot_eps.index.values[1]   - pivot_eps.index.values[0]
+
+# draw a rectangle around each maximal cell
+for col_idx, row_idx in enumerate(max_row_indices):
+    # lower-left corner of that cell
+    x0 = pivot_eps.columns.values[col_idx] - cell_width/2
+    y0 = pivot_eps.index.values[row_idx]   - cell_height/2
+    
+    rect = patches.Rectangle(
+        (x0, y0),
+        cell_width, cell_height,
+        fill=False,
+        edgecolor='black',  
+        linewidth=2
+    )
+    ax.add_patch(rect)
+
+cbar.set_label(r"$\varepsilon$ [%]")
+
+ax.set_title('Exergetic efficiency')
+ax.set_xlabel('Ambient temperature [°C]')
+ax.set_ylabel(r'$T_{34}$ [°C]')
+
+plt.tight_layout()
+plt.savefig("examples/hightemp_hp/plots/heatmap_double_sensitivity_epsilon.png", dpi=300)'''
 
 # 7. Combined Figure: Z + Exergy Destruction + Efficiencies
 
@@ -874,16 +923,13 @@ fig, (ax_z, ax_ed) = plt.subplots(
     sharex=True,
     gridspec_kw={"height_ratios": [1, 1]}
 )
-
-# Add overall title
 fig.suptitle("Capital cost and exergy destruction of the components", fontsize=14)
-# adjust layout to make room for title
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 
 x = np.arange(len(plot_df_z))
 bar_width = 0.8
 
-# ---- Top: Z + COP ----
+# Top: Z stacked bars
 plot_df_z.plot(
     kind="bar", stacked=True,
     ax=ax_z, width=bar_width,
@@ -892,20 +938,7 @@ plot_df_z.plot(
 )
 ax_z.set_ylabel(r"$\dot{Z}$ [€/h]")
 
-# draw black separators at VAL1→IHX boundary
-cumsum_ed = plot_df_z.cumsum(axis=1)
-if "MOT1" in cumsum_ed.columns:
-    y_vals = cumsum_ed["MOT1"]
-    for xi, yi in zip(x, y_vals):
-        ax_z.hlines(yi,
-                     xi - bar_width/2 + 0.02,
-                     xi + bar_width/2 - 0.02,
-                     color="black",
-                     linestyle="--",
-                     linewidth=1,
-                     zorder=5)
-
-# ---- Bottom: Exergy destruction + ε ----
+# Bottom: Exergy destruction stacked bars
 plot_df_ed.plot(
     kind="bar", stacked=True,
     ax=ax_ed, width=bar_width,
@@ -915,34 +948,37 @@ plot_df_ed.plot(
 ax_ed.set_xlabel(f"{SENS_VAR} {unit}")
 ax_ed.set_ylabel(r"$\dot{E}_D$ [kW]")
 
-# draw black separators at VAL1→IHX boundary
-cumsum_ed = plot_df_ed.cumsum(axis=1)
-if "VAL1" in cumsum_ed.columns:
-    y_vals = cumsum_ed["VAL1"]
-    for xi, yi in zip(x, y_vals):
-        ax_ed.hlines(yi,
-                     xi - bar_width/2 + 0.02,
-                     xi + bar_width/2 - 0.02,
-                     color="black",
-                     linestyle="--",
-                     linewidth=1,
-                     zorder=5)
-
-# X-axis ticks only on bottom
 ax_ed.set_xticks(x)
 ax_ed.set_xticklabels(plot_df_z.index.astype(str), rotation=0)
 
-# ---- Legend from lower plot ----
-bars, bar_labels = ax_ed.get_legend_handles_labels()
+# Hatch patterns for cycle highlighting
+pattern_map = {
+    'AIR_HX': '///', 'COMP1': '///', 'MOT1': '///', 'VAL1': '///',
+    'COMP2': '...', 'MOT2': '...', 'VAL2': '...', 'STEAM_GEN': '...'
+}
 
-handles = (bars)[::-1]
-labels  = (bar_labels)[::-1]
+# Apply hatches on top plot
+n_z = len(plot_df_z)
+for i, comp in enumerate(plot_df_z.columns):
+    hatch = pattern_map.get(comp, '')
+    for j in range(n_z):
+        ax_z.patches[i * n_z + j].set_hatch(hatch)
+
+# Apply hatches on bottom plot
+n_ed = len(plot_df_ed)
+for i, comp in enumerate(plot_df_ed.columns):
+    hatch = pattern_map.get(comp, '')
+    for j in range(n_ed):
+        ax_ed.patches[i * n_ed + j].set_hatch(hatch)
+
+# Legend (from bottom, reversed)
+handles, labels = ax_ed.get_legend_handles_labels()
 ax_z.legend(
-    handles, labels,
+    handles[::-1], labels[::-1],
     title="Component",
     bbox_to_anchor=(1.01, 0.5),
     loc="center left"
 )
 
 plt.tight_layout()
-plt.savefig(f"examples/hightemp_hp/plots/combined_Z_ED_{SENS_VAR}.png", dpi=300)
+plt.savefig(f"examples/hightemp_hp/plots/combined_Z_ED_{SENS_VAR_savefig}.png", dpi=300)

@@ -204,7 +204,7 @@ product = {
         'generator_of_GT__net power',
         'generator_of_ST1__net power',
         'generator_of_ST2__net power',
-        'generator_of_HC__heat output'
+        'HC__generator_of_HC'
     ],
     "outputs": [
         'net power__motor_of_PUMP2',

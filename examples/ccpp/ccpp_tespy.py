@@ -185,7 +185,7 @@ net_power.set_attr(P=-300e6)
 nw.solve("design")
 
 # assert convergence of calculation
-nw._convergence_check()
+nw.assert_convergence()
 
 nw.print_results()
 # %%[tespy_model_section_end]

@@ -83,7 +83,7 @@ nw.add_busses(
 nw.solve("design")
 
 # assert convergence of calculation
-nw._convergence_check()
+nw.assert_convergence()
 
 nw.print_results()
 # %%[tespy_model_section_end]

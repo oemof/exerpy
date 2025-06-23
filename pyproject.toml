@@ -4,6 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [tool.flit.sdist]
 include = [
+    ".readthedocs.yaml",
     "LICENSE*",
     "tox.ini",
     "docs/",

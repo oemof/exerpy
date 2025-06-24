@@ -48,10 +48,10 @@ dependencies = [
 license = {text = "MIT"}
 
 [project.urls]
-Homepage = "tba"
+Homepage = "https://github.com/oemof/exerpy"
 Documentation = "https://exerpy.readthedocs.io/"
-Changelog = "tba"
-"Issue Tracker" = "tba"
+Changelog = "https://exerpy.readthedocs.io/en/latest/whats_new.html"
+"Issue Tracker" = "https://github.com/oemof/exerpy/issues"
 
 [project.optional-dependencies]
 dev = [

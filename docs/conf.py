@@ -63,7 +63,7 @@ exclude_patterns = ['_build']
 bibtex_bibfiles = ['references.bib']
 
 # links to github
-github_repo_url = "https://github.com/tba/"
+github_repo_url = "https://github.com/oemof/exerpy"
 extlinks = {
     "issue": (f"{github_repo_url}/issues/%s", "#%s"),  # noqa: WPS323
     "pr": (f"{github_repo_url}/pull/%s", "PR #%s"),  # noqa: WPS323

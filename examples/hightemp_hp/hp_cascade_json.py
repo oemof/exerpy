@@ -296,8 +296,8 @@ areas = (Z_vals / Z_vals.max()) * max_marker_area
 radii = np.sqrt(areas / np.pi)    # radius in points
 
 # Plot
-plt.figure(figsize=(8, 6))
-plt.scatter(ε_vals, f_vals, s=areas, alpha=0.7, edgecolors='w', color='red')
+plt.figure(figsize=(12, 6))
+plt.scatter(ε_vals, f_vals, s=areas, edgecolors='w',  color='#BE2528')
 
 # Annotate each point to the NE, offset by its radius + a small margin
 for x, y, label, r in zip(ε_vals, f_vals, components, radii):
@@ -319,4 +319,79 @@ plt.grid(True, linestyle='--', alpha=0.5)
 plt.tight_layout()
 plt.xlim(0, 100)
 plt.ylim(0, 100)
-plt.show()
+
+component_colors = {
+    # compressors (blue tones)
+    "COMP1":      "#118cff",
+    "COMP2":      "#4aa7fd",
+    # motors (cyan tones)
+    "MOT1":       "#ceb200",
+    "MOT2":       "#f5da2d",
+    # valves (orange tones)
+    "VAL1":       "#009c63",
+    "VAL2":       "#2ae09d",
+    # heat exchangers (green/red tones)
+    "AIR_HX":     "#d3291d",
+    "IHX":        "#e44f44",
+    "STEAM_GEN":  "#ff7e7e",
+    # TOTAL if you ever include it
+    "TOT":        "#000000",
+}
+
+# 1) Drop TOTAL once for both
+df_base = df_comp[df_comp['Component'] != 'TOT']
+
+# 2) Compute sort order by descending ED
+sort_order = (
+    df_base
+      .sort_values('E_D [kW]', ascending=False)['Component']
+      .tolist()
+)
+
+# 3) ED‐plot: all components, in ED‐order
+df_ed_plot = (
+    df_base
+      .set_index('Component')
+      .loc[sort_order]         # use bracket-list here
+      .reset_index()
+)
+
+# 4) Z‐plot: drop VAL1/VAL2, then apply same order minus valves
+keep_for_z = [c for c in sort_order if c not in ('VAL1','VAL2')]
+df_z_plot = (
+    df_base[~df_base['Component'].str.contains('VAL1|VAL2')]
+      .set_index('Component')
+      .loc[keep_for_z]        # <<< brackets, not parentheses
+      .reset_index()
+)
+
+# 5) Extract and color
+comp_ed = df_ed_plot['Component']
+ED_vals = df_ed_plot['E_D [kW]']
+colors_ed = [component_colors[c] for c in comp_ed]
+
+comp_z = df_z_plot['Component']
+Z_vals  = df_z_plot['Z [EUR/h]']
+colors_z  = [component_colors[c] for c in comp_z]
+
+# 6) Plot
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+ax1.bar(comp_ed, ED_vals, color=colors_ed)
+ax1.set_xlabel('Component')
+ax1.set_ylabel(r'$\dot{E}_D$ [kW]')
+ax1.set_title(r'Exergy Destruction $\dot{E}_D$')
+ax1.tick_params(axis='x', labelrotation=45)
+plt.setp(ax1.get_xticklabels(), ha='right')
+ax1.grid(True, linestyle='--', alpha=0.5)
+
+ax2.bar(comp_z, Z_vals, color=colors_z)
+ax2.set_xlabel('Component')
+ax2.set_ylabel(r'$\dot{Z}$ [EUR/h]')
+ax2.set_title(r'Cost Rate $\dot{Z}$')
+ax2.tick_params(axis='x', labelrotation=45)
+plt.setp(ax2.get_xticklabels(), ha='right')
+ax2.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+plt.savefig("examples/hightemp_hp/plots/ebsilon_combined_Z_ED.png", dpi=300)

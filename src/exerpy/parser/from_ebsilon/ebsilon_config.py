@@ -832,7 +832,7 @@ composition_params = [
 # Define the component groups via unique labels
 grouped_components = {
     "Turbine": [6, 23, 56, 57, 58, 68, 122],
-    "HeatExchanger": [10, 15, 16, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
     "CombustionChamber": [22, 90],
     "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],

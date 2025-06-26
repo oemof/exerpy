@@ -6,6 +6,10 @@ from tespy.components import Drum
 from tespy.components import HeatExchanger
 from tespy.components import Merge
 from tespy.components import Pump
+from tespy.components import Motor
+from tespy.components import Generator
+from tespy.components import PowerSink
+from tespy.components import PowerBus
 from tespy.components import SimpleHeatExchanger
 from tespy.components import Sink
 from tespy.components import Source
@@ -14,6 +18,7 @@ from tespy.components import Turbine
 from tespy.components import Valve
 from tespy.connections import Bus
 from tespy.connections import Connection
+from tespy.connections import PowerConnection
 from tespy.connections import Ref
 from tespy.networks import Network
 
@@ -88,25 +93,51 @@ c22b = Connection(drum_pump, "out1", evaporator, "in2", label="22b")
 c22c = Connection(evaporator, "out2", drum, "in2", label="22c")
 c23 = Connection(drum, "out2", superheater, "in2", label="23")
 
-nw.add_conns(c9, c0, c101, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
+nw.add_conns(
+    c9, c0, c101, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21,
+    c22, c22a, c22b, c22c, c23
+)
 
-net_power = Bus("net power")
-# gas turbine and compressor efficiencies are different due to differences
-# in the definition of the efficiency, when using a single-shaft system
-net_power.add_comps(
-    {"comp": gasturbine, "base": "component", "char": 0.995},
-    {"comp": hp_steam_turbine, "base": "component", "char": 0.985},
-    {"comp": lp_steam_turbine, "base": "component", "char": 0.985},
-    {"comp": compressor, "base": "bus", "char": 0.995},
-    {"comp": feed_pump, "base": "bus", "char": 0.985},
-    {"comp": condensate_pump, "base": "bus", "char": 0.985},
-    {"comp": drum_pump, "base": "bus", "char": 0.985},
-)
-heat_output = Bus("heat output")
-heat_output.add_comps(
-    {"comp": heating_condenser, "base": "component"}
-)
-nw.add_busses(net_power, heat_output)
+gt_shaft = PowerBus("GT shaft", num_in=1, num_out=2)
+st_shaft = PowerBus("ST shaft", num_in=2, num_out=1)
+gt_generator = Generator("GT generator")
+st_generator = Generator("ST generator")
+fp_motor = Motor("feed pump motor")
+cp_motor = Motor("condensate pump motor")
+dp_motor = Motor("drum pump motor")
+distribution = PowerBus("electricity distribution", num_in=2, num_out=4)
+grid = PowerSink("grid")
+
+e1 = PowerConnection(gasturbine, "power", gt_shaft, "power_in1", label="e01")
+e2 = PowerConnection(gt_shaft, "power_out1", compressor, "power", label="e02")
+e3 = PowerConnection(gt_shaft, "power_out2", gt_generator, "power_in", label="e03")
+e4 = PowerConnection(gt_generator, "power_out", distribution, "power_in1", label="e04")
+
+e5 = PowerConnection(hp_steam_turbine, "power", st_shaft, "power_in1", label="e05")
+e6 = PowerConnection(lp_steam_turbine, "power", st_shaft, "power_in2", label="e06")
+e7 = PowerConnection(st_shaft, "power_out1", st_generator, "power_in", label="e07")
+e8 = PowerConnection(st_generator, "power_out", distribution, "power_in2", label="e08")
+
+e9 = PowerConnection(distribution, "power_out1", fp_motor, "power_in", label="e09")
+e10 = PowerConnection(fp_motor, "power_out", feed_pump, "power", label="e10")
+e11 = PowerConnection(distribution, "power_out2", cp_motor, "power_in", label="e11")
+e12 = PowerConnection(cp_motor, "power_out", condensate_pump, "power", label="e12")
+e13 = PowerConnection(distribution, "power_out3", dp_motor, "power_in", label="e13")
+e14 = PowerConnection(dp_motor, "power_out", drum_pump, "power", label="e14")
+e15 = PowerConnection(distribution, "power_out4", grid, "power", label="e15")
+
+nw.add_conns(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15)
+
+heating = PowerSink("heating")
+heating_condenser.set_attr(power_connector_location="outlet")
+h1 = PowerConnection(heating_condenser, "heat", heating, "power", label="h1")
+nw.add_conns(h1)
+
+gt_generator.set_attr(eta=0.985)
+st_generator.set_attr(eta=0.985)
+fp_motor.set_attr(eta=0.985)
+cp_motor.set_attr(eta=0.985)
+dp_motor.set_attr(eta=0.985)
 
 c1.set_attr(
     fluid={
@@ -180,7 +211,7 @@ c1.set_attr(m=637.8845562751899)
 heating_condenser.set_attr(Q=-100e6)
 
 c1.set_attr(m=None)
-net_power.set_attr(P=-300e6)
+e15.set_attr(E=300e6)
 
 nw.solve("design")
 
@@ -201,16 +232,10 @@ fuel = {
 
 product = {
     "inputs": [
-        'generator_of_GT__net power',
-        'generator_of_ST1__net power',
-        'generator_of_ST2__net power',
-        'HC__generator_of_HC'
+        'e15',
+        'h1'
     ],
     "outputs": [
-        'net power__motor_of_PUMP2',
-        'net power__motor_of_drum pump',
-        'net power__motor_of_PUMP1',
-        'net power__motor_of_COMP',
     ]
 }
 

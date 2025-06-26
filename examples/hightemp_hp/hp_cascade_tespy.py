@@ -1,6 +1,6 @@
-from tespy.components import Compressor, Source, Sink, CycleCloser, Pump, Valve
+from tespy.components import Compressor, Source, Sink, CycleCloser, Pump, Valve, PowerBus, PowerSource, Motor
 from tespy.components import MovingBoundaryHeatExchanger as HeatExchanger
-from tespy.connections import Connection, Ref, Bus
+from tespy.connections import Connection, Ref, PowerConnection
 from tespy.networks import Network
 from exerpy import ExergyAnalysis, ExergoeconomicAnalysis, EconomicAnalysis
 
@@ -70,8 +70,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, Tamb, print_results=
 
     fuel = {
         "inputs": [
-            'power input__motor_of_COMP1',
-            'power input__motor_of_COMP2'
+            'e1'
         ],
         "outputs": []
     }
@@ -209,7 +208,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, Tamb, print_results=
         Exe_Eco_Costs[f"{comp}_Z"] = z
     Exe_Eco_Costs["11_c"] = 0.0
     Exe_Eco_Costs["41_c"] = 0.0
-    Exe_Eco_Costs["power input__motor_of_COMP1_c"] = elec_cost_eur_per_GJ
+    Exe_Eco_Costs["e1_c"] = elec_cost_eur_per_GJ
 
     # Exergoeconomic Analysis
     exergoeco_analysis = ExergoeconomicAnalysis(ean)
@@ -225,7 +224,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, Tamb, print_results=
 # 1. TESPy Simulation of High-Temperature Heat Pump
 ##################################################
 
-nw = Network(T_unit="C", p_unit="bar", h_unit="kJ / kg", m_unit="kg / s", iterinfo=False)
+nw = Network(T_unit="C", p_unit="bar", h_unit="kJ / kg", m_unit="kg / s")
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
@@ -268,23 +267,36 @@ nw.add_conns(c11, c12)
 nw.add_conns(c31, c32, c32c, c33, c34)
 nw.add_conns(c41, c42)
 
+power_input = PowerSource("grid")
+distribution = PowerBus("electricity distribution", num_in=1, num_out=2)
+motor1 = Motor("MOT1")
+motor2 = Motor("MOT2")
+
+e1 = PowerConnection(power_input, "power", distribution, "power_in1", label="e1")
+e2 = PowerConnection(distribution, "power_out1", motor1, "power_in", label="e2")
+e3 = PowerConnection(motor1, "power_out", comp1, "power", label="e3")
+e4 = PowerConnection(distribution, "power_out2", motor2, "power_in", label="e4")
+e5 = PowerConnection(motor2, "power_out", comp2, "power", label="e5")
+
+nw.add_conns(e1, e2, e3, e4, e5)
+
 # Simulation with starting values
 
 c11.set_attr(fluid={"Ar": 0.0129, "CO2": 0.0005, "N2": 0.7552, "O2": 0.2314}, T=20, p=1.013)
 c12.set_attr(T=Ref(c11, 1, -5))
 
-c21.set_attr(fluid={"R245FA": 1}, h=417)
+c21.set_attr(fluid={"R245FA": 1}, Td_bp=5)
 c22.set_attr(p=6.4)
-c23.set_attr(h=290)
+c23.set_attr(Td_bp=-5)
 c24.set_attr(p=0.823)
 
-c31.set_attr(fluid={"R1233zdE": 1}, h=451)
+c31.set_attr(fluid={"R1233zdE": 1}, Td_bp=5)
 c32.set_attr(p=17.5)
-c33.set_attr(h=364)
-c34.set_attr(p=4.1)
+c33.set_attr(x=0)
+c34.set_attr(T=60)
 
 c41.set_attr(fluid={"water": 1}, p=2, x=0, m=1)
-c42.set_attr(h=2706)
+c42.set_attr(x=1)
 
 comp1.set_attr(eta_s=0.8)
 comp2.set_attr(eta_s=0.8)
@@ -293,33 +305,20 @@ steam_gen.set_attr(pr1=0.95, pr2=1)
 air_hx.set_attr(pr1=1, pr2=0.95)
 ihx.set_attr(pr1=0.95, pr2=0.95)
 
-nw.solve("design")
+motor1.set_attr(eta=0.985)
+motor2.set_attr(eta=0.985)
 
 # Simulation with fixed values
 
-c21.set_attr(h=None, Td_bp=5)
+nw.solve("design")
+
 c22.set_attr(p=None)
-c23.set_attr(h=None, Td_bp=-5)
 c24.set_attr(p=None)
-
-c31.set_attr(h=None, Td_bp=5)
 c32.set_attr(p=None)
-c33.set_attr(h=None, x=0)
-c34.set_attr(p=None, T=60)
-
-c42.set_attr(h=None, x=1)
 
 air_hx.set_attr(ttd_l=5)
 ihx.set_attr(ttd_l=5)
 steam_gen.set_attr(ttd_l=5)
-
-power_input = Bus("power input")
-power_input.add_comps(
-    {"comp": comp1, "base": "bus", "char": 0.985},
-    {"comp": comp2, "base": "bus", "char": 0.985}
-)
-
-nw.add_busses(power_input)
 
 nw.solve("design")
 nw.print_results()
@@ -327,7 +326,7 @@ nw.print_results()
 Q_out = c42.m.val * (c42.h.val - c41.h.val)
 COP2 = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val*1e-3)
 COP1 = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val*1e-3)
-COP = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val*1e-3)
+COP = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val*1e-3)
 
 print("Q = ", round(Q_out, 1), "kW")
 print("COP = ", round(COP, 3))
@@ -359,8 +358,7 @@ omc_relative = 0.03         # Relative operation and maintenance costs (compared
 
 fuel = {
     "inputs": [
-        'power input__motor_of_COMP1',
-        'power input__motor_of_COMP2'
+        'e1',
     ],
     "outputs": []
 }
@@ -425,7 +423,7 @@ def run_sensitivity_analysis(var_name, values):
         nw.solve('design')
 
         # 4) collect network‐level metrics
-        COP   = c42.m.val * (c42.h.val - c41.h.val) / (power_input.P.val * 1e-3)
+        COP   = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val * 1e-3)
         COP2  = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val     * 1e-3)
         COP1  = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val     * 1e-3)
         ean   = ExergyAnalysis.from_tespy(nw, Tamb+273.15, pamb*1e5, split_physical_exergy=True)
@@ -550,9 +548,9 @@ z_cols = [
 # rename motors, strip prefix from others
 rename_map = {}
 for col in z_cols:
-    if "motor_of_COMP1" in col:
+    if "motor 1" in col:
         rename_map[col] = "MOT1"
-    elif "motor_of_COMP2" in col:
+    elif "motor 2" in col:
         rename_map[col] = "MOT2"
     else:
         rename_map[col] = col.replace(prefix, "")
@@ -646,7 +644,7 @@ axs[2].plot(t, cop1, marker="o", label=r"COP$_\text{upper cycle}$", color='blue'
 axs[2].plot(t, cop2, marker="s", label=r"COP$_\text{lower cycle}$", color='red')
 axs[2].plot(t, cop, marker="o", label=r"COP$_\text{tot}$", color='black')
 axs[2].set_ylim(1.5, 7.0)
-axs[2].set_ylabel("COP [-]") 
+axs[2].set_ylabel("COP [-]")
 axs[2].set_title("COP")
 axs[2].yaxis.set_major_formatter(mpl.ticker.FormatStrFormatter('%.1f'))
 axs[2].legend(loc="best", ncol=2)
@@ -683,12 +681,7 @@ ed_cols = [
 # rename motors, strip prefix from others
 rename_map = {}
 for col in ed_cols:
-    if "motor_of_COMP1" in col:
-        rename_map[col] = "MOT1"
-    elif "motor_of_COMP2" in col:
-        rename_map[col] = "MOT2"
-    else:
-        rename_map[col] = col.replace(prefix, "")
+    rename_map[col] = col.replace(prefix, "")
 
 plot_df = df[ed_cols].rename(columns=rename_map)
 
@@ -809,12 +802,12 @@ for col_idx, row_idx in enumerate(min_row_indices):
     # lower-left corner of that cell
     x0 = pivot.columns.values[col_idx] - cell_width/2
     y0 = pivot.index.values[row_idx]   - cell_height/2
-    
+
     rect = patches.Rectangle(
         (x0, y0),
         cell_width, cell_height,
         fill=False,
-        edgecolor='black',  
+        edgecolor='black',
         linewidth=2
     )
     ax.add_patch(rect)
@@ -851,12 +844,12 @@ for col_idx, row_idx in enumerate(max_row_indices):
     # lower-left corner of that cell
     x0 = pivot_eps.columns.values[col_idx] - cell_width/2
     y0 = pivot_eps.index.values[row_idx]   - cell_height/2
-    
+
     rect = patches.Rectangle(
         (x0, y0),
         cell_width, cell_height,
         fill=False,
-        edgecolor='black',  
+        edgecolor='black',
         linewidth=2
     )
     ax.add_patch(rect)
@@ -880,12 +873,7 @@ z_cols = [
 ]
 rename_map_z = {}
 for col in z_cols:
-    if "motor_of_COMP1" in col:
-        rename_map_z[col] = "MOT1"
-    elif "motor_of_COMP2" in col:
-        rename_map_z[col] = "MOT2"
-    else:
-        rename_map_z[col] = col.replace(prefix_z, "")
+    rename_map_z[col] = col.replace(prefix_z, "")
 plot_df_z = df[z_cols].rename(columns=rename_map_z)
 
 # Exergy destruction per component
@@ -896,12 +884,7 @@ ed_cols = [
 ]
 rename_map_ed = {}
 for col in ed_cols:
-    if "motor_of_COMP1" in col:
-        rename_map_ed[col] = "MOT1"
-    elif "motor_of_COMP2" in col:
-        rename_map_ed[col] = "MOT2"
-    else:
-        rename_map_ed[col] = col.replace(prefix_ed, "")
+    rename_map_ed[col] = col.replace(prefix_ed, "")
 plot_df_ed = df[ed_cols].rename(columns=rename_map_ed)
 
 # === Reorder stacks from bottom to top ===

@@ -64,11 +64,11 @@ dev = [
     "sphinx-copybutton",
     "sphinx-design",
     "sphinxcontrib.bibtex",
-    "tespy",
+    "tespy>=0.9",
     "tox",
 ]
 tespy = [
-    "tespy"
+    "tespy>=0.9",
 ]
 ebsilon = [
     "pywin32"

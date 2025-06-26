@@ -33,7 +33,7 @@ ExerPy supports parsing models from different simulation tools to extract and pr
     * - `Ebsilon Professional <https://www.ebsilon.com/en/>`__
       - A comprehensive tool for simulating and analyzing energy systems, particularly in the field of power plant engineering.
       - Commercial
-      - 17.02
+      - 17.0
       - Windows
     * - `Aspen Plus <https://www.aspentech.com/en/products/engineering/aspen-plus>`__
       - A powerful process simulation software used for designing and optimizing chemical processes.
@@ -131,15 +131,19 @@ parsed data as input and conducts the component-level exergy analysis based on t
 Inputs
 ======
 
-The exergy analysis requires the following inputs from the user:
+The exergy analysis in ExerPy requires three structured inputs, each defined by a dictionary of connection IDs. These inputs represent the exergy flows associated with the fuel, product, and losses in the system. All connections entering or leaving the system must be specified, as they are essential for calculating the exergy balance.
 
-- **Exergy of the product** (:code:`E_P`): A dictionary containing the connection IDs that define the product exergy flows. The connection IDs are specified as "inputs" (flows entering the system) and "outputs" (flows leaving the system).
+- **Exergy of the fuel** (:code:`E_F`): 
+  - ``inputs``: flows entering the system supplying exergy to the system used to obtain the product (e.g., fuel flow to a combustion chamber or a inlet flow of a hot stream)
+  - ``outputs``: streams leaving the system diminishing the fuel exergy (e.g., outlet flow of a cold stream)
 
-- **Exergy of the fuel** (:code:`E_F`): A dictionary containing the connection IDs that define the fuel exergy flows, similarly structured with "inputs" and "outputs".
+- **Exergy of the product** (:code:`E_P`): 
+  - ``inputs``: flows leaving the system counted as useful output (e.g., the power flow from a generator)
+  - ``outputs``: flows entering the system that reduce the net product (e.g., the power flow to a motor)
 
-- **Exergy loss** (:code:`E_L`): A dictionary specifying the connection IDs for exergy losses. This input is optional and defaults to an empty dictionary.
-
-Example:
+- **Exergy loss** (:code:`E_L`): 
+  - ``inputs``: flows leaving the system and released to the environment (e.g., exhaust gases, cold outlet flow of a condenser in a steam cycle)
+  - ``outputs``: flows entering the system that will later exit as losses (e.g., cold inlet flow of a condenser in a steam cycle)
 
 .. code-block:: python
 

@@ -70,7 +70,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau, i_eff, Tamb, print_results=
 
     fuel = {
         "inputs": [
-            'e1'
+            'e1', 'e4'
         ],
         "outputs": []
     }
@@ -267,18 +267,19 @@ nw.add_conns(c11, c12)
 nw.add_conns(c31, c32, c32c, c33, c34)
 nw.add_conns(c41, c42)
 
-power_input = PowerSource("grid")
+power_input1 = PowerSource("grid1")
+power_input2 = PowerSource("grid2")
 distribution = PowerBus("electricity distribution", num_in=1, num_out=2)
 motor1 = Motor("MOT1")
 motor2 = Motor("MOT2")
 
-e1 = PowerConnection(power_input, "power", distribution, "power_in1", label="e1")
-e2 = PowerConnection(distribution, "power_out1", motor1, "power_in", label="e2")
+e1 = PowerConnection(power_input1, "power", motor1, "power_in", label="e1")
+# e2 = PowerConnection(distribution, "power_out1", motor1, "power_in", label="e2")
 e3 = PowerConnection(motor1, "power_out", comp1, "power", label="e3")
-e4 = PowerConnection(distribution, "power_out2", motor2, "power_in", label="e4")
+e4 = PowerConnection(power_input2, "power", motor2, "power_in", label="e4")
 e5 = PowerConnection(motor2, "power_out", comp2, "power", label="e5")
 
-nw.add_conns(e1, e2, e3, e4, e5)
+nw.add_conns(e1, e3, e4, e5)
 
 # Simulation with starting values
 
@@ -326,7 +327,7 @@ nw.print_results()
 Q_out = c42.m.val * (c42.h.val - c41.h.val)
 COP2 = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val*1e-3)
 COP1 = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val*1e-3)
-COP = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val*1e-3)
+COP = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val*1e-3 + e4.E.val*1e-3)
 
 print("Q = ", round(Q_out, 1), "kW")
 print("COP = ", round(COP, 3))
@@ -358,7 +359,7 @@ omc_relative = 0.03         # Relative operation and maintenance costs (compared
 
 fuel = {
     "inputs": [
-        'e1',
+        'e1', 'e4',
     ],
     "outputs": []
 }
@@ -423,7 +424,7 @@ def run_sensitivity_analysis(var_name, values):
         nw.solve('design')
 
         # 4) collect network‐level metrics
-        COP   = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val * 1e-3)
+        COP   = c42.m.val * (c42.h.val - c41.h.val) / (e1.E.val * 1e-3 + e4.E.val * 1e-3)
         COP2  = c42.m.val * (c42.h.val - c41.h.val) / (comp2.P.val     * 1e-3)
         COP1  = c31.m.val * (c31.h.val - c34.h.val) / (comp1.P.val     * 1e-3)
         ean   = ExergyAnalysis.from_tespy(nw, Tamb+273.15, pamb*1e5, split_physical_exergy=True)
@@ -456,7 +457,7 @@ def run_sensitivity_analysis(var_name, values):
         for comp, tci in zip(comps, TCI_list):
             res[f"TCI_{comp}"] = tci
         res['TCI_total'] = sum(TCI_list)
-        for lbl, row in nw.conns.iterrows():
+        for lbl, row in nw.conns.loc[nw.conns["conn_type"] == "Connection"].iterrows():
             conn = row['object']
             res[f"m_{lbl}"] = conn.m.val
             res[f"p_{lbl}"] = conn.p.val
@@ -548,12 +549,7 @@ z_cols = [
 # rename motors, strip prefix from others
 rename_map = {}
 for col in z_cols:
-    if "motor 1" in col:
-        rename_map[col] = "MOT1"
-    elif "motor 2" in col:
-        rename_map[col] = "MOT2"
-    else:
-        rename_map[col] = col.replace(prefix, "")
+    rename_map[col] = col.replace(prefix, "")
 
 plot_df = df[z_cols].rename(columns=rename_map)
 

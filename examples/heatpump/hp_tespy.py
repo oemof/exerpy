@@ -1,5 +1,5 @@
-from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve
-from tespy.connections import Connection, Ref, Bus
+from tespy.components import Compressor, Source, Sink, CycleCloser, HeatExchanger, Pump, Valve, PowerBus, PowerSource, Motor
+from tespy.connections import Connection, Ref, PowerConnection
 from tespy.networks import Network
 from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
@@ -38,47 +38,43 @@ nw.add_conns(c0, c1, c2, c3, c4)
 nw.add_conns(a1, a2, a3)
 nw.add_conns(b1, b2, b3)
 
-c3.set_attr(fluid={"R245FA": 1}, Td_bp=7.073)
+c3.set_attr(fluid={"R245FA": 1})
 c4.set_attr(p=23)
-c0.set_attr(T=75)
 c2.set_attr(p=0.6)
 
 a1.set_attr(fluid={"Ar": 0.0129, "CO2": 0.0005, "N2": 0.7552, "O2": 0.2314}, T=10, p=1.013)
-a2.set_attr()
 a3.set_attr(T=8, p=1.013)
 b1.set_attr(fluid={"water": 1}, T=70, p=5, m=10)
-b2.set_attr()
 b3.set_attr(T=120, p=5)
 
 compressor.set_attr(eta_s=0.8)
 fan.set_attr(eta_s=0.85)
 pump.set_attr(eta_s=0.8)
-evaporator.set_attr()
-condenser.set_attr()
+evaporator.set_attr(dp1=0.03, dp2=0.05)
+condenser.set_attr(dp1=0.05, dp2=0.05)
 
-c3.set_attr(p=Ref(c2, 1, -0.05))
-c0.set_attr(p=Ref(c4, 1, -0.05))
-
-b3.set_attr(p=Ref(b2, 1, -0.05))
-a3.set_attr(p=Ref(a2, 1, -0.03))
-
-nw.solve("design")
-
-c0.set_attr(T=None)
 condenser.set_attr(ttd_l=5)
-c3.set_attr(Td_bp=None)
 evaporator.set_attr(ttd_u=5)
 
-power_input = Bus("power input")
-power_input.add_comps(
-    {"comp": compressor, "base": "bus", "char": 0.985},
-    {"comp": pump, "base": "bus", "char": 0.985},
-    {"comp": fan, "base": "bus", "char": 0.985}
-)
+power_input = PowerSource("grid")
+distribution = PowerBus("electricity distribution", num_in=1, num_out=3)
+motor1 = Motor("MOT1")
+motor2 = Motor("MOT2")
+motor3 = Motor("MOT3")
 
-nw.add_busses(
-    power_input
-)
+e1 = PowerConnection(power_input, "power", distribution, "power_in1", label="e1")
+e2 = PowerConnection(distribution, "power_out3", motor3, "power_in", label="E3")
+e3 = PowerConnection(motor3, "power_out", pump, "power", label="e3")
+e4 = PowerConnection(distribution, "power_out1", motor1, "power_in", label="E1")
+e5 = PowerConnection(motor1, "power_out", fan, "power", label="e5")
+e6 = PowerConnection(distribution, "power_out2", motor2, "power_in", label="E2")
+e7 = PowerConnection(motor2, "power_out", compressor, "power", label="e7")
+
+nw.add_conns(e1, e2, e3, e4, e5, e6, e7)
+
+motor1.set_attr(eta=0.985)
+motor2.set_attr(eta=0.985)
+motor3.set_attr(eta=0.985)
 
 nw.solve("design")
 
@@ -93,11 +89,7 @@ T0 = 283.15
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
 # %%[exergy_analysis_setup]
 fuel = {
-    "inputs": [
-        'power input__motor_of_COMP',
-        'power input__motor_of_FAN',
-        'power input__motor_of_PUMP'
-    ],
+    "inputs": ['e1'],
     "outputs": []
 }
 

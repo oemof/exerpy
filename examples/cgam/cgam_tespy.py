@@ -3,9 +3,9 @@ from CoolProp.CoolProp import PropsSI as CPSI
 from tespy.networks import Network
 from tespy.components import (
     HeatExchanger, Turbine, Compressor, Drum,
-    DiabaticCombustionChamber, Sink, Source
+    DiabaticCombustionChamber, Sink, Source, PowerSink, PowerBus
 )
-from tespy.connections import Connection, Bus
+from tespy.connections import Connection, PowerConnection
 from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
 
 
@@ -61,12 +61,11 @@ c9 = Connection(dr, 'out2', ls, 'in1', label='9')
 nwk.add_conns(c8, c8p, c11, c11p, c9)
 
 c8.set_attr(p=20, T=25, m=14, fluid={"water": 1})
-c1.set_attr(p=1.013, T=25, fluid=air, m=91.753028)
+c1.set_attr(p=1.013, T=25, fluid=air)
 c10.set_attr(T=25, fluid=fuel, p=12)
 c7.set_attr(p=1.013)
 c3.set_attr(T=850 - 273.15)
-# c4.set_attr(T=1520 - 273.15)
-c10.set_attr(m=1)
+c4.set_attr(T=1520 - 273.15)
 c8p.set_attr(Td_bp=-15)
 c11p.set_attr(x=0.5)
 
@@ -77,32 +76,16 @@ aph.set_attr(pr1=0.97, pr2=0.95)
 eva.set_attr(pr1=0.95 ** 0.5)
 eco.set_attr(pr1=0.95 ** 0.5, pr2=1)
 
-# power = Bus('total power')
-# power.add_comps({'comp': cmp, 'base': 'bus'}, {'comp': tur})
+shaft = PowerBus("shaft", num_in=1, num_out=2)
+grid = PowerSink("grid")
 
-# nwk.add_busses(power)
+e1 = PowerConnection(tur, "power", shaft, "power_in1", label="e1")
+e2 = PowerConnection(shaft, "power_out1", cmp, "power", label="e2")
+e3 = PowerConnection(shaft, "power_out2", grid, "power", label="e3")
 
-# heat_output = Bus('heat output')
-power_output = Bus('power output')
-# fuel_input = Bus('fuel input')
+nwk.add_conns(e1, e2, e3)
 
-# heat_output.add_comps(
-#     {'comp': eco, 'char': -1},
-#     {'comp': eva, 'char': -1})
-power_output.add_comps(
-    {'comp': cmp, 'base': 'bus', 'char': 1},
-    {'comp': tur, 'char': 1})
-# fuel_input.add_comps({'comp': cb, 'base': 'bus'})
-# nwk.add_busses(heat_output, power_output, fuel_input)
-nwk.add_busses(power_output)
-
-nwk.solve('design')
-
-c4.set_attr(T=1520 - 273.15)
-c10.set_attr(m=None)
-
-power_output.set_attr(P=-30e6)
-c1.set_attr(m=None)
+e3.set_attr(E=30e6)
 
 nwk.solve('design')
 
@@ -122,8 +105,8 @@ fuel = {
 }
 
 product = {
-    "inputs": ['generator_of_EXP__power output', '9'],
-    "outputs": ['power output__motor_of_AC', '8']
+    "inputs": ['e3', '9'],
+    "outputs": ['8']
 }
 
 loss = {

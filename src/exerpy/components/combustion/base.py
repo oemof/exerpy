@@ -48,6 +48,10 @@ class CombustionChamber(Component):
         Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
     Ex_C_col : dict
         Custom cost coefficients collection passed via `kwargs`.
+
+    Notes
+    -----
+    This component requires the calculation of both physical and chemical exergy.
     """
 
     def __init__(self, **kwargs):
@@ -71,12 +75,9 @@ class CombustionChamber(Component):
         Compute the exergy balance of the combustion chamber.
 
         .. math::
-            \dot{E}_P = \dot{E}^{\mathrm{T}}_{\text{out}}
-                      + \dot{E}^{\mathrm{M}}_{\text{out}}
-                      - \bigl(\dot{E}^{\mathrm{T}}_{\text{in},1}
-                              + \dot{E}^{\mathrm{M}}_{\text{in},1}
-                              + \dot{E}^{\mathrm{T}}_{\text{in},2}
-                              + \dot{E}^{\mathrm{M}}_{\text{in},2}\bigr)
+            \dot{E}_P = \dot{E}^{\mathrm{PH}}_{\text{out}}
+                      - \bigl(\dot{E}^{\mathrm{PH}}_{\text{in},1}
+                              + \dot{E}^{\mathrm{PH}}_{\text{in},2}\bigr)
 
         .. math::
             \dot{E}_F = \dot{E}^{\mathrm{CH}}_{\text{in},1}
@@ -137,11 +138,11 @@ class CombustionChamber(Component):
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         r"""
-        Add auxiliary cost equations for mixing in the combustion chamber.
+        Add auxiliary cost equations for the combustion chamber.
 
         This method appends two rows to the cost matrix to enforce:
 
-        1. Mechanical mixing:
+        1. F rule for mechanical exergy:
 
         .. math::
             -\frac{1}{\dot{E}^{\mathrm{M}}_{\text{out}}}\,\dot{C}^{\mathrm{M}}_{\text{out}}
@@ -151,10 +152,10 @@ class CombustionChamber(Component):
               \frac{1}{\dot{E}^{\mathrm{M}}_{\text{in},2}}\,\dot{C}^{\mathrm{M}}_{\text{in},2}
             = 0
 
-        2. Chemical mixing:
+        2. F rule for chemical exergy:
 
         .. math::
-            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\text{out}}}\,\dot{C}^{\mathrm{CH}}_{\text{out}}
+            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\text{out}}}\,\dot{C}^{\mathrm{CH}}_{\text{out}}{}
             + \frac{\dot m_{1}}{\dot m_{1} + \dot m_{2}}
               \frac{1}{\dot{E}^{\mathrm{CH}}_{\text{in},1}}\,\dot{C}^{\mathrm{CH}}_{\text{in},1}
             + \frac{\dot m_{2}}{\dot m_{1} + \dot m_{2}}
@@ -230,6 +231,12 @@ class CombustionChamber(Component):
     def exergoeconomic_balance(self, T0):
         r"""
         Perform exergoeconomic cost balance for the combustion chamber.
+
+        .. math::
+            \dot{C}^{\mathrm{PH}}_{\text{in},1} + \dot{C}^{\mathrm{CH}}_{\text{in},1}
+            + \dot{C}^{\mathrm{CH}}_{\text{in},2} + \dot{C}^{\mathrm{PH}}_{\text{in},2}
+            - \dot{C}^{\mathrm{PH}}_{\text{out}} - \dot{C}^{\mathrm{CH}}_{\text{out}}
+            + \dot{Z} = 0
 
         This method computes cost coefficients and ratios:
 

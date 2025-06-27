@@ -9,17 +9,11 @@ from exerpy.components.component import component_registry
 @component_registry
 class HeatExchanger(Component):
     r"""
-    Class for exergy analysis of heat exchangers.
+    Class for exergy and exergoeconomic analysis of heat exchangers.
 
-    This class performs exergy analysis calculations for heat exchangers, considering
-    different temperature regimes relative to the ambient temperature. The exergy
-    product and fuel definitions vary based on the temperature levels of the streams.
-    Stream 0 represents the hot stream and stream 1 represents the cold stream.
-
-    Parameters
-    ----------
-    **kwargs : dict
-        Arbitrary keyword arguments passed to parent class.
+    This class performs exergy and exergoeconomic analysis calculations for heat exchanger components,
+    accounting for two inlet and two outlet streams across various temperature regimes, including
+    above and below ambient temperature, and optional dissipative behavior.
 
     Attributes
     ----------
@@ -32,133 +26,228 @@ class HeatExchanger(Component):
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
-        Dictionary containing inlet streams data (0: hot stream, 1: cold stream) with
-        temperature, mass flows, and specific exergies.
+        Dictionary containing inlet stream data with mass flows and specific exergies.
     outl : dict
-        Dictionary containing outlet streams data (0: hot stream, 1: cold stream) with
-        temperature, mass flows, and specific exergies.
-
-    Notes
-    -----
-    The exergy analysis considers six different cases based on stream temperatures
-    relative to ambient temperature :math:`T_0`. Stream indices refer to hot (0) and
-    cold (1) streams:
-
-    Case 1 - **All streams above ambient temperature**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{T}_{\mathrm{out,1}}
-        - \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{T}_{\mathrm{in,1}}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{PH}_{\mathrm{in,0}}
-        - \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{PH}_{\mathrm{out,0}} +
-        \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{M}_{\mathrm{in,1}}
-        - \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{M}_{\mathrm{out,1}}
-
-    Case 2 - **All streams below or at ambient temperature**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{T}_{\mathrm{out,0}}
-        - \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{T}_{\mathrm{in,0}}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{PH}_{\mathrm{in,1}}
-        - \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{PH}_{\mathrm{out,1}} +
-        \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{M}_{\mathrm{in,0}}
-        - \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{M}_{\mathrm{out,0}}
-
-    Case 3 - **Hot stream inlet/outlet above ambient, cold stream inlet/outlet below ambient**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{T}_{\mathrm{out,0}}
-        + \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{T}_{\mathrm{out,1}}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{PH}_{\mathrm{in,0}}
-        + \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{PH}_{\mathrm{in,1}}
-        - (\dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{M}_{\mathrm{out,0}}
-        + \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{M}_{\mathrm{out,1}})
-
-    Case 4 - **First inlet above ambient, all other streams below or at ambient**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{T}_{\mathrm{out,0}}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{PH}_{\mathrm{in,0}}
-        + \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{PH}_{\mathrm{in,1}}
-        - (\dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{PH}_{\mathrm{out,1}}
-        + \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{M}_{\mathrm{out,0}})
-
-    Case 5 - **Hot stream inlet/outlet above ambient, cold stream inlet/outlet below or at ambient**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \mathrm{NaN}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{PH}_{\mathrm{in,0}}
-        - \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{PH}_{\mathrm{out,0}}
-        + \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{PH}_{\mathrm{in,1}}
-        - \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{PH}_{\mathrm{out,1}}
-
-    Case 6 - **Second outlet above ambient, all others below or at ambient**:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{T}_{\mathrm{out,1}}\\
-        \dot{E}_\mathrm{F} &= \dot{m}_{\mathrm{in,0}} \cdot e^\mathrm{PH}_{\mathrm{in,0}}
-        - \dot{m}_{\mathrm{out,0}} \cdot e^\mathrm{PH}_{\mathrm{out,0}}
-        + \dot{m}_{\mathrm{in,1}} \cdot e^\mathrm{PH}_{\mathrm{in,1}}
-        - \dot{m}_{\mathrm{out,1}} \cdot e^\mathrm{M}_{\mathrm{out,1}}
-
-    Note that in Case 5, the exergy product :math:`\dot{E}_\mathrm{P}` is undefined (NaN),
-    leading to an exergy destruction equal to the exergy fuel:
-    :math:`\dot{E}_\mathrm{D} = \dot{E}_\mathrm{F}`.
-
-    The exergy destruction is calculated as:
-
-    .. math::
-        \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
-
-    And the exergetic efficiency as:
-
-    .. math::
-        \varepsilon = \frac{\dot{E}_\mathrm{P}}{\dot{E}_\mathrm{F}}
-
-    Where:
-        - :math:`e^\mathrm{T}`: Thermal exergy
-        - :math:`e^\mathrm{PH}`: Physical exergy
-        - :math:`e^\mathrm{M}`: Mechanical exergy
+        Dictionary containing outlet stream data with mass flows and specific exergies.
+    Z_costs : float
+        Investment cost rate of the component in currency/h.
+    C_P : float
+        Cost of product stream :math:`\dot{C}_P` in currency/h.
+    C_F : float
+        Cost of fuel stream :math:`\dot{C}_F` in currency/h.
+    C_D : float
+        Cost of exergy destruction :math:`\dot{C}_D` in currency/h.
+    c_P : float
+        Specific cost of product stream (currency per unit exergy).
+    c_F : float
+        Specific cost of fuel stream (currency per unit exergy).
+    r : float
+        Relative cost difference, :math:`(c_P - c_F)/c_F`.
+    f : float
+        Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
+    Ex_C_col : dict
+        Custom cost coefficients collection passed via `kwargs`.
     """
 
     def __init__(self, **kwargs):
-        r"""Initialize heat exchanger component with given parameters."""
+        r"""
+        Initialize the heat exchanger component.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Arbitrary keyword arguments. Recognized keys:
+            - dissipative (bool): whether component has dissipative behavior, default False
+            - Ex_C_col (dict): custom cost coefficients, default {}
+            - Z_costs (float): investment cost rate in currency/h, default 0.0
+        """
         self.dissipative = False
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        Calculate the exergy balance of the heat exchanger.
+        Compute the exergy balance of the heat exchanger.
 
-        Performs exergy balance calculations considering different temperature regimes
-        relative to the ambient temperature. The method automatically determines the
-        appropriate case based on stream temperatures.
+        Case 1: All streams above ambient temperature
+
+        If `split_physical_exergy=True`:
+
+        .. math::
+
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
+            - \dot{E}^{\mathrm{T}}_{\mathrm{in},2}
+
+        .. math::
+
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+            + \bigl(\dot{E}^{\mathrm{M}}_{\mathrm{in},2}
+                    - \dot{E}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Else:
+
+        .. math::
+
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+
+        .. math::
+
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+
+        Case 2: All streams below ambient temperature
+
+        If `split_physical_exergy=True`:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},1}
+            - \dot{E}^{\mathrm{T}}_{\mathrm{in},1}
+
+        .. math::
+
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+            + \bigl(\dot{E}^{\mathrm{M}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Else
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+
+        Case 3: Hot stream above, cold stream below ambient temperature
+
+        If `split_physical_exergy=True`:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},1}
+            + \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+            - \bigl(\dot{E}^{\mathrm{M}}_{\mathrm{out},1}
+                    + \dot{E}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Else:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},1}
+            + \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+
+        Case 4: Only inlet 1 above ambient temperature
+
+        If `split_physical_exergy=True`:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
+            - \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+                    + \dot{E}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Else:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+
+        Case 5: Both inlets above, both outlets below ambient temperature
+
+        .. math::
+            \dot{E}_{\mathrm{P}} = \mathrm{NaN}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            + \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}\bigr)
+
+        Case 6: Cold inlet below, others above ambient temperature
+
+        If `split_physical_exergy=True`:
+        
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            + \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \dot{E}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+       
+        Else:
+
+        .. math::
+            \dot{E}_{\mathrm{P}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+
+        Dissipative case:
+
+        .. math::
+            \dot{E}_{\mathrm{P}} = \mathrm{NaN}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
 
         Parameters
         ----------
         T0 : float
-            Ambient temperature in :math:`\mathrm{K}`.
+            Ambient temperature (K).
         p0 : float
-            Ambient pressure in :math:`\mathrm{Pa}`.
+            Ambient pressure (Pa).
         split_physical_exergy : bool
-            Flag indicating whether physical exergy is split into thermal and mechanical components.
+            Whether to split thermal and mechanical exergy.
 
         Raises
         ------
         ValueError
-            If the required inlet and outlet streams are not properly defined.
-
-        Notes
-        -----
-        This method updates the following component attributes:
-            - E_P (Exergy product)
-            - E_F (Exergy fuel)
-            - E_D (Exergy destruction)
-            - epsilon (Exergetic efficiency)
-
-        The calculation requires two inlet and two outlet streams, and their
-        temperature relationships with ambient temperature determine which case
-        of exergy analysis is applied.
+            If required inlets or outlets are missing.
         """
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 2:
@@ -261,34 +350,106 @@ class HeatExchanger(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """Set up auxiliary equations for heat exchanger exergy cost analysis.
-        This method constructs auxiliary equations for thermal, mechanical, and chemical
-        exergy costs in a heat exchanger. It considers different thermal cases based on the
-        temperatures of the streams relative to the reference temperature T0.
+        r"""
+        Add auxiliary cost equations for the heat exchanger.
+
+        This method appends rows to the cost matrix to enforce:
+
+        Case 1: All streams above ambient temperature
+
+        F rule for thermal exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            = 0
+
+        Case 2: All streams below or equal to ambient temperature
+
+        F rule for thermal exergy of the cold stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            = 0
+
+        Case 3: Hot ends above, cold ends below ambient temperature
+
+        P rule for thermal exergy of both outlets:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            = 0
+
+        Case 4: Only the hot inlet above ambient temperature
+
+        F rule for thermal exergy of the cold stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            = 0
+
+        Case 5: Only the cold inlet below ambient temperature
+
+        F rule for thermal exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            = 0
+
+        Case 6: Hot inlet above, cold inlet below ambient temperature (dissipative case): 
+
+        The dissipative is not handeld here.
+
+        For all cases, the mechanical and chemical exergy costs are handled as follows:
+
+        F rule for mechanical exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{out},i}
+            + \frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{in},i}
+            = 0
+
+        F rule for chemical exergy on hot branch:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{out},i}
+            + \frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{in},i}
+            = 0
+
         Parameters
         ----------
         A : numpy.ndarray
-            Coefficient matrix for the linear equation system.
+            Current cost matrix.
         b : numpy.ndarray
-            Right-hand side vector of the linear equation system.
+            Current RHS vector.
         counter : int
-            Current row counter in the linear equation system.
+            Starting row index for auxiliary equations.
         T0 : float
-            Reference temperature for exergy calculations.
-        equations : dict
-            Dictionary to store equation descriptions.
+            Ambient temperature (K).
+        equations : dict or list
+            Structure for equation labels.
         chemical_exergy_enabled : bool
-            Flag indicating whether chemical exergy analysis is enabled.
+            Must be True to include chemical exergy mixing.
+
         Returns
         -------
         A : numpy.ndarray
-            Updated coefficient matrix.
+            Updated cost matrix.
         b : numpy.ndarray
-            Updated right-hand side vector.
+            Updated RHS vector.
         counter : int
-            Updated row counter.
-        equations : dict
-            Updated dictionary of equation descriptions.
+            Updated row index after adding equations.
+        equations : dict or list
+            Updated labels.
+
+        Raises
+        ------
+        ValueError
+            If required cost variable indices are missing.
         """
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
@@ -399,25 +560,85 @@ class HeatExchanger(Component):
         return A, b, counter + num_aux_eqs, equations
 
     def exergoeconomic_balance(self, T0):
-        """
-        Perform exergoeconomic balance calculations for the general heat exchanger.
-        
-        This method calculates various exergoeconomic parameters including:
-        - Cost rates of product (C_P) and fuel (C_F)
-        - Specific cost of product (c_P) and fuel (c_F)
-        - Cost rate of exergy destruction (C_D)
-        - Relative cost difference (r)
-        - Exergoeconomic factor (f)
-        
+        r"""
+        Perform exergoeconomic cost balance for the heat exchanger.
+
+        .. math::
+            \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            + \dot{C}^{\mathrm{M}}_{\mathrm{in},1}
+            + \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            + \dot{C}^{\mathrm{M}}_{\mathrm{in},2}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}
+            + \dot{Z}
+            = 0
+
+        This method computes cost coefficients and ratios:
+
+        Case 1: All streams above ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
+                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},2}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Case 2: All streams below or equal to ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},1}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Case 3: Hot inlet 1 and outlet 2 above, cold inlet 2 and outlet 1 below ambient
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+                    + \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{out},1}
+                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Case 4: Only inlet 1 above ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
+                    - \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Case 5: Both inlets above, both outlets below ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
+                    + \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
         Parameters
         ----------
         T0 : float
-            Ambient temperature
-            
-        Notes
-        -----
-        The exergoeconomic balance considers thermal (T), chemical (CH),
-        and mechanical (M) exergy components for the inlet and outlet streams.
+            Ambient temperature (K).
         """
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]

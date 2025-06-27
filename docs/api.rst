@@ -134,16 +134,19 @@ Inputs
 The exergy analysis in ExerPy requires three structured inputs, each defined by a dictionary of connection IDs. These inputs represent the exergy flows associated with the fuel, product, and losses in the system. All connections entering or leaving the system must be specified, as they are essential for calculating the exergy balance.
 
 - **Exergy of the fuel** (:code:`E_F`): 
-  - ``inputs``: flows entering the system supplying exergy to the system used to obtain the product (e.g., fuel flow to a combustion chamber or a inlet flow of a hot stream)
-  - ``outputs``: streams leaving the system diminishing the fuel exergy (e.g., outlet flow of a cold stream)
+    - ``inputs``: flows entering the system supplying exergy to the system used to obtain the product (e.g., fuel flow to a combustion chamber or a inlet flow of a hot stream)
+
+    - ``outputs``: streams leaving the system diminishing the fuel exergy (e.g., outlet flow of a cold stream)
 
 - **Exergy of the product** (:code:`E_P`): 
-  - ``inputs``: flows leaving the system counted as useful output (e.g., the power flow from a generator)
-  - ``outputs``: flows entering the system that reduce the net product (e.g., the power flow to a motor)
+    - ``inputs``: flows leaving the system counted as useful output (e.g., the power flow from a generator)
+
+    - ``outputs``: flows entering the system that reduce the net product (e.g., the power flow to a motor)
 
 - **Exergy loss** (:code:`E_L`): 
-  - ``inputs``: flows leaving the system and released to the environment (e.g., exhaust gases, cold outlet flow of a condenser in a steam cycle)
-  - ``outputs``: flows entering the system that will later exit as losses (e.g., cold inlet flow of a condenser in a steam cycle)
+    - ``inputs``: flows leaving the system and released to the environment (e.g., exhaust gases, cold outlet flow of a condenser in a steam cycle)
+
+    - ``outputs``: flows entering the system that will later exit as losses (e.g., cold inlet flow of a condenser in a steam cycle)
 
 .. code-block:: python
 

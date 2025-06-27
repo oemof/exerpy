@@ -16,12 +16,6 @@ class CombustionChamber(Component):
     The exergy product is defined based on thermal and mechanical exergy differences,
     while the exergy fuel is based on chemical exergy differences.
 
-    Parameters
-    ----------
-    **kwargs : dict
-        Arbitrary keyword arguments passed to parent class.
-        Optional parameter 'Z_costs' (float): Investment cost rate of the component in currency/h.
-
     Attributes
     ----------
     E_F : float
@@ -38,34 +32,35 @@ class CombustionChamber(Component):
         Dictionary containing outlet stream data with mass flows and specific exergies.
     Z_costs : float
         Investment cost rate of the component in currency/h.
-
-    Notes
-    -----
-    The exergy analysis considers the following definitions:
-
-    .. math::
-        \dot{E}_\mathrm{P} &= \sum_{out} \dot{m}_{out} \cdot e^\mathrm{T}_{out}
-        + \sum_{out} \dot{m}_{out} \cdot e^\mathrm{M}_{out}
-        - \sum_{in} \dot{m}_{in} \cdot e^\mathrm{T}_{in}
-        - \sum_{in} \dot{m}_{in} \cdot e^\mathrm{M}_{in}
-
-    .. math::
-        \dot{E}_\mathrm{F} &= \sum_{in} \dot{m}_{in} \cdot e^\mathrm{CH}_{in}
-        - \sum_{out} \dot{m}_{out} \cdot e^\mathrm{CH}_{out}
-
-    The exergetic efficiency is calculated as:
-
-    .. math::
-        \varepsilon = \frac{\dot{E}_\mathrm{P}}{\dot{E}_\mathrm{F}}
-
-    The exergy destruction follows from the exergy balance:
-
-    .. math::
-        \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+    C_P : float
+        Cost of product stream :math:`\dot{C}_P` in currency/h.
+    C_F : float
+        Cost of fuel stream :math:`\dot{C}_F` in currency/h.
+    C_D : float
+        Cost of exergy destruction :math:`\dot{C}_D` in currency/h.
+    c_P : float
+        Specific cost of product stream (currency per unit exergy).
+    c_F : float
+        Specific cost of fuel stream (currency per unit exergy).
+    r : float
+        Relative cost difference, :math:`(c_P - c_F)/c_F`.
+    f : float
+        Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
+    Ex_C_col : dict
+        Custom cost coefficients collection passed via `kwargs`.
     """
 
     def __init__(self, **kwargs):
-        r"""Initialize combustion chamber component with given parameters."""
+        r"""
+        Initialize the combustion chamber component.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Arbitrary keyword arguments. Recognized keys:
+            - Ex_C_col (dict): custom cost coefficients, default {}
+            - Z_costs (float): investment cost rate (currency/h), default 0.0
+        """
         super().__init__(**kwargs)
         # Initialize additional attributes if necessary
         self.Ex_C_col = kwargs.get('Ex_C_col', {})
@@ -73,23 +68,34 @@ class CombustionChamber(Component):
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        Calculate the exergy balance of the combustion chamber.
+        Compute the exergy balance of the combustion chamber.
 
-        Performs exergy balance calculations considering both physical and chemical
-        exergy flows. The exergy product is based on physical exergy differences,
-        while the exergy fuel is based on chemical exergy differences.
+        .. math::
+            \dot{E}_P = \dot{E}^{\mathrm{T}}_{\text{out}}
+                      + \dot{E}^{\mathrm{M}}_{\text{out}}
+                      - \bigl(\dot{E}^{\mathrm{T}}_{\text{in},1}
+                              + \dot{E}^{\mathrm{M}}_{\text{in},1}
+                              + \dot{E}^{\mathrm{T}}_{\text{in},2}
+                              + \dot{E}^{\mathrm{M}}_{\text{in},2}\bigr)
+
+        .. math::
+            \dot{E}_F = \dot{E}^{\mathrm{CH}}_{\text{in},1}
+                      + \dot{E}^{\mathrm{CH}}_{\text{in},2}
+                      - \dot{E}^{\mathrm{CH}}_{\text{out}}
 
         Parameters
         ----------
         T0 : float
-            Ambient temperature in :math:`\mathrm{K}`.
+            Ambient temperature (K).
         p0 : float
-            Ambient pressure in :math:`\mathrm{Pa}`.
+            Ambient pressure (Pa).
+        split_physical_exergy : bool
+            Whether to split thermal and mechanical exergy.
 
         Raises
         ------
         ValueError
-            If the required inlet and outlet streams are not properly defined.
+            If fewer than two inlets or no outlets are defined.
         """
         # Check for necessary inlet and outlet data
         if not hasattr(self, 'inl') or not hasattr(self, 'outl') or len(self.inl) < 2 or len(self.outl) < 1:
@@ -130,52 +136,61 @@ class CombustionChamber(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
-        Auxiliary equations for the combustion chamber.
-        
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
-        
-        (1) For mechanical exergy:
-            - When all streams have non-zero mechanical exergy:
-              c_M(outlet)/E_M(outlet) = weighted average of inlet specific mechanical exergy costs
-            - When pressure can only decrease: c_M(outlet) is directly set
-            
-        (2) For chemical exergy:
-            - When all streams have non-zero chemical exergy:
-              c_CH(outlet)/E_CH(outlet) = weighted average of inlet specific chemical exergy costs
-            - When an inlet has zero chemical exergy: its specific cost is directly set
-        
+        r"""
+        Add auxiliary cost equations for mixing in the combustion chamber.
+
+        This method appends two rows to the cost matrix to enforce:
+
+        1. Mechanical mixing:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{M}}_{\text{out}}}\,\dot{C}^{\mathrm{M}}_{\text{out}}
+            + \frac{\dot m_{1}}{\dot m_{1} + \dot m_{2}}
+              \frac{1}{\dot{E}^{\mathrm{M}}_{\text{in},1}}\,\dot{C}^{\mathrm{M}}_{\text{in},1}
+            + \frac{\dot m_{2}}{\dot m_{1} + \dot m_{2}}
+              \frac{1}{\dot{E}^{\mathrm{M}}_{\text{in},2}}\,\dot{C}^{\mathrm{M}}_{\text{in},2}
+            = 0
+
+        2. Chemical mixing:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\text{out}}}\,\dot{C}^{\mathrm{CH}}_{\text{out}}
+            + \frac{\dot m_{1}}{\dot m_{1} + \dot m_{2}}
+              \frac{1}{\dot{E}^{\mathrm{CH}}_{\text{in},1}}\,\dot{C}^{\mathrm{CH}}_{\text{in},1}
+            + \frac{\dot m_{2}}{\dot m_{1} + \dot m_{2}}
+              \frac{1}{\dot{E}^{\mathrm{CH}}_{\text{in},2}}\,\dot{C}^{\mathrm{CH}}_{\text{in},2}
+            = 0
+
         Parameters
         ----------
         A : numpy.ndarray
-            The current cost matrix.
+            Current cost matrix.
         b : numpy.ndarray
-            The current right-hand-side vector.
+            Current RHS vector.
         counter : int
-            The current row index in the matrix.
+            Starting row index.
         T0 : float
             Ambient temperature.
         equations : dict or list
-            Data structure for storing equation labels.
+            Structure for equation labels.
         chemical_exergy_enabled : bool
-            Flag indicating whether chemical exergy is enabled.
-        
+            Must be True to include chemical exergy mixing.
+
         Returns
         -------
         A : numpy.ndarray
-            The updated cost matrix.
+            Updated cost matrix.
         b : numpy.ndarray
-            The updated right-hand-side vector.
+            Updated RHS vector.
         counter : int
-            The updated row index (counter + 2).
+            Updated row index.
         equations : dict or list
-            Updated structure with equation labels.
-            
+            Updated labels.
+
         Raises
         ------
         ValueError
-            If chemical exergy is not enabled, which is mandatory for combustion chambers.
+            If chemical_exergy_enabled is False.
         """
         # For the combustion chamber, chemical exergy is mandatory.
         if not chemical_exergy_enabled:
@@ -213,25 +228,28 @@ class CombustionChamber(Component):
         return [A, b, counter + 2, equations]
 
     def exergoeconomic_balance(self, T0):
-        """
-        Perform exergoeconomic balance calculations for the combustion chamber.
-        
-        This method calculates various exergoeconomic parameters including:
-        - Cost rates of product (C_P) and fuel (C_F)
-        - Specific cost of product (c_P) and fuel (c_F)
-        - Cost rate of exergy destruction (C_D)
-        - Relative cost difference (r)
-        - Exergoeconomic factor (f)
-        
+        r"""
+        Perform exergoeconomic cost balance for the combustion chamber.
+
+        This method computes cost coefficients and ratios:
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\text{out}}
+                      - \bigl(\dot{C}^{\mathrm{T}}_{\text{in},1}
+                              + \dot{C}^{\mathrm{T}}_{\text{in},2}\bigr)
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{CH}}_{\text{in},1}
+                      + \dot{C}^{\mathrm{CH}}_{\text{in},2}
+                      - \dot{C}^{\mathrm{CH}}_{\text{out}}
+                      + \dot{C}^{\mathrm{M}}_{\text{in},1}
+                      + \dot{C}^{\mathrm{M}}_{\text{in},2}
+                      - \dot{C}^{\mathrm{M}}_{\text{out}}
+
         Parameters
         ----------
         T0 : float
-            Ambient temperature
-            
-        Notes
-        -----
-        The exergoeconomic balance considers thermal (T), chemical (CH),
-        and mechanical (M) exergy components for the inlet and outlet streams.
+            Ambient temperature (K).
         """
         self.C_P = self.outl[0]["C_T"] - (
                 self.inl[0]["C_T"] + self.inl[1]["C_T"]

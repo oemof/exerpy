@@ -44,53 +44,52 @@ class Mixer(Component):
     product and fuel are defined based on temperature relationships:
 
     .. math::
-
-        \dot{E}_\mathrm{P} =
+        \displaystyle
+        \dot E_{P} =
         \begin{cases}
-        \begin{cases}
-        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
-        e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} > T_0\\
-        \mathrm{not defined (nan)} & T_\mathrm{out} = T_0\\
-        \begin{cases}
-        \sum_i \dot{m}_i \cdot e_\mathrm{out}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot (e_\mathrm{out}^\mathrm{PH} -
-        e_{\mathrm{in,}i}^\mathrm{PH})
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} < T_0\\
+            \displaystyle
+            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{out}}^{\mathrm{PH}}
+            -e_{\mathrm{in},i}^{\mathrm{PH}}\bigr),
+            \quad \text{if }T_{\mathrm{in},i}<T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}\ge T_{0},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,e_{\mathrm{out}}^{\mathrm{PH}},
+            \quad \text{if }T_{\mathrm{in},i}<T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}<T_{0},\\[8pt]
+            \displaystyle
+            \text{not defined (nan)},
+            \quad \text{if }T_{\mathrm{out}}=T_{0},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,e_{\mathrm{out}}^{\mathrm{PH}},
+            \quad \text{if }T_{\mathrm{in},i}>T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}\ge T_{0},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{out}}^{\mathrm{PH}}
+            -e_{\mathrm{in},i}^{\mathrm{PH}}\bigr),
+            \quad \text{if }T_{\mathrm{in},i}>T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}<T_{0}.
         \end{cases}
 
-        \dot{E}_\mathrm{F} =
+    .. math::
+        \displaystyle
+        \dot E_{F} =
         \begin{cases}
-        \begin{cases}
-        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
-        e_\mathrm{out}^\mathrm{PH})
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \\
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} < T_0 \\
-        \end{cases} & T_\mathrm{out} > T_0\\
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_\mathrm{out} = T_0\\
-        \begin{cases}
-        \sum_i \dot{m}_i \cdot e_{\mathrm{in,}i}^\mathrm{PH}
-        & T_{\mathrm{in,}i} > T_\mathrm{out} \mathrm{ & }
-        T_{\mathrm{in,}i} \geq T_0 \\
-        \sum_i \dot{m}_i \cdot (e_{\mathrm{in,}i}^\mathrm{PH} -
-        e_\mathrm{out}^\mathrm{PH})
-        & T_{\mathrm{in,}i} < T_\mathrm{out} \\
-        \end{cases} & T_\mathrm{out} < T_0\\
+            \displaystyle
+            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{PH}}
+            -e_{\mathrm{out}}^{\mathrm{PH}}\bigr),
+            \quad \text{if }T_{\mathrm{out}}>T_{0}\text{ and }T_{\mathrm{in},i}>T_{\mathrm{out}},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
+            \quad \text{if }T_{\mathrm{out}}>T_{0}\text{ and }T_{\mathrm{in},i}<T_{\mathrm{out}}
+            \text{ and }T_{\mathrm{in},i}<T_{0},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
+            \quad \text{if }T_{\mathrm{out}}=T_{0},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
+            \quad \text{if }T_{\mathrm{out}}<T_{0}\text{ and }T_{\mathrm{in},i}>T_{\mathrm{out}},\\[8pt]
+            \displaystyle
+            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{PH}}
+            -e_{\mathrm{out}}^{\mathrm{PH}}\bigr),
+            \quad \text{if }T_{\mathrm{out}}<T_{0}\text{ and }T_{\mathrm{in},i}<T_{\mathrm{out}}.
         \end{cases}
 
-        \forall i \in \mathrm{mixer inlets}
     """
 
     def __init__(self, **kwargs):
@@ -193,16 +192,18 @@ class Mixer(Component):
         This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
         the following auxiliary cost relations:
         
-        (1) Chemical exergy cost equation (if enabled):
-            - F-principle: The specific chemical exergy cost of the outlet stream is calculated as 
-              the weighted average of the specific chemical exergy costs of the inlet streams.
-            - For inlets with zero chemical exergy, their specific costs are directly transferred.
+        (1) Mixing equation for chemical exergy costs (if enabled):
+
+        - The outlet's specific chemical exergy cost is calculated as a mass-weighted average of the inlet streams' specific chemical exergy costs
         
-        (2) Mechanical exergy cost equation:
-            - F-principle: The specific mechanical exergy cost of the outlet stream is calculated as
-              the weighted average of the specific mechanical exergy costs of the inlet streams.
-            - For inlets with zero mechanical exergy, their specific costs are directly transferred.
+        - This enforces proper chemical exergy cost distribution through the deaerator
         
+        (2) Mixing equation for mechanical exergy costs:
+        
+        - The outlet's specific mechanical exergy cost is calculated as a mass-weighted average of the inlet streams' specific mechanical exergy costs
+        
+        - This ensures mechanical exergy costs are properly conserved in the mixing process
+       
         Parameters
         ----------
         A : numpy.ndarray

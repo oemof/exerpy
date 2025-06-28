@@ -9,6 +9,11 @@ Exergoeconomic Analysis
     users should validate results independently for critical applications. We welcome feedback and 
     bug reports to help improve this feature.
 
+    In the actual implementation of the exergoeconomic analysis, the exergy of the material streams is split 
+    into thermal, mechanical and chemical parts. Therefore, `split_physical_exergy` should be set to 
+    `True`. This makes the exergoeconomic analysis not applicable to models simulated with Aspen. 
+    For some components, such as combustion chambers, the chemical exergy is necessary as well. 
+
     
 Exergoeconomic analysis provides a systematic methodology to quantify both the thermodynamic performance and
 the associated economic costs of energy‐conversion systems. Building upon exergy analysis, which accounts for

@@ -9,17 +9,11 @@ from exerpy.components.component import component_registry
 @component_registry
 class Valve(Component):
     r"""
-    Class for exergy analysis of valves.
+    Class for exergy and exergoeconomic analysis of valves.
 
-    This class performs exergy analysis calculations for isenthalpic valves with 
-    one inlet and one outlet stream. The exergy product and fuel definitions
-    vary based on the temperature relationships between inlet stream, outlet stream,
-    and ambient conditions.
-
-    Parameters
-    ----------
-    **kwargs : dict
-        Arbitrary keyword arguments passed to parent class.
+    This class performs exergy and exergoeconomic analysis calculations for valve components,
+    accounting for one inlet and one outlet streams across various temperature regimes, including
+    above and below ambient temperature.
 
     Attributes
     ----------
@@ -32,11 +26,27 @@ class Valve(Component):
     epsilon : float
         Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
-        Dictionary containing inlet stream data with temperature, mass flows,
-        and specific exergies.
+        Dictionary containing inlet stream data with mass flows and specific exergies.
     outl : dict
-        Dictionary containing outlet stream data with temperature, mass flows,
-        and specific exergies.
+        Dictionary containing outlet stream data with mass flows and specific exergies.
+    Z_costs : float
+        Investment cost rate of the component in currency/h.
+    C_P : float
+        Cost of product stream :math:`\dot{C}_P` in currency/h.
+    C_F : float
+        Cost of fuel stream :math:`\dot{C}_F` in currency/h.
+    C_D : float
+        Cost of exergy destruction :math:`\dot{C}_D` in currency/h.
+    c_P : float
+        Specific cost of product stream (currency per unit exergy).
+    c_F : float
+        Specific cost of fuel stream (currency per unit exergy).
+    r : float
+        Relative cost difference, :math:`(c_P - c_F)/c_F`.
+    f : float
+        Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
+    Ex_C_col : dict
+        Custom cost coefficients collection passed via `kwargs`.
 
     Notes
     -----
@@ -179,14 +189,17 @@ class Valve(Component):
             - Valve is treated as dissipative (warning issued)
         
         For T_out <= T0:
-            (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
-                - F-principle: specific mechanical exergy costs equalized between inlet/outlet
-                - If E_M is zero for either stream, appropriate fallback coefficients are used
+        (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+
+        - F-principle: specific mechanical exergy costs equalized between inlet/outlet
+
+        - If E_M is zero for either stream, appropriate fallback coefficients are used
         
         When chemical_exergy_enabled is True:
-            (2) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
-                - F-principle: specific chemical exergy costs equalized between inlet/outlet
-                - If E_CH is zero for either stream, appropriate fallback coefficients are used
+        (2) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+
+        - F-principle: specific chemical exergy costs equalized between inlet/outlet
+        - If E_CH is zero for either stream, appropriate fallback coefficients are used
         
         Parameters
         ----------
@@ -254,8 +267,12 @@ class Valve(Component):
         components (non-dissipative and non-CycleCloser) in proportion to their exergy destruction (E_D)
         and adding an extra overall cost balance row that enforces:
         
-            (C_in,T - C_out,T) + (C_in,M - C_out,M) - C_diff = - Z_costs
-        
+        .. math::
+           (\dot C_{\mathrm{in},T} - \dot C_{\mathrm{out},T})
+           + (\dot C_{\mathrm{in},M} - \dot C_{\mathrm{out},M})
+           - \dot C_{\mathrm{diff}}
+           = -\,\dot Z_{\mathrm{costs}}
+
         In this formulation, the unknown cost variable in the "dissipative" column (i.e. C_diff)
         is solved for, ensuring the valve’s cost balance.
         
@@ -283,8 +300,7 @@ class Valve(Component):
         
         Notes
         -----
-        - It is assumed that each inlet/outlet stream’s CostVar_index dictionary has keys:
-        "T" (thermal), "M" (mechanical), and "dissipative" (the extra unknown).
+        - It is assumed that each inlet/outlet stream's CostVar_index dictionary has keys: "T" (thermal), "M" (mechanical), and "dissipative" (the extra unknown).
         - self.Z_costs is the known cost rate (in currency/s) for the valve.
         """
         # --- Thermal difference row ---

@@ -100,7 +100,7 @@ class HeatExchanger(Component):
             = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
             - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
 
-        Case 2: All streams below ambient temperature
+        Case 2: All streams below or equal to ambient temperature
 
         If `split_physical_exergy=True`:
 
@@ -129,7 +129,7 @@ class HeatExchanger(Component):
             = \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
             - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
 
-        Case 3: Hot stream above, cold stream below ambient temperature
+        Case 3: Both stream crossing ambient temperature
 
         If `split_physical_exergy=True`:
 
@@ -157,7 +157,7 @@ class HeatExchanger(Component):
             = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
             + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
 
-        Case 4: Only inlet 1 above ambient temperature
+        Case 4: Only the hot inlet above ambient temperature
 
         If `split_physical_exergy=True`:
 
@@ -184,19 +184,7 @@ class HeatExchanger(Component):
                     + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
             - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
 
-        Case 5: Both inlets above, both outlets below ambient temperature
-
-        .. math::
-            \dot{E}_{\mathrm{P}} = \mathrm{NaN}
-
-        .. math::
-            \dot{E}_{\mathrm{F}}
-            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
-                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
-            + \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
-                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}\bigr)
-
-        Case 6: Cold inlet below, others above ambient temperature
+        Case 5: Only the cold inlet below ambient temperature
 
         If `split_physical_exergy=True`:
         
@@ -223,7 +211,19 @@ class HeatExchanger(Component):
                     - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
             + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
 
-        Dissipative case:
+        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case): 
+
+        .. math::
+            \dot{E}_{\mathrm{P}} = \mathrm{NaN}
+
+        .. math::
+            \dot{E}_{\mathrm{F}}
+            = \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+
+        If `dissipative` is `True`, the component is treated as dissipative:
 
         .. math::
             \dot{E}_{\mathrm{P}} = \mathrm{NaN}
@@ -279,7 +279,7 @@ class HeatExchanger(Component):
                     self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']
                     self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH']
 
-            # Case 3: Hot stream from above to lower ambient, cold stream from lower to above ambient
+            # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
             elif (self.inl[0]['T'] > T0 and self.outl[1]['T'] > T0 and
                 self.outl[0]['T'] <= T0 and self.inl[1]['T'] <= T0):
                 if split_physical_exergy:
@@ -292,7 +292,7 @@ class HeatExchanger(Component):
                     self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] + self.outl[1]['m'] * self.outl[1]['e_PH']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH']
 
-            # Case 4: Hot stream inlet above ambient, all others below or equal to ambient
+            # Case 4: Only hot inlet > T0
             elif (self.inl[0]['T'] > T0 and self.inl[1]['T'] <= T0 and
                 self.outl[0]['T'] <= T0 and self.outl[1]['T'] <= T0):
                 if split_physical_exergy:
@@ -306,15 +306,9 @@ class HeatExchanger(Component):
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + (
                         self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
 
-            # Case 5: Inlets are higher but outlets are below or equal to ambient
-            elif (self.inl[0]['T'] > T0 and self.outl[0]['T'] > T0 and
-                self.inl[1]['T'] <= T0 and self.outl[1]['T'] <= T0):
-                self.E_P = np.nan
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                    self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
-
-            # Case 6: Cold inlet is lower ambient, others higher
-            else:
+            # Case 5: Only cold inlet <= T0
+            elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+            self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
                 if split_physical_exergy:
                     self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
@@ -325,6 +319,21 @@ class HeatExchanger(Component):
                     self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH']
                     self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
                         self.inl[1]['m'] * self.inl[1]['e_PH'])
+            
+            # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
+            elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+                self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
+                self.E_P = np.nan
+                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
+                    self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
+                
+                logging.warning(f"Component {self.name} is dissipative. This component should be " \
+                            "handled with the `dissipative` flag set to True.")
+            
+            # Case 7: Not implemented case
+            else: 
+                logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                                "Please check the inlet and outlet temperatures.")
 
         else:
             self.E_F = (
@@ -373,7 +382,7 @@ class HeatExchanger(Component):
             + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
             = 0
 
-        Case 3: Hot ends above, cold ends below ambient temperature
+        Case 3: Both stream crossing ambient temperature
 
         P rule for thermal exergy of both outlets:
 
@@ -400,9 +409,9 @@ class HeatExchanger(Component):
             + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
             = 0
 
-        Case 6: Hot inlet above, cold inlet below ambient temperature (dissipative case): 
+        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case): 
 
-        The dissipative is not handeld here.
+        The dissipative is not handeld here!
 
         For all cases, the mechanical and chemical exergy costs are handled as follows:
 
@@ -512,30 +521,31 @@ class HeatExchanger(Component):
         elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = f"aux_f_rule_cold_{self.name}"
-        # Case 3: Mixed temperatures: inl[0]["T"] > T0 and outl[1]["T"] > T0, while outl[0]["T"] <= T0 and inl[1]["T"] <= T0.
+        # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
         elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
             self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
             set_thermal_p_rule(A, counter + 0)
             equations[counter] = f"aux_p_rule_{self.name}"
-        # Case 4: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] <= T0.
+        # Case 4: Only hot inlet > T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = f"aux_f_rule_cold_{self.name}"
-        # Case 5: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] > T0.
+        # Case 5: Only cold inlet <= T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = f"aux_f_rule_hot_{self.name}"
-        # Case 6: Mixed temperatures (dissipative case): inl[0]["T"] > T0, inl[1]["T"] <= T0, outl[0]["T"] > T0, and outl[1]["T"] <= T0.
+        # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
-            print("you shouldn't see this")
+            logging.warning(f"Component {self.name} is dissipative. This component should be " \
+                            "handled with the `dissipative` flag set to True.")
             return
-        # Case 7: Default case.
-        else:
-            set_thermal_f_hot(A, counter + 0)
-            equations[counter] = f"aux_f_rule_hot_{self.name}"
+        # Case 7: Not implemented case
+        else: 
+            logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                            "Please check the inlet and outlet temperatures.")
         
         # Mechanical equations (always added)
         set_equal(A, counter + 1, self.inl[0], self.outl[0], "M")
@@ -575,6 +585,16 @@ class HeatExchanger(Component):
             + \dot{Z}
             = 0
 
+        In case the chemical exergy of the streams is know:
+
+        .. math::
+            \dot{C}^{\mathrm{CH}}_{\mathrm{in},1} =
+            \dot{C}^{\mathrm{CH}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{C}^{\mathrm{CH}}_{\mathrm{in},2} =
+            \dot{C}^{\mathrm{CH}}_{\mathrm{out},2}
+
         This method computes cost coefficients and ratios:
 
         Case 1: All streams above ambient temperature
@@ -601,7 +621,7 @@ class HeatExchanger(Component):
                     + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},1}
                             - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
 
-        Case 3: Hot inlet 1 and outlet 2 above, cold inlet 2 and outlet 1 below ambient
+        Case 3: Both stream crossing ambient temperature
 
         .. math::
             \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
@@ -613,7 +633,7 @@ class HeatExchanger(Component):
                     - \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{out},1}
                             + \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
 
-        Case 4: Only inlet 1 above ambient temperature
+        Case 4: Only the hot inlet above ambient temperature
 
         .. math::
             \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
@@ -624,7 +644,7 @@ class HeatExchanger(Component):
                     - \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
                             + \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
 
-        Case 5: Both inlets above, both outlets below ambient temperature
+        Case 5: Only the cold inlet below ambient temperature
 
         .. math::
             \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
@@ -635,33 +655,62 @@ class HeatExchanger(Component):
                     + \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
                             - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
 
+        Case 6: Hot stream always above and cold stream always below ambient temperature (dissipative case):
+
+        .. math::
+            \dot{C}_P = \mathrm{NaN}
+
+        .. math::
+            \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+        
         Parameters
         ----------
         T0 : float
             Ambient temperature (K).
         """
+        # Case 1: All streams are above the ambient temperature
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
             self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
                 self.inl[1]["C_M"] - self.outl[1]["C_M"])
+        # Case 2: All streams are below or equal to the ambient temperature
         elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[0]["C_T"] - self.inl[0]["C_T"]
             self.C_F = self.inl[1]["C_PH"] - self.outl[1]["C_PH"] + (
                 self.inl[0]["C_M"] - self.outl[0]["C_M"])
+        # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
         elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
               self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
             self.C_P = self.outl[0]["C_T"] + self.outl[1]["C_T"]
             self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
                 self.outl[0]["C_M"] + self.outl[1]["C_M"])
+        # Case 4: Only hot inlet > T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
               self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
             self.C_P = self.outl[0]["C_T"]
             self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
                self.outl[1]["C_PH"] + self.outl[0]["C_M"])
-        else:
+        # Case 5: Only cold inlet <= T0
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+              self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
             self.C_P = self.outl[1]["C_T"]
             self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
                 self.inl[1]["C_PH"] - self.outl[1]["C_M"])
+        # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
+        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
+              self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
+            logging.warning(f"Component {self.name} is dissipative. This component should be " \
+                            "handled with the `dissipative` flag set to True.")
+            self.C_P = np.nan
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
+                self.inl[1]["C_PH"] - self.outl[1]["C_PH"])
+        # Case 7: Not implemented case
+        else: 
+            logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                            "Please check the inlet and outlet temperatures.")
 
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P

@@ -6,94 +6,91 @@ from exerpy.components.component import component_registry
 
 @component_registry
 class Condenser(Component):
-    """
-    Condenser component class.
+    r"""
+    Class for exergy and exergoeconomic analysis of condensers (only dissipative).
 
-    This class represents a condenser within the system, responsible for
-    calculating the exergy balance specific to condensation processes.
-    It evaluates the exergy interactions between multiple inlet and outlet
-    streams to determine exergy loss and exergy destruction.
+    This class performs exergy and exergoeconomic analysis calculations for condenser components,
+    accounting for two inlet and two outlet streams. This class should be used only for dissipative 
+    condensers. For non-dissipative condensers, use components that are modeled in ExerPy using the 
+    `HeatExchanger` class.
 
     Attributes
     ----------
-    E_L : float
-        Exergy loss associated with heat transfer (difference in physical exergy 
-        between specific outlet and inlet streams).
+    E_F : float
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\mathrm{W}`.
     E_D : float
-        Exergy destruction, calculated as the difference between the primary 
-        inlet and outlet streams minus exergy loss (E_L), representing
-        irreversibilities in the condensation process.
-    E_P : None
-        Exergy product, not defined for a condenser as there is no exergy output
-        intended for productive use.
-    E_F : None
-        Exergy fuel, typically undefined for a condenser as it does not involve 
-        an external exergy input for production purposes.
-    epsilon : None
-        Exergy efficiency, not applicable to a condenser due to the nature of 
-        exergy interactions focused on loss and destruction.
-
-    Methods
-    -------
-    __init__(**kwargs)
-        Initializes the Condenser component with given parameters.
-    calc_exergy_balance(T0, p0)
-        Calculates the exergy balance of the condenser.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\mathrm{W}`.
+    E_L : float
+        Exergy loss of the component :math:`\dot{E}_\mathrm{L}` in :math:`\mathrm{W}`.
+    inl : dict
+        Dictionary containing inlet stream data with mass flows and specific exergies.
+    outl : dict
+        Dictionary containing outlet stream data with mass flows and specific exergies.
+    Z_costs : float
+        Investment cost rate of the component in currency/h.
+    C_F : float
+        Cost of fuel stream :math:`\dot{C}_F` in currency/h.
+    C_D : float
+        Cost of exergy destruction :math:`\dot{C}_D` in currency/h.
+    c_F : float
+        Specific cost of fuel stream (currency per unit exergy).
+    f : float
+        Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
+    Ex_C_col : dict
+        Custom cost coefficients collection passed via `kwargs`.
     """
 
     def __init__(self, **kwargs):
-        """
-        Initialize the Condenser component.
+        r"""
+        Initialize the condenser component.
 
         Parameters
         ----------
         **kwargs : dict
-            Arbitrary keyword arguments passed to the base class initializer.
+            Arbitrary keyword arguments. Recognized keys:
+            - Ex_C_col (dict): custom cost coefficients, default {}
+            - Z_costs (float): investment cost rate in currency/h, default 0.0
         """
         super().__init__(**kwargs)
     
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
-        """
-        Calculate the exergy balance of the condenser.
+        r"""
+        Compute the exergy balance of the condenser.
 
-        This method computes exergy loss and exergy destruction based on the inlet
-        and outlet streams involved in the condensation process.
+        In order to distinguish between the exergetic destruction because of heat transfer
+        and the exergetic loss (coldf stream leaving the system) the exergetic losses and
+        destruction are calculated as follows:
+
+        .. math::
+
+            \dot{E}_{\mathrm{L}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
+
+        .. math::
+
+            \dot{E}_{\mathrm{D}}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{in},1}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+            - \dot{E}_{\mathrm{L}}
+
+        However, these value can only be accessed via the attributes `E_L` and `E_D` of the component. 
+        In the table of final results of the exergy analysis of the system, the exergy destruction of 
+        the condenser is counted as the exergy loss and the exergetic destruction due to heat transfer.
 
         Parameters
         ----------
         T0 : float
-            Reference temperature in Kelvin.
+            Ambient temperature (K).
         p0 : float
-            Reference pressure in Pascals.
+            Ambient pressure (Pa).
         split_physical_exergy : bool
-            Flag indicating whether physical exergy is split into thermal and mechanical components.
+            Whether to split thermal and mechanical exergy.
 
         Raises
         ------
         ValueError
-            If the condenser does not have exactly two inlets and two outlets.
-
-        Calculation Details
-        -------------------
-        The exergy balance is determined based on exergy transfer due to heat loss (`E_L`)
-        and the exergy destruction within the system:
-
-        - **Exergy Loss (E_L)**:
-            \[
-            E_L = \dot{m}_{\mathrm{out,1}} \cdot (e_{\mathrm{PH,out,1}} - e_{\mathrm{PH,in,1}})
-            \]
-            Represents the exergy loss due to heat transfer from the process.
-
-        - **Exergy Destruction (E_D)**:
-            \[
-            E_D = \dot{m}_{\mathrm{out,0}} \cdot (e_{\mathrm{PH,in,0}} - e_{\mathrm{PH,out,0}}) - E_L
-            \]
-            Accounts for the irreversibilities and losses in the condenser.
-
-        Note
-        ----
-        Exergy product (E_P) and exergy fuel (E_F) are generally undefined in a
-        condenser due to the focus on exergy loss rather than productive exergy usage.
+            If required inlets or outlets are missing.
         """
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 2:
@@ -115,54 +112,106 @@ class Condenser(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
-        Auxiliary equations for the condenser.
-        
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
-        
-        (1) Thermal auxiliary equation based on temperature cases:
-            - Case 1 (T > T0): c_T(hot_inlet)/E_T(hot_in) = c_T(hot_outlet)/E_T(hot_out)
-              F-principle: specific thermal exergy costs equalized in hot stream
-            - Case 2 (T <= T0): c_T(cold_inlet)/E_T(cold_in) = c_T(cold_outlet)/E_T(cold_out)
-              F-principle: specific thermal exergy costs equalized in cold stream
-            - Case 3 (mixed temperatures): c_T(hot_outlet)/E_T(hot_out) = c_T(cold_outlet)/E_T(cold_out)
-              P-principle: equal specific costs of thermal exergy in outlets
-            
-        (2) c_M(hot_inlet)/E_M(hot_in) = c_M(hot_outlet)/E_M(hot_out)
-            - F-principle: specific mechanical exergy costs equalized in hot stream
-            
-        (3) c_M(cold_inlet)/E_M(cold_in) = c_M(cold_outlet)/E_M(cold_out)
-            - F-principle: specific mechanical exergy costs equalized in cold stream
-            
-        (4-5) Chemical exergy cost equations (if enabled) for hot and cold streams
-            - F-principle: specific chemical exergy costs equalized between inlets/outlets
-        
+        r"""
+        Add auxiliary cost equations for the condenser.
+
+        This method appends rows to the cost matrix to enforce:
+
+        Case 1: All streams above ambient temperature
+
+        F rule for thermal exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            = 0
+
+        Case 2: All streams below or equal to ambient temperature
+
+        F rule for thermal exergy of the cold stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            = 0
+
+        Case 3: Both stream crossing ambient temperature
+
+        P rule for thermal exergy of both outlets:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            = 0
+
+        Case 4: Only the hot inlet above ambient temperature
+
+        F rule for thermal exergy of the cold stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            = 0
+
+        Case 5: Only the cold inlet below ambient temperature
+
+        F rule for thermal exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            = 0
+
+        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case): 
+
+        The dissipative is not handeld here!
+
+        For all cases, the mechanical and chemical exergy costs are handled as follows:
+
+        F rule for mechanical exergy of the hot stream:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{out},i}
+            + \frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{in},i}
+            = 0
+
+        F rule for chemical exergy on hot branch:
+
+        .. math::
+            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{out},i}
+            + \frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{in},i}
+            = 0
+
         Parameters
         ----------
         A : numpy.ndarray
-            The current cost matrix.
+            Current cost matrix.
         b : numpy.ndarray
-            The current right-hand-side vector.
+            Current RHS vector.
         counter : int
-            The current row index in the matrix.
+            Starting row index for auxiliary equations.
         T0 : float
-            Ambient temperature.
-        equations : dict
-            Dictionary for storing equation labels.
+            Ambient temperature (K).
+        equations : dict or list
+            Structure for equation labels.
         chemical_exergy_enabled : bool
-            Flag indicating whether chemical exergy auxiliary equations should be added.
-        
+            Must be True to include chemical exergy mixing.
+
         Returns
         -------
         A : numpy.ndarray
-            The updated cost matrix.
+            Updated cost matrix.
         b : numpy.ndarray
-            The updated right-hand-side vector.
+            Updated RHS vector.
         counter : int
-            The updated row index.
-        equations : dict
-            Updated dictionary with equation labels.
+            Updated row index after adding equations.
+        equations : dict or list
+            Updated labels.
+
+        Raises
+        ------
+        ValueError
+            If required cost variable indices are missing.
         """
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
@@ -222,25 +271,42 @@ class Condenser(Component):
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = f"aux_f_rule_hot_{self.name}"
         # Case 2: All temperatures <= T0.
-        elif all([c["T"] <= T0 for c in self.inl + self.outl]):
+        elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = f"aux_f_rule_cold_{self.name}"
-        # Case 3: Mixed temperatures: inl[0]["T"] > T0 and outl[1]["T"] > T0, while outl[0]["T"] <= T0 and inl[1]["T"] <= T0.
+            logging.warning(
+                f"All temperatures in {self.name} are below ambient temperature. " \
+                "This is not a typical case for a dissipative condenser."
+            )
+        # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
         elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
             self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
             set_thermal_p_rule(A, counter + 0)
             equations[counter] = f"aux_p_rule_{self.name}"
-        # Case 4: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] <= T0.
+            logging.warning(
+                f"Hot inlet and cold outlet in {self.name} are above ambient temperature, " \
+                "while hot outlet and cold inlet are below. This is not a typical case for a dissipative condenser." \
+                "The exergoeconomic analysis is counting the outlets as products."
+            )
+        # Case 4: Only hot inlet > T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = f"aux_f_rule_cold_{self.name}"
-        # Case 5: Mixed temperatures: inl[0]["T"] > T0, inl[1]["T"] <= T0, and both outl[0]["T"] and outl[1]["T"] > T0.
+            logging.warning(
+                f"Cold inlet in {self.name} is below ambient temperature. " \
+                "This is not a typical case for a dissipative condenser."
+            )
+        # Case 5: Only cold inlet <= T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = f"aux_f_rule_hot_{self.name}"
-        # Case 6: Mixed temperatures (dissipative case): inl[0]["T"] > T0, inl[1]["T"] <= T0, outl[0]["T"] > T0, and outl[1]["T"] <= T0.
+            logging.warning(
+                f"Cold inlet in {self.name} is below ambient temperature. " \
+                "This is not a typical case for a dissipative condenser."
+            )
+        # Case 6: hot stream always above T0, cold stream always below T0
         elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
             self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
             print("you shouldn't see this")
@@ -273,25 +339,110 @@ class Condenser(Component):
         return A, b, counter + num_aux_eqs, equations
     
     def exergoeconomic_balance(self, T0):
-        """
-        Perform exergoeconomic balance calculations for the condenser.
-        
-        This method calculates various exergoeconomic parameters including:
-        - Cost rates of product (C_P) and fuel (C_F)
-        - Specific cost of product (c_P) and fuel (c_F)
-        - Cost rate of exergy destruction (C_D)
-        - Relative cost difference (r)
-        - Exergoeconomic factor (f)
+        r"""
+        Perform exergoeconomic cost balance for the condenser.
+
+        Even though this class should only consider dissipative condensers, the exergoeconomic balance is
+        still performed to ensure consistency. Please note that same of the following cases cases are not 
+        typical for dissipative condensers. This may change in a future version of ExerPy.
+
+        .. math::
+            \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+            + \dot{C}^{\mathrm{M}}_{\mathrm{in},1}
+            + \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+            + \dot{C}^{\mathrm{M}}_{\mathrm{in},2}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}
+            + \dot{Z}
+            = 0
+
+        In case the chemical exergy of the streams is know:
+
+        .. math::
+            \dot{C}^{\mathrm{CH}}_{\mathrm{in},1} =
+            \dot{C}^{\mathrm{CH}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{C}^{\mathrm{CH}}_{\mathrm{in},2} =
+            \dot{C}^{\mathrm{CH}}_{\mathrm{out},2}
+
+        This method computes cost coefficients and ratios:
+
+        Case 1: All streams above ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
+                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},2}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Case 2: All streams below or equal to ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},1}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Case 3: Both stream crossing ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+                    + \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{out},1}
+                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Case 4: Only the hot inlet above ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
+
+        .. math::
+            \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
+                    - \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
+
+        Case 5: Only the cold inlet below ambient temperature
+
+        .. math::
+            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
+
+        .. math::
+            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
+                    + \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
+
+        Case 6: Hot stream always above and cold stream always below ambient temperature (dissipative case):
+
+        .. math::
+            \dot{C}_P = \mathrm{NaN}
+
+        .. math::
+            \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
+            - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
+            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
         
         Parameters
         ----------
         T0 : float
-            Ambient temperature
-            
-        Notes
-        -----
-        The exergoeconomic balance considers thermal (T), chemical (CH),
-        and mechanical (M) exergy components for the inlet and outlet streams.
+            Ambient temperature (K).
         """
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]

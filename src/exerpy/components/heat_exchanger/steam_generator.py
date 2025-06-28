@@ -7,117 +7,129 @@ from exerpy.components.component import component_registry
 @component_registry
 class SteamGenerator(Component):
     r"""
-    Class for exergy analysis of steam generators.
+    Class for exergy and exergoeconomic analysis of heat exchangers.
 
-    This class performs exergy analysis calculations for steam generators.
-    The component has several input and output streams as follows:
-
-        Inlet streams:
-            - inl[0]: Feed water inlet (high pressure)
-            - inl[1]: Steam inlet (intermediate pressure)
-            - inl[2]: Heat inlet (providing the heat input Q)
-            - inl[3]: Water injection (high pressure)
-            - inl[4]: Water injection (intermediate pressure)
-
-        Outlet streams:
-            - outl[0]: Superheated steam outlet (high pressure)
-            - outl[1]: Superheated steam outlet (intermediate pressure)
-            - outl[2]: Drain / Blow down outlet
-
-    The exergy product is defined as:
-
-    .. math::
-        \dot{E}_P = \Bigl[ \dot{m}_{\mathrm{out,HP}}\,e_{\mathrm{out,HP}}
-        - \dot{m}_{\mathrm{in,HP}}\,e_{\mathrm{in,HP}} \Bigr]
-        + \Bigl[ \dot{m}_{\mathrm{out,IP}}\,e_{\mathrm{out,IP}}
-        - \dot{m}_{\mathrm{in,IP}}\,e_{\mathrm{in,IP}} \Bigr]
-        - \dot{m}_{\mathrm{w,HP}}\,e_{\mathrm{w,HP}}
-        - \dot{m}_{\mathrm{w,IP}}\,e_{\mathrm{w,IP}}
-
-    where:
-        - \(\dot{m}\) is the mass flow rate and \(e\) is the specific exergy of the stream.
-        - The subscripts HP and IP denote high and intermediate pressure streams,
-          respectively, and 'w' stands for water injection.
-
-    The exergy fuel is computed from the heat input as:
-
-    .. math::
-        \dot{E}_F = E_q = Q \left( 1 - \frac{T_b}{T_0} \right)
-
-    with the thermodynamic temperature difference defined by
-
-    .. math::
-        T_b = \frac{h_{\mathrm{out,HP}} - h_{\mathrm{in,HP}}}{s_{\mathrm{out,HP}} - s_{\mathrm{in,HP}}}
-
-    where:
-        - \(h\) and \(s\) are the specific enthalpy and entropy,
-        - \(T_0\) is the ambient temperature.
-
-    The exergy destruction and efficiency are then given by:
-
-    .. math::
-        \dot{E}_D = \dot{E}_F - \dot{E}_P \quad\mathrm{and}\quad \varepsilon = \frac{\dot{E}_P}{\dot{E}_F}
-
-    Parameters
-    ----------
-    **kwargs : dict
-        Arbitrary keyword arguments passed to the parent class.
+    This class performs exergy and exergoeconomic analysis calculations for heat exchanger components,
+    accounting for two inlet and two outlet streams across various temperature regimes, including
+    above and below ambient temperature, and optional dissipative behavior.
 
     Attributes
     ----------
     E_F : float
-        Exergy fuel of the component :math:`\dot{E}_F` in :math:`\mathrm{W}`.
+        Exergy fuel of the component :math:`\dot{E}_\mathrm{F}` in :math:`\mathrm{W}`.
     E_P : float
-        Exergy product of the component :math:`\dot{E}_P` in :math:`\mathrm{W}`.
+        Exergy product of the component :math:`\dot{E}_\mathrm{P}` in :math:`\mathrm{W}`.
     E_D : float
-        Exergy destruction of the component :math:`\dot{E}_D` in :math:`\mathrm{W}`.
+        Exergy destruction of the component :math:`\dot{E}_\mathrm{D}` in :math:`\mathrm{W}`.
     epsilon : float
-        Exergetic efficiency :math:`\varepsilon`.
+        Exergetic efficiency of the component :math:`\varepsilon` in :math:`-`.
     inl : dict
-        Dictionary containing inlet streams.
+        Dictionary containing inlet stream data with mass flows and specific exergies.
     outl : dict
-        Dictionary containing outlet streams.
+        Dictionary containing outlet stream data with mass flows and specific exergies.
+    Z_costs : float
+        Investment cost rate of the component in currency/h.
+    C_P : float
+        Cost of product stream :math:`\dot{C}_P` in currency/h.
+    C_F : float
+        Cost of fuel stream :math:`\dot{C}_F` in currency/h.
+    C_D : float
+        Cost of exergy destruction :math:`\dot{C}_D` in currency/h.
+    c_P : float
+        Specific cost of product stream (currency per unit exergy).
+    c_F : float
+        Specific cost of fuel stream (currency per unit exergy).
+    r : float
+        Relative cost difference, :math:`(c_P - c_F)/c_F`.
+    f : float
+        Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
+    Ex_C_col : dict
+        Custom cost coefficients collection passed via `kwargs`.
+
+    Notes
+    -----
+    The component has several input and output streams as follows.
+
+    Inlet streams:
+
+    - inl[0]: Feed water inlet (high pressure)
+    - inl[1]: Steam inlet (intermediate pressure)
+    - inl[2]: Heat inlet (providing the heat input Q)
+    - inl[3]: Water injection (high pressure)
+    - inl[4]: Water injection (intermediate pressure)
+
+    Outlet streams:
+
+    - outl[0]: Superheated steam outlet (high pressure)
+    - outl[1]: Superheated steam outlet (intermediate pressure)
+    - outl[2]: Drain / Blow down outlet
+
     """
 
     def __init__(self, **kwargs):
-        r"""Initialize steam generator component with given parameters."""
-        self.dissipative = False
+        r"""
+        Initialize the steam generator component.
+
+        Parameters
+        ----------
+        **kwargs : dict
+            Arbitrary keyword arguments. Recognized keys:
+            - Ex_C_col (dict): custom cost coefficients, default {}
+            - Z_costs (float): investment cost rate in currency/h, default 0.0
+        """        
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        Calculate the exergy balance of the steam generator.
+        Compute the exergy balance of the steam generator.
 
-        This method computes the exergy fuel from the heat inlet using the relation
+        The exergy fuel is defined as follows. 
 
-        .. math::
-            E_F = Q \left(1 - \frac{T_b}{T_0}\right),
-            \quad T_b = \frac{h_{\mathrm{out,HP}} - h_{\mathrm{in,HP}}}{s_{\mathrm{out,HP}} - s_{\mathrm{in,HP}}}
-
-        and the exergy product as
+        If `split_physical_exergy` is `True`:
 
         .. math::
-            E_P = \Bigl[ \dot{m}_{\mathrm{out,HP}}\,e_{\mathrm{out,HP}} -
-            \dot{m}_{\mathrm{in,HP}}\,e_{\mathrm{in,HP}} \Bigr]
-            + \Bigl[ \dot{m}_{\mathrm{out,IP}}\,e_{\mathrm{out,IP}} -
-            \dot{m}_{\mathrm{in,IP}}\,e_{\mathrm{in,IP}} \Bigr]
-            - \dot{m}_{\mathrm{w,HP}}\,e_{\mathrm{w,HP}}
-            - \dot{m}_{\mathrm{w,IP}}\,e_{\mathrm{w,IP}}
+            \dot{E}_{\mathrm{F}}
+            = \bigl[\dot{E}^{\mathrm{T}}_{\mathrm{out,HP}} - \dot{E}^{\mathrm{T}}_{\mathrm{in,HP}}\bigr]
+            + \bigl[\dot{E}^{\mathrm{T}}_{\mathrm{out,IP}} - \dot{E}^{\mathrm{T}}_{\mathrm{in,IP}}\bigr]
+            - \dot{E}^{\mathrm{T}}_{\mathrm{w,HP}}
+            - \dot{E}^{\mathrm{T}}_{\mathrm{w,IP}}
 
-        The exergy destruction is given by
-
-        .. math::
-            E_D = E_F - E_P
-
-        and the exergetic efficiency is
+        If `split_physical_exergy` is `False`:
 
         .. math::
-            \varepsilon = \frac{E_P}{E_F}
+            \dot{E}_{\mathrm{F}}
+            = \bigl[\dot{E}^{\mathrm{PH}}_{\mathrm{out,HP}} - \dot{E}^{\mathrm{PH}}_{\mathrm{in,HP}}\bigr]
+            + \bigl[\dot{E}^{\mathrm{PH}}_{\mathrm{out,IP}} - \dot{E}^{\mathrm{PH}}_{\mathrm{in,IP}}\bigr]
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{w,HP}}
+            - \dot{E}^{\mathrm{PH}}_{\mathrm{w,IP}}
+
+        The exergy product is defined as:
+
+        .. math::
+
+            \dot{E}_\mathrm{P} = \Bigl[ \dot E^{\mathrm{PH}}_{\mathrm{out,HP}}
+            - \dot E^{\mathrm{PH}}_{\mathrm{in,HP}} \Bigr]
+            + \Bigl[ \dot E^{\mathrm{PH}}_{\mathrm{out,IP}}
+            - \dot E^{\mathrm{PH}}_{\mathrm{in,IP}} \Bigr]
+            - \dot E^{\mathrm{PH}}_{\mathrm{w,HP}}
+            - \dot E^{\mathrm{PH}}_{\mathrm{w,IP}}
+
+        where the subscripts HP and IP denote high and intermediate pressure streams,
+        respectively, and w stands for water injection.
 
         Parameters
         ----------
         T0 : float
-            Ambient temperature in Kelvin.
+            Ambient temperature (K).
+        p0 : float
+            Ambient pressure (Pa).
+        split_physical_exergy : bool
+            Whether to split thermal and mechanical exergy.
+
+        Raises
+        ------
+        ValueError
+            If required inlets or outlets are missing.
         """
         # Ensure that all necessary streams exist
         required_inlets = [0]
@@ -129,12 +141,6 @@ class SteamGenerator(Component):
             if idx not in self.outl:
                 raise ValueError(f"Missing outlet stream with index {idx}.")
 
-        # Calculate T_b for high pressure streams: from superheated steam outlet (HP) and feed water inlet (HP)
-        try:
-            T_b = (self.outl[0]['h'] - self.inl[0]['h']) / (self.outl[0]['s'] - self.inl[0]['s'])
-        except ZeroDivisionError:
-            raise ZeroDivisionError("Division by zero encountered in calculating T_b. Check entropy differences.")
-       
         if split_physical_exergy:
             exergy_type = 'e_T'
         else:
@@ -172,6 +178,15 @@ class SteamGenerator(Component):
 
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+        r"""
+        This function must be implemented in the future.
+
+        The exergoeconomic analysis of SteamGenerator is not implemented yet.
+        """
+        logging.error(
+            "The exergoeconomic analysis of SteamGenerator is not implemented yet. "
+            "This method will be implemented in a future release."
+        )
         """
         Auxiliary equations for the steam generator.
         
@@ -218,6 +233,16 @@ class SteamGenerator(Component):
         """
 
     def exergoeconomic_balance(self, T0):
+        r"""
+        This function must be implemented in the future.
+
+        The exergoeconomic analysis of SteamGenerator is not implemented yet.
+        """
+        
+        logging.error(
+            "The exergoeconomic analysis of SteamGenerator is not implemented yet. "
+            "This method will be implemented in a future release."
+        )
         """
         Perform exergoeconomic balance calculations for the steam generator.
         

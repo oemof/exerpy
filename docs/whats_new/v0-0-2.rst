@@ -1,0 +1,20 @@
+v0.0.1 (01.07.2025)
+++++++++++++++++++++++
+
+Bug fixes
+#########
+- HeatExchanger and SimpleHeatExchanger correctly parsed from Ebsilon 
+
+Documentation
+#############
+- Improved documentation for the exergoeconomic analysis module
+
+Developers
+##########
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__) — Lead Developer
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__) — Contributor
+- Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__) — Contributor
+
+Supervision
+###########
+- Prof. Dr.-Ing. Fontina Petrakopoulou — Project Supervisor

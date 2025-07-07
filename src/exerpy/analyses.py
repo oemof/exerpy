@@ -589,6 +589,28 @@ class ExergyAnalysis:
             "chemExLib": self.chemExLib
         }
 
+        # add per-component exergy results
+        for comp_type, comps in export["components"].items():
+            for comp_name, comp_data in comps.items():
+                comp = self.components[comp_name]
+                comp_data["exergy_results"] = {
+                    "E_F": getattr(comp, "E_F", None),
+                    "E_P": getattr(comp, "E_P", None),
+                    "E_D": getattr(comp, "E_D", None),
+                    "epsilon": getattr(comp, "epsilon", None),
+                    "y": getattr(comp, "y", None),
+                    "y_star": getattr(comp, "y_star", None),
+                }
+
+        # add overall system exergy results
+        export["system_results"] = {
+            "E_F": getattr(self, "E_F", None),
+            "E_P": getattr(self, "E_P", None),
+            "E_D": getattr(self, "E_D", None),
+            "E_L": getattr(self, "E_L", None),
+            "epsilon": getattr(self, "epsilon", None)
+        }
+
         return export
 
 

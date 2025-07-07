@@ -494,7 +494,7 @@ class EbsilonModelParser:
                         unit_id_to_string.get(comp_cast.Q1N.Dimension, "Unknown")
                     ) if hasattr(comp_cast, 'Q1N') and comp_cast.Q1N.Value is not None else None
                 ),
-                'mass_flow_1_unit': fluid_property_data['heat']['SI_unit'],
+                'energy_flow_1_unit': fluid_property_data['heat']['SI_unit'],
             }
 
             # Determine the group for the component based on its type

@@ -471,6 +471,13 @@ def run_sensitivity_analysis(var_name, values):
 
         results[v] = res
 
+        # put the non-material DataFrame onto its Connection index
+        non_mat = df_non_mat.set_index('Connection')
+
+        # extract the total cost rates for the two electricity streams
+        res['Ctot_e1'] = non_mat.loc['e1', 'C^TOT [EUR/h]']
+        res['Ctot_e4'] = non_mat.loc['e4', 'C^TOT [EUR/h]']
+
     return pd.DataFrame.from_dict(results, orient='index')
 
 df = run_sensitivity_analysis(SENS_VAR, SENS_VALUES)
@@ -961,3 +968,37 @@ ax_z.legend(
 
 plt.tight_layout()
 plt.savefig(f"examples/hightemp_hp/plots/combined_Z_ED_{SENS_VAR_savefig}.png", dpi=300)
+
+
+# data series
+z   = df['Z_tot']        # [EUR/h]
+c1  = df['Ctot_e1']      # [EUR/h]
+c4  = df['Ctot_e4']      # [EUR/h]
+cp  = df['c_P']          # [EUR/GJ]  for coloring
+sv  = df.index.values    # sensitivity var, T34
+
+x = c1 + c4
+
+plt.figure(figsize=(7,5))
+sc = plt.scatter(x, z,
+                 c=cp,
+                 cmap='viridis',
+                 s=80,
+                 edgecolor='k',
+                 marker='o')
+
+# annotate each point with its T34
+for xi, zi, tval in zip(x, z, sv):
+    plt.text(xi + 0.3, zi, f"{tval:.0f}°C", fontsize=9, color='black')
+
+plt.xlabel(r'$\dot C_{\mathrm{F,TOT}}$ [EUR/h]')
+plt.ylabel(r'$\dot{Z}_{\mathrm{TOT}}$ [EUR/h]')
+plt.title(r'Investment costs vs. fuel costs at varying $T_{34}$')
+plt.grid(True)
+
+# colorbar shows c_P
+cbar = plt.colorbar(sc)
+cbar.set_label(r'$c_P$ [EUR/GJ]')
+
+plt.tight_layout()
+plt.savefig(f"examples/hightemp_hp/plots/plot_fuel_invest_costs_{SENS_VAR_savefig}.png", dpi=300)

@@ -6,14 +6,28 @@ grouped_components = {
     "Valve": ['Valve'],
     "Pump": ['Pump'],
     "Compressor": ['Compr'],
-    # "Condenser": [],
-    # "Deaerator": [],
     "SimpleHeatExchanger": ['Heater'],
     "Mixer": ['Mixer'],
     "Splitter": ['FSplit'],
     "Generator": ['Gen'],
     "Motor": ['Motor'],
 }
+"""
+This is the mapping of component groups to their respective component IDs:
+
+    - "Turbine": ['Compr'],
+    - "HeatExchanger": ['HeatX'],
+    - "CombustionChamber": ['RStoic'],
+    - "Valve": ['Valve'],
+    - "Pump": ['Pump'],
+    - "Compressor": ['Compr'],
+    - "SimpleHeatExchanger": ['Heater'],
+    - "Mixer": ['Mixer'],
+    - "Splitter": ['FSplit'],
+    - "Generator": ['Gen'],
+    - "Motor": ['Motor']
+
+"""
 
 connector_mappings = {
     'Turbine': {

@@ -51,7 +51,30 @@ ExerPy supports parsing models from different simulation tools to extract and pr
     Note that Ebsilon Professional and Aspen Plus require a valid commercial
     license for use. Additionally, while these tools are designed only for
     Windows, they can also be operated on macOS or Linux through the use of a
-    virtual machine.
+    virtual machine. For Ebsilon Professional, a valid license including EBSOpen
+    is required to enable the API connection. 
+
+
+====================
+Supported components
+====================
+ExerPy supports a wide range of components from the simulation tools. For Ebsilon Professional, the following components are supported:
+
+.. autodata:: exerpy.parser.from_ebsilon.ebsilon_config.grouped_components
+   :annotation:
+
+For Aspen Plus, the supported components include:
+
+.. autodata:: exerpy.parser.from_aspen.aspen_config.grouped_components
+   :annotation:
+
+For TESPy, the supported components include:
+
+.. autodata:: exerpy.parser.from_tespy.tespy_config.EXERPY_TESPY_MAPPINGS
+   :annotation:
+
+We are continuously working to expand the list of supported components, so please refer to the latest documentation for updates.
+In case you need to parse a component that is not yet supported, please contact us or open an issue on the GitHub repository.
 
 ======
 Inputs

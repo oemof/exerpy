@@ -843,10 +843,30 @@ grouped_components = {
     "SteamGenerator": [5],
     "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
     "FlashTank" : [34],
-    "Splitter": [4, 17, 18, 52, 109, 140, 157],
-    "Separator": [19, 99],
+    "Storage": [118],
+    "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
     "CycleCloser": [80]
 }
+"""
+This is the mapping of component groups to their respective component IDs:
+
+    - "Turbine": [6, 23, 56, 57, 58, 68, 122],
+    - "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    - "CombustionChamber": [22, 90],
+    - "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
+    - "Pump": [8, 44, 83, 159],
+    - "Compressor": [24, 94],
+    - "Condenser": [7, 47, 78],
+    - "Deaerator": [9, 63],
+    - "SimpleHeatExchanger": [15, 16, 35],
+    - "SteamGenerator": [5],
+    - "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
+    - "FlashTank" : [34],
+    - "Storage": [118],
+    - "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
+    - "CycleCloser": [80]
+    
+"""
 
 # Connector mapping rules for different component types
 connector_mapping = {
@@ -1051,5 +1071,9 @@ connector_mapping = {
         7: 4,  # Irradation losses below
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
+    },
+    118: {  # Storage
+        1: 0,  # Inlet
+        2: 0,  # Outlet
     },
 }

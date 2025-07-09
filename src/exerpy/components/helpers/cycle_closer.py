@@ -9,7 +9,7 @@ from exerpy.components.component import component_registry
 @component_registry
 class CycleCloser(Component):
     r"""
-    Component for closing cycles. This component is not analyzed in exergy analysis.
+    Component for closing cycles. This component is not considered in exergy analysis, but it is used in exergoeconomic analysis.
     """
     def __init__(self, **kwargs):
         r"""Initialize CycleCloser component with given parameters."""
@@ -87,12 +87,8 @@ class CycleCloser(Component):
         return A, b, counter, equations
     
     def exergoeconomic_balance(self, T0):
-        """
-        Placeholder for exergoeconomic balance calculations.
-        
-        The CycleCloser component is not considered in exergoeconomic analysis
-        and all calculations are skipped. NaN values are assigned to all
-        exergoeconomic parameters.
+        """        
+        The exergoeconomic balance for the CycleCloser component is not necessary as it does not have a defined exergy balance.
         """
 
         self.C_P = np.nan

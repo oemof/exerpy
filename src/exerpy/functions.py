@@ -19,32 +19,39 @@ def mass_to_molar_fractions(mass_fractions):
     Returns:
     - molar_fractions: Dictionary with component names as keys and molar fractions as values.
     """
-    molar_masses = {}
     molar_fractions = {}
 
-    # Step 1: Get the molar masses for each component
-    for fraction in mass_fractions.keys():
-        try:
-            molar_masses[fraction] = CP.PropsSI('M', fraction)
-        except Exception as e:
-           #  print(f"Warning: Could not retrieve molar mass for {fraction} ({fraction}). Error: {e}")
-            continue  # Skip this fraction if there's an issue
+    if len(mass_fractions.values()) == 1:
+        molar_fractions = {comp: 1.0 for comp in mass_fractions.keys()}
 
-    # Step 2: Check if we have valid molar masses
-    if not molar_masses:
-        raise ValueError("No valid molar masses were retrieved. Exiting...")
+    else:
+        molar_masses = {}
 
-    # Step 3: Calculate total moles in the mixture
-    total_moles = sum(mass_fractions[comp] / molar_masses[comp] for comp in molar_masses)
+        # Step 1: Get the molar masses for each component
+        for fraction in mass_fractions.keys():
+            try:
+                molar_masses[fraction] = CP.PropsSI('M', fraction)
+            except Exception as e:
+            #  print(f"Warning: Could not retrieve molar mass for {fraction} ({fraction}). Error: {e}")
+                continue  # Skip this fraction if there's an issue
 
-    # Step 4: Calculate molar fractions
-    for component in molar_masses.keys():
-        molar_fractions[component] = (mass_fractions[component] / molar_masses[component]) / total_moles
+        # Step 2: Check if we have valid molar masses
+        if not molar_masses:
+            raise ValueError(f"No valid molar masses were retrieved for substances {list(mass_fractions.keys())}")
 
-    # Step 5: Check if molar fractions sum to approximately 1
-    molar_sum = sum(molar_fractions.values())
-    if abs(molar_sum - 1.0) > 1e-6:
-        raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
+        else:
+
+            # Step 3: Calculate total moles in the mixture
+            total_moles = sum(mass_fractions[comp] / molar_masses[comp] for comp in molar_masses)
+
+            # Step 4: Calculate molar fractions
+            for component in molar_masses.keys():
+                molar_fractions[component] = (mass_fractions[component] / molar_masses[component]) / total_moles
+
+            # Step 5: Check if molar fractions sum to approximately 1
+            molar_sum = sum(molar_fractions.values())
+            if abs(molar_sum - 1.0) > 1e-6:
+                raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
 
     return molar_fractions
 
@@ -104,24 +111,20 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
     Returns:
     - eCH: Chemical exergy in kJ/kg.
     """
-    logging.info(f"Starting chemical exergy calculation with Tamb={Tamb}, pamb={pamb}")
+    logging.info(f"Starting chemical exergy of stream of composition {stream_data} calculation with Tamb={Tamb}, pamb={pamb}")
 
     try:
         # Check if molar fractions already exist
         if 'molar_composition' in stream_data:
             molar_fractions = stream_data['molar_composition']
-            logging.info("Molar fractions found in stream.")
         else:
             # If not, convert mass composition to molar fractions
             molar_fractions = mass_to_molar_fractions(stream_data['mass_composition'])
-            logging.info(f"Converted mass composition to molar fractions: {molar_fractions}")
-
         try:
             # Load chemical exergy data
             chem_ex_file = os.path.join(__datapath__, f'{chemExLib}.json')
             with open(chem_ex_file, 'r') as file:
                 chem_ex_data = json.load(file)  # data in J/kmol
-                logging.info("Chemical exergy data loaded successfully.")
         except FileNotFoundError:
             error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
             logging.error(error_msg)
@@ -135,20 +138,26 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
         if len(molar_fractions) == 1:
             logging.info("Handling pure substance case (Case A).")
             substance = next(iter(molar_fractions))  # Get the single key
-            aliases = CP.get_aliases(substance)
 
-            if set(aliases) & set(aliases_water):
-                eCH = chem_ex_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in J/kg
-                logging.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
-            else:
-                for alias in aliases:
-                    if alias.upper() in chem_ex_data:
-                        eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI('M', substance)  # in J/kg
-                        logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
-                        break
+            try: 
+                aliases = CP.get_aliases(substance)
+
+                if set(aliases) & set(aliases_water):
+                    eCH = chem_ex_data['WATER'][2] / CP.PropsSI('M', 'H2O')  # liquid water, in J/kg
+                    logging.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
                 else:
-                    logging.error(f"No matching alias found for {substance}")
-                    raise KeyError(f"No matching alias found for {substance}")
+                    for alias in aliases:
+                        if alias.upper() in chem_ex_data:
+                            eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI('M', substance)  # in J/kg
+                            logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
+                            break
+                    else:
+                        logging.error(f"No matching alias found for {substance}")
+                        raise KeyError(f"No matching alias found for {substance}")
+            
+            except:
+                eCH = 0  # If no aliases found, set chemical exergy to 0    
+                logging.warning(f"No CoolProp aliases found for {substance}. Setting chemical exergy to 0 J/kg.")
 
         # Handle mixtures (Case B or C)
         else:
@@ -453,12 +462,12 @@ def convert_to_SI(property, value, unit):
 
     # Check if the property is valid and exists in fluid_property_data
     if property not in fluid_property_data:
-        logging.warning(f"Unrecognized property: '{property}'. Returning original value.")
+        logging.warning(f"Unrecognized property: '{property}'. Returning original value {value} {unit}.")
         return value
 
     # Check if the unit is valid
     if unit == 'Unknown':
-        logging.warning(f"Unrecognized unit for property '{property}'. Returning original value.")
+        logging.warning(f"Unrecognized unit {unit} for property '{property}'. Returning original value {value} {unit}.")
         return value
 
     try:

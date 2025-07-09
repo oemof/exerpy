@@ -53,8 +53,10 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
 
     Raises
     ------
+    ValueError
+        If Ebsilon returns the sentinel value -999.0 indicating a failed calculation.
     Exception
-        Logs an error and returns None if any exception occurs during property calculation.
+        Logs an error and returns None if any other exception occurs during property calculation.
     """
 
     # Create a new FluidData object
@@ -85,6 +87,10 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
         fd.Medium = pipe.FMED.Value
         fdAnalysis = app.NewFluidAnalysis()
 
+    elif fd.FluidType == 20:  # ThermoLiquid
+        fd.Medium = pipe.FMED.Value
+        fdAnalysis = app.NewFluidAnalysis()
+        
     else:  # flue gas, air etc.
         fd.GasTable = EpGasTable.epGasTableFromSuperiorModel
 
@@ -113,10 +119,19 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
         elif property == 'H':  # Enthalpy
             res = fd.PropertyH_OF_PT(pressure * 1e-5, temperature - 273.15)  # Ebsilon works with °C and bar
             res_SI = res * 1e3  # Convert kJ/kg to J/kg
+        
+        if res == -999.0:
+            raise ValueError(
+                f"Calculation with Ebsilon property failed: {property} = -999.0 "
+                f"for fluid {fd.Medium} at p={pressure} Pa and T={temperature} K. "
+                f"It may helpful to set split_physical_exergy=False in the ExergyAnalysis constructor."
+            )
 
         return res_SI
 
     except Exception as e:
+        if isinstance(e, ValueError):
+            raise
         logging.error(f"An error occurred during property calculation: {e}")
         return None
 

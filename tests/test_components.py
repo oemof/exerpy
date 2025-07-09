@@ -22,6 +22,8 @@ from exerpy.components.power_machines.motor import Motor
 from exerpy.components.turbomachinery.compressor import Compressor
 from exerpy.components.turbomachinery.pump import Pump
 from exerpy.components.turbomachinery.turbine import Turbine
+from exerpy.components.nodes.storage import Storage
+from exerpy.components.nodes.flash_tank import FlashTank
 
 
 @pytest.fixture
@@ -1185,3 +1187,167 @@ def test_turbine_invalid_case(turbine):
     
     assert np.isnan(turbine.E_P), "E_P should be NaN for invalid case (outlet T > inlet T)."
     assert np.isnan(turbine.E_F), "E_F should be NaN for invalid case (outlet T > inlet T)."
+
+@pytest.fixture
+def storage():
+    """
+    Create a Storage instance with default investment cost.
+    """
+    return Storage(Z_costs=0.0)
+
+@pytest.fixture
+def charging_streams():
+    """
+    Streams for charging (outlet mass < inlet mass):
+    
+    - Inlet 0: m = 10, e_PH = 100
+    - Outlet 0: m = 5, e_PH = 80
+    
+    Expected:
+      E_F = 10*100 - 5*80 = 600
+      E_P = (10 - 5)*80 = 400
+      E_D = 600 - 400 = 200
+      ε = 400/600 ≈ 0.6667
+    """
+    inl = {0: {"m": 10, "e_PH": 100}}
+    outl = {0: {"m": 5, "e_PH": 80}}
+    return inl, outl
+
+def test_storage_charging(storage, charging_streams):
+    """
+    Test calc_exergy_balance for charging case.
+    """
+    inl, outl = charging_streams
+    storage.inl = inl
+    storage.outl = outl
+    storage.name = "TestStorageCharging"
+
+    storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    assert storage.E_F == pytest.approx(600, rel=1e-6)
+    assert storage.E_P == pytest.approx(400, rel=1e-6)
+    assert storage.E_D == pytest.approx(200, rel=1e-6)
+    assert storage.epsilon == pytest.approx(400/600, rel=1e-6)
+
+@pytest.fixture
+def discharging_streams():
+    """
+    Streams for discharging (outlet mass > inlet mass):
+    
+    - Inlet 0: m = 10, e_PH = 100
+    - Outlet 0: m = 15, e_PH = 80
+    
+    Expected:
+      E_F = (15 - 10)*80 = 400
+      E_P = 15*80 - 10*100 = 200
+      E_D = 400 - 200 = 200
+      ε = 200/400 = 0.5
+    """
+    inl = {0: {"m": 10, "e_PH": 100}}
+    outl = {0: {"m": 15, "e_PH": 80}}
+    return inl, outl
+
+def test_storage_discharging(storage, discharging_streams):
+    """
+    Test calc_exergy_balance for discharging case.
+    """
+    inl, outl = discharging_streams
+    storage.inl = inl
+    storage.outl = outl
+    storage.name = "TestStorageDischarging"
+
+    storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    assert storage.E_F == pytest.approx(400, rel=1e-6)
+    assert storage.E_P == pytest.approx(200, rel=1e-6)
+    assert storage.E_D == pytest.approx(200, rel=1e-6)
+    assert storage.epsilon == pytest.approx(0.5, rel=1e-6)
+
+def test_storage_missing_streams_raises(storage):
+    """
+    Test that calc_exergy_balance raises KeyError if inlet or outlet missing.
+    """
+    storage.inl = {}  # no inlet 0
+    storage.outl = {0: {"m": 1, "e_PH": 50}}
+    with pytest.raises(KeyError):
+        storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    storage.inl = {0: {"m": 1, "e_PH": 50}}
+    storage.outl = {}
+    with pytest.raises(KeyError):
+        storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+@pytest.fixture
+def flash_tank():
+    """
+    Create a FlashTank instance.
+    """
+    return FlashTank()
+
+@pytest.fixture
+def valid_flash_streams():
+    """
+    Create dummy inlet and outlet streams for FlashTank.
+
+    Inlets:
+      0: m = 3, e_PH = 100, e_T = 50
+      1: m = 2, e_PH =  80, e_T = 40
+    Outlets:
+      0: m = 1, e_PH =  90, e_T = 45
+      1: m = 4, e_PH =  70, e_T = 35
+    """
+    inl = {
+        0: {"m": 3, "e_PH": 100, "e_T": 50},
+        1: {"m": 2, "e_PH":  80, "e_T": 40}
+    }
+    outl = {
+        0: {"m": 1, "e_PH":  90, "e_T": 45},
+        1: {"m": 4, "e_PH":  70, "e_T": 35}
+    }
+    return inl, outl
+
+def test_flash_tank_calc_exergy_balance_success(flash_tank, valid_flash_streams):
+    """
+    Test that FlashTank.calc_exergy_balance computes correct values
+    when split_physical_exergy=True.
+    """
+    inl, outl = valid_flash_streams
+    flash_tank.inl = inl
+    flash_tank.outl = outl
+
+    flash_tank.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    # E_F = 3*50 + 2*40 = 230
+    # E_P = 1*45 + 4*35 = 185
+    expected_E_F = 230
+    expected_E_P = 185
+    expected_E_D = expected_E_F - expected_E_P  # 45
+    expected_epsilon = expected_E_P / expected_E_F
+
+    assert flash_tank.E_F == pytest.approx(expected_E_F, rel=1e-6)
+    assert flash_tank.E_P == pytest.approx(expected_E_P, rel=1e-6)
+    assert flash_tank.E_D == pytest.approx(expected_E_D, rel=1e-6)
+    assert flash_tank.epsilon == pytest.approx(expected_epsilon, rel=1e-6)
+
+def test_flash_tank_missing_streams_raises(flash_tank):
+    """
+    Test that calc_exergy_balance raises ValueError when inlet <1 or outlets <2.
+    """
+    # No inlets
+    flash_tank.inl = {}
+    flash_tank.outl = {
+        0: {"m": 1, "e_PH":  90, "e_T": 45},
+        1: {"m": 2, "e_PH":  80, "e_T": 40}
+    }
+    with pytest.raises(ValueError, match="Flash tank requires at least one inlet and two outlets."):
+        flash_tank.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    # Only one outlet
+    flash_tank.inl = {
+        0: {"m": 1, "e_PH": 100, "e_T": 50}
+    }
+    flash_tank.outl = {
+        0: {"m": 1, "e_PH":  90, "e_T": 45}
+    }
+    with pytest.raises(ValueError, match="Flash tank requires at least one inlet and two outlets."):
+        flash_tank.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)

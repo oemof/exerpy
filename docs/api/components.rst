@@ -140,3 +140,33 @@ Valve
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+*******
+Storage
+*******
+
+.. automodule:: exerpy.components.nodes.storage
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+**********
+Flash Tank
+**********
+
+.. automodule:: exerpy.components.nodes.flash_tank
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+************
+Cycle Closer
+************
+
+.. automodule:: exerpy.components.helpers.cycle_closer
+    :members:
+    :undoc-members:
+    :show-inheritance:

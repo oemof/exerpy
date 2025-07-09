@@ -274,10 +274,10 @@ def test_fraction_conversion_invalid_substance():
     - Proper error messages
     """
     with pytest.raises(ValueError):
-        mass_to_molar_fractions({'InvalidSubstance': 1.0})
+        mass_to_molar_fractions({'InvalidSubstance1': 0.5, 'InvaludeSubstance2': 0.5})
 
     with pytest.raises(ValueError):
-        molar_to_mass_fractions({'InvalidSubstance': 1.0})
+        molar_to_mass_fractions({'InvalidSubstance1': 0.5, 'InvaludeSubstance2': 0.5})
 
 # Chemical Exergy Tests
 def test_calc_chemical_exergy_basic(basic_stream_data):
@@ -329,7 +329,7 @@ def test_calc_chemical_exergy_invalid_substance():
     """
     Test error handling for invalid substance in chemical exergy calculation.
     """
-    stream_data = {'mass_composition': {'InvalidSubstance': 1.0}}
+    stream_data = {'mass_composition': {'InvalidSubstance': 0.5, 'AnotherInvalid': 0.5}}
     with pytest.raises(ValueError, match="No valid molar masses were retrieved"):
         calc_chemical_exergy(stream_data, 298.15, 1.01325, 'Ahrendts')
 

@@ -5,7 +5,6 @@ from tespy.networks import Network
 from exerpy import ExergyAnalysis, ExergoeconomicAnalysis, EconomicAnalysis
 
 import os
-import logging
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio

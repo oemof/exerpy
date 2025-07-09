@@ -57,7 +57,7 @@ class Valve(Component):
 
         \dot{E}_\mathrm{P} =
         \begin{cases}
-        \mathrm{not defined (nan)}
+        \text{not defined (nan)}
         & T_\mathrm{in}, T_\mathrm{out} > T_0\\
         \dot{m} \cdot e_\mathrm{out}^\mathrm{T}
         & T_\mathrm{in} > T_0 \geq T_\mathrm{out}\\
@@ -81,7 +81,7 @@ class Valve(Component):
 
     .. math::
         \dot{E}_\mathrm{D} = \begin{cases}
-        \dot{E}_\mathrm{F} & \mathrm{if } \dot{E}_\mathrm{P} = \mathrm{nan}\\
+        \dot{E}_\mathrm{F} & \text{if } \dot{E}_\mathrm{P} = \text{nan}\\
         \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P} & \mathrm{otherwise}
         \end{cases}
 

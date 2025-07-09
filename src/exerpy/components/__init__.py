@@ -7,6 +7,7 @@ from .helpers.cycle_closer import CycleCloser
 from .nodes.deaerator import Deaerator
 from .nodes.drum import Drum
 from .nodes.flash_tank import FlashTank
+from .nodes.storage import Storage
 from .nodes.mixer import Mixer
 from .piping.valve import Valve
 from .power_machines.generator import Generator

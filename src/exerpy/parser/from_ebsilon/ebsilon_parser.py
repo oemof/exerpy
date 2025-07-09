@@ -7,9 +7,7 @@ simulate them, extract data about components and connections, and write the data
 import json
 import logging
 import os
-from typing import Any
-from typing import Dict
-from typing import Optional
+from typing import Any, Dict, Optional, List
 
 from exerpy.functions import convert_to_SI
 from exerpy.functions import fluid_property_data
@@ -87,6 +85,8 @@ class EbsilonModelParser:
         self.connections_data: Dict[str, Dict[str, Any]] = {}  # Dictionary to store connection data
         self.Tamb: Optional[float] = None  # Ambient temperature
         self.pamb: Optional[float] = None  # Ambient pressure
+
+        self._storages_to_postprocess: List[Dict[str, Any]] = []
 
     @require_ebsilon
     def initialize_model(self):
@@ -179,6 +179,9 @@ class EbsilonModelParser:
                 # Check if the object is a pipe (epObjectKindPipe = 16)
                 if obj.IsKindOf(16):
                     self.parse_connection(obj)
+
+            # After parsing all components and connections, create storage connections
+            self._create_storage_connections()
 
         except Exception as e:
             logging.error(f"Error while parsing the model: {e}")
@@ -342,6 +345,9 @@ class EbsilonModelParser:
                     else:
                         connection_data['mass_composition'] = {}  # Default if no mapping found
                         logging.warning(f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it.")
+                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['ThermoLiquid']:
+                    # For oil, we assume a default composition
+                    connection_data['mass_composition'] = {'ThermoLiquid': 1}
                 else:
                     connection_data['mass_composition'] = {
                         param.lstrip('X'): getattr(pipe_cast, param).Value
@@ -525,6 +531,81 @@ class EbsilonModelParser:
                 self.pamb = convert_to_SI('p', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
                 logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
+        if type_index == 118:
+            storage = self.oc.CastToComp118(obj)
+            self._storages_to_postprocess.append({
+                'name': storage.Name,
+                'kind': storage.Kind,
+                'm_flow_load': storage.MLD.Value,
+                'm_flow_load_unit': unit_id_to_string.get(storage.MLD.Dimension, 'Unknown'),
+                'm_flow_unload': storage.MUNLD.Value,
+                'm_flow_unload_unit': unit_id_to_string.get(storage.MUNLD.Dimension, 'Unknown'),
+                'T_storage': storage.TNEW.Value,
+                'T_storage_unit': unit_id_to_string.get(storage.TNEW.Dimension, 'Unknown'),
+                'p_storage': storage.PNEW.Value,
+                'p_storage_unit': unit_id_to_string.get(storage.PNEW.Dimension, 'Unknown'),
+                'h_storage': storage.HNEW.Value,
+                'h_storage_unit': unit_id_to_string.get(storage.HNEW.Dimension, 'Unknown'),
+            })
+
+
+    def _create_storage_connections(self):
+        """
+        Create fictive charging/discharging connections for storage components.
+
+        After all real connections are parsed, uses stored storage parameters
+        and existing connections_data to generate and insert material connections.
+
+        Returns
+        -------
+        None
+        """
+        for raw in self._storages_to_postprocess:
+            name = raw['name']
+            m_load = raw['m_flow_load']
+            m_unload = raw['m_flow_unload']
+            sign = 'charging' if m_load >= m_unload else 'discharging'
+            delta_m = abs(m_load - m_unload)
+            prefix = f"{name}_{sign}"
+            new_conn = {
+                'name': prefix,
+                'kind': 'material',
+                'source_component': name if sign == 'charging' else None,
+                'target_component': name if sign == 'discharging' else None,
+                'source_component_type': (raw['kind'] - 10000) if sign == 'charging' else None,
+                'target_component_type': (raw['kind'] - 10000) if sign == 'discharging' else None,
+                'source_connector': None,
+                'target_connector': None,
+                'm': convert_to_SI('m', delta_m, raw['m_flow_load_unit']),
+                'm_unit': fluid_property_data['m']['SI_unit'],
+                'T': convert_to_SI('T', raw['T_storage'], raw['T_storage_unit']),
+                'T_unit': fluid_property_data['T']['SI_unit'],
+                'p': convert_to_SI('p', raw['p_storage'], raw['p_storage_unit']),
+                'p_unit': fluid_property_data['p']['SI_unit'],
+                'h': convert_to_SI('h', raw['h_storage'], raw['h_storage_unit']),
+                'h_unit': fluid_property_data['h']['SI_unit'],
+                's': next(
+                    (c['s'] for c in self.connections_data.values()
+                     if c.get('source_component') == name
+                     and c.get('source_connector') == connector_mapping[118][2]),
+                    None
+                ),
+                's_unit': fluid_property_data['s']['SI_unit'],
+                'e_PH': next(
+                    (c['e_PH'] for c in self.connections_data.values()
+                     if c.get('source_component') == name
+                     and c.get('source_connector') == connector_mapping[118][2]),
+                    None
+                ),
+                'e_PH_unit': fluid_property_data['e']['SI_unit'],
+                'mass_composition': next(
+                    (c['mass_composition'] for c in self.connections_data.values()
+                     if c.get('source_component') == name
+                     and c.get('source_connector') == connector_mapping[118][2]),
+                    None
+                )
+            }
+            self.connections_data[prefix] = new_conn
 
     def get_sorted_data(self) -> Dict[str, Any]:
         """

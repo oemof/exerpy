@@ -7,12 +7,12 @@ from exerpy.components.component import component_registry
 
 
 @component_registry
-class FlashTank(Component):
+class Storage(Component):
     r"""
-    Class for exergy and exergoeconomic analysis of flash tank.
+    Class for exergy and exergoeconomic analysis of a storage.
 
-    This class performs exergy and exergoeconomic analysis calculations for flash tank components,
-    accounting for two inlet and two outlet streams.
+    This class performs exergy and exergoeconomic analysis calculations for storage components,
+    accounting for one inlet and one outlet stream.
 
     Attributes
     ----------
@@ -50,7 +50,7 @@ class FlashTank(Component):
 
     def __init__(self, **kwargs):
         r"""
-        Initialize the flash tank component.
+        Initialize the storage component.
 
         Parameters
         ----------
@@ -64,7 +64,7 @@ class FlashTank(Component):
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        Compute the exergy balance of the flash tank.
+        Compute the exergy balance of the storage.
 
         Parameters
         ----------
@@ -75,46 +75,53 @@ class FlashTank(Component):
         split_physical_exergy : bool
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 
-        Raises
-        ------
-        ValueError
-            If the number of inlet or outlet streams is less than two.
-
         Notes
         -----
-        The definition of exergy fuel and product for this component has not been validated yet. For now, the 
-        exergy fuel is defined as the sum of the inlet streams' exergies, and the exergy product is defined as the
-        sum of the outlet streams' exergies. The exergy destruction is calculated as the difference between the exergy fuel and product. 
-        .. math::
+        The exergy analysis considers the cases where the storage is either charged or discharged.
 
-            \dot{E}_\mathrm{F} = \sum_{i=1}^{n} \dot{E}_i^\mathrm{PH}
+        Case 1 (Charging):
 
         .. math::
 
-            \dot{E}_\mathrm{P} = \sum_{j=1}^{m} \dot{E}_j^\mathrm{PH}
+            \dot{E}_\mathrm{F} = \dot{E}_\mathrm{in}^\mathrm{PH} - \dot{E}_\mathrm{out}^\mathrm{PH}
 
+        .. math::
+            \dot{E}_\mathrm{P} = (\dot{m}_\mathrm{in} - \dot{m}_\mathrm{out}) \cdot e_\mathrm{out}^\mathrm{PH}
+
+            
+        Case 2 (Discharging):
+
+        .. math::
+
+            \dot{E}_\mathrm{F} = (\dot{m}_\mathrm{out} - \dot{m}_\mathrm{in}) \cdot e_\mathrm{out}^\mathrm{PH}
+
+        .. math::
+
+            \dot{E}_\mathrm{P} = \dot{E}_\mathrm{out}^\mathrm{PH} - \dot{E}_\mathrm{in}^\mathrm{PH}
+         
         """
-        # Ensure that the component has at least two outlets and one inlet.
-        if len(self.inl) < 1 or len(self.outl) < 2:
-            raise ValueError("Flash tank requires at least one inlet and two outlets.")
-        
-        if split_physical_exergy:
-            exergy_type = 'e_T'
-        else:
-            exergy_type = 'e_PH'
 
-        # Calculate exergy fuel (E_F) from inlet streams.
-        self.E_F = sum(inlet['m'] * inlet[exergy_type] for inlet in self.inl.values())
-        # Calculate exergy product (E_P) from outlet streams.
-        self.E_P = sum(outlet['m'] * outlet[exergy_type] for outlet in self.outl.values())
+        if self.outl[0]['m'] < self.inl[0]['m']:
+            logging.info(f"Storage '{self.name}' is charged.")
+            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH']
+            self.E_P = (self.inl[0]['m'] - self.outl[0]['m']) * self.outl[0]['e_PH']  # assuming that exergy is stored at the same temperature as the outlet
+            self.E_D = self.E_F - self.E_P
+        elif self.outl[0]['m'] > self.inl[0]['m']:
+            logging.info(f"Storage '{self.name}' is discharged.")
+            self.E_F =  (self.outl[0]['m'] - self.inl[0]['m']) * self.outl[0]['e_PH']  # assuming that exergy is stored at the same temperature as the outlet
+            self.E_P =  self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']  
+            self.E_D = self.E_F - self.E_P
 
-        # Exergy destruction and efficiency.
-        self.E_D = self.E_F - self.E_P
-        self.epsilon = self.calc_epsilon()
+        self.epsilon = self.E_P / self.E_F if self.E_F != 0 else np.nan
 
         # Log the results.
         logging.info(
-            f"FlashTank exergy balance calculated: "
+            f"Storage exergy balance calculated: "
             f"E_F = {self.E_F:.2f} W, E_P = {self.E_P:.2f} W, E_D = {self.E_D:.2f} W, "
-            f"Efficiency = {self.epsilon:.2%}"
         )
+
+    def exergoeconomic_balance(self, T0):
+        r"""
+        This class has not been implemented yet!
+        """
+        pass

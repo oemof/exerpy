@@ -7,7 +7,10 @@ simulate them, extract data about components and connections, and write the data
 import json
 import logging
 import os
-from typing import Any, Dict, Optional, List
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from exerpy.functions import convert_to_SI
 from exerpy.functions import fluid_property_data

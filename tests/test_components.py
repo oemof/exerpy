@@ -15,9 +15,9 @@ from exerpy.components.heat_exchanger.simple import SimpleHeatExchanger
 from exerpy.components.helpers.cycle_closer import CycleCloser
 from exerpy.components.nodes.deaerator import Deaerator
 from exerpy.components.nodes.drum import Drum
+from exerpy.components.nodes.flash_tank import FlashTank
 from exerpy.components.nodes.mixer import Mixer
 from exerpy.components.nodes.storage import Storage
-from exerpy.components.nodes.flash_tank import FlashTank
 from exerpy.components.piping.valve import Valve
 from exerpy.components.power_machines.generator import Generator
 from exerpy.components.power_machines.motor import Motor

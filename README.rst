@@ -47,6 +47,45 @@ Quick Start Example
 ===================
 Here's a simple example how to perform an exergy analysis using ExerPy:
 
+Custom json
+-----------
+
+.. code:: python
+
+    from exerpy import ExergyAnalysis
+
+    model_path = 'my_model.json'
+
+    ean = ExergyAnalysis.from_json(model_path, chemExLib='Ahrendts')
+
+    fuel = {"inputs": ['Fuel'], "outputs": []}
+    product = {"inputs": ['Power'], "outputs": []}
+
+    ean.analyse(E_F=fuel, E_P=product)
+    ean.exergy_results()
+
+Exported tespy model
+--------------------
+
+.. code:: python
+
+    from exerpy import ExergyAnalysis
+
+    model_path = 'tespy_model_export.json'
+
+    ean = ExergyAnalysis.from_tespy(model_path, chemExLib='Ahrendts')
+
+    fuel = {"inputs": ['Fuel'], "outputs": []}
+    product = {"inputs": ['Power'], "outputs": []}
+
+    ean.analyse(E_F=fuel, E_P=product)
+    ean.exergy_results()
+
+You can also use a tespy network object instead!
+
+Ebsilon model
+-------------
+
 .. code:: python
 
     from exerpy import ExergyAnalysis

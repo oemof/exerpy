@@ -4,9 +4,13 @@
 Custom JSON Example
 *******************
 
-ExerPy can analyze data from simulation software that isn't directly supported (like Ebsilon Professional, Aspen Plus, or TESPy). This guide explains how to structure your data in a JSON file and use ExerPy's API to perform exergy analysis with external simulation data.
+ExerPy can analyze data from simulation software that isn't directly supported
+(like Ebsilon Professional, Aspen Plus, or TESPy). This guide explains how to
+structure your data in a JSON file and use ExerPy's API to perform exergy
+analysis with external simulation data.
 
-ExerPy requires specific data formatting in a JSON file. This is the required format:
+ExerPy requires specific data formatting in a JSON file. This is the required
+format:
 
 .. code-block:: json
 
@@ -20,7 +24,7 @@ ExerPy requires specific data formatting in a JSON file. This is the required fo
                 },
                 "ComponentClass2": {
                     "name": "CompName2",
-                    "parameter1": 100000,   
+                    "parameter1": 100000,
                     "parameter2": 0.98,
                 }
             },
@@ -84,20 +88,33 @@ ExerPy requires specific data formatting in a JSON file. This is the required fo
 
 Please ensure the following things:
 
-- The components should be grouped by their class (e.g., CombustionChamber, Compressor, Turbine, etc.)
-- Each component and each connection should have a unique name. 
-- The connections must specify the source and target components and their respective connectors. Visit the dedicated `ExerPy documentation <file:///Z:/Desktop/exerpy/docs/_build/api/components.html>`_ for more details on the connectors of each component.
-- If you want to split the physical exergy into thermal and mechanical parts, set :code:`"split_physical_exergy": true` in the Python code and make sure that the connections contain the :code:`e_M` and :code:`e_T` parameters. These values are not calculated by ExerPy, but must be provided in the JSON file!
-- If you want to use the chemical exergy library of Ahrendts, set :code:`"chemExLib": "Ahrendts"` in the Python code.
-- Ambient conditions (:code:`Tamb` and :code:`pamb`) must be provided in the JSON file.
-- The units for all parameters should be SI units (K, bar, kg/s, kW) for consistency.
+- The components should be grouped by their class (e.g., CombustionChamber,
+  Compressor, Turbine, etc.)
+- Each component and each connection should have a unique name.
+- The connections must specify the source and target components and their
+  respective connectors. Visit the dedicated
+  `ExerPy documentation <https://exerpy.readthedocs.io/en/latest/api/components.html>`__
+  for more details on the connectors of each component.
+- If you want to split the physical exergy into thermal and mechanical parts,
+  set :code:`"split_physical_exergy": true` in the Python code and make sure
+  that the connections contain the :code:`e_M` and :code:`e_T` parameters.
+  These values are not calculated by ExerPy, but must be provided in the JSON
+  file!
+- If you want to use the chemical exergy library of Ahrendts, set
+  :code:`"chemExLib": "Ahrendts"` in the Python code.
+- Ambient conditions (:code:`Tamb` and :code:`pamb`) must be provided in the
+  JSON file.
+- The units for all parameters should be SI units (K, bar, kg/s, kW) for
+  consistency.
 
 
 
 Example
 =======
 
-This is an example of how to perform an exergy analysis using ExerPy with a custom JSON file. The example is based on a simple gas turbine cycle with a combustion chamber, compressor, and generator.
+This is an example of how to perform an exergy analysis using ExerPy with a
+custom JSON file. The example is based on a simple gas turbine cycle with a
+combustion chamber, compressor, and generator.
 
 JSON file:
 

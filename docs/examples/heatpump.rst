@@ -165,31 +165,6 @@ The import of the exerpy dependency is the same for all simulators:
         loss of the system (:code:`E_L`), and the change of exergy from the
         liquid water to steam is considered the exergy product (:code:`E_P`).
 
-        For the fuel exergy (:code:`E_F`) the same structure applies as in the
-        other two examples, when implementing the tespy model:
-
-        a. Add components that generate or consume power or heat, which is
-           transferred over the system boundaries and therefore required for
-           the analysis to a :code:`Bus`. The :code:`base` keyword should be
-
-           - :code:`"bus"`, in case the component gains energy and
-           - :code:`"component"` in case it produces energy.
-
-        b. Then, you can use the following label:
-
-          - :code:`generator_of_<COMPONENT-LABEL>__<BUS-LABEL>` for the output
-            from a component to outside the system factoring in the specified
-            bus efficiency, and
-          - :code:`<BUS-LABEL>__motor_of_<COMPONENT-LABEL>` for the input from
-            outside of the system to a component inside also factoring in the
-            specified bus efficiency.
-
-        .. attention::
-
-            This is a drop-in adjustment of the tespy export structure to make
-            tespy compatible to the exerpy API. Expect, that the API will be
-            more SIMPLE in a future release of tespy.
-
         .. literalinclude:: /../examples/heatpump/hp_tespy.py
             :language: python
             :start-after: [exergy_analysis_setup]

@@ -171,31 +171,9 @@ The import of the exerpy dependency is the same for all simulators:
         inputs to the combustion process. The exhaust stream (:code:`7`)
         represents the exergy losses of the system (:code:`E_L`). The product
         exergy (:code:`E_P`) is the power output of the turbine minus the power
-        requirement of the compressor. As these are non-fluid streams of energy
-        the definition differes from the simple definition of the other two
-        parts in this case:
-
-        a. Add components that generate or consume heat, which is transferred
-           over the system boundaries and therefore required for the analysis
-           to a :code:`Bus`. The :code:`base` keyword should be
-
-           - :code:`"bus"`, in case the component gains energy and
-           - :code:`"component"` in case it produces energy.
-
-        b. Then, you can use the following label:
-
-          - :code:`generator_of_<COMPONENT-LABEL>__<BUS-LABEL>` for the output
-            from a component to outside the system factoring in the specified
-            bus efficiency, and
-          - :code:`<BUS-LABEL>__motor_of_<COMPONENT-LABEL>` for the input from
-            outside of the system to a component inside also factoring in the
-            specified bus efficiency.
-
-        .. attention::
-
-            This is a drop-in adjustment of the tespy export structure to make
-            tespy compatible to the exerpy API. Expect, that the API will be
-            more SIMPLE in a future release of tespy.
+        requirement of the compressor :code:`e3` as well as the difference in
+        total exergy between the flow of water entering the economizer
+        :code:`8`and the saturated steam leaving the drum :code:`9`.
 
         .. literalinclude:: /../examples/cgam/cgam_tespy.py
             :language: python

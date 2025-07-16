@@ -176,32 +176,9 @@ The import of the exerpy dependency is the same for all simulators:
         inputs to the combustion process. The exhaust stream (:code:`8`) and
         the difference between the exergy values of the outlet (:code:`15`) and
         the inlet cooling water stream (:code:`14`) represent the exergy losses
-        of the system (:code:`E_L`).
-
-        The product exergy (:code:`E_P`) is particulary complicated for this
-        model. There are two things you have to do in tespy:
-
-        a. Add components that generate or consume heat, which is transferred
-           over the system boundaries and therefore required for the analysis
-           to a :code:`Bus`. The :code:`base` keyword should be
-
-           - :code:`"bus"`, in case the component gains energy and
-           - :code:`"component"` in case it produces energy.
-
-        b. Then, you can use the following label:
-
-          - :code:`generator_of_<COMPONENT-LABEL>__<BUS-LABEL>` for the output
-            from a component to outside the system factoring in the specified
-            bus efficiency, and
-          - :code:`<BUS-LABEL>__motor_of_<COMPONENT-LABEL>` for the input from
-            outside of the system to a component inside also factoring in the
-            specified bus efficiency.
-
-        .. attention::
-
-            This is a drop-in adjustment of the tespy export structure to make
-            tespy compatible to the exerpy API. Expect, that the API will be
-            more SIMPLE in a future release of tespy.
+        of the system (:code:`E_L`). The product exergy (:code:`E_P`) is the
+        sum of the electrical energy :code:`E_TOT` and the exergy of the heat
+        :code:`H1`.
 
         .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
             :language: python
@@ -222,7 +199,7 @@ The import of the exerpy dependency is the same for all simulators:
         .. note::
             At the moment, it is not possible to split the physical exergy into its mechanical and thermal shares
             when using Aspen Plus. Therefore, the :code:`split_physical_exergy` parameter should be always set to :code:`False`
-            when using the :code:`from_aspen` method.        
+            when using the :code:`from_aspen` method.
 
         .. code-block:: python
 

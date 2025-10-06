@@ -174,12 +174,12 @@ integration into additional workflows.
 
 Validation has been carried out based on three different case studies
 documented in the online documentation of the framework [@exerpy-web].
-The results of the exergy analysis of the CCPP simulated with Aspen Plus® and
-with TESPy show a maximum difference of 1% compared to the simulation results
-from Ebsilon Professional®, validating the accuracy and confirming the
-flexibility of the tool. Additional applications of ExerPy, such as the CGAM
-process [@valero1994cgam] and a heat pump, are also provided in the GitHub
-repository.
+The results of the exergy analysis of a combined cycle power plant simulated
+with Aspen Plus® and with TESPy show a maximum difference of 1% compared to the
+simulation results from Ebsilon Professional®, validating the accuracy and
+confirming the flexibility of the tool. Additional applications and validation
+of ExerPy, e.g. the CGAM process [@valero1994cgam] and a heat pump, are also
+available in the documentation and GitHub repository.
 
 # Acknowledgements
 

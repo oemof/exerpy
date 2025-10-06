@@ -46,13 +46,7 @@ interface. ExerPy automatically identifies system components and defines exergy
 balances at both the component and system levels, thereby streamlining the
 analysis process. It outputs key metrics, such as exergy destruction and
 exergetic efficiency, which are essential for pinpointing sources of
-inefficiency and guiding optimization. The software’s capabilities are
-validated using a combined-cycle power plant, where it effectively identifies
-inefficiencies in key components such as the combustion chamber and gas turbine
-system. By offering detailed insights into the performance of energy systems,
-ExerPy supports both academic research and industrial applications,
-facilitating more sustainable and resource-efficient energy conversion
-processes.
+inefficiency and guiding optimization.
 
 # Statement of need
 
@@ -88,15 +82,13 @@ user-friendly, automated open-source software that enables exergy-based
 analyses and interoperates with both commercial and open-source tools.
 
 To address these needs ExerPy provides a Python-based solution that automates
-exergy analysis of energy-conversion systems modeled in commercial software via
-a JSON data interface. The tool includes an API that automatically connects to
-Aspen Plus®, Ebsilon Professional®, or TESPy, autonomously identifies
-components and assigns exergy balances, enabling the detailed and accurate
-exergy analysis across the entire process. This level of automation not only
-streamlines the workflow, improving efficiency and accuracy, but also
-facilitates the identification of inefficiencies at both the system and
-component levels, thereby supporting the optimization of energy-conversion
-systems from an exergy perspective.
+exergy analysis of energy-conversion systems via a JSON data interface. The
+tool includes an API that automatically connects to Aspen Plus®, Ebsilon
+Professional®, or TESPy, autonomously identifies components and assigns exergy
+balances, enabling the detailed and accurate exergy analysis across the entire
+process. This level of automation streamlines the workflow, improving
+efficiency and accuracy in applying exergy analysis, and therefore supports the
+optimization of energy-conversion systems from an exergy perspective.
 
 # Features
 
@@ -112,25 +104,15 @@ architecture is outlined in the following sections and is shown in
 
 ![Structure of the ExerPy framework.\label{fig:structure}](exerpy_vertical.svg){width="80%"}
 
-### Data processing
+## Data processing
 
-The framework begins with the parsing of simulation data from models created in
+A workflow starts with the parsing of simulation data from models created in
 Ebsilon Professional®, Aspen Plus®, or TESPy, using the respective functions:
 `from_ebsilon`, `from_aspen`, and `from_tespy`. It is important to note that
 the physical exergy, calculated from the entropy and enthalpy of the streams,
-is parsed directly from the simulation tools. In the cases of `from_ebsilon`
-and `from_aspen`, the simulation is run and the necessary data are retrieved
-directly from the respective simulation environments. The integration with
-TESPy is slightly different: the simulation is performed beforehand within
-Python. The resulting TESPy simulation is then passed to ExerPy via the
-`from_tespy` function, which is responsible solely for calculating the exergy
-values. This allows updating the exergy values in case the ambient state is
-changed without rerunning the simulation. Independent of the simulation
+is parsed directly from the simulation tools. Independent of the simulation
 software, users also have the option to supply their own JSON file using
-`from_json`, which must conform to the required format for exergy analysis. In
-all cases, these functions instantiate an object of the `ExergyAnalysis` class,
-which internally calls the `_construct_components` function to build the system
-network.
+`from_json`, which must conform to the required format for exergy analysis.
 
 During the parsing process, connection data such as mass flow ($m$),
 temperature ($T$), pressure ($p$), enthalpy ($h$), entropy ($s$), and physical
@@ -145,7 +127,7 @@ and mechanical ($e^\text{M}$) parts. This separation enables a more
 comprehensive analysis of thermodynamic processes, especially for components
 operating below ambient temperature [@morosuk2019splitting]. These values are
 calculated using the native property functions of the simulation tools. In the
-initial release of ExerPy, this separation is not yet available in Aspen Plus
+initial release of ExerPy, this separation is not yet available in Aspen Plus®
 due to limited access to thermodynamic functions, but it is planned for a
 future update.
 
@@ -160,15 +142,12 @@ gas, the chemical exergy is calculated based on the values of individual
 components. This involves using molar fractions and assuming ideal behavior
 when the mixture is gaseous, with adjustments made for mixtures including
 condensable components (e.g., water) to account for both gas and liquid phases.
-The evaluation of chemical exergy is performed only if the user explicitly
-specifies it. However, it is important to note that its use becomes
-indispensable for systems involving chemical reactions or mixing processes,
-where chemical exergy variations are significant. Finally, all parsed and
+Finally, all parsed and
 calculated data are consolidated into a standardized JSON file, independent of
 the simulation tool used, which includes all the necessary information for a
 comprehensive exergy analysis.
 
-### Exergy Analysis
+## Exergy Analysis
 
 The framework performs exergy analysis at both the component and system levels.
 Each component of the system-such as turbines, compressors, and heat
@@ -179,141 +158,28 @@ exergy destruction and exergetic efficiency). Thermal energy losses of
 components are included in their exergy destruction and streams discharged to
 the environment, are considered exergy losses of the overall system. This
 offers coherent calculations of  inefficiencies of each individual component
-and enables targeted optimization. The class-based structure of the tool
-enables the user to define custom component classes specific to their problem.
-The component can then be registered to the ExerPy package using the
-`component_registry` decorator to be included in the automated evaluation. At
+and enables targeted optimization
+
+ At
 the system level, the total exergy balance is determined by evaluating the
 exergy of streams crossing the system boundaries. To perform this analysis, and
 in the current release of the tool, it is necessary for the user to define the
-product, the fuel, and the exergy loss of the overall process. Further
-automation is planned for future versions of the platform. The system-level
+product, the fuel, and the exergy loss of the overall process. The system-level
 exergy analysis yields the overall exergetic efficiency and the total exergy
 destruction of the overall system. Finally, the framework offers the
 possibility to export the results as CSV files for further examination and
 integration into additional workflows.
 
+## Validation
 
-# Use Case and validation
-
-
-![Flow sheet of the combined cycle power plant.\label{fig:ccpp}](combined_cycle_power_plant.svg){width="100%"}
-
-In this study, a combined-cycle power plant (CCPP) is analyzed to demonstrate
-the capabilities of the ExerPy framework for detailed exergy analysis. The
-analyzed CCPP, as illustrated in \autoref{fig:ccpp}, integrates a gas turbine
-system (GT) with a steam cycle to optimize energy conversion efficiency. The
-plant is designed to deliver 300 MW net electrical power, with 248 MW generated
-in the gas turbine, and 100 MW of thermal energy. The gas turbine system
-operates with a turbine inlet pressure of 15 bar and an inlet temperature of
-1150 °C. The heat recovery steam generator (HRSG) generates steam at 50 bar and
-505.6 °C, maintaining a minimum temperature difference of 25 K in the
-superheater. The steam cycle is split into high- and low-pressure stages. The
-high-pressure steam turbine expands the steam down to 15 bar. A portion of the
-expanded steam is extracted and condensed to provide heat, another portion is
-sent to the deaerator, and the rest passes through the low-pressure steam
-turbine. In the low-pressure steam turbine, the steam is further expanded and
-then condensed in the condenser (COND) using cooling water at ambient
-conditions. The electrical efficiency of the system is 48.5%. When coupled with
-the heat extraction process, the overall energetic efficiency of the system is
-64.7%.
-
-The results of the exergy analysis of the CCPP simulated with Ebsilon
-Professional® are shown in \autoref{tab:exergy-analysis}. The exergy
-destruction is calculated for all components of the system based on their
-exergy balance equation. Since the condenser is a dissipative component, its
-exergy product and fuel are not defined.
-
-The combustion chamber (CC) is the component with the most significant exergy
-destruction and has the greatest impact on system performance. Together with
-the expander and the air compressor (COMP), the GT system accounts for
-approximately 88% of the exergy destruction in the overall plant.
-
-: Exergy analysis results for each component of the combined-cycle power plant \label{tab:exergy-analysis}
-
-| Component    | $\dot{E}_\mathrm{F}$ [ MW ] | $\dot{E}_\mathrm{P}$ [ MW ] | $\dot{E}_\mathrm{D}$ [ MW ] | $\varepsilon$ [ % ] | $y$ [ % ] | $y^*$ [ % ] |
-|--------------|-------------------|------------------|------------------|--------------------|-----------|-------------|
-| CC           |         632.23  |         436.46  |         195.77   |          69.04    |   30.52   |     76.98   |
-| COMP         |         241.98  |         231.04  |          10.95   |          95.48    |    1.71   |      4.30   |
-| COND         |            --   |            --   |           3.72   |             --    |    0.36   |      0.92   |
-| DEA          |           8.20  |           6.44  |           1.76   |          78.51    |    0.28   |      0.69   |
-| ECO          |          13.42  |          11.95  |           1.48   |          89.01    |    0.23   |      0.58   |
-| EVA          |          74.13  |          62.48  |          11.65   |          84.29    |    1.82   |      4.58   |
-| GEN1         |         251.83  |         248.05  |           3.78   |          98.50    |    0.59   |      1.49   |
-| GEN2         |          53.25  |          52.45  |           0.80   |          98.50    |    0.13   |      0.31   |
-| GT           |         509.78  |         493.81  |          15.97   |          96.87    |    2.49   |      6.28   |
-| HC           |          39.72  |          39.72  |           0.00   |         100.00    |    0.00   |      0.00   |
-| MIX          |           3.09  |           1.67  |           1.42   |          53.99    |    0.22   |      0.56   |
-| MOT1         |           0.04  |           0.04  |           0.00   |          98.50    |    0.00   |      0.00   |
-| MOT2         |           0.46  |           0.46  |           0.01   |          98.50    |    0.00   |      0.00   |
-| PUMP1        |           0.04  |           0.03  |           0.01   |          81.17    |    0.00   |      0.00   |
-| PUMP2        |           0.46  |           0.40  |           0.06   |          87.30    |    0.01   |      0.02   |
-| SH           |          33.35  |          29.01  |           4.35   |          86.97    |    0.68   |      1.71   |
-| ST1          |          28.46  |          27.47  |           1.00   |          96.50    |    0.16   |      0.39   |
-| ST2          |          28.78  |          25.78  |           3.00   |          89.58    |    0.47   |      1.18   |
-| TOT          |         641.45  |         339.72  |         254.32   |          52.96    |   39.65   |    100.00   |
-
-The following specifications are used in the exergy analysis of the overall plant:
-\begin{align}
-    & \dot{E}_\mathrm{F} = \dot{E}_1 + \dot{E}_3 \\
-    &\dot{E}_\mathrm{P} = \dot{W}_\mathrm{el,net} + \dot{E}_\mathrm{q} \\
-    &\dot{E}_\mathrm{L} = \dot{E}_8 + \dot{E}_{15} - \dot{E}_{14}
-\end{align}
-where, $\dot{W}_\mathrm{el,net}$ is the net electric power and
-$\dot{E}_\mathrm{q}$ is the exergy related to the extracted heat flow rate. The
-value of $\dot{E}_\mathrm{q}$ is determined as the difference between the
-thermal exergy of the inlet and outlet streams. The temperature level at which
-the heat is transferred is not specified since the cold stream is not simulated
-in this example.
-
-The system results in an exergetic efficiency of approximately 53%, which is
-comparable to values reported in the literature
-[@petrakopoulou2012conventional; @ersayin2015performance; @ameri2008exergy].
-The exergy product amounts to around 340 MW, with 300 MW attributed to electric
-power and the remaining 40 MW to thermal energy. The exergy analysis of the
-entire system shows that the exergy of the product is considerably lower than
-the energy of the product due to the low exergy value of the heat output
-(25.0%). This underscores the significance of incorporating exergy calculations
-when assessing and comparing product of different quality.
-
+Validation has been carried out based on three different case studies
+documented in the online documentation of the framework [@exerpy-web].
 The results of the exergy analysis of the CCPP simulated with Aspen Plus® and
 with TESPy show a maximum difference of 1% compared to the simulation results
 from Ebsilon Professional®, validating the accuracy and confirming the
 flexibility of the tool. Additional applications of ExerPy, such as the CGAM
 process [@valero1994cgam] and a heat pump, are also provided in the GitHub
 repository.
-
-# Nomenclature
-| Abbr. | Description | Abbr. | Description |
-|--------|-----------------------------------|--------|-------------------------------------|
-| CC     | Combustion chamber                | CCPP   | Combined cycle power plant          |
-| COMP   | Compressor                        | COND   | Condenser                           |
-| DEA    | Deaerator                         | ECO    | Economizer                          |
-| EVA    | Evaporator                        | GEN    | Generator                           |
-| GT     | Gas turbine expander              | HC     | Heat consumer                       |
-| MIX    | Mixer                             | PUMP   | Pump                                |
-| SH     | Superheater                       | ST     | Steam turbine                       |
-| TESPy  | Tool for energy system simulation in Python |        |                                     |
-
-| Symbol | Meaning             | Symbol | Meaning               |
-|--------|---------------------|--------|-----------------------|
-| 0      | Ambient state       | CH     | Chemical (exergy)     |
-| D      | Destruction         | F      | Fuel                  |
-| i      | Component index     | L      | Loss                  |
-| M      | Mechanical (exergy) | P      | Product               |
-| PH     | Physical (exergy)   | T      | Thermal (exergy)      |
-
-| Symbol       | Meaning                     | Symbol     | Meaning                          |
-|--------------|-----------------------------|------------|----------------------------------|
-| $\dot{E}$    | Exergy rate [MW]            | $h$        | Enthalpy [kJ/kg]                |
-| $m$          | Mass flow rate [kg/s]       | $p$        | Pressure [bar]                  |
-| $s$          | Entropy [kJ/(kg·K)]         | $T$        | Temperature [°C]                |
-| $\dot{W}$    | Power rate [MW]             | $y,\,y^*$  | Exergy yield parameters [%]     |
-
-| Symbol           | Meaning                       | Symbol | Meaning                       |
-|------------------|-------------------------------|--------|-------------------------------|
-| $\varepsilon$    | Exergetic efficiency [%]      | $\eta$ | Energetic efficiency [%]      |
-
 
 # Acknowledgements
 

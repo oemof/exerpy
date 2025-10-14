@@ -31,11 +31,11 @@ bibliography: paper.bib
 
 # Summary
 
-ExerPy is an open-source Python framework that automates exergy analysis of thermodynamic systems. It integrates with established simulation envirnoments, such as Aspen Plus®, Ebsilon Professional®, and TESPy, via a unified JSON interface. ExerPy automatically identifies components and defines component- and system-level exergy balances. It also outputs metrics, such as exergy destruction and exergetic efficiency. By handling both physical and chemical exergy and reducing the need for manual calculations, ExerPy enables consistent second-law assessments for a wide range of systems, from simple cycles to complex plants. ExerPy facilitates the integration of analysis across tools and enables the subsequent processing of data through the use of standardized outputs.
+ExerPy is an open-source Python framework that automates exergy analysis of thermodynamic systems. It integrates with established simulation environments, such as Aspen Plus®, Ebsilon Professional®, and TESPy, via a unified JSON interface. ExerPy automatically identifies components and defines component- and system-level exergy balances. It also outputs metrics, such as exergy destruction and exergetic efficiency. By handling both physical and chemical exergy and reducing the need for manual calculations, ExerPy enables consistent second-law assessments for a wide range of systems, from simple cycles to complex plants. ExerPy facilitates the integration of analysis across tools and enables the subsequent processing of data through the use of standardized outputs.
 
 # Statement of need
 
-Exergy analysis is an effective tool for assessing the quality of energy and the capacity to generate work. It facilitates the identification of thermodynamic irreversibilities within a system, thereby offering a more comprehensive understanding of the energy conversion process. The quantification of exergy destruction enables researchers and engineers to develop strategies aimed at enhancing efficiency, reducing costs, and promoting sustainable conversion technologies [@Tsatsaronis_1993; @Meyer_2008; @petrakopoulou2017improving].
+Exergy analysis is an effective tool for assessing the quality of energy and the capability to generate work. It facilitates the identification of thermodynamic irreversibilities within a system, thereby offering a more comprehensive understanding of the energy conversion process. The quantification of exergy destruction enables researchers and engineers to develop strategies aimed at enhancing efficiency, reducing costs, and promoting sustainable conversion technologies [@Tsatsaronis_1993; @Meyer_2008; @petrakopoulou2017improving].
 
 Despite its advantages, exergy analysis is not yet widely integrated into most
 commercial software used for thermodynamic assessments, which focus on energy
@@ -92,7 +92,7 @@ initial release of ExerPy, this separation is not yet available in Aspen Plus®
 due to limited access to thermodynamic functions, but it is planned for a
 future update.
 
-After the data parsing is complete, chemical exergyis calculated from stream composition following TESPy’s approach [@Hofmann2022] and the reference environment developed by Ahrendts [@Ahrendts_1977]. For pure substances, values come from tabulated data in the selected thermodynamic model. For mixtures (e.g., air, flue gas), ExerPy computes specific chemical exergy from constituent molar fractions using standard assumptions (ideal behavior for gas mixtures, with adjustments for condensables such as water). Finally, all parsed and calculated data are consolidated into a standardized JSON file, independent of the simulation tool used, which includes all the necessary information for a comprehensive exergy analysis.
+After the data parsing is complete, chemical exergy is calculated from stream composition following TESPy’s approach [@Hofmann2022] and the reference environment developed by Ahrendts [@Ahrendts_1977]. For pure substances, values come from tabulated data in the selected thermodynamic model. For mixtures (e.g., air, flue gas), ExerPy computes specific chemical exergy from constituent molar fractions using standard assumptions (ideal behavior for gas mixtures, with adjustments for condensables such as water). Finally, all parsed and calculated data are consolidated into a standardized JSON file, independent of the simulation tool used, which includes all the necessary information for a comprehensive exergy analysis.
 
 ## Exergy Analysis
 
@@ -103,7 +103,7 @@ exergy of the fuel and exergy of the product of the component. Using these
 definitions, ExerPy calculates relevant metrics for each component (i.e., the
 exergy destruction and exergetic efficiency). Thermal energy losses of components are included in their exergy destruction, and streams discharged to the environment are considered exergy losses of the overall system. This
 offers coherent calculations of  inefficiencies of each individual component
-and enables targeted optimization
+and enables targeted optimization.
 
 At the system level, the total exergy balance is determined by evaluating the
 exergy of streams crossing the system boundaries. To perform this analysis, and

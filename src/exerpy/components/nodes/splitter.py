@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -12,7 +11,7 @@ class Splitter(Component):
     Class for exergy analysis of splitters.
 
     This class performs exergy analysis calculations for splitters with one
-    inlet stream and multiple outlet stream. For this component, it is not 
+    inlet stream and multiple outlet stream. For this component, it is not
     reasonable to define exergy fuel and product in the same way as for other components,
     since the splitter does not convert energy from one form to another.
 
@@ -61,20 +60,19 @@ class Splitter(Component):
             raise ValueError("Splitter requires at least one inlet and two outlets.")
         outlet_list = list(self.outl.values())
         inlet_list = list(self.inl.values())
-        E_in = sum(inlet.get('m', 0) * inlet.get('e_PH') for inlet in inlet_list) 
-        E_out = sum(outlet.get('m', 0) * outlet.get('e_PH') for outlet in outlet_list)
+        E_in = sum(inlet.get("m", 0) * inlet.get("e_PH") for inlet in inlet_list)
+        E_out = sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
         self.E_P = np.nan
         self.E_F = np.nan
         self.E_D = E_in - E_out
         self.epsilon = np.nan
-        
+
         # Log the results.
         logging.info(
-            f"Splitter exergy balance calculated: "
+            f"Exergy balance of Splitter {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
-    )
-
+        )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
@@ -118,8 +116,8 @@ class Splitter(Component):
             A[counter, outlet["CostVar_index"]["T"]] = (-1 / outlet["e_T"]) if outlet["e_T"] != 0 else -1
             equations[counter] = {
                 "kind": "aux_equality",
-                "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
-                "property": "c_T"
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_T",
             }
             b[counter] = 0
             counter += 1
@@ -130,8 +128,8 @@ class Splitter(Component):
             A[counter, outlet["CostVar_index"]["M"]] = (-1 / outlet["e_M"]) if outlet["e_M"] != 0 else -1
             equations[counter] = {
                 "kind": "aux_equality",
-                "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
-                "property": "c_M"
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_M",
             }
             b[counter] = 0
             counter += 1
@@ -143,17 +141,17 @@ class Splitter(Component):
                 A[counter, outlet["CostVar_index"]["CH"]] = (-1 / outlet["e_CH"]) if outlet["e_CH"] != 0 else -1
                 equations[counter] = {
                     "kind": "aux_equality",
-                    "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
-                    "property": "c_CH"
+                    "objects": [self.name, inlet["name"], outlet["name"]],
+                    "property": "c_CH",
                 }
                 b[counter] = 0
                 counter += 1
 
         return A, b, counter, equations
-    
+
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
-        """        
-        The exergoeconomic balance for the Splitter component is not neglected, 
+        """
+        The exergoeconomic balance for the Splitter component is not neglected,
         as it does not perform any conversion of energy forms.
         Instead, it is assumed that the specific costs of the inlet and outlet streams are equal.
 
@@ -167,9 +165,9 @@ class Splitter(Component):
         """
 
         self.C_P = np.nan
-        self.C_F = np.nan   
-        self.c_F = np.nan 
-        self.c_P = np.nan 
-        self.C_D = np.nan 
-        self.r = np.nan 
-        self.f = np.nan 
+        self.C_F = np.nan
+        self.c_F = np.nan
+        self.c_P = np.nan
+        self.C_D = np.nan
+        self.r = np.nan
+        self.f = np.nan

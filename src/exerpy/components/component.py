@@ -20,7 +20,7 @@ class Component:
     Base class for all ExerPy components.
 
     This class serves as the parent class for all exergy analysis components. It provides
-    the basic structure and methods for exergy analysis calculations including the 
+    the basic structure and methods for exergy analysis calculations including the
     calculation of exergetic efficiency and exergy balance.
 
     Parameters
@@ -41,7 +41,7 @@ class Component:
 
     Notes
     -----
-    The exergetic efficiency is calculated as the ratio of exergy product to 
+    The exergetic efficiency is calculated as the ratio of exergy product to
     exergy fuel:
 
     .. math::
@@ -84,14 +84,14 @@ class Component:
         r"""
         Calculate the exergetic efficiency of the component.
 
-        The exergetic efficiency is defined as the ratio of exergy product to 
-        exergy fuel. If the exergy fuel is zero, the function returns NaN to 
+        The exergetic efficiency is defined as the ratio of exergy product to
+        exergy fuel. If the exergy fuel is zero, the function returns NaN to
         avoid division by zero.
 
         Returns
         -------
         float or nan
-            Exergetic efficiency :math:`\varepsilon = \frac{\dot{E}_\mathrm{P}}{\dot{E}_\mathrm{F}}` 
+            Exergetic efficiency :math:`\varepsilon = \frac{\dot{E}_\mathrm{P}}{\dot{E}_\mathrm{F}}`
             or NaN if :math:`\dot{E}_\mathrm{F} = 0`.
 
         Notes
@@ -106,7 +106,6 @@ class Component:
             return np.nan
         else:
             return self.E_P / self.E_F
-        
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
         r"""
@@ -125,4 +124,3 @@ class Component:
             If True, chemical exergy is considered in the calculations.
         """
         return
-

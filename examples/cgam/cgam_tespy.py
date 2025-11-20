@@ -1,62 +1,66 @@
 from CoolProp.CoolProp import PropsSI as CPSI
-
-from tespy.networks import Network
 from tespy.components import (
-    HeatExchanger, Turbine, Compressor, Drum,
-    DiabaticCombustionChamber, Sink, Source, PowerSink, PowerBus
+    Compressor,
+    DiabaticCombustionChamber,
+    Drum,
+    HeatExchanger,
+    PowerBus,
+    PowerSink,
+    Sink,
+    Source,
+    Turbine,
 )
 from tespy.connections import Connection, PowerConnection
-from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
+from tespy.networks import Network
 
+from exerpy import ExergyAnalysis
 
-nwk = Network(p_unit='bar', T_unit='C')
+nwk = Network(p_unit="bar", T_unit="C")
 
-air_molar = {
-    'O2': 0.2059, 'N2': 0.7748, 'CO2': 0.0003, 'H2O': 0.019, 'CH4': 0
-}
-molar_masses = {key: CPSI('M', key) * 1000 for key in air_molar}
+air_molar = {"O2": 0.2059, "N2": 0.7748, "CO2": 0.0003, "H2O": 0.019, "CH4": 0}
+molar_masses = {key: CPSI("M", key) * 1000 for key in air_molar}
 M_air = sum([air_molar[key] * molar_masses[key] for key in air_molar])
 
 air = {key: value / M_air * molar_masses[key] for key, value in air_molar.items()}
 
-fuel = {f: (0 if f != 'CH4' else 1) for f in air}
+fuel = {f: (0 if f != "CH4" else 1) for f in air}
 
-amb = Source('ambient air')
-ch4 = Source('methane')
-fw = Source('feed water')
+amb = Source("ambient air")
+ch4 = Source("methane")
+fw = Source("feed water")
 
-ch = Sink('chimney')
-ls = Sink('live steam')
+ch = Sink("chimney")
+ls = Sink("live steam")
 
-cmp = Compressor('AC')
-aph = HeatExchanger('APH')
-cb = DiabaticCombustionChamber('CC')
-tur = Turbine('EXP')
+cmp = Compressor("AC")
+aph = HeatExchanger("APH")
+cb = DiabaticCombustionChamber("CC")
+tur = Turbine("EXP")
 
-eva = HeatExchanger('EV')
-eco = HeatExchanger('PH')
-dr = Drum('DRUM')
+eva = HeatExchanger("EV")
+eco = HeatExchanger("PH")
+dr = Drum("DRUM")
 
-c1 = Connection(amb, 'out1', cmp, 'in1', label='1')
-c2 = Connection(cmp, 'out1', aph, 'in2', label='2')
-c3 = Connection(aph, 'out2', cb, 'in1', label='3')
-c10 = Connection(ch4, 'out1', cb, 'in2', label='10')
+c1 = Connection(amb, "out1", cmp, "in1", label="1")
+c2 = Connection(cmp, "out1", aph, "in2", label="2")
+c3 = Connection(aph, "out2", cb, "in1", label="3")
+c10 = Connection(ch4, "out1", cb, "in2", label="10")
 
 nwk.add_conns(c1, c2, c3, c10)
 
-c4 = Connection(cb, 'out1', tur, 'in1', label='4')
-c5 = Connection(tur, 'out1', aph, 'in1', label='5')
-c6 = Connection(aph, 'out1', eva, 'in1', label='6')
-c6p = Connection(eva, 'out1', eco, 'in1', label='6P')
-c7 = Connection(eco, 'out1', ch, 'in1', label='7')
+c4 = Connection(cb, "out1", tur, "in1", label="4")
+c5 = Connection(tur, "out1", aph, "in1", label="5")
+c6 = Connection(aph, "out1", eva, "in1", label="6")
+c6p = Connection(eva, "out1", eco, "in1", label="6P")
+c7 = Connection(eco, "out1", ch, "in1", label="7")
 
 nwk.add_conns(c4, c5, c6, c6p, c7)
 
-c8 = Connection(fw, 'out1', eco, 'in2', label='8')
-c8p = Connection(eco, 'out2', dr, 'in1', label='8P')
-c11 = Connection(dr, 'out1', eva, 'in2', label='11')
-c11p = Connection(eva, 'out2', dr, 'in2', label='11P')
-c9 = Connection(dr, 'out2', ls, 'in1', label='9')
+c8 = Connection(fw, "out1", eco, "in2", label="8")
+c8p = Connection(eco, "out2", dr, "in1", label="8P")
+c11 = Connection(dr, "out1", eva, "in2", label="11")
+c11p = Connection(eva, "out2", dr, "in2", label="11P")
+c9 = Connection(dr, "out2", ls, "in1", label="9")
 
 nwk.add_conns(c8, c8p, c11, c11p, c9)
 
@@ -73,8 +77,8 @@ cmp.set_attr(pr=10, eta_s=0.86)
 cb.set_attr(eta=0.98, pr=0.95)
 tur.set_attr(eta_s=0.86)
 aph.set_attr(pr1=0.97, pr2=0.95)
-eva.set_attr(pr1=0.95 ** 0.5)
-eco.set_attr(pr1=0.95 ** 0.5, pr2=1)
+eva.set_attr(pr1=0.95**0.5)
+eco.set_attr(pr1=0.95**0.5, pr2=1)
 
 shaft = PowerBus("shaft", num_in=1, num_out=2)
 grid = PowerSink("grid")
@@ -87,7 +91,7 @@ nwk.add_conns(e1, e2, e3)
 
 e3.set_attr(E=30e6)
 
-nwk.solve('design')
+nwk.solve("design")
 
 # assert convergence of calculation
 nwk.assert_convergence()
@@ -97,22 +101,13 @@ nwk.print_results()
 p0 = 101300
 T0 = 298.15
 
-ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib='Ahrendts', split_physical_exergy=False)
+ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
 # %%[exergy_analysis_setup]
-fuel = {
-    "inputs": ['1', '10'],
-    "outputs": []
-}
+fuel = {"inputs": ["1", "10"], "outputs": []}
 
-product = {
-    "inputs": ['e3', '9'],
-    "outputs": ['8']
-}
+product = {"inputs": ["e3", "9"], "outputs": ["8"]}
 
-loss = {
-    "inputs": ['7'],
-    "outputs": []
-}
+loss = {"inputs": ["7"], "outputs": []}
 # %%[exergy_analysis_flows]
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

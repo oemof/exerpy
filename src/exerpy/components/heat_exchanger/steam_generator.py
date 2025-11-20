@@ -1,7 +1,6 @@
 import logging
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -76,14 +75,14 @@ class SteamGenerator(Component):
             Arbitrary keyword arguments. Recognized keys:
             - Ex_C_col (dict): custom cost coefficients, default {}
             - Z_costs (float): investment cost rate in currency/h, default 0.0
-        """        
+        """
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Compute the exergy balance of the steam generator.
 
-        The exergy fuel is defined as follows. 
+        The exergy fuel is defined as follows.
 
         If `split_physical_exergy` is `True`:
 
@@ -141,28 +140,35 @@ class SteamGenerator(Component):
             if idx not in self.outl:
                 raise ValueError(f"Missing outlet stream with index {idx}.")
 
-        if split_physical_exergy:
-            exergy_type = 'e_T'
-        else:
-            exergy_type = 'e_PH'
+        exergy_type = "e_T" if split_physical_exergy else "e_PH"
 
         # Calculate exergy fuel
         # High pressure part: Superheated steam outlet (HP) minus Feed water inlet (HP)
-        E_F_HP = self.outl[0]['m'] * self.outl[0][exergy_type] - self.inl[0]['m'] * self.inl[0][exergy_type]
+        E_F_HP = self.outl[0]["m"] * self.outl[0][exergy_type] - self.inl[0]["m"] * self.inl[0][exergy_type]
         # Intermediate pressure part: Superheated steam outlet (IP) minus Steam inlet (IP)
-        E_F_IP = self.outl.get(1, {}).get('m', 0) * self.outl.get(1, {}).get(exergy_type, 0) - self.inl.get(1, {}).get('m', 0) * self.inl.get(1, {}).get(exergy_type, 0)
+        E_F_IP = self.outl.get(1, {}).get("m", 0) * self.outl.get(1, {}).get(exergy_type, 0) - self.inl.get(1, {}).get(
+            "m", 0
+        ) * self.inl.get(1, {}).get(exergy_type, 0)
         # Water injection contributions (assumed to be negative)
-        E_F_w_inj = self.inl.get(2, {}).get('m', 0) * self.inl.get(2, {}).get(exergy_type, 0) + self.inl.get(3, {}).get('m', 0) * self.inl.get(3, {}).get(exergy_type, 0)
+        E_F_w_inj = self.inl.get(2, {}).get("m", 0) * self.inl.get(2, {}).get(exergy_type, 0) + self.inl.get(3, {}).get(
+            "m", 0
+        ) * self.inl.get(3, {}).get(exergy_type, 0)
         self.E_F = E_F_HP + E_F_IP - E_F_w_inj
-        logging.warning(f"Since the temperature level of the heat source of the steam generator is unknown, "
-                        "the exergy fuel of this component is calculated based on the thermal exergy value of the water streams.")
+        logging.warning(
+            "Since the temperature level of the heat source of the steam generator is unknown, "
+            "the exergy fuel of this component is calculated based on the thermal exergy value of the water streams."
+        )
         # Calculate exergy product
         # High pressure part: Superheated steam outlet (HP) minus Feed water inlet (HP)
-        E_P_HP = self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']
+        E_P_HP = self.outl[0]["m"] * self.outl[0]["e_PH"] - self.inl[0]["m"] * self.inl[0]["e_PH"]
         # Intermediate pressure part: Superheated steam outlet (IP) minus Steam inlet (IP)
-        E_P_IP = self.outl.get(1, {}).get('m', 0) * self.outl.get(1, {}).get('e_PH', 0) - self.inl.get(1, {}).get('m', 0) * self.inl.get(1, {}).get('e_PH', 0)
+        E_P_IP = self.outl.get(1, {}).get("m", 0) * self.outl.get(1, {}).get("e_PH", 0) - self.inl.get(1, {}).get(
+            "m", 0
+        ) * self.inl.get(1, {}).get("e_PH", 0)
         # Water injection contributions (assumed to be negative)
-        E_P_w_inj = self.inl.get(2, {}).get('m', 0) * self.inl.get(2, {}).get('e_PH', 0) + self.inl.get(3, {}).get('m', 0) * self.inl.get(3, {}).get('e_PH', 0)
+        E_P_w_inj = self.inl.get(2, {}).get("m", 0) * self.inl.get(2, {}).get("e_PH", 0) + self.inl.get(3, {}).get(
+            "m", 0
+        ) * self.inl.get(3, {}).get("e_PH", 0)
         self.E_P = E_P_HP + E_P_IP - E_P_w_inj
 
         # Calculate exergy destruction and efficiency
@@ -171,11 +177,10 @@ class SteamGenerator(Component):
 
         # Log the results
         logging.info(
-            f"SteamGenerator exergy balance calculated: "
+            f"Exergy balance of SteamGenerator {self.name} calculated: "
             f"E_P = {self.E_P:.2f} W, E_F = {self.E_F:.2f} W, "
             f"E_D = {self.E_D:.2f} W, Efficiency = {self.epsilon:.2%}"
         )
-
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         r"""
@@ -189,22 +194,22 @@ class SteamGenerator(Component):
         )
         """
         Auxiliary equations for the steam generator.
-        
+
         This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
         the following auxiliary cost relations:
-        
+
         (1) c_T(heat_source)/E_F = c_T(HP_outlet)/E_T(HP) + c_T(IP_outlet)/E_T(IP)
             - P-principle: thermal exergy costs from heat source are distributed to steam outlets
-            
+
         (2) 1/E_M_in(HP) * C_M_in(HP) - 1/E_M_out(HP) * C_M_out(HP) = 0
             - F-principle: specific mechanical exergy costs equalized between HP inlet/outlet
-            
+
         (3) 1/E_M_in(IP) * C_M_in(IP) - 1/E_M_out(IP) * C_M_out(IP) = 0
             - F-principle: specific mechanical exergy costs equalized between IP inlet/outlet
-            
+
         (4-5) Chemical exergy cost equations (if enabled) for HP and IP streams
             - F-principle: specific chemical exergy costs equalized between inlets/outlets
-        
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -219,7 +224,7 @@ class SteamGenerator(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
-        
+
         Returns
         -------
         A : numpy.ndarray
@@ -238,21 +243,21 @@ class SteamGenerator(Component):
 
         The exergoeconomic analysis of SteamGenerator is not implemented yet.
         """
-        
+
         logging.error(
             "The exergoeconomic analysis of SteamGenerator is not implemented yet. "
             "This method will be implemented in a future release."
         )
         """
         Perform exergoeconomic balance calculations for the steam generator.
-        
+
         This method calculates various exergoeconomic parameters including:
         - Cost rates of product (C_P) and fuel (C_F)
         - Specific cost of product (c_P) and fuel (c_F)
         - Cost rate of exergy destruction (C_D)
         - Relative cost difference (r)
         - Exergoeconomic factor (f)
-        
+
         Parameters
         ----------
         T0 : float
@@ -266,26 +271,24 @@ class SteamGenerator(Component):
         and mechanical (M) exergy components for the inlet and outlet streams.
         """
         # 1) Product cost rate: HP and IP steam net physical exergy costs, minus injection
-        C_P_hp = (self.outl[0]['m'] * self.outl[0]['C_PH']
-                  - self.inl[0]['m'] * self.inl[0]['C_PH'])
+        C_P_hp = self.outl[0]["m"] * self.outl[0]["C_PH"] - self.inl[0]["m"] * self.inl[0]["C_PH"]
         C_P_ip = 0.0
         if 1 in self.outl and 1 in self.inl:
-            C_P_ip = (self.outl[1]['m'] * self.outl[1]['C_PH']
-                      - self.inl[1]['m'] * self.inl[1]['C_PH'])
+            C_P_ip = self.outl[1]["m"] * self.outl[1]["C_PH"] - self.inl[1]["m"] * self.inl[1]["C_PH"]
         # Subtract water injection costs
         C_P_w = 0.0
         if 3 in self.inl:
-            C_P_w += self.inl[3]['m'] * self.inl[3]['C_PH']
+            C_P_w += self.inl[3]["m"] * self.inl[3]["C_PH"]
         if 4 in self.inl:
-            C_P_w += self.inl[4]['m'] * self.inl[4]['C_PH']
+            C_P_w += self.inl[4]["m"] * self.inl[4]["C_PH"]
         self.C_P = C_P_hp + C_P_ip - C_P_w
 
         # 2) Fuel cost rate: cost of heat exergy stream
-        self.C_F = self.inl[2]['C_T']
+        self.C_F = self.inl[2]["C_T"]
 
         # 3) Specific costs and destruction cost
-        self.c_F = self.C_F / self.E_F if self.E_F != 0 else float('nan')
-        self.c_P = self.C_P / self.E_P if self.E_P != 0 else float('nan')
+        self.c_F = self.C_F / self.E_F if self.E_F != 0 else float("nan")
+        self.c_P = self.C_P / self.E_P if self.E_P != 0 else float("nan")
         self.C_D = self.C_F - self.C_P
-        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F != 0 else float('nan')
-        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else float('nan')
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F != 0 else float("nan")
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else float("nan")

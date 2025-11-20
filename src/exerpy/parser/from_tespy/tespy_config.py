@@ -3,7 +3,6 @@ EXERPY_TESPY_MAPPINGS = {
     "HeatExchanger": "HeatExchanger",
     "MovingBoundaryHeatExchanger": "HeatExchanger",
     "Desuperheater": "HeatExchanger",
-    "MovingBoundaryHeatExchanger": "HeatExchanger",
     "Condenser": "Condenser",
     "SimpleHeatExchanger": "SimpleHeatExchanger",
     "ParabolicTrough": "SimpleHeatExchanger",

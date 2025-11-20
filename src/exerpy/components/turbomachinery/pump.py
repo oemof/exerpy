@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -100,12 +99,19 @@ class Pump(Component):
             Flag indicating whether physical exergy is split into thermal and mechanical components.
 
         """
-        # Get power flow if not already available
-        if self.P is None:
-            self.P = self.outl[0]['m'] * (self.outl[0]['h'] - self.inl[0]['h'])
+        # Get power flow
+        if (
+            1 in self.inl
+            and self.inl[1] is not None
+            and self.inl[1].get("kind") == "power"
+            and "energy_flow" in self.inl[1]
+        ):
+            self.P = self.inl[1]["energy_flow"]
+        else:
+            self.P = self.outl[0]["m"] * (self.outl[0]["h"] - self.inl[0]["h"])
 
         # First, check for the invalid case: outlet temperature smaller than inlet temperature.
-        if self.inl[0]['T'] > self.outl[0]['T']:
+        if self.inl[0]["T"] > self.outl[0]["T"]:
             logging.warning(
                 f"Exergy balance of pump '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
                 f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
@@ -114,39 +120,43 @@ class Pump(Component):
             self.E_F = np.nan
 
         # Case 1: Both temperatures above ambient
-        elif round(self.inl[0]['T'], 5) >= T0 and round(self.outl[0]['T'], 5) > T0:
-            self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+        elif round(self.inl[0]["T"], 5) >= T0 and round(self.outl[0]["T"], 5) > T0:
+            self.E_P = self.outl[0]["m"] * (self.outl[0]["e_PH"] - self.inl[0]["e_PH"])
             self.E_F = abs(self.P)
 
         # Case 2: Inlet below, outlet above ambient
-        elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) > T0:
+        elif round(self.inl[0]["T"], 5) < T0 and round(self.outl[0]["T"], 5) > T0:
             if split_physical_exergy:
-                self.E_P = (self.outl[0]['m'] * self.outl[0]['e_T'] +
-                            self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M']))
-                self.E_F = abs(self.P) + self.inl[0]['m'] * self.inl[0]['e_T']
+                self.E_P = self.outl[0]["m"] * self.outl[0]["e_T"] + self.outl[0]["m"] * (
+                    self.outl[0]["e_M"] - self.inl[0]["e_M"]
+                )
+                self.E_F = abs(self.P) + self.inl[0]["m"] * self.inl[0]["e_T"]
             else:
-                logging.warning("While dealing with pump below ambient, "
-                                "physical exergy should be split into thermal and mechanical components!")
-                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+                logging.warning(
+                    "While dealing with pump below ambient, "
+                    "physical exergy should be split into thermal and mechanical components!"
+                )
+                self.E_P = self.outl[0]["m"] * (self.outl[0]["e_PH"] - self.inl[0]["e_PH"])
                 self.E_F = abs(self.P)
 
         # Case 3: Both temperatures below ambient
-        elif round(self.inl[0]['T'], 5) < T0 and round(self.outl[0]['T'], 5) <= T0:
+        elif round(self.inl[0]["T"], 5) < T0 and round(self.outl[0]["T"], 5) <= T0:
             if split_physical_exergy:
-                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_M'] - self.inl[0]['e_M'])
-                self.E_F = abs(self.P) + self.inl[0]['m'] * (self.inl[0]['e_T'] -
-                                                            self.outl[0]['e_T'])
+                self.E_P = self.outl[0]["m"] * (self.outl[0]["e_M"] - self.inl[0]["e_M"])
+                self.E_F = abs(self.P) + self.inl[0]["m"] * (self.inl[0]["e_T"] - self.outl[0]["e_T"])
             else:
-                logging.warning("While dealing with pump below ambient, "
-                                "physical exergy should be split into thermal and mechanical components!")
-                self.E_P = self.outl[0]['m'] * (self.outl[0]['e_PH'] - self.inl[0]['e_PH'])
+                logging.warning(
+                    "While dealing with pump below ambient, "
+                    "physical exergy should be split into thermal and mechanical components!"
+                )
+                self.E_P = self.outl[0]["m"] * (self.outl[0]["e_PH"] - self.inl[0]["e_PH"])
                 self.E_F = abs(self.P)
 
         # Invalid case: outlet temperature smaller than inlet
         else:
             logging.warning(
-                'Exergy balance of a pump where outlet temperature is smaller '
-                'than inlet temperature is not implemented.'
+                "Exergy balance of a pump where outlet temperature is smaller "
+                "than inlet temperature is not implemented."
             )
             self.E_P = np.nan
             self.E_F = np.nan
@@ -157,37 +167,36 @@ class Pump(Component):
 
         # Log the results
         logging.info(
-            f"Pump exergy balance calculated: "
+            f"Exergy balance of Pump {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
 
-
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the pump.
-        
+
         This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
         the following auxiliary cost relations:
-        
+
         (1) Chemical exergy cost equation (if enabled):
             1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
             - F-principle: specific chemical exergy costs equalized between inlet/outlet
-            
+
         (2) Thermal/Mechanical exergy cost equations (based on temperature conditions):
-            
+
             Case 1 (T_in > T0, T_out > T0):
             1/dET * C_T_out - 1/dET * C_T_in - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
             - P-principle: relates inlet/outlet thermal and mechanical exergy costs
-            
+
             Case 2 (T_in ≤ T0, T_out > T0):
             1/E_T_out * C_T_out - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
             - P-principle: relates outlet thermal and inlet/outlet mechanical exergy costs
-            
+
             Case 3 (T_in ≤ T0, T_out ≤ T0):
             1/E_T_out * C_T_out - 1/E_T_in * C_T_in = 0
             - F-principle: specific thermal exergy costs equalized between inlet/outlet
-        
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -202,7 +211,7 @@ class Pump(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
-        
+
         Returns
         -------
         A : numpy.ndarray
@@ -217,12 +226,16 @@ class Pump(Component):
         # --- Chemical equality equation (row added only if enabled) ---
         if chemical_exergy_enabled:
             # Set the chemical cost equality:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else 1
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
+                (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+            )
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
+                (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else 1
+            )
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_CH"
+                "property": "c_CH",
             }
             chem_row = 1
         else:
@@ -232,7 +245,7 @@ class Pump(Component):
         # Compute differences in thermal and mechanical exergy:
         dET = self.outl[0]["E_T"] - self.inl[0]["E_T"]
         dEM = self.outl[0]["E_M"] - self.inl[0]["E_M"]
-        
+
         # The row for the thermal/mechanical equation:
         row_index = counter + chem_row
         if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
@@ -244,7 +257,7 @@ class Pump(Component):
                 equations[row_index] = {
                     "kind": "aux_p_rule",
                     "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                    "property": "c_T, c_M"
+                    "property": "c_T, c_M",
                 }
             else:
                 logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
@@ -255,7 +268,7 @@ class Pump(Component):
             equations[row_index] = {
                 "kind": "aux_p_rule",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T, c_M"
+                "property": "c_T, c_M",
             }
         else:
             A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
@@ -263,41 +276,130 @@ class Pump(Component):
             equations[row_index] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
-        
+
         # Set the right-hand side entry for the thermal/mechanical row to zero.
         b[row_index] = 0
 
         # Update the counter accordingly.
-        if chemical_exergy_enabled:
-            new_counter = counter + 2
-        else:
-            new_counter = counter + 1
+        new_counter = counter + 2 if chemical_exergy_enabled else counter + 1
 
         return A, b, new_counter, equations
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
-        """
-        Perform exergoeconomic balance calculations for the pump.
-        
-        This method calculates various exergoeconomic parameters including:
-        - Cost rates of product (C_P) and fuel (C_F)
-        - Specific cost of product (c_P) and fuel (c_F)
-        - Cost rate of exergy destruction (C_D)
-        - Relative cost difference (r)
-        - Exergoeconomic factor (f)
-        
+        r"""
+        Perform exergoeconomic cost balance for the pump.
+
+        The general exergoeconomic balance equation is:
+
+        .. math::
+            \dot{C}^{\mathrm{T}}_{\mathrm{in}}
+            + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out}}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
+            + \dot{Z}
+            = 0
+
+        In case the chemical exergy of the streams is known:
+
+        .. math::
+            \dot{C}^{\mathrm{CH}}_{\mathrm{in}} =
+            \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
+
+        This method computes cost rates for product and fuel, and derives
+        exergoeconomic indicators. The pump consumes power (fuel) to increase
+        the exergy of the working fluid (product).
+
+        **Case 1: Both inlet and outlet above ambient temperature**
+
+        Both inlet and outlet satisfy :math:`T \geq T_0`:
+
+        .. math::
+            \dot{C}_{\mathrm{P}}
+            = \dot{C}^{\mathrm{PH}}_{\mathrm{out}}
+            - \dot{C}^{\mathrm{PH}}_{\mathrm{in}}
+
+        .. math::
+            \dot{C}_{\mathrm{F}}
+            = \dot{C}^{\mathrm{TOT}}_{\mathrm{power,in}}
+
+        **Case 2: Inlet at or below and outlet above ambient temperature**
+
+        Inlet satisfies :math:`T \leq T_0` and outlet :math:`T > T_0`:
+
+        .. math::
+            \dot{C}_{\mathrm{P}}
+            = \dot{C}^{\mathrm{T}}_{\mathrm{out}}
+            + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{out}}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{in}}\bigr)
+
+        .. math::
+            \dot{C}_{\mathrm{F}}
+            = \dot{C}^{\mathrm{TOT}}_{\mathrm{power,in}}
+            + \dot{C}^{\mathrm{T}}_{\mathrm{in}}
+
+        **Case 3: Both inlet and outlet at or below ambient temperature**
+
+        Both inlet and outlet satisfy :math:`T \leq T_0`:
+
+        .. math::
+            \dot{C}_{\mathrm{P}}
+            = \dot{C}^{\mathrm{M}}_{\mathrm{out}}
+            - \dot{C}^{\mathrm{M}}_{\mathrm{in}}
+
+        .. math::
+            \dot{C}_{\mathrm{F}}
+            = \dot{C}^{\mathrm{TOT}}_{\mathrm{power,in}}
+            + \bigl(\dot{C}^{\mathrm{T}}_{\mathrm{in}}
+            - \dot{C}^{\mathrm{T}}_{\mathrm{out}}\bigr)
+
+        **Calculated exergoeconomic indicators:**
+
+        .. math::
+            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
+
+        .. math::
+            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
+
+        .. math::
+            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
+
+        .. math::
+            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
+
+        .. math::
+            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
+
         Parameters
         ----------
         T0 : float
-            Ambient temperature
+            Ambient temperature (K).
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
-        Notes
-        -----
-        The exergoeconomic balance considers thermal (T), chemical (CH),
-        and mechanical (M) exergy components for the inlet and outlet streams.
+            Default is False.
+
+        Attributes Set
+        --------------
+        C_P : float
+            Cost rate of product (currency/time).
+        C_F : float
+            Cost rate of fuel (currency/time).
+        c_P : float
+            Specific cost of product (currency/energy).
+        c_F : float
+            Specific cost of fuel (currency/energy).
+        C_D : float
+            Cost rate of exergy destruction (currency/time).
+        r : float
+            Relative cost difference (dimensionless).
+        f : float
+            Exergoeconomic factor (dimensionless).
+
+        Raises
+        ------
+        ValueError
+            If no inlet power stream is found.
         """
         # Retrieve the cost of power from the inlet stream of kind "power"
         power_cost = None

@@ -4,32 +4,21 @@ Ebsilon Model Parser
 This module defines the EbsilonModelParser class, which is used to parse Ebsilon models,
 simulate them, extract data about components and connections, and write the data to a JSON file.
 """
+
 import json
 import logging
 import os
 from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
 
-from exerpy.functions import convert_to_SI
-from exerpy.functions import fluid_property_data
+from exerpy.functions import convert_to_SI, fluid_property_data
 
-from . import __ebsilon_available__
-from . import is_ebsilon_available
-from .utils import EpCalculationResultStatus2Stub
-from .utils import EpFluidTypeStub
-from .utils import EpGasTableStub
-from .utils import EpSteamTableStub
-from .utils import require_ebsilon
+from . import __ebsilon_available__, is_ebsilon_available
+from .ebsilon_functions import calc_eph_from_min
+from .utils import EpCalculationResultStatus2Stub, EpFluidTypeStub, EpGasTableStub, EpSteamTableStub, require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpCalculationResultStatus2
-    from EbsOpen import EpFluidType
-    from EbsOpen import EpGasTable
-    from EbsOpen import EpSteamTable
-    from EbsOpen import EpSubstance
+    from EbsOpen import EpCalculationResultStatus2, EpFluidType, EpGasTable, EpSteamTable
     from win32com.client import Dispatch
 else:
     EpFluidType = EpFluidTypeStub
@@ -37,15 +26,16 @@ else:
     EpGasTable = EpGasTableStub
     EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
 
-from .ebsilon_config import composition_params
-from .ebsilon_config import connection_kinds
-from .ebsilon_config import connector_mapping
-from .ebsilon_config import ebs_objects
-from .ebsilon_config import fluid_type_index
-from .ebsilon_config import grouped_components
-from .ebsilon_config import non_thermodynamic_unit_operators
-from .ebsilon_config import two_phase_fluids_mapping
-from .ebsilon_config import unit_id_to_string
+from .ebsilon_config import (
+    composition_params,
+    connector_mapping,
+    ebs_objects,
+    fluid_type_index,
+    grouped_components,
+    non_thermodynamic_unit_operators,
+    two_phase_fluids_mapping,
+    unit_id_to_string,
+)
 
 # Configure logging to display info-level messages
 logging.basicConfig(level=logging.ERROR)
@@ -55,6 +45,7 @@ class EbsilonModelParser:
     """
     A class to parse Ebsilon models, simulate them, extract data, and write to JSON.
     """
+
     def __init__(self, model_path: str, split_physical_exergy: bool = True):
         """
         Initializes the parser with the given model path.
@@ -84,12 +75,12 @@ class EbsilonModelParser:
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model
         self.oc = None  # ObjectCaster for type casting
-        self.components_data: Dict[str, Dict[str, Dict[str, Any]]] = {}  # Dictionary to store component data
-        self.connections_data: Dict[str, Dict[str, Any]] = {}  # Dictionary to store connection data
-        self.Tamb: Optional[float] = None  # Ambient temperature
-        self.pamb: Optional[float] = None  # Ambient pressure
+        self.components_data: dict[str, dict[str, dict[str, Any]]] = {}  # Dictionary to store component data
+        self.connections_data: dict[str, dict[str, Any]] = {}  # Dictionary to store connection data
+        self.Tamb: float | None = None  # Ambient temperature
+        self.pamb: float | None = None  # Ambient pressure
 
-        self._storages_to_postprocess: List[Dict[str, Any]] = []
+        self._storages_to_postprocess: list[dict[str, Any]] = []
 
     @require_ebsilon
     def initialize_model(self):
@@ -106,21 +97,21 @@ class EbsilonModelParser:
         except Exception as e:
             logging.error(f"Failed to start Ebsilon COM server: {e}")
             raise RuntimeError(f"Could not start Ebsilon COM server: {e}")
-        
+
         # 2) try to open the .ebs model
         try:
             self.model = self.app.Open(self.model_path)
         except Exception as e:
             logging.error(f"Failed to open model file: {e}")
             raise FileNotFoundError(f"File not found at: {self.model_path}") from e
-        
+
         # 3) grab the ObjectCaster
         try:
             self.oc = self.app.ObjectCaster
         except Exception as e:
             logging.error(f"Failed to obtain ObjectCaster: {e}")
             raise RuntimeError(f"Could not get ObjectCaster: {e}")
-        
+
         logging.info(f"Model opened successfully: {self.model_path}")
 
     @require_ebsilon
@@ -190,7 +181,6 @@ class EbsilonModelParser:
             logging.error(f"Error while parsing the model: {e}")
             raise
 
-
     @require_ebsilon
     def parse_connection(self, obj: Any):
         """
@@ -199,8 +189,7 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_functions import calc_eM
-        from .ebsilon_functions import calc_eT
+        from .ebsilon_functions import calc_eM, calc_eT
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
@@ -216,16 +205,16 @@ class EbsilonModelParser:
         # ALL EBSILON CONNECTIONS
         # Initialize connection data with the common fields
         connection_data = {
-            'name': pipe_cast.Name,
-            'kind': "other",  # it will be changed later ("material", "heat", "power") according to the fluid type
-            'source_component': None,
-            'source_component_type': None,
-            'source_connector': None,
-            'target_component': None,
-            'target_component_type': None,
-            'target_connector': None,
-            'fluid_type': fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
-            'fluid_type_id': pipe_cast.FluidType,
+            "name": pipe_cast.Name,
+            "kind": "other",  # it will be changed later ("material", "heat", "power") according to the fluid type
+            "source_component": None,
+            "source_component_type": None,
+            "source_connector": None,
+            "target_component": None,
+            "target_component_type": None,
+            "target_connector": None,
+            "fluid_type": fluid_type_index.get(pipe_cast.FluidType, "Unknown"),
+            "fluid_type_id": pipe_cast.FluidType,
         }
 
         # Check if the connection is is not in non-energetic fluids
@@ -238,168 +227,239 @@ class EbsilonModelParser:
             link1 = pipe_cast.Link(1) if pipe_cast.HasComp(1) else None
 
             # GENERAL INFORMATION
-            connection_data.update({
-                'source_component': comp0.Name if comp0 else None,
-                'source_component_type': (comp0.Kind - 10000) if comp0 else None,
-                'source_connector': link0.Index if link0 else None,
-                'target_component': comp1.Name if comp1 else None,
-                'target_component_type': (comp1.Kind - 10000) if comp1 else None,
-                'target_connector': link1.Index if link1 else None,
-            })
+            connection_data.update(
+                {
+                    "source_component": comp0.Name if comp0 else None,
+                    "source_component_type": (comp0.Kind - 10000) if comp0 else None,
+                    "source_connector": link0.Index if link0 else None,
+                    "target_component": comp1.Name if comp1 else None,
+                    "target_component_type": (comp1.Kind - 10000) if comp1 else None,
+                    "target_connector": link1.Index if link1 else None,
+                }
+            )
 
             # MATERIAL CONNECTIONS
             if (pipe_cast.Kind - 1000) not in non_material_fluids:
-                # Retrieve all data and convert them in SI units
-                connection_data.update({
-                    'kind': 'material',
-                    'm': (
-                        convert_to_SI(
-                            'm',
-                            pipe_cast.M.Value,
-                            unit_id_to_string.get(pipe_cast.M.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'M') and pipe_cast.M.Value is not None else None
-                    ),
-                    'm_unit': fluid_property_data['m']['SI_unit'],
+                # Extract basic thermodynamic properties
+                T_value = (
+                    convert_to_SI("T", pipe_cast.T.Value, unit_id_to_string.get(pipe_cast.T.Dimension, "Unknown"))
+                    if hasattr(pipe_cast, "T") and pipe_cast.T.Value is not None
+                    else None
+                )
 
-                    'T': (
-                        convert_to_SI(
-                            'T',
-                            pipe_cast.T.Value,
-                            unit_id_to_string.get(pipe_cast.T.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'T') and pipe_cast.T.Value is not None else None
-                    ),
-                    'T_unit': fluid_property_data['T']['SI_unit'],
+                p_value = (
+                    convert_to_SI("p", pipe_cast.P.Value, unit_id_to_string.get(pipe_cast.P.Dimension, "Unknown"))
+                    if hasattr(pipe_cast, "P") and pipe_cast.P.Value is not None
+                    else None
+                )
 
-                    'p': (
-                        convert_to_SI(
-                            'p',
-                            pipe_cast.P.Value,
-                            unit_id_to_string.get(pipe_cast.P.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'P') and pipe_cast.P.Value is not None else None
-                    ),
-                    'p_unit': fluid_property_data['p']['SI_unit'],
+                e_PH_value = (
+                    convert_to_SI("e", pipe_cast.E.Value, unit_id_to_string.get(pipe_cast.E.Dimension, "Unknown"))
+                    if hasattr(pipe_cast, "E") and pipe_cast.E.Value is not None
+                    else None
+                )
 
-                    'h': (
-                        convert_to_SI(
-                            'h',
-                            pipe_cast.H.Value,
-                            unit_id_to_string.get(pipe_cast.H.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'H') and pipe_cast.H.Value is not None else None
-                    ),
-                    'h_unit': fluid_property_data['h']['SI_unit'],
+                # If e_PH is not available from Ebsilon, calculate using min-based formula
+                if (
+                    e_PH_value is None
+                    and T_value is not None
+                    and p_value is not None
+                    and (
+                        hasattr(pipe_cast, "H")
+                        and pipe_cast.H.Value is not None
+                        and hasattr(pipe_cast, "S")
+                        and pipe_cast.S.Value is not None
+                    )
+                ):
+                    try:
+                        e_PH_value = calc_eph_from_min(pipe_cast, self.Tamb)
+                        if e_PH_value is not None:
+                            logging.info(
+                                f"Physical exergy calculated using min-based formula for {pipe_cast.Name}: "
+                                f"{e_PH_value:.2f} J/kg"
+                            )
+                    except ValueError as ve:
+                        logging.error(f"Failed to calculate e_PH from min for {pipe_cast.Name}: {ve}")
+                        e_PH_value = None
 
-                    's': (
-                        convert_to_SI(
-                            's',
-                            pipe_cast.S.Value,
-                            unit_id_to_string.get(pipe_cast.S.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'S') and pipe_cast.S.Value is not None else None
-                    ),
-                    's_unit': fluid_property_data['s']['SI_unit'],
-
-                    'e_PH': (
-                        convert_to_SI(
-                            'e',
-                            pipe_cast.E.Value,
-                            unit_id_to_string.get(pipe_cast.E.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'E') and pipe_cast.E.Value is not None else None
-                    ),
-                    'e_PH_unit': fluid_property_data['e']['SI_unit'],
-
-                    'x': (
-                        convert_to_SI(
-                            'x',
-                            pipe_cast.X.Value,
-                            unit_id_to_string.get(pipe_cast.X.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'X') and pipe_cast.X.Value is not None else None
-                    ),
-                    'x_unit': fluid_property_data['x']['SI_unit'],
-
-                    'VM': (
-                        convert_to_SI(
-                            'VM',
-                            pipe_cast.VM.Value,
-                            unit_id_to_string.get(pipe_cast.VM.Dimension, "Unknown")
-                        ) if hasattr(pipe_cast, 'VM') and pipe_cast.VM.Value is not None else None
-                    ),
-                    'VM_unit': fluid_property_data['VM']['SI_unit'],
-                })
+                connection_data.update(
+                    {
+                        "kind": "material",
+                        "m": (
+                            convert_to_SI(
+                                "m", pipe_cast.M.Value, unit_id_to_string.get(pipe_cast.M.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "M") and pipe_cast.M.Value is not None
+                            else None
+                        ),
+                        "m_unit": fluid_property_data["m"]["SI_unit"],
+                        "T": T_value,
+                        "T_unit": fluid_property_data["T"]["SI_unit"],
+                        "p": p_value,
+                        "p_unit": fluid_property_data["p"]["SI_unit"],
+                        "h": (
+                            convert_to_SI(
+                                "h", pipe_cast.H.Value, unit_id_to_string.get(pipe_cast.H.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "H") and pipe_cast.H.Value is not None
+                            else None
+                        ),
+                        "h_unit": fluid_property_data["h"]["SI_unit"],
+                        "s": (
+                            convert_to_SI(
+                                "s", pipe_cast.S.Value, unit_id_to_string.get(pipe_cast.S.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "S") and pipe_cast.S.Value is not None
+                            else None
+                        ),
+                        "s_unit": fluid_property_data["s"]["SI_unit"],
+                        "e_PH": e_PH_value,
+                        "e_PH_unit": fluid_property_data["e"]["SI_unit"],
+                        "x": (
+                            convert_to_SI(
+                                "x", pipe_cast.X.Value, unit_id_to_string.get(pipe_cast.X.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "X") and pipe_cast.X.Value is not None
+                            else None
+                        ),
+                        "x_unit": fluid_property_data["x"]["SI_unit"],
+                        "VM": (
+                            convert_to_SI(
+                                "VM", pipe_cast.VM.Value, unit_id_to_string.get(pipe_cast.VM.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "VM") and pipe_cast.VM.Value is not None
+                            else None
+                        ),
+                        "VM_unit": fluid_property_data["VM"]["SI_unit"],
+                    }
+                )
 
                 # Add the mechanical and thermal specific exergies unless the flag is set to False
                 if self.split_physical_exergy:
-                    e_T_value = calc_eT(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
-                    e_M_value = calc_eM(self.app, pipe_cast, connection_data['p'], self.Tamb, self.pamb)
+                    e_T_value = calc_eT(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
+                    e_M_value = calc_eM(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
 
-                    connection_data.update({
-                        'e_T': e_T_value,
-                        'e_T_unit': fluid_property_data['e']['SI_unit'],
-                        'e_M': e_M_value,
-                        'e_M_unit': fluid_property_data['e']['SI_unit']
-                    })
+                    connection_data.update(
+                        {
+                            "e_T": e_T_value,
+                            "e_T_unit": fluid_property_data["e"]["SI_unit"],
+                            "e_M": e_M_value,
+                            "e_M_unit": fluid_property_data["e"]["SI_unit"],
+                        }
+                    )
 
                 # Handle mass composition logic for fluids
-                if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['Steam', 'Water']:
-                    connection_data['mass_composition'] = {'H2O': 1}
-                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['2PhaseLiquid', '2PhaseGaseous']:
+                if fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ["Steam", "Water"]:
+                    connection_data["mass_composition"] = {"H2O": 1}
+                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ["2PhaseLiquid", "2PhaseGaseous"]:
                     # Get the FMED value to determine the substance
-                    fmed_value = pipe_cast.FMED.Value if hasattr(pipe_cast, 'FMED') else None
-                    if fmed_value in two_phase_fluids_mapping.keys():
-                        connection_data['mass_composition'] = two_phase_fluids_mapping[fmed_value]
+                    fmed_value = pipe_cast.FMED.Value if hasattr(pipe_cast, "FMED") else None
+                    if fmed_value in two_phase_fluids_mapping:
+                        connection_data["mass_composition"] = two_phase_fluids_mapping[fmed_value]
                     else:
-                        connection_data['mass_composition'] = {}  # Default if no mapping found
-                        logging.warning(f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it.")
-                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ['ThermoLiquid']:
+                        connection_data["mass_composition"] = {}  # Default if no mapping found
+                        logging.warning(
+                            f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it."
+                        )
+                elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ["ThermoLiquid"]:
                     # For oil, we assume a default composition
-                    connection_data['mass_composition'] = {'ThermoLiquid': 1}
+                    connection_data["mass_composition"] = {"ThermoLiquid": 1}
                 else:
-                    connection_data['mass_composition'] = {
-                        param.lstrip('X'): getattr(pipe_cast, param).Value
+                    connection_data["mass_composition"] = {
+                        param.lstrip("X"): getattr(pipe_cast, param).Value
                         for param in composition_params
                         if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
                     }
 
             # HEAT AND POWER CONNECTIONS from Logic "fluids"
             if (pipe_cast.Kind - 1000) == logic_fluids:
-                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in heat_components) or (comp1 is not None and comp1.Kind is not None and comp1.Kind - 10000 in heat_components):
-                    connection_data.update({
-                        'kind': "heat",
-                        'energy_flow': convert_to_SI('heat', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-                        'energy_flow_unit': fluid_property_data['heat']['SI_unit'],
-                        'E': None,
-                        'E_unit': fluid_property_data['power']['SI_unit'],
-                    })
-                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in power_components):
-                    connection_data.update({
-                        'kind': "power",
-                        'energy_flow': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-                        'energy_flow_unit': fluid_property_data['power']['SI_unit'],
-                        'E': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-                        'E_unit': fluid_property_data['power']['SI_unit'],
-                    })
+                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in heat_components) or (
+                    comp1 is not None and comp1.Kind is not None and comp1.Kind - 10000 in heat_components
+                ):
+                    connection_data.update(
+                        {
+                            "kind": "heat",
+                            "energy_flow": (
+                                convert_to_SI(
+                                    "heat", pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")
+                                )
+                                if hasattr(pipe_cast, "Q") and pipe_cast.Q.Value is not None
+                                else None
+                            ),
+                            "energy_flow_unit": fluid_property_data["heat"]["SI_unit"],
+                            "E": None,
+                            "E_unit": fluid_property_data["power"]["SI_unit"],
+                        }
+                    )
+                if comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in power_components:
+                    connection_data.update(
+                        {
+                            "kind": "power",
+                            "energy_flow": (
+                                convert_to_SI(
+                                    "power", pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")
+                                )
+                                if hasattr(pipe_cast, "Q") and pipe_cast.Q.Value is not None
+                                else None
+                            ),
+                            "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                            "E": (
+                                convert_to_SI(
+                                    "power", pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")
+                                )
+                                if hasattr(pipe_cast, "Q") and pipe_cast.Q.Value is not None
+                                else None
+                            ),
+                            "E_unit": fluid_property_data["power"]["SI_unit"],
+                        }
+                    )
 
             # POWER CONNECTIONS from power "fluids"
             if (pipe_cast.Kind - 1000) in power_fluids:
-                connection_data.update({
-                    'kind': "power",
-                    'energy_flow': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-                    'energy_flow_unit': fluid_property_data['power']['SI_unit'],
-                    'E': convert_to_SI('power', pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")) if hasattr(pipe_cast, 'Q') and pipe_cast.Q.Value is not None else None,
-                    'E_unit': fluid_property_data['power']['SI_unit'],
-                    })
+                connection_data.update(
+                    {
+                        "kind": "power",
+                        "energy_flow": (
+                            convert_to_SI(
+                                "power", pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "Q") and pipe_cast.Q.Value is not None
+                            else None
+                        ),
+                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "E": (
+                            convert_to_SI(
+                                "power", pipe_cast.Q.Value, unit_id_to_string.get(pipe_cast.Q.Dimension, "Unknown")
+                            )
+                            if hasattr(pipe_cast, "Q") and pipe_cast.Q.Value is not None
+                            else None
+                        ),
+                        "E_unit": fluid_property_data["power"]["SI_unit"],
+                    }
+                )
 
             # Convert the connector numbers to selected standard values for each component
-            if connection_data['source_component_type'] in connector_mapping and connection_data['source_connector'] in connector_mapping[connection_data['source_component_type']]:
-                connection_data['source_connector'] = connector_mapping[connection_data['source_component_type']][connection_data['source_connector']]
+            if (
+                connection_data["source_component_type"] in connector_mapping
+                and connection_data["source_connector"] in connector_mapping[connection_data["source_component_type"]]
+            ):
+                connection_data["source_connector"] = connector_mapping[connection_data["source_component_type"]][
+                    connection_data["source_connector"]
+                ]
 
-            if connection_data['target_component_type'] in connector_mapping and connection_data['target_connector'] in connector_mapping[connection_data['target_component_type']]:
-                connection_data['target_connector'] = connector_mapping[connection_data['target_component_type']][connection_data['target_connector']]
+            if (
+                connection_data["target_component_type"] in connector_mapping
+                and connection_data["target_connector"] in connector_mapping[connection_data["target_component_type"]]
+            ):
+                connection_data["target_connector"] = connector_mapping[connection_data["target_component_type"]][
+                    connection_data["target_connector"]
+                ]
 
             # Store the connection data
             self.connections_data[obj.Name] = connection_data
 
         else:
             logging.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
-
 
     @require_ebsilon
     def parse_component(self, obj: Any):
@@ -411,7 +471,7 @@ class EbsilonModelParser:
         """
         # Cast the component to get its type index
         comp_cast = self.oc.CastToComp(obj)
-        type_index = (comp_cast.Kind - 10000)
+        type_index = comp_cast.Kind - 10000
 
         # Dynamically call the specific CastToCompX method based on type_index
         cast_method_name = f"CastToComp{type_index}"
@@ -431,79 +491,62 @@ class EbsilonModelParser:
         if type_index not in non_thermodynamic_unit_operators:
             # Collect component data
             component_data = {
-                'name': comp_cast.Name,
-                'type': type_name,
-                'type_index': type_index,
-                'eta_s': (
-                    comp_cast.ETAIN.Value
-                    if hasattr(comp_cast, 'ETAIN') and comp_cast.ETAIN.Value is not None else None
+                "name": comp_cast.Name,
+                "type": type_name,
+                "type_index": type_index,
+                "eta_s": (
+                    comp_cast.ETAIN.Value if hasattr(comp_cast, "ETAIN") and comp_cast.ETAIN.Value is not None else None
                 ),
-                'eta_mech': (
-                    comp_cast.ETAMN.Value
-                    if hasattr(comp_cast, 'ETAMN') and comp_cast.ETAMN.Value is not None else None
+                "eta_mech": (
+                    comp_cast.ETAMN.Value if hasattr(comp_cast, "ETAMN") and comp_cast.ETAMN.Value is not None else None
                 ),
-                'eta_el': (
-                    comp_cast.ETAEN.Value
-                    if hasattr(comp_cast, 'ETAEN') and comp_cast.ETAEN.Value is not None else None
+                "eta_el": (
+                    comp_cast.ETAEN.Value if hasattr(comp_cast, "ETAEN") and comp_cast.ETAEN.Value is not None else None
                 ),
-                'eta_cc': (
-                    comp_cast.ETAB.Value
-                    if hasattr(comp_cast, 'ETAB') and comp_cast.ETAB.Value is not None else None
+                "eta_cc": (
+                    comp_cast.ETAB.Value if hasattr(comp_cast, "ETAB") and comp_cast.ETAB.Value is not None else None
                 ),
-                'lamb': (
-                    comp_cast.ALAMN.Value
-                    if hasattr(comp_cast, 'ALAMN') and comp_cast.ALAMN.Value is not None else None
+                "lamb": (
+                    comp_cast.ALAMN.Value if hasattr(comp_cast, "ALAMN") and comp_cast.ALAMN.Value is not None else None
                 ),
-                'Q': (
+                "Q": (
+                    convert_to_SI("heat", comp_cast.QT.Value, unit_id_to_string.get(comp_cast.QT.Dimension, "Unknown"))
+                    if hasattr(comp_cast, "QT") and comp_cast.QT.Value is not None
+                    else None
+                ),
+                "Q_unit": fluid_property_data["heat"]["SI_unit"],
+                "P": (
                     convert_to_SI(
-                        'heat',
-                        comp_cast.QT.Value,
-                        unit_id_to_string.get(comp_cast.QT.Dimension, "Unknown")
-                    ) if hasattr(comp_cast, 'QT') and comp_cast.QT.Value is not None else None
+                        "power", comp_cast.QSHAFT.Value, unit_id_to_string.get(comp_cast.QSHAFT.Dimension, "Unknown")
+                    )
+                    if hasattr(comp_cast, "QSHAFT") and comp_cast.QSHAFT.Value is not None
+                    else None
                 ),
-                'Q_unit': fluid_property_data['heat']['SI_unit'],
-                'P': (
+                "P_unit": fluid_property_data["power"]["SI_unit"],
+                "kA": (comp_cast.KA.Value if hasattr(comp_cast, "KA") and comp_cast.KA.Value is not None else None),
+                "kA_unit": fluid_property_data["kA"]["SI_unit"],
+                "A": (comp_cast.A.Value if hasattr(comp_cast, "A") and comp_cast.A.Value is not None else None),
+                "A_unit": fluid_property_data["A"]["SI_unit"],
+                "mass_flow_1": (
+                    convert_to_SI("m", comp_cast.M1N.Value, unit_id_to_string.get(comp_cast.M1N.Dimension, "Unknown"))
+                    if hasattr(comp_cast, "M1N") and comp_cast.M1N.Value is not None
+                    else None
+                ),
+                "mass_flow_1_unit": fluid_property_data["m"]["SI_unit"],
+                "mass_flow_3": (
+                    convert_to_SI("m", comp_cast.M3N.Value, unit_id_to_string.get(comp_cast.M3N.Dimension, "Unknown"))
+                    if hasattr(comp_cast, "M3N") and comp_cast.M3N.Value is not None
+                    else None
+                ),
+                "mass_flow_3_unit": fluid_property_data["m"]["SI_unit"],
+                "energy_flow_1": (
                     convert_to_SI(
-                        'power',
-                        comp_cast.QSHAFT.Value,
-                        unit_id_to_string.get(comp_cast.QSHAFT.Dimension, "Unknown")
-                    ) if hasattr(comp_cast, 'QSHAFT') and comp_cast.QSHAFT.Value is not None else None
+                        "heat", comp_cast.Q1N.Value, unit_id_to_string.get(comp_cast.Q1N.Dimension, "Unknown")
+                    )
+                    if hasattr(comp_cast, "Q1N") and comp_cast.Q1N.Value is not None
+                    else None
                 ),
-                'P_unit': fluid_property_data['power']['SI_unit'],
-                'kA': (
-                    comp_cast.KA.Value
-                    if hasattr(comp_cast, 'KA') and comp_cast.KA.Value is not None else None
-                ),
-                'kA_unit': fluid_property_data['kA']['SI_unit'],
-                'A': (
-                    comp_cast.A.Value
-                    if hasattr(comp_cast, 'A') and comp_cast.A.Value is not None else None
-                ),
-                'A_unit': fluid_property_data['A']['SI_unit'],
-                'mass_flow_1': (
-                    convert_to_SI(
-                        'm',
-                        comp_cast.M1N.Value,
-                        unit_id_to_string.get(comp_cast.M1N.Dimension, "Unknown")
-                    ) if hasattr(comp_cast, 'M1N') and comp_cast.M1N.Value is not None else None
-                ),
-                'mass_flow_1_unit': fluid_property_data['m']['SI_unit'],
-                'mass_flow_3': (
-                    convert_to_SI(
-                        'm',
-                        comp_cast.M3N.Value,
-                        unit_id_to_string.get(comp_cast.M3N.Dimension, "Unknown")
-                    ) if hasattr(comp_cast, 'M3N') and comp_cast.M3N.Value is not None else None
-                ),
-                'mass_flow_3_unit': fluid_property_data['m']['SI_unit'],
-                'energy_flow_1': (
-                    convert_to_SI(
-                        'heat',
-                        comp_cast.Q1N.Value,
-                        unit_id_to_string.get(comp_cast.Q1N.Dimension, "Unknown")
-                    ) if hasattr(comp_cast, 'Q1N') and comp_cast.Q1N.Value is not None else None
-                ),
-                'energy_flow_1_unit': fluid_property_data['heat']['SI_unit'],
+                "energy_flow_1_unit": fluid_property_data["heat"]["SI_unit"],
             }
 
             # Determine the group for the component based on its type
@@ -528,29 +571,34 @@ class EbsilonModelParser:
         elif type_index == 46:
             comp46 = self.oc.CastToComp46(obj)
             if comp46.FTYP.Value == 26:
-                self.Tamb = convert_to_SI('T', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
+                self.Tamb = convert_to_SI(
+                    "T", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
+                )
                 logging.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
             elif comp46.FTYP.Value == 13:
-                self.pamb = convert_to_SI('p', comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
+                self.pamb = convert_to_SI(
+                    "p", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
+                )
                 logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
         if type_index == 118:
             storage = self.oc.CastToComp118(obj)
-            self._storages_to_postprocess.append({
-                'name': storage.Name,
-                'kind': storage.Kind,
-                'm_flow_load': storage.MLD.Value,
-                'm_flow_load_unit': unit_id_to_string.get(storage.MLD.Dimension, 'Unknown'),
-                'm_flow_unload': storage.MUNLD.Value,
-                'm_flow_unload_unit': unit_id_to_string.get(storage.MUNLD.Dimension, 'Unknown'),
-                'T_storage': storage.TNEW.Value,
-                'T_storage_unit': unit_id_to_string.get(storage.TNEW.Dimension, 'Unknown'),
-                'p_storage': storage.PNEW.Value,
-                'p_storage_unit': unit_id_to_string.get(storage.PNEW.Dimension, 'Unknown'),
-                'h_storage': storage.HNEW.Value,
-                'h_storage_unit': unit_id_to_string.get(storage.HNEW.Dimension, 'Unknown'),
-            })
-
+            self._storages_to_postprocess.append(
+                {
+                    "name": storage.Name,
+                    "kind": storage.Kind,
+                    "m_flow_load": storage.MLD.Value,
+                    "m_flow_load_unit": unit_id_to_string.get(storage.MLD.Dimension, "Unknown"),
+                    "m_flow_unload": storage.MUNLD.Value,
+                    "m_flow_unload_unit": unit_id_to_string.get(storage.MUNLD.Dimension, "Unknown"),
+                    "T_storage": storage.TNEW.Value,
+                    "T_storage_unit": unit_id_to_string.get(storage.TNEW.Dimension, "Unknown"),
+                    "p_storage": storage.PNEW.Value,
+                    "p_storage_unit": unit_id_to_string.get(storage.PNEW.Dimension, "Unknown"),
+                    "h_storage": storage.HNEW.Value,
+                    "h_storage_unit": unit_id_to_string.get(storage.HNEW.Dimension, "Unknown"),
+                }
+            )
 
     def _create_storage_connections(self):
         """
@@ -564,53 +612,59 @@ class EbsilonModelParser:
         None
         """
         for raw in self._storages_to_postprocess:
-            name = raw['name']
-            m_load = raw['m_flow_load']
-            m_unload = raw['m_flow_unload']
-            sign = 'charging' if m_load >= m_unload else 'discharging'
+            name = raw["name"]
+            m_load = raw["m_flow_load"]
+            m_unload = raw["m_flow_unload"]
+            sign = "charging" if m_load >= m_unload else "discharging"
             delta_m = abs(m_load - m_unload)
             prefix = f"{name}_{sign}"
             new_conn = {
-                'name': prefix,
-                'kind': 'material',
-                'source_component': name if sign == 'charging' else None,
-                'target_component': name if sign == 'discharging' else None,
-                'source_component_type': (raw['kind'] - 10000) if sign == 'charging' else None,
-                'target_component_type': (raw['kind'] - 10000) if sign == 'discharging' else None,
-                'source_connector': None,
-                'target_connector': None,
-                'm': convert_to_SI('m', delta_m, raw['m_flow_load_unit']),
-                'm_unit': fluid_property_data['m']['SI_unit'],
-                'T': convert_to_SI('T', raw['T_storage'], raw['T_storage_unit']),
-                'T_unit': fluid_property_data['T']['SI_unit'],
-                'p': convert_to_SI('p', raw['p_storage'], raw['p_storage_unit']),
-                'p_unit': fluid_property_data['p']['SI_unit'],
-                'h': convert_to_SI('h', raw['h_storage'], raw['h_storage_unit']),
-                'h_unit': fluid_property_data['h']['SI_unit'],
-                's': next(
-                    (c['s'] for c in self.connections_data.values()
-                     if c.get('source_component') == name
-                     and c.get('source_connector') == connector_mapping[118][2]),
-                    None
+                "name": prefix,
+                "kind": "material",
+                "source_component": name if sign == "charging" else None,
+                "target_component": name if sign == "discharging" else None,
+                "source_component_type": (raw["kind"] - 10000) if sign == "charging" else None,
+                "target_component_type": (raw["kind"] - 10000) if sign == "discharging" else None,
+                "source_connector": None,
+                "target_connector": None,
+                "m": convert_to_SI("m", delta_m, raw["m_flow_load_unit"]),
+                "m_unit": fluid_property_data["m"]["SI_unit"],
+                "T": convert_to_SI("T", raw["T_storage"], raw["T_storage_unit"]),
+                "T_unit": fluid_property_data["T"]["SI_unit"],
+                "p": convert_to_SI("p", raw["p_storage"], raw["p_storage_unit"]),
+                "p_unit": fluid_property_data["p"]["SI_unit"],
+                "h": convert_to_SI("h", raw["h_storage"], raw["h_storage_unit"]),
+                "h_unit": fluid_property_data["h"]["SI_unit"],
+                "s": next(
+                    (
+                        c["s"]
+                        for c in self.connections_data.values()
+                        if c.get("source_component") == name and c.get("source_connector") == connector_mapping[118][2]
+                    ),
+                    None,
                 ),
-                's_unit': fluid_property_data['s']['SI_unit'],
-                'e_PH': next(
-                    (c['e_PH'] for c in self.connections_data.values()
-                     if c.get('source_component') == name
-                     and c.get('source_connector') == connector_mapping[118][2]),
-                    None
+                "s_unit": fluid_property_data["s"]["SI_unit"],
+                "e_PH": next(
+                    (
+                        c["e_PH"]
+                        for c in self.connections_data.values()
+                        if c.get("source_component") == name and c.get("source_connector") == connector_mapping[118][2]
+                    ),
+                    None,
                 ),
-                'e_PH_unit': fluid_property_data['e']['SI_unit'],
-                'mass_composition': next(
-                    (c['mass_composition'] for c in self.connections_data.values()
-                     if c.get('source_component') == name
-                     and c.get('source_connector') == connector_mapping[118][2]),
-                    None
-                )
+                "e_PH_unit": fluid_property_data["e"]["SI_unit"],
+                "mass_composition": next(
+                    (
+                        c["mass_composition"]
+                        for c in self.connections_data.values()
+                        if c.get("source_component") == name and c.get("source_connector") == connector_mapping[118][2]
+                    ),
+                    None,
+                ),
             }
             self.connections_data[prefix] = new_conn
 
-    def get_sorted_data(self) -> Dict[str, Any]:
+    def get_sorted_data(self) -> dict[str, Any]:
         """
         Sorts the component and connection data alphabetically by name.
 
@@ -626,16 +680,15 @@ class EbsilonModelParser:
         sorted_connections = dict(sorted(self.connections_data.items()))
         # Return data including ambient conditions
         return {
-            'components': sorted_components,
-            'connections': sorted_connections,
-            'ambient_conditions': {
-                'Tamb': self.Tamb,
-                'Tamb_unit': fluid_property_data['T']['SI_unit'],
-                'pamb': self.pamb,
-                'pamb_unit': fluid_property_data['p']['SI_unit']
-            }
+            "components": sorted_components,
+            "connections": sorted_connections,
+            "ambient_conditions": {
+                "Tamb": self.Tamb,
+                "Tamb_unit": fluid_property_data["T"]["SI_unit"],
+                "pamb": self.pamb,
+                "pamb_unit": fluid_property_data["p"]["SI_unit"],
+            },
         }
-
 
     def write_to_json(self, output_path: str):
         """
@@ -650,7 +703,7 @@ class EbsilonModelParser:
         data = self.get_sorted_data()
         try:
             # Write the data to a JSON file with indentation for readability
-            with open(output_path, 'w') as json_file:
+            with open(output_path, "w") as json_file:
                 json.dump(data, json_file, indent=4)
             logging.info(f"Data successfully written to {output_path}")
         except Exception as e:
@@ -658,7 +711,7 @@ class EbsilonModelParser:
             raise
 
 
-def run_ebsilon(model_path: str, output_dir: Optional[str] = None, split_physical_exergy: bool = True) -> Dict[str, Any]:
+def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_exergy: bool = True) -> dict[str, Any]:
     """
     Main function to process the Ebsilon model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -700,9 +753,9 @@ def run_ebsilon(model_path: str, output_dir: Optional[str] = None, split_physica
         # Initialize the Ebsilon model within the parser
         parser.initialize_model()
     except FileNotFoundError:
-    # allow an invalid/corrupt‐model file to bubble up as FileNotFoundError
+        # allow an invalid/corrupt‐model file to bubble up as FileNotFoundError
         raise
-    except Exception as e:
+    except Exception:
         # other COM/server errors should still be RuntimeErrors
         error_msg = f"File not found: {model_path}"
         logging.error(error_msg)

@@ -1,29 +1,27 @@
-from tespy.components import Compressor
-from tespy.components import Condenser
-from tespy.components import CycleCloser
-from tespy.components import DiabaticCombustionChamber
-from tespy.components import Drum
-from tespy.components import HeatExchanger
-from tespy.components import Merge
-from tespy.components import Pump
-from tespy.components import Motor
-from tespy.components import Generator
-from tespy.components import PowerSink
-from tespy.components import PowerBus
-from tespy.components import SimpleHeatExchanger
-from tespy.components import Sink
-from tespy.components import Source
-from tespy.components import Splitter
-from tespy.components import Turbine
-from tespy.components import Valve
-from tespy.connections import Bus
-from tespy.connections import Connection
-from tespy.connections import PowerConnection
-from tespy.connections import Ref
+from tespy.components import (
+    Compressor,
+    Condenser,
+    CycleCloser,
+    DiabaticCombustionChamber,
+    Drum,
+    Generator,
+    HeatExchanger,
+    Merge,
+    Motor,
+    PowerBus,
+    PowerSink,
+    Pump,
+    SimpleHeatExchanger,
+    Sink,
+    Source,
+    Splitter,
+    Turbine,
+    Valve,
+)
+from tespy.connections import Connection, PowerConnection, Ref
 from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
-
 
 nw = Network(T_unit="C", p_unit="bar")
 
@@ -93,10 +91,7 @@ c22b = Connection(drum_pump, "out1", evaporator, "in2", label="22b")
 c22c = Connection(evaporator, "out2", drum, "in2", label="22c")
 c23 = Connection(drum, "out2", superheater, "in2", label="23")
 
-nw.add_conns(
-    c9, c0, c101, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21,
-    c22, c22a, c22b, c22c, c23
-)
+nw.add_conns(c9, c0, c101, c10, c10a, c11, c12, c13, c14, c15, c16, c17, c18, c20, c21, c22, c22a, c22b, c22c, c23)
 
 gt_shaft = PowerBus("GT shaft", num_in=1, num_out=2)
 st_shaft = PowerBus("ST shaft", num_in=2, num_out=1)
@@ -139,18 +134,7 @@ fp_motor.set_attr(eta=0.985)
 cp_motor.set_attr(eta=0.985)
 dp_motor.set_attr(eta=0.985)
 
-c1.set_attr(
-    fluid={
-        "AR": 0.01282,
-        "CO2": 0.00040,
-        "H2O": 0.00634,
-        "N2": 0.75051,
-        "O2": 0.22993
-    },
-    m=600,
-    p=1.013,
-    T=15
-)
+c1.set_attr(fluid={"AR": 0.01282, "CO2": 0.00040, "H2O": 0.00634, "N2": 0.75051, "O2": 0.22993}, m=600, p=1.013, T=15)
 c2.set_attr(p=15.51)
 c3.set_attr(fluid={"CH4": 1}, p=Ref(c2, 1, 0), T=15, m=12)
 c4.set_attr(p=15)
@@ -225,24 +209,11 @@ T0 = 288.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
 # %%[exergy_analysis_setup]
-fuel = {
-    "inputs": ['1', '3'],
-    "outputs": []
-}
+fuel = {"inputs": ["1", "3"], "outputs": []}
 
-product = {
-    "inputs": [
-        'e15',
-        'h1'
-    ],
-    "outputs": [
-    ]
-}
+product = {"inputs": ["e15", "h1"], "outputs": []}
 
-loss = {
-    "inputs": ['8', '15'],
-    "outputs": ['14']
-}
+loss = {"inputs": ["8", "15"], "outputs": ["14"]}
 # %%[exergy_analysis_flows]
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

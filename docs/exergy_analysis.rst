@@ -47,6 +47,112 @@ In literature, exergy is defined as follows:
     equilibrium, heat transfer occurring with the environment only."*
     :cite:`Bejan1996`
 
+Physical exergy
+===============
+
+In many energy conversion systems, chemical reactions are absent. In such cases, 
+the consideration of chemical exergy is not necessary. Additionally, when the 
+contributions of potential and kinetic exergy are negligible, the focus is 
+exclusively on physical exergy. The specific physical exergy of stream :math:`i` 
+is defined as :cite:`Bejan1996`:
+
+.. math::
+
+    e^\mathrm{PH}_i = h_i - h_0 - T_0 (s_i - s_0)
+
+where :math:`h_i` and :math:`s_i` are the specific enthalpy and entropy at state 
+:math:`i`, and :math:`h_0` and :math:`s_0` are the specific enthalpy and entropy 
+at the ambient conditions (:math:`T_0`, :math:`p_0`).
+
+.. warning::
+
+    For substances that are not fluid under ambient conditions, the physical 
+    exergy calculation requires a modified approach. In such cases, the specific 
+    physical exergy is calculated as:
+
+    .. math::
+
+        e^\mathrm{PH}_i = h_i - h_\mathrm{min} - T_0 (s_i - s_\mathrm{min})
+
+    where the subscript "min" refers to the modified state at the given pressure 
+    but at the minimum possible temperature at which the substance remains in 
+    its fluid state. For example, for a molten salt consisting of 60% NaNO₃ and 
+    40% KNO₃, the minimum temperature is 200°C.
+
+    This formulation has been validated with Ebsilon Professional only.
+
+Splitting of physical exergy
+=============================
+
+Since some thermal systems include states at ambient temperature, the splitting 
+of physical exergy into thermal and mechanical parts enables a more comprehensive 
+analysis of the system's components :cite:`morosuk2019splitting`. These two parts represent 
+the contribution of the temperature and pressure to the physical exergy. This 
+separation is particularly valuable for defining more meaningful exergetic 
+efficiencies for components operating below ambient temperature and components 
+where distinguishing between thermal and mechanical exergy contributions provides 
+more precise thermodynamic characterization. The separation is given by:
+
+.. math::
+
+    e^\mathrm{PH}_i = e^\mathrm{T}_i + e^\mathrm{M}_i
+
+with the thermal exergy defined as:
+
+.. math::
+
+    e^\mathrm{T}_i = h_i - h_A - T_0 (s_i - s_A)
+
+and the mechanical exergy defined as:
+
+.. math::
+
+    e^\mathrm{M}_i = h_A - h_0 - T_0 (s_A - s_0)
+
+In these expressions, state :math:`A` is at ambient temperature :math:`T_0` and 
+pressure :math:`p_i`.
+
+Component-level exergy balance
+===============================
+
+The exergy analysis at the component-level uses standardized balance equations, 
+following the approach developed by :cite:`Witte2022`. The exergy balance 
+equation of component :math:`k` can be formulated as:
+
+.. math::
+
+    0 = \dot{E}_{\mathrm{F},k} - \dot{E}_{\mathrm{P},k} - \dot{E}_{\mathrm{D},k}
+
+Each component :math:`k` is evaluated by three metrics that quantify its 
+performance and losses: the exergetic efficiency :math:`\varepsilon_k`, the 
+exergy destruction ratio :math:`y_k` measuring the share of the total exergy 
+fuel destroyed by component :math:`k`, and the exergy destruction ratio 
+:math:`y^*_k` measuring the share of the total exergy destruction attributable 
+to component :math:`k`:
+
+.. math::
+
+    \varepsilon_k = \frac{\dot{E}_{\mathrm{P},k}}{\dot{E}_{\mathrm{F},k}}
+
+.. math::
+
+    y_k = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{F,tot}}}
+
+.. math::
+
+    y^*_k = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{D,tot}}}
+
+System-level exergy balance
+============================
+
+At the system level, the overall exergy balance is expressed as:
+
+.. math::
+
+    0 = \dot{E}_{\mathrm{F,tot}} - \dot{E}_{\mathrm{P,tot}} - \dot{E}_{\mathrm{D,tot}} - \dot{E}_{\mathrm{L,tot}}
+
+where the fuel, product, and loss streams of the overall system need to be 
+defined according to the thermodynamic purpose of the system under consideration.
 
 ***********
 Terminology

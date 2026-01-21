@@ -15,7 +15,15 @@ from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
 
-nw = Network(T_unit="C", p_unit="bar", h_unit="kJ / kg", m_unit="kg / s")
+nw = Network()
+nw.units.set_defaults(
+    temperature="degC",
+    pressure="bar",
+    enthalpy="kJ / kg",
+    mass_flow="kg / s",
+    heat="kW",
+    power="kW"
+)
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
@@ -65,7 +73,6 @@ pump.set_attr(eta_s=0.8)
 evaporator.set_attr(dp1=0.03, dp2=0.05)
 condenser.set_attr(dp1=0.05, dp2=0.05)
 
-# condenser.set_attr(ttd_l=5)
 evaporator.set_attr(ttd_u=5)
 
 power_input = PowerSource("grid")

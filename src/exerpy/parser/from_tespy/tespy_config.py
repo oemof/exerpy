@@ -5,6 +5,7 @@ EXERPY_TESPY_MAPPINGS = {
     "Desuperheater": "HeatExchanger",
     "Condenser": "Condenser",
     "SimpleHeatExchanger": "SimpleHeatExchanger",
+    "SectionedHeatExchanger": "HeatExchanger",
     "ParabolicTrough": "SimpleHeatExchanger",
     "Pipe": "SimpleHeatExchanger",
     "SolarCollector": "SimpleHeatExchanger",

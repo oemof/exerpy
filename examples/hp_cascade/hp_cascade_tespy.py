@@ -527,7 +527,7 @@ plt.ylabel(r"$\dot{Z}_{\text{tot}}/E_{P,\text{tot}}$ [€/GJ$_\mathrm{ex}$]")
 plt.title("Normalized investmenet costs and exergy destruction")
 plt.grid(True)
 plt.tight_layout()
-plt.savefig(f"examples/hp_cascade_hp/plots/plot_normalized_scatter_{SENS_VAR_savefig}.png", dpi=300)
+plt.savefig(f"examples/hp_cascade/plots/plot_normalized_scatter_{SENS_VAR_savefig}.png", dpi=300)
 
 
 # 3. Stacked Bar Chart: Z per Component + COP Overlay

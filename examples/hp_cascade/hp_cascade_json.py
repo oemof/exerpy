@@ -59,7 +59,7 @@ def run_exergoeco_analysis(elec_price_cent_kWh, tau):
 
     # Run the exergy analysis.
     ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-    ean.exergy_results(print_results=True)
+    ean.exergy_results(print_results=False)
 
     # ------------------------------
     # PEC Calculation Using Class-Based Correlations with cost correction

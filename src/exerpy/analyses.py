@@ -2,6 +2,7 @@ import json
 import logging
 import os
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
@@ -71,6 +72,10 @@ class ExergyAnalysis:
         Creates an instance from a JSON file containing system data.
     exergy_results(print_results=True)
         Displays and returns tables of exergy analysis results.
+    plot_exergy_waterfall(title=None, figsize=(12, 10), exclude_components=None, show_plot=True)
+        Creates an exergy destruction waterfall diagram visualizing exergy flow through the system.
+    print_exergy_summary()
+        Prints a concise text summary of the exergy analysis results.
     export_to_json(output_path)
         Exports the model and analysis results to a JSON file.
     _serialize()
@@ -562,6 +567,214 @@ class ExergyAnalysis:
             )
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
+
+    def plot_exergy_waterfall(self, title=None, figsize=(12, 10), exclude_components=None, show_plot=True):
+        """
+        Create an exergy destruction waterfall diagram.
+
+        This method visualizes the exergy flow through the system as a waterfall chart,
+        showing how exergy is destroyed in each component from the exergetic fuel (100%)
+        down to the exergetic product and losses.
+
+        Parameters
+        ----------
+        title : str, optional
+            Title for the plot. If None, no title is displayed.
+        figsize : tuple, optional
+            Figure size as (width, height) in inches. Default is (12, 10).
+        exclude_components : list, optional
+            List of component names to exclude from the diagram.
+            By default, all components with NaN E_F (Exergetic Fuel) are excluded,
+            as well as CycleCloser and PowerBus components.
+        show_plot : bool, optional
+            Whether to display the plot immediately. Default is True.
+
+        Returns
+        -------
+        fig : matplotlib.figure.Figure
+            The figure object containing the waterfall diagram.
+        ax : matplotlib.axes.Axes
+            The axes object of the waterfall diagram.
+
+        Raises
+        ------
+        RuntimeError
+            If the exergy analysis has not been performed yet (analyse() not called).
+
+        Notes
+        -----
+        - The waterfall diagram displays exergy values as percentages of the total fuel exergy.
+        - Components are sorted by their exergy destruction rate (y [%]) in descending order.
+        - Each bar represents the remaining exergy after destruction in that component.
+        - Red bars indicate exergy destruction in components.
+        - Blue bar represents the initial exergetic fuel (100%).
+        - Green bar represents the final exergetic product.
+
+        Examples
+        --------
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
+        >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')
+        >>> fig.savefig('exergy_waterfall.pdf')
+
+        See Also
+        --------
+        exergy_results : Display tabular exergy analysis results.
+        print_exergy_summary : Print a text summary of exergy analysis.
+        """
+        # Check if analysis has been performed
+        if not hasattr(self, "epsilon") or self.epsilon is None:
+            raise RuntimeError("Exergy analysis has not been performed yet. Please call analyse() first.")
+
+        # Get component results without printing
+        df_component_results, _, _ = self.exergy_results(print_results=False)
+
+        # Default exclusions: empty list, but filter for valid E_F
+        if exclude_components is None:
+            exclude_components = []
+
+        # Get total values from df_component_results
+        total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
+        epsilon_total = total_row["ε [%]"]
+        E_L_total = total_row["E_L [kW]"]
+        E_F_total = total_row["E_F [kW]"]
+        exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
+
+        # Filter components (exclude TOT, components with NaN E_F, and specified components)
+        component_data = df_component_results[
+            (df_component_results["Component"] != "TOT")
+            & (df_component_results["E_F [kW]"].notna())
+            & (~df_component_results["Component"].isin(exclude_components))
+            & (df_component_results["y [%]"].notna())
+        ].copy()
+
+        # Sort by y [%] in descending order
+        component_data = component_data.sort_values("y [%]", ascending=False)
+
+        # Create bar values: Start at 100%, decrease by each component's y [%]
+        bar_values = [100.0]
+        current_value = 100.0
+        for y in component_data["y [%]"]:
+            current_value -= y
+            bar_values.append(current_value)
+        bar_values.append(epsilon_total)  # Final bar is the exergetic product
+
+        # Create labels for spaces between bars
+        space_labels = ["Exergetic fuel"] + list(component_data["Component"]) + ["Exergetic loss", "Exergetic product"]
+
+        # Create the figure
+        fig, ax = plt.subplots(figsize=figsize)
+
+        # Number of bars and spaces
+        n_bars = len(bar_values)
+
+        # Create horizontal bars at positions 0, 1, 2, ..., n_bars-1
+        bar_positions = np.arange(n_bars)
+        bar_colors = ["#1565C0"] + ["#D32F2F"] * (n_bars - 2) + ["#2E7D32"]
+        # Blue for fuel, red for destruction, green for product
+
+        for i, (pos, value, color) in enumerate(zip(bar_positions, bar_values, bar_colors, strict=False)):
+            ax.barh(pos, value, color=color, alpha=0.8, height=0.6)
+            # Add value label inside the bar on the right
+            ax.text(
+                value - 2, pos, f"{value:.2f}%", va="center", ha="right", fontsize=9, fontweight="bold", color="white"
+            )
+
+        # Add space labels between bars
+        # Space positions: between bars, so at 0.5, 1.5, 2.5, ..., and above/below
+        space_positions = [-0.5] + [i + 0.5 for i in range(n_bars - 1)] + [n_bars - 0.5]
+
+        for i, (space_pos, label) in enumerate(zip(space_positions, space_labels, strict=False)):
+            if i == 0:  # Exergetic fuel - above first bar
+                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
+            elif i == len(space_labels) - 2:  # Exergetic loss
+                loss_label = f"{label} (-{exergetic_loss_percent:.2f}%)"
+                ax.text(
+                    2, space_pos, loss_label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic"
+                )
+            elif i == len(space_labels) - 1:  # Exergetic product - below last bar
+                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
+            else:  # Component labels
+                component_idx = i - 1
+                destruction_rate = component_data.iloc[component_idx]["y [%]"]
+                label_with_rate = f"{label} (-{destruction_rate:.2f}%)"
+                ax.text(2, space_pos, label_with_rate, va="center", ha="left", fontsize=10, fontweight="bold")
+
+        # Customize plot
+        ax.set_yticks(bar_positions)
+        ax.set_yticklabels([""] * n_bars)  # Empty labels since we have custom labels
+        ax.set_xlabel("Exergy [%]", fontsize=12, fontweight="bold")
+
+        if title is not None:
+            ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
+
+        ax.set_xlim(0, 100)
+        ax.set_ylim(-1, n_bars)
+        ax.grid(axis="x", alpha=0.3, linestyle="--")
+        ax.axvline(x=0, color="black", linewidth=0.8)
+        ax.invert_yaxis()  # Invert so highest bar is at top
+
+        plt.tight_layout()
+
+        if show_plot:
+            plt.show()
+
+        return fig, ax
+
+    def print_exergy_summary(self):
+        """
+        Print a text summary of the exergy analysis results.
+
+        This method provides a concise summary of the overall system exergy performance,
+        including fuel exergy, total destruction, losses, and efficiency.
+
+        Raises
+        ------
+        RuntimeError
+            If the exergy analysis has not been performed yet (analyse() not called).
+
+        Notes
+        -----
+        The summary includes:
+        - Exergetic Fuel: Normalized to 100%
+        - Total Exergy Destruction: Sum of all component exergy destructions as % of fuel
+        - Exergetic Loss: Exergy losses to the environment as % of fuel
+        - Exergetic Product (ε): Overall system exergy efficiency as %
+
+        Examples
+        --------
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
+        >>> analysis.print_exergy_summary()
+        Exergy Analysis Summary:
+        Exergetic Fuel: 100.00%
+        Total Exergy Destruction: 35.42%
+        Exergetic Loss: 5.12%
+        Exergetic Product (ε): 59.46%
+
+        See Also
+        --------
+        exergy_results : Display detailed tabular results.
+        plot_exergy_waterfall : Create a visual waterfall diagram.
+        """
+        # Check if analysis has been performed
+        if not hasattr(self, "epsilon") or self.epsilon is None:
+            raise RuntimeError("Exergy analysis has not been performed yet. Please call analyse() first.")
+
+        # Get component results without printing
+        df_component_results, _, _ = self.exergy_results(print_results=False)
+
+        total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
+        epsilon_total = total_row["ε [%]"]
+        E_L_total = total_row["E_L [kW]"]
+        E_F_total = total_row["E_F [kW]"]
+        exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
+
+        print("\nExergy Analysis Summary:")
+        print("Exergetic Fuel: 100.00%")
+        print(f"Total Exergy Destruction: {100 - epsilon_total - exergetic_loss_percent:.2f}%")
+        print(f"Exergetic Loss: {exergetic_loss_percent:.2f}%")
+        print(f"Exergetic Product (epsilon): {epsilon_total:.2f}%")
 
     def export_to_json(self, output_path):
         """

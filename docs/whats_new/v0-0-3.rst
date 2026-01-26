@@ -1,0 +1,25 @@
+v0.0.3 (31.10.2025)
+++++++++++++++++++++++
+
+Bug fixes
+#########
+- Turbine, Pump and Compressor now consider all losses from simulation done with Ebsilon.
+- Substances that are not fluid under ambient conditions are now better handled in exergy calculations.
+
+New features
+###############
+- Exergoeconomic analysis of SimpleHeatExchanger is now supported.
+
+Documentation
+#############
+- Improved documentation for the exergy and exergoeconomic analysis modules.
+
+Developers
+##########
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__) — Lead Developer
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__) — Contributor
+- Robert Müller (`@rbrtmueller <https://github.com/rbrtmueller>`__) — Contributor
+
+Supervision
+###########
+- Prof. Dr.-Ing. Fontina Petrakopoulou — Project Supervisor

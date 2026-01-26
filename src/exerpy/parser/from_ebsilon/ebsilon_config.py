@@ -5,6 +5,7 @@ This script contains the configuration data used by the Ebsilon model parser,
 including lists of component types, fluid types, fluid composition parameters,
 and groups for sorting components into functional categories.
 """
+
 from . import __ebsilon_available__
 from .utils import EpSubstanceStub
 
@@ -184,12 +185,12 @@ ebs_objects = {
     166: "Phase Change Material Storage",
     167: "Electrolysis Cell",
     168: "Quantity Converter",
-    169: "Biomass Gasifier"
+    169: "Biomass Gasifier",
 }
 
 # Neglected components
 non_thermodynamic_unit_operators = [
-    1,   # Boundary Input Value
+    1,  # Boundary Input Value
     12,  # Controller (with external default value)
     30,  # Difference Meter
     31,  # Power Summarizer
@@ -208,44 +209,44 @@ non_thermodynamic_unit_operators = [
     77,  # Calculator
     # 80,  # Separator (logical) is considered a thermodynamic component
     93,  # Kernel Scripting
-    105, # Library Specification
-    108, # Elementary Analyzer
-    110, # Mass Multiplier
-    117, # The Sun (environmental data)
-    130, # PID-Controller
-    132, # Automatic Connector
-    136, # Emission Display
-    142, # Wind Data
-    144, # Multivalue Transmitter
-    147, # Limiter
-    168  # Quantity Converter
+    105,  # Library Specification
+    108,  # Elementary Analyzer
+    110,  # Mass Multiplier
+    117,  # The Sun (environmental data)
+    130,  # PID-Controller
+    132,  # Automatic Connector
+    136,  # Emission Display
+    142,  # Wind Data
+    144,  # Multivalue Transmitter
+    147,  # Limiter
+    168,  # Quantity Converter
 ]
 
 # Fluid types of Ebsilon
 fluid_type_index = {
-    0: "None",                  # epFluidTypeNONE
-    1: "Air",                   # epFluidTypeAir
-    2: "Fluegas",               # epFluidTypeFluegas
-    3: "Steam",                 # epFluidTypeSteam
-    4: "Water",                 # epFluidTypeWater
-    5: "Scheduled",             # epFluidTypeScheduled
-    6: "Actual",                # epFluidTypeActual
-    7: "Crudegas",              # epFluidTypeCrudegas
-    8: "Oil",                   # epFluidTypeOil
-    9: "Electric",              # epFluidTypeElectric
-    10: "Shaft",                # epFluidTypeShaft
-    11: "Coal",                 # epFluidTypeCoal
-    12: "Gas",                  # epFluidTypeGas
-    13: "Logic",                # epFluidTypeLogic
-    14: "User",                 # epFluidTypeUser
-    15: "2PhaseLiquid",         # epFluidType2PhaseLiquid
-    16: "2PhaseGaseous",        # epFluidType2PhaseGaseous
-    17: "Saltwater",            # epFluidTypeSaltwater
-    18: "UniversalFluid",       # epFluidTypeUniversalFluid
-    19: "BinaryMixture",        # epFluidTypeBinaryMixture
-    20: "ThermoLiquid",         # epFluidTypeThermoLiquid
-    21: "HumidAir",             # epFluidTypeHumidAir
-    22: "NASA"                  # epFluidTypeNASA
+    0: "None",  # epFluidTypeNONE
+    1: "Air",  # epFluidTypeAir
+    2: "Fluegas",  # epFluidTypeFluegas
+    3: "Steam",  # epFluidTypeSteam
+    4: "Water",  # epFluidTypeWater
+    5: "Scheduled",  # epFluidTypeScheduled
+    6: "Actual",  # epFluidTypeActual
+    7: "Crudegas",  # epFluidTypeCrudegas
+    8: "Oil",  # epFluidTypeOil
+    9: "Electric",  # epFluidTypeElectric
+    10: "Shaft",  # epFluidTypeShaft
+    11: "Coal",  # epFluidTypeCoal
+    12: "Gas",  # epFluidTypeGas
+    13: "Logic",  # epFluidTypeLogic
+    14: "User",  # epFluidTypeUser
+    15: "2PhaseLiquid",  # epFluidType2PhaseLiquid
+    16: "2PhaseGaseous",  # epFluidType2PhaseGaseous
+    17: "Saltwater",  # epFluidTypeSaltwater
+    18: "UniversalFluid",  # epFluidTypeUniversalFluid
+    19: "BinaryMixture",  # epFluidTypeBinaryMixture
+    20: "ThermoLiquid",  # epFluidTypeThermoLiquid
+    21: "HumidAir",  # epFluidTypeHumidAir
+    22: "NASA",  # epFluidTypeNASA
 }
 
 # Mapping fluid types to categories
@@ -267,7 +268,7 @@ connection_kinds = {
     "HumidAir": "material",
     "Electric": "power",
     "Shaft": "power",
-    "Logic": "heat"
+    "Logic": "heat",
 }
 
 # Dictionary mapping stream substance names to EpSubstance identifiers
@@ -333,7 +334,7 @@ if __ebsilon_available__:
         "XHEPT": EpSubstance.epSubstanceHEPT,
         "XOXYLEN": EpSubstance.epSubstanceOXYLEN,
         "XTDECALIN": EpSubstance.epSubstanceTDECALIN,
-        "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN
+        "XT2BUTEN": EpSubstance.epSubstanceT2BUTEN,
     }
 
 # ebsilon_config.py
@@ -445,112 +446,112 @@ two_phase_fluids_mapping = {
     -1063: {"R142B": 1},  # REFPROP_R142B
     -1064: {"R143A": 1},  # REFPROP_R143A
     -1065: {"R152A": 1},  # REFPROP_R152A
-    -1066: {"R21": 1},     # REFPROP_R21
-    -1067: {"R218": 1},    # REFPROP_R218
-    -1068: {"R22": 1},     # REFPROP_R22
+    -1066: {"R21": 1},  # REFPROP_R21
+    -1067: {"R218": 1},  # REFPROP_R218
+    -1068: {"R22": 1},  # REFPROP_R22
     -1069: {"R227EA": 1},  # REFPROP_R227EA
-    -1070: {"R23": 1},     # REFPROP_R23
+    -1070: {"R23": 1},  # REFPROP_R23
     -1071: {"R236EA": 1},  # REFPROP_R236EA
     -1072: {"R236FA": 1},  # REFPROP_R236FA
     -1073: {"R245CA": 1},  # REFPROP_R245CA
     -1074: {"R245FA": 1},  # REFPROP_R245FA
-    -1075: {"R32": 1},     # REFPROP_R32
-    -1076: {"R365MFC": 1}, # REFPROP_R365MFC
-    -1077: {"R404A": 1},   # REFPROP_R404A
-    -1078: {"R407C": 1},   # REFPROP_R407C
-    -1079: {"R41": 1},     # REFPROP_R41
-    -1080: {"R410A": 1},   # REFPROP_R410A
-    -1081: {"R507A": 1},   # REFPROP_R507A
-    -1082: {"RC318": 1},   # REFPROP_RC318
-    -1083: {"SF6": 1},     # REFPROP_SF6
-    -1084: {"SO2": 1},     # REFPROP_SO2
-    -1085: {"T2Butene": 1},# REFPROP_T2BUTEN
-    -1086: {"Toluene": 1}, # REFPROP_TOLUEN
-    -1087: {"H2O": 1},     # REFPROP_H2O
-    -1088: {"XE": 1},      # REFPROP_XE
-    -1090: {"MCyclohex": 1}, # REFPROP_MCYCHEX
-    -1091: {"C3CC6": 1},   # REFPROP_C3CC6
-    -1092: {"Cyclopentane": 1}, # REFPROP_CYCPENT
-    -1093: {"D4": 1},      # REFPROP_D4
-    -1094: {"D5": 1},      # REFPROP_D5
-    -1095: {"D6": 1},      # REFPROP_D6
-    -1096: {"DMC": 1},     # REFPROP_DMC
-    -1097: {"MD2M": 1},    # REFPROP_MD2M
-    -1098: {"MD3M": 1},    # REFPROP_MD3M
-    -1099: {"MD4M": 1},    # REFPROP_MD4M
-    -1100: {"MDM": 1},     # REFPROP_MDM
-    -1101: {"MLinolea": 1},# REFPROP_MLINOLEA
-    -1102: {"MLinolEN": 1},# REFPROP_MLINOLEN
-    -1103: {"MM": 1},      # REFPROP_MM
-    -1104: {"Moleate": 1}, # REFPROP_MOLEATE
-    -1105: {"MPalmita": 1},# REFPROP_MPALMITA
-    -1106: {"MStearat": 1},# REFPROP_MSTEARAT
-    -1107: {"OrthoHyd": 1}, # REFPROP_ORTHOHYD
-    -1108: {"R1234YF": 1}, # REFPROP_R1234YF
-    -1109: {"R1234ZE": 1}, # REFPROP_R1234ZE
-    -1110: {"R161": 1},    # REFPROP_R161
-    -1111: {"UD_01": 1}, # REFPROP_REFPROP_UD_01
-    -1112: {"UD_02": 1}, # REFPROP_REFPROP_UD_02
-    -1113: {"UD_03": 1}, # REFPROP_REFPROP_UD_03
-    -1114: {"UD_04": 1}, # REFPROP_REFPROP_UD_04
-    -1115: {"UD_05": 1}, # REFPROP_REFPROP_UD_05
-    -1116: {"UD_06": 1}, # REFPROP_REFPROP_UD_06
-    -1117: {"UD_07": 1}, # REFPROP_REFPROP_UD_07
-    -1118: {"UD_08": 1}, # REFPROP_REFPROP_UD_08
-    -1119: {"UD_09": 1}, # REFPROP_REFPROP_UD_09
-    -1120: {"UD_10": 1}, # REFPROP_REFPROP_UD_10
-    -1121: {"UD_11": 1}, # REFPROP_REFPROP_UD_11
-    -1122: {"UD_12": 1}, # REFPROP_REFPROP_UD_12
-    -1123: {"UD_13": 1}, # REFPROP_REFPROP_UD_13
-    -1124: {"UD_14": 1}, # REFPROP_REFPROP_UD_14
-    -1125: {"UD_15": 1}, # REFPROP_REFPROP_UD_15
-    -1126: {"UD_16": 1}, # REFPROP_REFPROP_UD_16
-    -1127: {"UD_17": 1}, # REFPROP_REFPROP_UD_17
-    -1128: {"UD_18": 1}, # REFPROP_REFPROP_UD_18
-    -1129: {"UD_19": 1}, # REFPROP_REFPROP_UD_19
-    -1130: {"UD_20": 1}, # REFPROP_REFPROP_UD_20
-    -1131: {"C11": 1},    # REFPROP_C11
-    -1132: {"DEE": 1},    # REFPROP_DEE
-    -1133: {"EBenzene": 1}, # REFPROP_EBENZ
-    -1134: {"HCL": 1},    # REFPROP_HCL
-    -1135: {"IOctane": 1}, # REFPROP_IOCTANE
-    -1136: {"MXYlene": 1}, # REFPROP_MXYLENE
-    -1137: {"Novec649": 1}, # REFPROP_NOVEC649
-    -1138: {"Oxylene": 1}, # REFPROP_OXYLEN
-    -1139: {"PXylene": 1}, # REFPROP_PXYLENE
+    -1075: {"R32": 1},  # REFPROP_R32
+    -1076: {"R365MFC": 1},  # REFPROP_R365MFC
+    -1077: {"R404A": 1},  # REFPROP_R404A
+    -1078: {"R407C": 1},  # REFPROP_R407C
+    -1079: {"R41": 1},  # REFPROP_R41
+    -1080: {"R410A": 1},  # REFPROP_R410A
+    -1081: {"R507A": 1},  # REFPROP_R507A
+    -1082: {"RC318": 1},  # REFPROP_RC318
+    -1083: {"SF6": 1},  # REFPROP_SF6
+    -1084: {"SO2": 1},  # REFPROP_SO2
+    -1085: {"T2Butene": 1},  # REFPROP_T2BUTEN
+    -1086: {"Toluene": 1},  # REFPROP_TOLUEN
+    -1087: {"H2O": 1},  # REFPROP_H2O
+    -1088: {"XE": 1},  # REFPROP_XE
+    -1090: {"MCyclohex": 1},  # REFPROP_MCYCHEX
+    -1091: {"C3CC6": 1},  # REFPROP_C3CC6
+    -1092: {"Cyclopentane": 1},  # REFPROP_CYCPENT
+    -1093: {"D4": 1},  # REFPROP_D4
+    -1094: {"D5": 1},  # REFPROP_D5
+    -1095: {"D6": 1},  # REFPROP_D6
+    -1096: {"DMC": 1},  # REFPROP_DMC
+    -1097: {"MD2M": 1},  # REFPROP_MD2M
+    -1098: {"MD3M": 1},  # REFPROP_MD3M
+    -1099: {"MD4M": 1},  # REFPROP_MD4M
+    -1100: {"MDM": 1},  # REFPROP_MDM
+    -1101: {"MLinolea": 1},  # REFPROP_MLINOLEA
+    -1102: {"MLinolEN": 1},  # REFPROP_MLINOLEN
+    -1103: {"MM": 1},  # REFPROP_MM
+    -1104: {"Moleate": 1},  # REFPROP_MOLEATE
+    -1105: {"MPalmita": 1},  # REFPROP_MPALMITA
+    -1106: {"MStearat": 1},  # REFPROP_MSTEARAT
+    -1107: {"OrthoHyd": 1},  # REFPROP_ORTHOHYD
+    -1108: {"R1234YF": 1},  # REFPROP_R1234YF
+    -1109: {"R1234ZE": 1},  # REFPROP_R1234ZE
+    -1110: {"R161": 1},  # REFPROP_R161
+    -1111: {"UD_01": 1},  # REFPROP_REFPROP_UD_01
+    -1112: {"UD_02": 1},  # REFPROP_REFPROP_UD_02
+    -1113: {"UD_03": 1},  # REFPROP_REFPROP_UD_03
+    -1114: {"UD_04": 1},  # REFPROP_REFPROP_UD_04
+    -1115: {"UD_05": 1},  # REFPROP_REFPROP_UD_05
+    -1116: {"UD_06": 1},  # REFPROP_REFPROP_UD_06
+    -1117: {"UD_07": 1},  # REFPROP_REFPROP_UD_07
+    -1118: {"UD_08": 1},  # REFPROP_REFPROP_UD_08
+    -1119: {"UD_09": 1},  # REFPROP_REFPROP_UD_09
+    -1120: {"UD_10": 1},  # REFPROP_REFPROP_UD_10
+    -1121: {"UD_11": 1},  # REFPROP_REFPROP_UD_11
+    -1122: {"UD_12": 1},  # REFPROP_REFPROP_UD_12
+    -1123: {"UD_13": 1},  # REFPROP_REFPROP_UD_13
+    -1124: {"UD_14": 1},  # REFPROP_REFPROP_UD_14
+    -1125: {"UD_15": 1},  # REFPROP_REFPROP_UD_15
+    -1126: {"UD_16": 1},  # REFPROP_REFPROP_UD_16
+    -1127: {"UD_17": 1},  # REFPROP_REFPROP_UD_17
+    -1128: {"UD_18": 1},  # REFPROP_REFPROP_UD_18
+    -1129: {"UD_19": 1},  # REFPROP_REFPROP_UD_19
+    -1130: {"UD_20": 1},  # REFPROP_REFPROP_UD_20
+    -1131: {"C11": 1},  # REFPROP_C11
+    -1132: {"DEE": 1},  # REFPROP_DEE
+    -1133: {"EBenzene": 1},  # REFPROP_EBENZ
+    -1134: {"HCL": 1},  # REFPROP_HCL
+    -1135: {"IOctane": 1},  # REFPROP_IOCTANE
+    -1136: {"MXYlene": 1},  # REFPROP_MXYLENE
+    -1137: {"Novec649": 1},  # REFPROP_NOVEC649
+    -1138: {"Oxylene": 1},  # REFPROP_OXYLEN
+    -1139: {"PXylene": 1},  # REFPROP_PXYLENE
     -1140: {"R1216": 1},  # REFPROP_R1216
-    -1141: {"R1233ZD": 1}, # REFPROP_R1233ZD
-    -1142: {"R40": 1},    # REFPROP_R40
-    -1143: {"RE143A": 1}, # REFPROP_RE143A
-    -1144: {"RE245CB2": 1}, # REFPROP_RE245CB2
-    -1145: {"RE245FA2": 1}, # REFPROP_RE245FA2
-    -1146: {"RE347MCC": 1}, # REFPROP_RE347MCC
-    -1147: {"EthyleneOxide": 1}, # REFPROP_EthyleneOxide
-    -1148: {"13Butadien": 1}, # REFPROP_13BUTADIEN
-    -1149: {"1-Butyne": 1}, # REFPROP_1BUTYNE
-    -1150: {"1Penten": 1}, # REFPROP_1PENTEN
-    -1151: {"22DMBut": 1}, # REFPROP_22DMBUT
-    -1152: {"23DMBut": 1}, # REFPROP_23DMBUT
+    -1141: {"R1233ZD": 1},  # REFPROP_R1233ZD
+    -1142: {"R40": 1},  # REFPROP_R40
+    -1143: {"RE143A": 1},  # REFPROP_RE143A
+    -1144: {"RE245CB2": 1},  # REFPROP_RE245CB2
+    -1145: {"RE245FA2": 1},  # REFPROP_RE245FA2
+    -1146: {"RE347MCC": 1},  # REFPROP_RE347MCC
+    -1147: {"EthyleneOxide": 1},  # REFPROP_EthyleneOxide
+    -1148: {"13Butadien": 1},  # REFPROP_13BUTADIEN
+    -1149: {"1-Butyne": 1},  # REFPROP_1BUTYNE
+    -1150: {"1Penten": 1},  # REFPROP_1PENTEN
+    -1151: {"22DMBut": 1},  # REFPROP_22DMBUT
+    -1152: {"23DMBut": 1},  # REFPROP_23DMBUT
     -1153: {"3MPent": 1},  # REFPROP_3MPENT
-    -1154: {"Acet": 1},    # REFPROP_ACET
-    -1155: {"C16": 1},      # REFPROP_C16
-    -1156: {"C22": 1},      # REFPROP_C22
-    -1157: {"C6F14": 1},    # REFPROP_C6F14
-    -1158: {"Chlorine": 1}, # REFPROP_CHLORINE
-    -1159: {"Chlorobenzene": 1}, # REFPROP_CHLOROBENZENE
-    -1160: {"Cyclobutene": 1}, # REFPROP_CYCLOBUTENE
+    -1154: {"Acet": 1},  # REFPROP_ACET
+    -1155: {"C16": 1},  # REFPROP_C16
+    -1156: {"C22": 1},  # REFPROP_C22
+    -1157: {"C6F14": 1},  # REFPROP_C6F14
+    -1158: {"Chlorine": 1},  # REFPROP_CHLORINE
+    -1159: {"Chlorobenzene": 1},  # REFPROP_CHLOROBENZENE
+    -1160: {"Cyclobutene": 1},  # REFPROP_CYCLOBUTENE
     -1161: {"Propadien": 1},  # REFPROP_PROPADIEN
-    -1162: {"PropyleneOxide": 1}, # REFPROP_PROPYLENEOXIDE
-    -1163: {"R1123": 1},    # REFPROP_R1123
+    -1162: {"PropyleneOxide": 1},  # REFPROP_PROPYLENEOXIDE
+    -1163: {"R1123": 1},  # REFPROP_R1123
     -1164: {"R1224YDZ": 1},  # REFPROP_R1224YDZ
     -1165: {"R1234zeZ": 1},  # REFPROP_R1234zeZ
-    -1166: {"R1243ZF": 1},    # REFPROP_R1243ZF
+    -1166: {"R1243ZF": 1},  # REFPROP_R1243ZF
     -1167: {"R1336MZZZ": 1},  # REFPROP_R1336MZZZ
-    -1168: {"Dichloroethane": 1}, # REFPROP_Dichloroethane
+    -1168: {"Dichloroethane": 1},  # REFPROP_Dichloroethane
     -1169: {"Vinylchloride": 1},  # REFPROP_VINYLCHLORIDE
-    -1170: {"Diethanolamine": 1}, # REFPROP_DIETHANOLAMINE
-    -1171: {"Ethylene_glycol": 1}, # REFPROP_Ethylene_glycol
-    -1172: {"Monoethanolamine": 1}, # REFPROP_MONOETHANOLAMINE
+    -1170: {"Diethanolamine": 1},  # REFPROP_DIETHANOLAMINE
+    -1171: {"Ethylene_glycol": 1},  # REFPROP_Ethylene_glycol
+    -1172: {"Monoethanolamine": 1},  # REFPROP_MONOETHANOLAMINE
     -2000: {"AIR_dry": 1},  # REFPROPMIXTURE_AIR_dry
     -2001: {"R401A": 1},  # REFPROPMIXTURE_R401A
     -2002: {"R401B": 1},  # REFPROPMIXTURE_R401B
@@ -597,82 +598,81 @@ two_phase_fluids_mapping = {
     -2043: {"R426A": 1},  # REFPROPMIXTURE_R426A
     -2044: {"R427A": 1},  # REFPROPMIXTURE_R427A
     -2045: {"R428A": 1},  # REFPROPMIXTURE_R428A
-    -2046: {"R500": 1},   # REFPROPMIXTURE_R500
-    -2047: {"R501": 1},   # REFPROPMIXTURE_R501
-    -2048: {"R502": 1},   # REFPROPMIXTURE_R502
-    -2049: {"R503": 1},   # REFPROPMIXTURE_R503
-    -2050: {"R504": 1},   # REFPROPMIXTURE_R504
+    -2046: {"R500": 1},  # REFPROPMIXTURE_R500
+    -2047: {"R501": 1},  # REFPROPMIXTURE_R501
+    -2048: {"R502": 1},  # REFPROPMIXTURE_R502
+    -2049: {"R503": 1},  # REFPROPMIXTURE_R503
+    -2050: {"R504": 1},  # REFPROPMIXTURE_R504
     -2051: {"R507A": 1},  # REFPROPMIXTURE_R507A
     -2052: {"R508A": 1},  # REFPROPMIXTURE_R508A
     -2053: {"R508B": 1},  # REFPROPMIXTURE_R508B
     -2054: {"R509A": 1},  # REFPROPMIXTURE_R509A
     -2055: {"AMARILLO": 1},  # REFPROPMIXTURE_AMARILLO
-    -2056: {"EKOFISK": 1},   # REFPROPMIXTURE_EKOFISK
-    -2057: {"GLFCOAST": 1},   # REFPROPMIXTURE_GLFCOAST
-    -2058: {"HIGHCO2": 1},    # REFPROPMIXTURE_HIGHCO2
-    -2059: {"HIGHN2": 1},     # REFPROPMIXTURE_HIGHN2
-    -2060: {"R429A": 1},      # REFPROPMIXTURE_R429A
-    -2061: {"R430A": 1},      # REFPROPMIXTURE_R430A
-    -2062: {"R431A": 1},      # REFPROPMIXTURE_R431A
-    -2063: {"R432A": 1},      # REFPROPMIXTURE_R432A
-    -2064: {"R433A": 1},      # REFPROPMIXTURE_R433A
-    -2065: {"R434A": 1},      # REFPROPMIXTURE_R434A
-    -2066: {"R438A": 1},      # REFPROPMIXTURE_R438A
-    -2067: {"R435A": 1},      # REFPROPMIXTURE_R435A
-    -2068: {"R436A": 1},      # REFPROPMIXTURE_R436A
-    -2069: {"R436B": 1},      # REFPROPMIXTURE_R436B
-    -2070: {"R437A": 1},      # REFPROPMIXTURE_R437A
-    -2071: {"R510A": 1},      # REFPROPMIXTURE_R510A
-    -2072: {"NGSAMPLE": 1},   # REFPROPMIXTURE_NGSAMPLE
-    -2073: {"R407F": 1},      # REFPROPMIXTURE_R407F
-    -2074: {"R441A": 1},      # REFPROPMIXTURE_R441A
-    -2075: {"R442A": 1},      # REFPROPMIXTURE_R442A
-    -2076: {"R443A": 1},      # REFPROPMIXTURE_R443A
-    -2077: {"R444A": 1},      # REFPROPMIXTURE_R444A
-    -2078: {"R512A": 1},      # REFPROPMIXTURE_R512A
-    -2079: {"R407G": 1},      # REFPROPMIXTURE_R407G
-    -2080: {"R407H": 1},      # REFPROPMIXTURE_R407H
-    -2081: {"R417B": 1},      # REFPROPMIXTURE_R417B
-    -2082: {"R417C": 1},      # REFPROPMIXTURE_R417C
-    -2083: {"R419B": 1},      # REFPROPMIXTURE_R419B
-    -2084: {"R422E": 1},      # REFPROPMIXTURE_R422E
-    -2085: {"R433B": 1},      # REFPROPMIXTURE_R433B
-    -2086: {"R433C": 1},      # REFPROPMIXTURE_R433C
-    -2087: {"R439A": 1},      # REFPROPMIXTURE_R439A
-    -2088: {"R440A": 1},      # REFPROPMIXTURE_R440A
-    -2089: {"R444B": 1},      # REFPROPMIXTURE_R444B
-    -2090: {"R445A": 1},      # REFPROPMIXTURE_R445A
-    -2091: {"R446A": 1},      # REFPROPMIXTURE_R446A
-    -2092: {"R447A": 1},      # REFPROPMIXTURE_R447A
-    -2093: {"R447B": 1},      # REFPROPMIXTURE_R447B
-    -2094: {"R448A": 1},      # REFPROPMIXTURE_R448A
-    -2095: {"R449A": 1},      # REFPROPMIXTURE_R449A
-    -2096: {"R449B": 1},      # REFPROPMIXTURE_R449B
-    -2097: {"R449C": 1},      # REFPROPMIXTURE_R449C
-    -2098: {"R450A": 1},      # REFPROPMIXTURE_R450A
-    -2099: {"R451A": 1},      # REFPROPMIXTURE_R451A
-    -2100: {"R451B": 1},      # REFPROPMIXTURE_R451B
-    -2101: {"R452A": 1},      # REFPROPMIXTURE_R452A
-    -2102: {"R452B": 1},      # REFPROPMIXTURE_R452B
-    -2103: {"R452C": 1},      # REFPROPMIXTURE_R452C
-    -2104: {"R453A": 1},      # REFPROPMIXTURE_R453A
-    -2105: {"R454A": 1},      # REFPROPMIXTURE_R454A
-    -2106: {"R454B": 1},      # REFPROPMIXTURE_R454B
-    -2107: {"R454C": 1},      # REFPROPMIXTURE_R454C
-    -2108: {"R455A": 1},      # REFPROPMIXTURE_R455A
-    -2109: {"R456A": 1},      # REFPROPMIXTURE_R456A
-    -2110: {"R457A": 1},      # REFPROPMIXTURE_R457A
-    -2111: {"R458A": 1},      # REFPROPMIXTURE_R458A
-    -2112: {"R459A": 1},      # REFPROPMIXTURE_R459A
-    -2113: {"R459B": 1},      # REFPROPMIXTURE_R459B
-    -2114: {"R460A": 1},      # REFPROPMIXTURE_R460A
-    -2115: {"R460B": 1},      # REFPROPMIXTURE_R460B
-    -2116: {"R511A": 1},      # REFPROPMIXTURE_R511A
-    -2117: {"R513A": 1},      # REFPROPMIXTURE_R513A
-    -2118: {"R513B": 1},      # REFPROPMIXTURE_R513B
-    -2119: {"R515A": 1},      # REFPROPMIXTURE_R515A
+    -2056: {"EKOFISK": 1},  # REFPROPMIXTURE_EKOFISK
+    -2057: {"GLFCOAST": 1},  # REFPROPMIXTURE_GLFCOAST
+    -2058: {"HIGHCO2": 1},  # REFPROPMIXTURE_HIGHCO2
+    -2059: {"HIGHN2": 1},  # REFPROPMIXTURE_HIGHN2
+    -2060: {"R429A": 1},  # REFPROPMIXTURE_R429A
+    -2061: {"R430A": 1},  # REFPROPMIXTURE_R430A
+    -2062: {"R431A": 1},  # REFPROPMIXTURE_R431A
+    -2063: {"R432A": 1},  # REFPROPMIXTURE_R432A
+    -2064: {"R433A": 1},  # REFPROPMIXTURE_R433A
+    -2065: {"R434A": 1},  # REFPROPMIXTURE_R434A
+    -2066: {"R438A": 1},  # REFPROPMIXTURE_R438A
+    -2067: {"R435A": 1},  # REFPROPMIXTURE_R435A
+    -2068: {"R436A": 1},  # REFPROPMIXTURE_R436A
+    -2069: {"R436B": 1},  # REFPROPMIXTURE_R436B
+    -2070: {"R437A": 1},  # REFPROPMIXTURE_R437A
+    -2071: {"R510A": 1},  # REFPROPMIXTURE_R510A
+    -2072: {"NGSAMPLE": 1},  # REFPROPMIXTURE_NGSAMPLE
+    -2073: {"R407F": 1},  # REFPROPMIXTURE_R407F
+    -2074: {"R441A": 1},  # REFPROPMIXTURE_R441A
+    -2075: {"R442A": 1},  # REFPROPMIXTURE_R442A
+    -2076: {"R443A": 1},  # REFPROPMIXTURE_R443A
+    -2077: {"R444A": 1},  # REFPROPMIXTURE_R444A
+    -2078: {"R512A": 1},  # REFPROPMIXTURE_R512A
+    -2079: {"R407G": 1},  # REFPROPMIXTURE_R407G
+    -2080: {"R407H": 1},  # REFPROPMIXTURE_R407H
+    -2081: {"R417B": 1},  # REFPROPMIXTURE_R417B
+    -2082: {"R417C": 1},  # REFPROPMIXTURE_R417C
+    -2083: {"R419B": 1},  # REFPROPMIXTURE_R419B
+    -2084: {"R422E": 1},  # REFPROPMIXTURE_R422E
+    -2085: {"R433B": 1},  # REFPROPMIXTURE_R433B
+    -2086: {"R433C": 1},  # REFPROPMIXTURE_R433C
+    -2087: {"R439A": 1},  # REFPROPMIXTURE_R439A
+    -2088: {"R440A": 1},  # REFPROPMIXTURE_R440A
+    -2089: {"R444B": 1},  # REFPROPMIXTURE_R444B
+    -2090: {"R445A": 1},  # REFPROPMIXTURE_R445A
+    -2091: {"R446A": 1},  # REFPROPMIXTURE_R446A
+    -2092: {"R447A": 1},  # REFPROPMIXTURE_R447A
+    -2093: {"R447B": 1},  # REFPROPMIXTURE_R447B
+    -2094: {"R448A": 1},  # REFPROPMIXTURE_R448A
+    -2095: {"R449A": 1},  # REFPROPMIXTURE_R449A
+    -2096: {"R449B": 1},  # REFPROPMIXTURE_R449B
+    -2097: {"R449C": 1},  # REFPROPMIXTURE_R449C
+    -2098: {"R450A": 1},  # REFPROPMIXTURE_R450A
+    -2099: {"R451A": 1},  # REFPROPMIXTURE_R451A
+    -2100: {"R451B": 1},  # REFPROPMIXTURE_R451B
+    -2101: {"R452A": 1},  # REFPROPMIXTURE_R452A
+    -2102: {"R452B": 1},  # REFPROPMIXTURE_R452B
+    -2103: {"R452C": 1},  # REFPROPMIXTURE_R452C
+    -2104: {"R453A": 1},  # REFPROPMIXTURE_R453A
+    -2105: {"R454A": 1},  # REFPROPMIXTURE_R454A
+    -2106: {"R454B": 1},  # REFPROPMIXTURE_R454B
+    -2107: {"R454C": 1},  # REFPROPMIXTURE_R454C
+    -2108: {"R455A": 1},  # REFPROPMIXTURE_R455A
+    -2109: {"R456A": 1},  # REFPROPMIXTURE_R456A
+    -2110: {"R457A": 1},  # REFPROPMIXTURE_R457A
+    -2111: {"R458A": 1},  # REFPROPMIXTURE_R458A
+    -2112: {"R459A": 1},  # REFPROPMIXTURE_R459A
+    -2113: {"R459B": 1},  # REFPROPMIXTURE_R459B
+    -2114: {"R460A": 1},  # REFPROPMIXTURE_R460A
+    -2115: {"R460B": 1},  # REFPROPMIXTURE_R460B
+    -2116: {"R511A": 1},  # REFPROPMIXTURE_R511A
+    -2117: {"R513A": 1},  # REFPROPMIXTURE_R513A
+    -2118: {"R513B": 1},  # REFPROPMIXTURE_R513B
+    -2119: {"R515A": 1},  # REFPROPMIXTURE_R515A
 }
-
 
 
 unit_id_to_string = {
@@ -808,25 +808,101 @@ unit_id_to_string = {
     135: "kJ / kgK",
     136: "mol",
     137: "K / bar",
-    138: "kg / m2"
+    138: "kg / m2",
 }
 
 
 # List of fluid composition materials to include in the JSON file
 composition_params = [
-    'X12BUTADIEN', 'X13BUTADIEN', 'X1BUTEN', 'X1PENTEN', 'X22DMBUT',
-    'X23DMBUT', 'X3MPENT', 'XACET', 'XAIR', 'XAR', 'XASH', 'XASHG',
-    'XBENZ', 'XBUT', 'XC', 'XC2BUTEN', 'XCA', 'XCACO3', 'XCAO', 'XCASO4',
-    'XCDECALIN', 'XCH3SH', 'XCH4', 'XCL', 'XCO', 'XCO2', 'XCOS', 'XCS2',
-    'XCYCHEX', 'XCYCPENT', 'XDEC', 'XDODEC', 'XEBENZ', 'XECYCHEX',
-    'XECYCPENT', 'XETH', 'XETHEN', 'XETHL', 'XH', 'XH2', 'XH2O', 'XH2OB',
-    'XH2OG', 'XH2OL', 'XH2S', 'XHCL', 'XHCN', 'XHE', 'XHEPT', 'XHEX',
-    'XI', 'XIBUT', 'XIBUTEN', 'XIHEX', 'XIPENT', 'XKR', 'XLIME', 'XL_CO2',
-    'XL_H2O', 'XL_NH3', 'XMCYCHEX', 'XMCYCPENT', 'XMETHL', 'XMG',
-    'XMGCO3', 'XMGO', 'XN', 'XN2', 'XN2O', 'XNE', 'XNEOPENT', 'XNH3',
-    'XNO', 'XNO2', 'XNON', 'XO', 'XO2', 'XOCT', 'XOXYLEN', 'XPENT',
-    'XPROP', 'XPROPADIEN', 'XPROPEN', 'XS', 'XSO2', 'XT2BUTEN',
-    'XTDECALIN', 'XTOLUEN', 'XXE'
+    "X12BUTADIEN",
+    "X13BUTADIEN",
+    "X1BUTEN",
+    "X1PENTEN",
+    "X22DMBUT",
+    "X23DMBUT",
+    "X3MPENT",
+    "XACET",
+    "XAIR",
+    "XAR",
+    "XASH",
+    "XASHG",
+    "XBENZ",
+    "XBUT",
+    "XC",
+    "XC2BUTEN",
+    "XCA",
+    "XCACO3",
+    "XCAO",
+    "XCASO4",
+    "XCDECALIN",
+    "XCH3SH",
+    "XCH4",
+    "XCL",
+    "XCO",
+    "XCO2",
+    "XCOS",
+    "XCS2",
+    "XCYCHEX",
+    "XCYCPENT",
+    "XDEC",
+    "XDODEC",
+    "XEBENZ",
+    "XECYCHEX",
+    "XECYCPENT",
+    "XETH",
+    "XETHEN",
+    "XETHL",
+    "XH",
+    "XH2",
+    "XH2O",
+    "XH2OB",
+    "XH2OG",
+    "XH2OL",
+    "XH2S",
+    "XHCL",
+    "XHCN",
+    "XHE",
+    "XHEPT",
+    "XHEX",
+    "XI",
+    "XIBUT",
+    "XIBUTEN",
+    "XIHEX",
+    "XIPENT",
+    "XKR",
+    "XLIME",
+    "XL_CO2",
+    "XL_H2O",
+    "XL_NH3",
+    "XMCYCHEX",
+    "XMCYCPENT",
+    "XMETHL",
+    "XMG",
+    "XMGCO3",
+    "XMGO",
+    "XN",
+    "XN2",
+    "XN2O",
+    "XNE",
+    "XNEOPENT",
+    "XNH3",
+    "XNO",
+    "XNO2",
+    "XNON",
+    "XO",
+    "XO2",
+    "XOCT",
+    "XOXYLEN",
+    "XPENT",
+    "XPROP",
+    "XPROPADIEN",
+    "XPROPEN",
+    "XS",
+    "XSO2",
+    "XT2BUTEN",
+    "XTDECALIN",
+    "XTOLUEN",
+    "XXE",
 ]
 
 # Define the component groups via unique labels
@@ -834,7 +910,7 @@ grouped_components = {
     "Turbine": [6, 23, 56, 57, 58, 68, 122],
     "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
     "CombustionChamber": [22, 90],
-    "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
+    "Valve": [2, 13, 14, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
     "Condenser": [7, 47, 78],
@@ -842,10 +918,10 @@ grouped_components = {
     "SimpleHeatExchanger": [15, 16, 35],
     "SteamGenerator": [5],
     "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
-    "FlashTank" : [34],
+    "FlashTank": [34],
     "Storage": [118],
     "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
-    "CycleCloser": [80]
+    "CycleCloser": [80],
 }
 """
 This is the mapping of component groups to their respective component IDs:
@@ -865,7 +941,7 @@ This is the mapping of component groups to their respective component IDs:
     - "Storage": [118],
     - "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
     - "CycleCloser": [80]
-    
+
 """
 
 # Connector mapping rules for different component types
@@ -889,7 +965,7 @@ connector_mapping = {
         2: 0,  # Superheated steam outlet (high pressure)
         3: 1,  # Steam inlet (intermediate pressure)
         4: 1,  # Superheated steam outlet (intermediate pressure)
-        5: 2,  # Heat source (counted as outlet!!!) 
+        5: 2,  # Heat source (counted as outlet!!!)
         6: 2,  # Water injection (high pressure)
         7: 3,  # Water injection (intermediate pressure)
         8: 3,  # Drain / Blow down outlet
@@ -912,6 +988,7 @@ connector_mapping = {
     8: {  # Pump
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
+        3: 1,  # Power inlet
     },
     9: {  # Feed Water Container / De Aerator
         1: 0,  # Inlet boiling water
@@ -974,6 +1051,7 @@ connector_mapping = {
     24: {  # Compressor / Fan
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
+        3: 0,  # Power inlet
     },
     25: {  # Air Preheater
         1: 1,  # Inlet cold stream
@@ -1010,7 +1088,7 @@ connector_mapping = {
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
     },
     34: {  # Flash box
-        1: 0,  # General inlet 
+        1: 0,  # General inlet
         2: 0,  # Vaporous outlet
         3: 1,  # Liquid outlet
         4: 1,  # Liquid injection inlet
@@ -1045,9 +1123,9 @@ connector_mapping = {
         5: 2,  # Second outlet hot stream (if present)
     },
     58: {  # Governing stage (steam turbine)
-        1: 0,  # Steam inlet 
+        1: 0,  # Steam inlet
         2: 0,  # Steam outlet
-        3: 1,  # Shaft power inlet 
+        3: 1,  # Shaft power inlet
         4: 1,  # Shaft power outlet
     },
     70: {  # Evaporator
@@ -1057,7 +1135,7 @@ connector_mapping = {
         4: 0,  # Outlet hot stream
         5: 2,  # Second outlet cold stream (if present)
     },
-    80:  { # Separator (logical)
+    80: {  # Separator (logical)
         1: 0,  # Inlet
         2: 0,  # Outlet 1
     },

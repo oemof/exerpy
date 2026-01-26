@@ -117,7 +117,7 @@ ongoing development. You can cite ExerPy using the following BibTeX entry:
          title = {{ExerPy}: Exergy Analysis in Python},
          note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou}
          url = {https://github.com/oemof/exerpy},
-         version = {0.0.2},
+         version = {0.0.3},
          year = {2025}
     }
 

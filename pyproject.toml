@@ -66,6 +66,8 @@ dev = [
     "sphinxcontrib.bibtex",
     "tespy>=0.9",
     "tox",
+    "black>=24.10.0",
+    "ruff>=0.6.9",
 ]
 tespy = [
     "tespy>=0.9",
@@ -77,6 +79,29 @@ aspen = [
     "pywin32"
 ]
 
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 120
+unsafe-fixes = true  # activate unsafe fixes
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "SIM"]
+ignore = [
+    "E501",   # Line too long
+    "E402",   # Module level import not at top 
+    "B007",   # Loop variable not used 
+    "B904",   # raise ... from err
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"examples/**/*.py" = ["E402"]   
+"tests/**/*.py" = ["B015"]    
+"**/*.ipynb" = ["B018"]  
+
 [tool.pytest.ini_options]
 python_files = [
     "test_*.py",
@@ -87,7 +112,7 @@ addopts = """
     -ra
     --strict-markers
     --doctest-modules
-    --doctest-glob=\"*.rst\"
+    --doctest-glob="*.rst"
     --tb=short
     --pyargs
     --ignore=docs/conf.py
@@ -101,6 +126,7 @@ testpaths = [
 ]
 
 [tool.isort]
+profile = "black"
 force_single_line = true
 line_length = 120
 known_first_party = "exerpy"
@@ -117,3 +143,14 @@ parallel = true
 show_missing = true
 precision = 2
 omit = ["migrations"]
+
+[tool.check-manifest]
+ignore = [
+    ".pre-commit-config.yaml",
+    ".github/**",
+    "*.yaml",
+    "*.yml",
+    ".gitignore",
+    ".readthedocs.yml",
+    "tox.ini",
+]

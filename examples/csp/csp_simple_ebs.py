@@ -1,0 +1,22 @@
+import logging
+import os
+
+# Configure logging
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
+
+# Import the necessary modules and functions from exerpy
+from exerpy import ExergyAnalysis
+
+# Define the path to the Ebsilon model file
+model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "csp_simple.ebs"))
+
+# Initialize the exergy analysis with the simulation path
+ean = ExergyAnalysis.from_ebsilon(model_path, split_physical_exergy=False)
+
+fuel = {"inputs": ["1"], "outputs": ["4"]}
+
+product = {"inputs": ["8"], "outputs": ["5"]}
+
+ean.analyse(E_F=fuel, E_P=product)
+ean.exergy_results()
+ean.export_to_json("examples/csp/csp_simple_ebs.json")

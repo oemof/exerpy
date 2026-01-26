@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -187,7 +186,7 @@ class HeatExchanger(Component):
         Case 5: Only the cold inlet below ambient temperature
 
         If `split_physical_exergy=True`:
-        
+
         .. math::
             \dot{E}_{\mathrm{P}}
             = \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
@@ -198,7 +197,7 @@ class HeatExchanger(Component):
                     - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
             + \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
                     - \dot{E}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
-       
+
         Else:
 
         .. math::
@@ -211,7 +210,7 @@ class HeatExchanger(Component):
                     - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
             + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
 
-        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case): 
+        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case):
 
         .. math::
             \dot{E}_{\mathrm{P}} = \mathrm{NaN}
@@ -258,89 +257,125 @@ class HeatExchanger(Component):
 
         if not self.dissipative:
             # Case 1: All streams are above the ambient temperature
-            if all([stream['T'] >= T0 for stream in all_streams]):
+            if all([stream["T"] >= T0 for stream in all_streams]):
                 if split_physical_exergy:
-                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_T'] - self.inl[1]['m'] * self.inl[1]['e_T']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                        self.inl[1]['m'] * self.inl[1]['e_M'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                    self.E_P = self.outl[1]["m"] * self.outl[1]["e_T"] - self.inl[1]["m"] * self.inl[1]["e_T"]
+                    self.E_F = (
+                        self.inl[0]["m"] * self.inl[0]["e_PH"]
+                        - self.outl[0]["m"] * self.outl[0]["e_PH"]
+                        + (self.inl[1]["m"] * self.inl[1]["e_M"] - self.outl[1]["m"] * self.outl[1]["e_M"])
+                    )
                 else:
-                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH'] - self.inl[1]['m'] * self.inl[1]['e_PH']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH']
+                    self.E_P = self.outl[1]["m"] * self.outl[1]["e_PH"] - self.inl[1]["m"] * self.inl[1]["e_PH"]
+                    self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self.outl[0]["m"] * self.outl[0]["e_PH"]
 
             # Case 2: All streams are below or equal to the ambient temperature
-            elif all([stream['T'] <= T0 for stream in all_streams]):
+            elif all([stream["T"] <= T0 for stream in all_streams]):
                 if split_physical_exergy:
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] - self.inl[0]['m'] * self.inl[0]['e_T']
-                    self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'] + (
-                        self.inl[0]['m'] * self.inl[0]['e_M'] - self.outl[0]['m'] * self.outl[0]['e_M'])
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_T"] - self.inl[0]["m"] * self.inl[0]["e_T"]
+                    self.E_F = (
+                        self.inl[1]["m"] * self.inl[1]["e_PH"]
+                        - self.outl[1]["m"] * self.outl[1]["e_PH"]
+                        + (self.inl[0]["m"] * self.inl[0]["e_M"] - self.outl[0]["m"] * self.outl[0]["e_M"])
+                    )
                 else:
-                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
-                    "physical exergy should be split into thermal and mechanical components!")
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']
-                    self.E_F = self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH']
+                    logging.warning(
+                        "While dealing with heat exchnager below ambient temperautre, "
+                        "physical exergy should be split into thermal and mechanical components!"
+                    )
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"] - self.inl[0]["m"] * self.inl[0]["e_PH"]
+                    self.E_F = self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_PH"]
 
             # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
-            elif (self.inl[0]['T'] > T0 and self.outl[1]['T'] > T0 and
-                self.outl[0]['T'] <= T0 and self.inl[1]['T'] <= T0):
+            elif (
+                self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0
+            ):
                 if split_physical_exergy:
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T'] + self.outl[1]['m'] * self.outl[1]['e_T']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
-                        self.outl[0]['m'] * self.outl[0]['e_M'] + self.outl[1]['m'] * self.outl[1]['e_M'])
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_T"] + self.outl[1]["m"] * self.outl[1]["e_T"]
+                    self.E_F = (
+                        self.inl[0]["m"] * self.inl[0]["e_PH"]
+                        + self.inl[1]["m"] * self.inl[1]["e_PH"]
+                        - (self.outl[0]["m"] * self.outl[0]["e_M"] + self.outl[1]["m"] * self.outl[1]["e_M"])
+                    )
                 else:
-                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
-                    "physical exergy should be split into thermal and mechanical components!")
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH'] + self.outl[1]['m'] * self.outl[1]['e_PH']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH']
+                    logging.warning(
+                        "While dealing with heat exchnager below ambient temperautre, "
+                        "physical exergy should be split into thermal and mechanical components!"
+                    )
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"] + self.outl[1]["m"] * self.outl[1]["e_PH"]
+                    self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] + self.inl[1]["m"] * self.inl[1]["e_PH"]
 
             # Case 4: Only hot inlet > T0
-            elif (self.inl[0]['T'] > T0 and self.inl[1]['T'] <= T0 and
-                self.outl[0]['T'] <= T0 and self.outl[1]['T'] <= T0):
+            elif (
+                self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0
+            ):
                 if split_physical_exergy:
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_T']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + self.inl[1]['m'] * self.inl[1]['e_PH'] - (
-                        self.outl[1]['m'] * self.outl[1]['e_PH'] + self.outl[0]['m'] * self.outl[0]['e_M'])
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_T"]
+                    self.E_F = (
+                        self.inl[0]["m"] * self.inl[0]["e_PH"]
+                        + self.inl[1]["m"] * self.inl[1]["e_PH"]
+                        - (self.outl[1]["m"] * self.outl[1]["e_PH"] + self.outl[0]["m"] * self.outl[0]["e_M"])
+                    )
                 else:
-                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
-                    "physical exergy should be split into thermal and mechanical components!")
-                    self.E_P = self.outl[0]['m'] * self.outl[0]['e_PH']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] + (
-                        self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
+                    logging.warning(
+                        "While dealing with heat exchnager below ambient temperautre, "
+                        "physical exergy should be split into thermal and mechanical components!"
+                    )
+                    self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"]
+                    self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] + (
+                        self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_PH"]
+                    )
 
             # Case 5: Only cold inlet <= T0
-            elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-            self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
+            elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0:
                 if split_physical_exergy:
-                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_T']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                        self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_M'])
+                    self.E_P = self.outl[1]["m"] * self.outl[1]["e_T"]
+                    self.E_F = (
+                        self.inl[0]["m"] * self.inl[0]["e_PH"]
+                        - self.outl[0]["m"] * self.outl[0]["e_PH"]
+                        + (self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_M"])
+                    )
                 else:
-                    logging.warning("While dealing with heat exchnager below ambient temperautre, "
-                    "physical exergy should be split into thermal and mechanical components!")
-                    self.E_P = self.outl[1]['m'] * self.outl[1]['e_PH']
-                    self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                        self.inl[1]['m'] * self.inl[1]['e_PH'])
-            
+                    logging.warning(
+                        "While dealing with heat exchnager below ambient temperautre, "
+                        "physical exergy should be split into thermal and mechanical components!"
+                    )
+                    self.E_P = self.outl[1]["m"] * self.outl[1]["e_PH"]
+                    self.E_F = (
+                        self.inl[0]["m"] * self.inl[0]["e_PH"]
+                        - self.outl[0]["m"] * self.outl[0]["e_PH"]
+                        + (self.inl[1]["m"] * self.inl[1]["e_PH"])
+                    )
+
             # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
-            elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-                self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
+            elif (
+                self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0
+            ):
                 self.E_P = np.nan
-                self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH'] + (
-                    self.inl[1]['m'] * self.inl[1]['e_PH'] - self.outl[1]['m'] * self.outl[1]['e_PH'])
-                
-                logging.warning(f"Component {self.name} is dissipative. This component should be " \
-                            "handled with the `dissipative` flag set to True.")
-            
+                self.E_F = (
+                    self.inl[0]["m"] * self.inl[0]["e_PH"]
+                    - self.outl[0]["m"] * self.outl[0]["e_PH"]
+                    + (self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_PH"])
+                )
+
+                logging.warning(
+                    f"Component {self.name} is dissipative. This component should be "
+                    "handled with the `dissipative` flag set to True."
+                )
+
             # Case 7: Not implemented case
-            else: 
-                logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
-                                "Please check the inlet and outlet temperatures.")
+            else:
+                logging.error(
+                    f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                    "Please check the inlet and outlet temperatures."
+                )
 
         else:
             self.E_F = (
-                self.inl[0]['m'] * self.inl[0]['e_PH']
-                - self.outl[0]['m'] * self.outl[0]['e_PH']
-                - self.outl[1]['m'] * self.outl[1]['e_PH']
-                + self.inl[1]['m'] * self.inl[1]['e_PH']
+                self.inl[0]["m"] * self.inl[0]["e_PH"]
+                - self.outl[0]["m"] * self.outl[0]["e_PH"]
+                - self.outl[1]["m"] * self.outl[1]["e_PH"]
+                + self.inl[1]["m"] * self.inl[1]["e_PH"]
             )
             self.E_P = np.nan
         # Calculate exergy destruction and efficiency
@@ -352,11 +387,10 @@ class HeatExchanger(Component):
 
         # Log the results
         logging.info(
-            f"HeatExchanger exergy balance calculated: "
+            f"Exergy balance of HeatExchanger {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
-
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         r"""
@@ -409,7 +443,7 @@ class HeatExchanger(Component):
             + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
             = 0
 
-        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case): 
+        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case):
 
         The dissipative is not handeld here!
 
@@ -460,6 +494,7 @@ class HeatExchanger(Component):
         ValueError
             If required cost variable indices are missing.
         """
+
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
             if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
@@ -519,7 +554,7 @@ class HeatExchanger(Component):
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
         # Case 2: All temperatures <= T0.
         elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
@@ -527,60 +562,60 @@ class HeatExchanger(Component):
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
         # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
-        elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
-            self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
+        elif self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0:
             set_thermal_p_rule(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_p_rule",
                 "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
         # Case 4: Only hot inlet > T0
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-            self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0:
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
         # Case 5: Only cold inlet <= T0
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-            self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0:
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T"
+                "property": "c_T",
             }
         # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-            self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
-            logging.warning(f"Component {self.name} is dissipative. This component should be " \
-                            "handled with the `dissipative` flag set to True.")
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0:
+            logging.warning(
+                f"Component {self.name} is dissipative. This component should be "
+                "handled with the `dissipative` flag set to True."
+            )
             return
         # Case 7: Not implemented case
-        else: 
-            logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
-                            "Please check the inlet and outlet temperatures.")
-        
+        else:
+            logging.error(
+                f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                "Please check the inlet and outlet temperatures."
+            )
+
         # Mechanical equations (always added)
         set_equal(A, counter + 1, self.inl[0], self.outl[0], "M")
         set_equal(A, counter + 2, self.inl[1], self.outl[1], "M")
-        equations[counter+1] = {
-                "kind": "aux_equality",
-                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_M"
-            }
+        equations[counter + 1] = {
+            "kind": "aux_equality",
+            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+            "property": "c_M",
+        }
         equations[counter + 2] = {
-                "kind": "aux_equality",
-                "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_M"
-            }
-        
+            "kind": "aux_equality",
+            "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
+            "property": "c_M",
+        }
+
         # Only add chemical auxiliary equations if chemical exergy is enabled.
         if chemical_exergy_enabled:
             set_equal(A, counter + 3, self.inl[0], self.outl[0], "CH")
@@ -588,12 +623,12 @@ class HeatExchanger(Component):
             equations[counter + 3] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_CH"
+                "property": "c_CH",
             }
             equations[counter + 4] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_M"
+                "property": "c_M",
             }
             num_aux_eqs = 5
         else:
@@ -701,7 +736,7 @@ class HeatExchanger(Component):
                     - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
             - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
             + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
-        
+
         Parameters
         ----------
         T0 : float
@@ -712,43 +747,37 @@ class HeatExchanger(Component):
         # Case 1: All streams are above the ambient temperature
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
-                self.inl[1]["C_M"] - self.outl[1]["C_M"])
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_M"] - self.outl[1]["C_M"])
         # Case 2: All streams are below or equal to the ambient temperature
         elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             self.C_P = self.outl[0]["C_T"] - self.inl[0]["C_T"]
-            self.C_F = self.inl[1]["C_PH"] - self.outl[1]["C_PH"] + (
-                self.inl[0]["C_M"] - self.outl[0]["C_M"])
+            self.C_F = self.inl[1]["C_PH"] - self.outl[1]["C_PH"] + (self.inl[0]["C_M"] - self.outl[0]["C_M"])
         # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
-        elif (self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and
-              self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0):
+        elif self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0:
             self.C_P = self.outl[0]["C_T"] + self.outl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
-                self.outl[0]["C_M"] + self.outl[1]["C_M"])
+            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (self.outl[0]["C_M"] + self.outl[1]["C_M"])
         # Case 4: Only hot inlet > T0
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-              self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0):
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0:
             self.C_P = self.outl[0]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (
-               self.outl[1]["C_PH"] + self.outl[0]["C_M"])
+            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (self.outl[1]["C_PH"] + self.outl[0]["C_M"])
         # Case 5: Only cold inlet <= T0
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-              self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0):
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0:
             self.C_P = self.outl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
-                self.inl[1]["C_PH"] - self.outl[1]["C_M"])
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_M"])
         # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
-        elif (self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and
-              self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0):
-            logging.warning(f"Component {self.name} is dissipative. This component should be " \
-                            "handled with the `dissipative` flag set to True.")
+        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0:
+            logging.warning(
+                f"Component {self.name} is dissipative. This component should be "
+                "handled with the `dissipative` flag set to True."
+            )
             self.C_P = np.nan
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (
-                self.inl[1]["C_PH"] - self.outl[1]["C_PH"])
+            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_PH"])
         # Case 7: Not implemented case
-        else: 
-            logging.error(f"The heat exchanger {self.name} has an unexpected temperature configuration. "
-                            "Please check the inlet and outlet temperatures.")
+        else:
+            logging.error(
+                f"The heat exchanger {self.name} has an unexpected temperature configuration. "
+                "Please check the inlet and outlet temperatures."
+            )
 
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P

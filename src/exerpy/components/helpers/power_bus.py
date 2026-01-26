@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -11,6 +10,7 @@ class PowerBus(Component):
     r"""
     Component for power busses. This component is not considered in exergy analysis, but it is used in exergoeconomic analysis.
     """
+
     def __init__(self, **kwargs):
         r"""Initialize CycleCloser component with given parameters."""
         super().__init__(**kwargs)
@@ -18,7 +18,7 @@ class PowerBus(Component):
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         The PowerBus component does not have an exergy balance calculation.
-        """      
+        """
         self.E_D = np.nan
         self.E_F = np.nan
         self.E_P = np.nan
@@ -26,24 +26,21 @@ class PowerBus(Component):
         self.epsilon = np.nan
 
         # Log the results
-        logging.info(
-            f"The exergy balance of a CycleCloser component is skipped."
-        )
+        logging.info(f"The exergy balance of a PowerBus {self.name} is skipped.")
 
-    
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
         Auxiliary equations for the cycle closer.
-        
-        This function adds two rows to the cost matrix A and the right-hand side vector b to enforce 
+
+        This function adds two rows to the cost matrix A and the right-hand side vector b to enforce
         the following auxiliary cost relations:
-        
+
         (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
         (2) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
-        
-        These equations ensure that the specific mechanical and thermal costs are equalized between 
+
+        These equations ensure that the specific mechanical and thermal costs are equalized between
         the inlet and outlet of the cycle closer. Chemical exergy is not considered for the cycle closer.
-        
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -59,7 +56,7 @@ class PowerBus(Component):
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
             This flag is ignored for CycleCloser.
-        
+
         Returns
         -------
         A : numpy.ndarray
@@ -71,27 +68,38 @@ class PowerBus(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        if len(self.outl) <= 1:
-            return A, b, counter, equations
 
-        for out in self.outl[1:]:
-            A[counter, self.inl[0]["CostVar_index"]["TOT"]] = (1 / self.inl[0]["e_TOT"]) if self.inl[0]["e_TOT"] != 0 else 1
-            A[counter, out["CostVar_index"]["TOT"]]           = (-1 / out["e_TOT"])         if out["e_TOT"]         != 0 else -1
-            equations[counter] = {
-                "kind":     "aux_equality",
-                "objects":  [self.name, self.inl[0]["name"], out["name"]],
-                "property": "c_TOT"
-            }
-            b[counter] = 0
-            counter += 1
+        # Splitter case
+        if len(self.inl) >= 1 and len(self.outl) <= 1:
+            logging.info(f"PowerBus {self.name} has only one output, no auxiliary equations added.")
+
+        # Mixer case
+        elif len(self.inl) == 1 and len(self.outl) > 1:
+            logging.info(f"PowerBus {self.name} has multiple outputs, auxiliary equations will be added.")
+            for out in list(self.outl.values())[:]:
+                A[counter, self.inl[0]["CostVar_index"]["exergy"]] = (
+                    (1 / self.inl[0]["E"]) if self.inl[0]["E"] != 0 else 1
+                )
+                A[counter, out["CostVar_index"]["exergy"]] = (-1 / out["E"]) if out["E"] != 0 else -1
+                equations[counter] = {
+                    "kind": "aux_power_eq",
+                    "objects": [self.name, self.inl[0]["name"], out["name"]],
+                    "property": "c_TOT",
+                }
+                b[counter] = 0
+                counter += 1
+
+        # Mixer case with multiple inputs and outputs
+        else:
+            logging.error(f"PowerBus {self.name} has multiple inputs and outputs, which has not been implemented yet.")
 
         return A, b, counter, equations
-    
+
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False) -> None:
         """
         Exergoeconomic balance for the PowerBus is not defined.
 
-        This component does not generate or consume exergy, so all cost terms are undefined.
+        This component does not convert or destroy exergy, so all cost terms are undefined.
 
         Parameters
         ----------
@@ -100,10 +108,10 @@ class PowerBus(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
         """
-        self.C_F    = np.nan
-        self.C_P    = np.nan
-        self.C_D    = np.nan
-        self.c_TOT  = np.nan
-        self.C_TOT  = np.nan
-        self.r      = np.nan
-        self.f      = np.nan
+        self.C_F = np.nan
+        self.C_P = np.nan
+        self.C_D = np.nan
+        self.c_TOT = np.nan
+        self.C_TOT = np.nan
+        self.r = np.nan
+        self.f = np.nan

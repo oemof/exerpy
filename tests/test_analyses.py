@@ -13,11 +13,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from exerpy.analyses import ExergyAnalysis
-from exerpy.analyses import _construct_components
-from exerpy.analyses import _load_json
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.analyses import ExergyAnalysis, _construct_components, _load_json
+from exerpy.components.component import Component, component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
 from exerpy.parser.from_ebsilon import __ebsilon_path__
 
@@ -31,6 +28,7 @@ class MockTurbine(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.E_P / self.E_F
 
+
 @component_registry
 class MockCompressor(Component):
     def calc_exergy_balance(self, T0, p0, split_physical_exergy=True):
@@ -38,6 +36,7 @@ class MockCompressor(Component):
         self.E_P = 40000
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.E_P / self.E_F
+
 
 # Dummy CycleCloser (should be skipped in the analysis)
 @component_registry
@@ -47,6 +46,7 @@ class DummyCycleCloser(CycleCloser):
         self.E_P = 0
         self.E_D = 0
 
+
 # Dummy Valve to test dissipative logic
 @component_registry
 class DummyValve(Component):
@@ -55,28 +55,16 @@ class DummyValve(Component):
         self.E_P = 0
         self.E_D = 0
 
+
 # Test fixtures
 @pytest.fixture
 def mock_component_data():
     """Create mock component data."""
     return {
-        "MockTurbine": {
-            "T1": {
-                "name": "T1",
-                "type": "MockTurbine",
-                "type_index": 23,
-                "eta_s": 0.9
-            }
-        },
-        "MockCompressor": {
-            "C1": {
-                "name": "C1",
-                "type": "MockCompressor",
-                "type_index": 24,
-                "eta_s": 0.85
-            }
-        }
+        "MockTurbine": {"T1": {"name": "T1", "type": "MockTurbine", "type_index": 23, "eta_s": 0.9}},
+        "MockCompressor": {"C1": {"name": "C1", "type": "MockCompressor", "type_index": 24, "eta_s": 0.85}},
     }
+
 
 @pytest.fixture
 def mock_connection_data():
@@ -92,10 +80,7 @@ def mock_connection_data():
             "p": 101325,
             "m": 100,
             "E": 50000,
-            "mass_composition": {  # Added composition
-                "N2": 0.79,
-                "O2": 0.21
-            }
+            "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
         "2": {
             "kind": "material",
@@ -107,10 +92,7 @@ def mock_connection_data():
             "p": 500000,
             "m": 100,
             "E": 5000,
-            "mass_composition": {  # Added composition
-                "N2": 0.79,
-                "O2": 0.21
-            }
+            "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
         "3": {
             "kind": "power",
@@ -119,14 +101,16 @@ def mock_connection_data():
             "target_component": None,
             "target_connector": None,
             "energy_flow": 85000,
-            "E": 35000
-        }
+            "E": 35000,
+        },
     }
+
 
 @pytest.fixture
 def exergy_analysis(mock_component_data, mock_connection_data):
     """Create ExergyAnalysis instance."""
     return ExergyAnalysis(mock_component_data, mock_connection_data, 298.15, 101325)
+
 
 # Test component construction
 def test_component_construction(mock_component_data, mock_connection_data):
@@ -143,13 +127,10 @@ def test_component_construction(mock_component_data, mock_connection_data):
     assert 0 in components["C1"].outl
     assert components["T1"].inl[0]["T"] == 500
 
+
 def test_invalid_component_type():
     """Test handling of invalid component type."""
-    invalid_data = {
-        "InvalidType": {
-            "X1": {"name": "X1", "type": "InvalidType"}
-        }
-    }
+    invalid_data = {"InvalidType": {"X1": {"name": "X1", "type": "InvalidType"}}}
     components = _construct_components(invalid_data, {}, 298.15)
     # Expect that the invalid component is skipped, resulting in an empty dictionary.
     assert components == {}
@@ -167,6 +148,7 @@ def test_analyse_basic(exergy_analysis):
     assert exergy_analysis.E_P == 35000
     assert exergy_analysis.epsilon == pytest.approx(0.7, rel=1e-2)
 
+
 def test_analyse_with_losses(exergy_analysis):
     """Test exergy analysis with loss accounting."""
     E_F = {"inputs": ["1"]}
@@ -177,6 +159,7 @@ def test_analyse_with_losses(exergy_analysis):
 
     assert exergy_analysis.E_L == 5000
     assert exergy_analysis.E_D == exergy_analysis.E_F - exergy_analysis.E_P - exergy_analysis.E_L
+
 
 def test_component_exergy_balance(exergy_analysis):
     """Test individual component exergy balance calculations."""
@@ -190,6 +173,7 @@ def test_component_exergy_balance(exergy_analysis):
     assert comp.E_P == 40000
     assert comp.E_D == 10000
     assert comp.y == pytest.approx(0.2, rel=1e-2)
+
 
 # Test results generation
 def test_exergy_results(exergy_analysis):
@@ -213,10 +197,7 @@ def test_exergy_results(exergy_analysis):
     assert "Energy Flow [kW]" in non_material_results.columns
 
 
-@pytest.mark.skipif(
-    __ebsilon_path__ is None,
-    reason='Test skipped due to missing ebsilon dependency.'
-)
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
 def test_from_ebsilon(tmp_path):
     """Test creating instance from Ebsilon file."""
     test_file = tmp_path / "test.ebs"
@@ -226,25 +207,23 @@ def test_from_ebsilon(tmp_path):
         ExergyAnalysis.from_ebsilon(str(test_file))
 
 
-@pytest.mark.skipif(
-    __ebsilon_path__ is None,
-    reason='Test skipped due to missing ebsilon dependency.'
-)
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
 def test_from_ebsilon_load_existing_json(tmp_path):
     """
     Test that the from_ebsilon() method can load existing JSON data when simulate=False.
     """
     # Setup
-    ebsilon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'examples', 'cgam', 'cgam.ebs'))
-    parsed_json_file = ebsilon_file.replace(".ebs", "_ebs.json")
+    ebsilon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples", "cgam", "cgam.ebs"))
+    ebsilon_file.replace(".ebs", "_ebs.json")
 
     # Call the method and verify the output
     analysis = ExergyAnalysis.from_ebsilon(ebsilon_file, Tamb=None, pamb=None)
     assert isinstance(analysis, ExergyAnalysis)
-    assert abs(analysis.Tamb - 298.15) < 1e-5    # Allow small floating-point tolerance
-    assert abs(analysis.pamb - 101300) < 1e-5    # Allow small floating-point tolerance
+    assert abs(analysis.Tamb - 298.15) < 1e-5  # Allow small floating-point tolerance
+    assert abs(analysis.pamb - 101300) < 1e-5  # Allow small floating-point tolerance
     assert len(analysis.components) > 0
     assert "CC" in analysis.components
+
 
 def test_ebsilon_invalid_format(tmp_path):
     """Test handling of invalid file format."""
@@ -254,58 +233,42 @@ def test_ebsilon_invalid_format(tmp_path):
     with pytest.raises(ValueError, match="Unsupported file format"):
         ExergyAnalysis.from_ebsilon(str(invalid_file))
 
+
 @pytest.fixture
 def mock_json_data(mock_component_data, mock_connection_data):
     """Provide mock JSON data for testing."""
     return {
         "components": mock_component_data,
         "connections": mock_connection_data,
-        "ambient_conditions": {
-            "Tamb": 298.15,
-            "Tamb_unit": "K",
-            "pamb": 101325,
-            "pamb_unit": "Pa"
-        }
+        "ambient_conditions": {"Tamb": 298.15, "Tamb_unit": "K", "pamb": 101325, "pamb_unit": "Pa"},
     }
+
 
 @pytest.fixture
 def json_file(tmp_path, mock_json_data):
     """Create temporary JSON file with mock data."""
     json_path = tmp_path / "test.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(mock_json_data, f)
     return json_path
+
 
 def test_from_json_missing_composition(tmp_path):
     """Test error handling for material streams without composition."""
     data = {
-        "components": {
-            "MockTurbine": {
-                "T1": {
-                    "name": "T1",
-                    "type": "MockTurbine",
-                    "type_index": 23,
-                    "eta_s": 0.9
-                }
-            }
-        },
+        "components": {"MockTurbine": {"T1": {"name": "T1", "type": "MockTurbine", "type_index": 23, "eta_s": 0.9}}},
         "connections": {
-            "1": {
-                "kind": "material",
-                "source_component": None,
-                "target_component": "T1",
-                "T": 298.15,
-                "p": 101325
-            }
+            "1": {"kind": "material", "source_component": None, "target_component": "T1", "T": 298.15, "p": 101325}
         },
-        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325}
+        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325},
     }
     json_path = tmp_path / "missing_comp.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(data, f)
 
     with pytest.raises(ValueError, match="Material stream '1' missing mass_composition"):
-        ExergyAnalysis.from_json(str(json_path), chemExLib='Ahrendts')
+        ExergyAnalysis.from_json(str(json_path), chemExLib="Ahrendts")
+
 
 def test_from_json_basic(json_file):
     """Test basic JSON file loading."""
@@ -317,45 +280,45 @@ def test_from_json_basic(json_file):
     assert abs(analysis.Tamb - 298.15) < 1e-5
     assert abs(analysis.pamb - 101325) < 1e-5
 
+
 def test_from_json_override_ambient(json_file):
     """Test overriding ambient conditions."""
     analysis = ExergyAnalysis.from_json(str(json_file), Tamb=300, pamb=100000)
     assert abs(analysis.Tamb - 300) < 1e-5
     assert abs(analysis.pamb - 100000) < 1e-5
 
+
 def test_from_json_missing_sections(tmp_path):
     """Test error handling for missing required sections."""
     incomplete_data = {"components": {}}
     json_path = tmp_path / "incomplete.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(incomplete_data, f)
 
     with pytest.raises(ValueError, match="Missing required sections"):
         ExergyAnalysis.from_json(str(json_path))
+
 
 def test_from_json_invalid_component_structure(tmp_path):
     """Test error handling for invalid component structure."""
     invalid_data = {
         "components": {"InvalidComponent": []},  # Should be dict
         "connections": {},
-        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325}
+        "ambient_conditions": {"Tamb": 298.15, "pamb": 101325},
     }
     json_path = tmp_path / "invalid.json"
-    with open(json_path, 'w') as f:
+    with open(json_path, "w") as f:
         json.dump(invalid_data, f)
 
     with pytest.raises(ValueError, match="must contain dictionary"):
         ExergyAnalysis.from_json(str(json_path))
 
-def test_from_json_with_chemical_exergy(json_file):
-    """Test JSON loading with chemical exergy calculation."""
-    analysis = ExergyAnalysis.from_json(str(json_file), chemExLib='Ahrendts')
-    assert 'e_CH' in next(iter(analysis.connections.values()))
 
 def test_from_json_invalid_file():
     """Test error handling for non-existent file."""
     with pytest.raises(FileNotFoundError):
         ExergyAnalysis.from_json("nonexistent.json")
+
 
 def test_zero_fuel_exergy(exergy_analysis, mock_connection_data, monkeypatch):
     """
@@ -366,14 +329,13 @@ def test_zero_fuel_exergy(exergy_analysis, mock_connection_data, monkeypatch):
     # Patch logging.info in the analyses module to prevent formatting of None.
     monkeypatch.setattr("exerpy.analyses.logging.info", lambda msg: None)
     # Create a fresh analysis with the modified connection data.
-    analysis = ExergyAnalysis(
-        exergy_analysis._component_data, mock_connection_data, 298.15, 101325
-    )
+    analysis = ExergyAnalysis(exergy_analysis._component_data, mock_connection_data, 298.15, 101325)
     fuel = {"inputs": ["1"]}
     product = {"inputs": ["3"]}
     analysis.analyse(fuel, product)
     assert analysis.E_F == 0.0
     assert analysis.epsilon is None
+
 
 def test_invalid_connection_reference(exergy_analysis):
     """
@@ -384,6 +346,7 @@ def test_invalid_connection_reference(exergy_analysis):
     with pytest.raises(ValueError, match="The connection nonexistent is not part of the plant's connections."):
         exergy_analysis.analyse(fuel, product)
 
+
 def test_cyclecloser_skipped(mock_component_data, mock_connection_data, caplog):
     """
     Test that a CycleCloser component is skipped in the exergy analysis calculations,
@@ -391,9 +354,7 @@ def test_cyclecloser_skipped(mock_component_data, mock_connection_data, caplog):
     the overall system destruction.
     """
     # Add a dummy CycleCloser component.
-    mock_component_data["CycleCloser"] = {
-        "CC": {"name": "CC", "type": "DummyCycleCloser", "type_index": 999}
-    }
+    mock_component_data["CycleCloser"] = {"CC": {"name": "CC", "type": "DummyCycleCloser", "type_index": 999}}
     # Add a connection for the CycleCloser (this connection should be ignored)
     mock_connection_data["99"] = {
         "kind": "material",
@@ -405,7 +366,7 @@ def test_cyclecloser_skipped(mock_component_data, mock_connection_data, caplog):
         "p": 101325,
         "m": 100,
         "E": 1000,
-        "mass_composition": {"N2": 0.79, "O2": 0.21}
+        "mass_composition": {"N2": 0.79, "O2": 0.21},
     }
     analysis = ExergyAnalysis(mock_component_data, mock_connection_data, 298.15, 101325)
     fuel = {"inputs": ["1"]}
@@ -415,23 +376,21 @@ def test_cyclecloser_skipped(mock_component_data, mock_connection_data, caplog):
     # Verify that the CycleCloser component "CC" is present
     assert "CC" in analysis.components
     # Sum of component destruction for non-CycleCloser components:
-    total_component_E_D = sum(comp.E_D for name, comp in analysis.components.items()
-                                if comp.__class__.__name__ != "CycleCloser")
+    total_component_E_D = sum(
+        comp.E_D for name, comp in analysis.components.items() if comp.__class__.__name__ != "CycleCloser"
+    )
     # Overall system destruction calculated from connections:
     overall_E_D = analysis.E_F - analysis.E_P - analysis.E_L
     # They are not equal, so a warning should be logged.
     assert not np.isclose(total_component_E_D, overall_E_D, rtol=1e-5)
     assert "does not match overall system exergy destruction" in caplog.text
 
+
 def test_valve_dissipative():
     """
     Test that a Valve component with inlet and outlet temperatures above ambient is marked as dissipative.
     """
-    component_data = {
-        "Valve": {
-            "V1": {"name": "V1", "type": "DummyValve", "type_index": 101}
-        }
-    }
+    component_data = {"Valve": {"V1": {"name": "V1", "type": "DummyValve", "type_index": 101}}}
     # Create connection data for the valve:
     connection_data = {
         "1": {
@@ -444,7 +403,7 @@ def test_valve_dissipative():
             "p": 101325,
             "m": 100,
             "E": 1000,
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
         },
         "2": {
             "kind": "material",
@@ -456,14 +415,15 @@ def test_valve_dissipative():
             "p": 101325,
             "m": 100,
             "E": 1000,
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
-        }
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
+        },
     }
     # Use an ambient temperature lower than the connection temperatures.
-    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    ExergyAnalysis(component_data, connection_data, 300, 101325)
     components = _construct_components(component_data, connection_data, 300)
     valve = components["V1"]
     assert valve.is_dissipative is True
+
 
 def test_multiple_inputs_outputs(mock_component_data):
     """
@@ -481,7 +441,7 @@ def test_multiple_inputs_outputs(mock_component_data):
             "p": 101325,
             "m": 100,
             "E": 50000,
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
         },
         "2": {  # existing product connection from C1 to T1
             "kind": "material",
@@ -493,7 +453,7 @@ def test_multiple_inputs_outputs(mock_component_data):
             "p": 500000,
             "m": 100,
             "E": 5000,
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
         },
         "3": {  # existing power connection from T1
             "kind": "power",
@@ -502,7 +462,7 @@ def test_multiple_inputs_outputs(mock_component_data):
             "target_component": None,
             "target_connector": None,
             "energy_flow": 85000,
-            "E": 35000
+            "E": 35000,
         },
         "4": {  # additional fuel connection to C1
             "kind": "material",
@@ -514,7 +474,7 @@ def test_multiple_inputs_outputs(mock_component_data):
             "p": 101325,
             "m": 100,
             "E": 30000,
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
         },
         "5": {  # additional product connection from T1 (power stream)
             "kind": "power",
@@ -523,8 +483,8 @@ def test_multiple_inputs_outputs(mock_component_data):
             "target_component": None,
             "target_connector": None,
             "energy_flow": 50000,
-            "E": 20000
-        }
+            "E": 20000,
+        },
     }
     # Use the original component data fixture function to get components.
     analysis = ExergyAnalysis(mock_component_data, connection_data, 298.15, 101325)
@@ -535,6 +495,7 @@ def test_multiple_inputs_outputs(mock_component_data):
     assert analysis.E_F == 80000
     assert analysis.E_P == 55000
 
+
 def test_ambient_conditions_propagation(mock_component_data, mock_connection_data):
     """
     Test that ambient conditions (Tamb, pamb) provided to ExergyAnalysis are correctly stored.
@@ -542,6 +503,7 @@ def test_ambient_conditions_propagation(mock_component_data, mock_connection_dat
     analysis = ExergyAnalysis(mock_component_data, mock_connection_data, 310, 90000)
     assert analysis.Tamb == 310
     assert analysis.pamb == 90000
+
 
 def test_exergy_destruction_warning(exergy_analysis, caplog):
     """
@@ -551,10 +513,12 @@ def test_exergy_destruction_warning(exergy_analysis, caplog):
     # Monkey-patch one component's calc_exergy_balance to artificially alter its E_D.
     comp = exergy_analysis.components["C1"]
     orig_calc = comp.calc_exergy_balance
+
     def fake_calc(T0, p0, split_physical_exergy=True):
         orig_calc(T0, p0, split_physical_exergy)
         # Artificially add an error to the destruction value.
         comp.E_D += 1000
+
     comp.calc_exergy_balance = fake_calc
 
     fuel = {"inputs": ["1"]}
@@ -562,6 +526,7 @@ def test_exergy_destruction_warning(exergy_analysis, caplog):
     exergy_analysis.analyse(fuel, product)
     # Check that a warning message is logged.
     assert "does not match overall system exergy destruction" in caplog.text
+
 
 def test_export_to_json(tmp_path, mock_component_data, mock_connection_data):
     """
@@ -575,7 +540,7 @@ def test_export_to_json(tmp_path, mock_component_data, mock_connection_data):
     analysis.export_to_json(str(output_file))
 
     # Load the exported JSON data.
-    with open(output_file, "r") as f:
+    with open(output_file) as f:
         data = json.load(f)
 
     # Check that required keys are present.
@@ -598,9 +563,10 @@ def test_from_json_with_chemical_exergy(json_file, monkeypatch):
     Test that when a chemical exergy library is provided, the from_json method adds the
     chemical exergy field (e_CH) to at least one material connection.
     """
+
     # Define a dummy add_chemical_exergy function that adds 'e_CH' to each material connection.
     def dummy_add_chemical_exergy(data, Tamb, pamb, chemExLib):
-        for conn in data['connections'].values():
+        for conn in data["connections"].values():
             if conn.get("kind") == "material":
                 conn["e_CH"] = 123  # dummy chemical exergy value
         return data
@@ -609,10 +575,11 @@ def test_from_json_with_chemical_exergy(json_file, monkeypatch):
     monkeypatch.setattr("exerpy.analyses.add_chemical_exergy", dummy_add_chemical_exergy)
 
     # Load the analysis with the dummy chemExLib parameter.
-    analysis = ExergyAnalysis.from_json(str(json_file), chemExLib='DummyChemLib')
+    analysis = ExergyAnalysis.from_json(str(json_file), chemExLib="DummyChemLib")
     # Check that for at least one connection of kind 'material', the key 'e_CH' is present.
     material_connections = [conn for conn in analysis.connections.values() if conn.get("kind") == "material"]
     assert any("e_CH" in conn for conn in material_connections)
+
 
 def test_round_trip_export_import(tmp_path, mock_component_data, mock_connection_data):
     """
@@ -641,6 +608,7 @@ def test_round_trip_export_import(tmp_path, mock_component_data, mock_connection
     for comp_type in mock_component_data:
         assert analysis_loaded._component_data[comp_type].keys() == mock_component_data[comp_type].keys()
 
+
 def test_malformed_json_raises(tmp_path):
     """
     Test that _load_json raises a JSONDecodeError when given a file with malformed JSON.
@@ -654,6 +622,7 @@ def test_malformed_json_raises(tmp_path):
     # Depending on implementation, the error may be a JSONDecodeError or a custom error.
     assert "Invalid JSON format" in str(excinfo.value) or "Expecting value" in str(excinfo.value)
 
+
 def test_results_numerical_conversion(tmp_path):
     """
     Test that numerical conversions (e.g., from W to kW) in the exergy results DataFrame are correct.
@@ -661,16 +630,7 @@ def test_results_numerical_conversion(tmp_path):
     """
     # Create minimal component and connection data with known values.
     # Use a registered component type ("MockTurbine") for the component.
-    component_data = {
-        "MockTurbine": {
-            "Comp1": {
-                "name": "Comp1",
-                "type": "MockTurbine",
-                "type_index": 1,
-                "eta_s": 1.0
-            }
-        }
-    }
+    component_data = {"MockTurbine": {"Comp1": {"name": "Comp1", "type": "MockTurbine", "type_index": 1, "eta_s": 1.0}}}
     # Set connection E values in Watts.
     connection_data = {
         "1": {
@@ -683,7 +643,7 @@ def test_results_numerical_conversion(tmp_path):
             "p": 101325,
             "m": 10,
             "E": 100000,  # 100 kW when converted
-            "mass_composition": {"N2": 0.79, "O2": 0.21}
+            "mass_composition": {"N2": 0.79, "O2": 0.21},
         },
         "2": {
             "kind": "power",
@@ -692,8 +652,8 @@ def test_results_numerical_conversion(tmp_path):
             "target_component": None,
             "target_connector": None,
             "energy_flow": 50000,
-            "E": 50000  # 50 kW when converted
-        }
+            "E": 50000,  # 50 kW when converted
+        },
     }
     # Create analysis with these values.
     analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)

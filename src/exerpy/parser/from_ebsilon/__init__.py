@@ -31,7 +31,7 @@ if __ebsilon_path__ is not None:
 def is_ebsilon_available() -> bool:
     """
     Check if Ebsilon functionality is available.
-    
+
     Returns:
         bool: True if Ebsilon is available, False otherwise.
     """

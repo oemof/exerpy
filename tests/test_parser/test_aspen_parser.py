@@ -17,26 +17,26 @@ The test suite verifies:
 - Error handling for a missing model file
 """
 
-import json
-import os
-from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
 
-from exerpy.parser.from_aspen.aspen_parser import AspenModelParser
-from exerpy.parser.from_aspen.aspen_parser import run_aspen
+from exerpy.parser.from_aspen.aspen_parser import AspenModelParser, run_aspen
 
 # --- DummyCollection class to simulate COM collection behavior ---
+
 
 class DummyCollection(list):
     @property
     def Count(self):
         return len(self)
+
     def __call__(self, index):
         return self[index]
 
+
 # --- Dummy COM Node and Tree Classes to simulate Aspen structure ---
+
 
 class DummyNode:
     """
@@ -53,11 +53,13 @@ class DummyNode:
     Elements : DummyCollection
         Collection of child nodes.
     """
+
     def __init__(self, name="", value=None, unit=""):
         self.Name = name
         self.Value = value
         self.UnitString = unit
         self.Elements = DummyCollection()
+
 
 class DummyTree:
     """
@@ -68,6 +70,7 @@ class DummyTree:
     nodes : dict
         Dictionary mapping node paths to DummyNode instances.
     """
+
     def __init__(self, nodes):
         self.nodes = nodes
 
@@ -87,6 +90,7 @@ class DummyTree:
         """
         return self.nodes.get(path, None)
 
+
 class DummyAspen:
     """
     Dummy Aspen application simulating the COM interface.
@@ -96,6 +100,7 @@ class DummyAspen:
     Tree : DummyTree
         The dummy tree structure of the Aspen model.
     """
+
     def __init__(self, tree):
         self.Tree = tree
 
@@ -110,7 +115,9 @@ class DummyAspen:
         """
         self.model_path = model_path
 
+
 # --- Helper class for block nodes ---
+
 
 class DummyBlockNode(DummyNode):
     """
@@ -121,6 +128,7 @@ class DummyBlockNode(DummyNode):
     attr_value : any
         The value to return for AttributeValue(6).
     """
+
     def __init__(self, name, value, attr_value):
         super().__init__(name, value)
         self._attr_value = attr_value
@@ -130,7 +138,9 @@ class DummyBlockNode(DummyNode):
             return self._attr_value
         return None
 
+
 # --- Fixtures for dummy conversion and fluid property data ---
+
 
 @pytest.fixture
 def dummy_convert_to_SI():
@@ -144,6 +154,7 @@ def dummy_convert_to_SI():
     """
     return lambda phys, value, unit_str: value
 
+
 @pytest.fixture
 def dummy_fluid_property_data():
     """
@@ -155,18 +166,20 @@ def dummy_fluid_property_data():
         Dictionary mapping fluid property keys to their SI unit representation.
     """
     return {
-        'T': {'SI_unit': 'K'},
-        'p': {'SI_unit': 'Pa'},
-        'h': {'SI_unit': 'J/kg'},
-        's': {'SI_unit': 'J/kgK'},
-        'm': {'SI_unit': 'kg'},
-        'power': {'SI_unit': 'W'},
-        'heat': {'SI_unit': 'W'},
-        'e': {'SI_unit': 'J'},
-        'n': {'SI_unit': 'mol/s'}
+        "T": {"SI_unit": "K"},
+        "p": {"SI_unit": "Pa"},
+        "h": {"SI_unit": "J/kg"},
+        "s": {"SI_unit": "J/kgK"},
+        "m": {"SI_unit": "kg"},
+        "power": {"SI_unit": "W"},
+        "heat": {"SI_unit": "W"},
+        "e": {"SI_unit": "J"},
+        "n": {"SI_unit": "mol/s"},
     }
 
+
 # --- Fixture to setup a parser with a dummy Aspen COM object (ambient only) ---
+
 
 @pytest.fixture
 def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
@@ -182,6 +195,7 @@ def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
         Parser instance with injected dummy Aspen object.
     """
     import exerpy.parser.from_aspen.aspen_parser as ap
+
     ap.convert_to_SI = dummy_convert_to_SI
     ap.fluid_property_data = dummy_fluid_property_data
 
@@ -198,7 +212,9 @@ def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
     parser.aspen = dummy_aspen
     return parser
 
+
 # --- Tests for parse_streams ---
+
 
 def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
     """
@@ -212,6 +228,7 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
       energy flow, exergy, total flow, and fluid composition.
     """
     import exerpy.parser.from_aspen.aspen_parser as ap
+
     ap.convert_to_SI = dummy_convert_to_SI
     ap.fluid_property_data = dummy_fluid_property_data
 
@@ -273,31 +290,33 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
 
     conn1 = parser.connections_data.get("Stream1")
     assert conn1 is not None
-    assert conn1['kind'] == 'power'
-    assert conn1['energy_flow'] == 100
-    assert conn1['source_component'] == "CompA"
-    assert conn1['target_component'] == "CompB"
+    assert conn1["kind"] == "power"
+    assert conn1["energy_flow"] == 100
+    assert conn1["source_component"] == "CompA"
+    assert conn1["target_component"] == "CompB"
 
     conn2 = parser.connections_data.get("Stream2")
     assert conn2 is not None
-    assert conn2['kind'] == 'heat'
-    assert conn2['energy_flow'] == 200
+    assert conn2["kind"] == "heat"
+    assert conn2["energy_flow"] == 200
 
     conn3 = parser.connections_data.get("Stream3")
     assert conn3 is not None
-    assert conn3['kind'] == 'material'
-    assert conn3['T'] == 350
-    assert conn3['p'] == 101325
-    assert conn3['h'] == 1500
-    assert conn3['s'] == 3
-    assert conn3['m'] == 5
-    assert conn3['energy_flow'] == 250
-    assert conn3['e_PH'] == 400
-    assert conn3['n'] == 10
-    assert conn3['molar_composition'].get("Water") == 0.9
-    assert conn3['mass_composition'].get("Water") == 0.8
+    assert conn3["kind"] == "material"
+    assert conn3["T"] == 350
+    assert conn3["p"] == 101325
+    assert conn3["h"] == 1500
+    assert conn3["s"] == 3
+    assert conn3["m"] == 5
+    assert conn3["energy_flow"] == 250
+    assert conn3["e_PH"] == 400
+    assert conn3["n"] == 10
+    assert conn3["molar_composition"].get("Water") == 0.9
+    assert conn3["mass_composition"].get("Water") == 0.8
+
 
 # --- Tests for parse_blocks and component grouping ---
+
 
 def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_data):
     """
@@ -308,13 +327,14 @@ def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_dat
     - A Mult block with factor < 1 (Generator scenario).
     - A Pump block that creates an associated Motor.
     - Grouping of components based on type using grouped_components.
-    
+
     Verifies
     --------
     - Components are parsed and grouped.
     - Additional connections (like heater heat connection and pump motor connections) are created.
     """
     import exerpy.parser.from_aspen.aspen_parser as ap
+
     ap.convert_to_SI = dummy_convert_to_SI
     ap.fluid_property_data = dummy_fluid_property_data
 
@@ -336,7 +356,7 @@ def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_dat
     elec_power_node = DummyNode("ELEC_POWER", 120, "W")
     brake_power_node = DummyNode("BRAKE_POWER", 80, "W")
     eff_driv_node = DummyNode("EFF_DRIV", 0.95, "")
-    
+
     blocks_parent.Elements = DummyCollection([block1, block2, block3])
     tree_nodes = {
         r"\Data\Blocks": blocks_parent,
@@ -375,7 +395,9 @@ def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_dat
     assert elec_conn_name in parser.connections_data
     assert mech_conn_name in parser.connections_data
 
+
 # --- Tests for connector assignment routines ---
+
 
 def test_assign_mixer_connectors():
     """
@@ -394,20 +416,20 @@ def test_assign_mixer_connectors():
     port2.Elements = DummyCollection([outlet_elem])
     mixer_ports = DummyNode("Ports")
     mixer_ports.Elements = DummyCollection([port1, port2])
-    dummy_tree = DummyTree({
-        r"\Data\Blocks\Mixer1\Ports": mixer_ports,
-        r"\Data\Blocks\Mixer1\Ports\InletPort": port1,
-        r"\Data\Blocks\Mixer1\Ports\OutletPort": port2,
-    })
+    dummy_tree = DummyTree(
+        {
+            r"\Data\Blocks\Mixer1\Ports": mixer_ports,
+            r"\Data\Blocks\Mixer1\Ports\InletPort": port1,
+            r"\Data\Blocks\Mixer1\Ports\OutletPort": port2,
+        }
+    )
     dummy_aspen = DummyAspen(dummy_tree)
-    connections_data = {
-        "StreamIn": {"target_component": "Mixer1"},
-        "StreamOut": {"source_component": "Mixer1"}
-    }
+    connections_data = {"StreamIn": {"target_component": "Mixer1"}, "StreamOut": {"source_component": "Mixer1"}}
     parser = AspenModelParser("dummy.apw")
     parser.assign_mixer_connectors("Mixer1", dummy_aspen, connections_data)
     assert connections_data["StreamIn"].get("target_connector") == 0
     assert connections_data["StreamOut"].get("source_connector") == 0
+
 
 def test_assign_splitter_connectors():
     """
@@ -426,20 +448,20 @@ def test_assign_splitter_connectors():
     outlet_port.Elements = DummyCollection([outlet_elem])
     splitter_ports = DummyNode("Ports")
     splitter_ports.Elements = DummyCollection([inlet_port, outlet_port])
-    dummy_tree = DummyTree({
-        r"\Data\Blocks\Splitter1\Ports": splitter_ports,
-        r"\Data\Blocks\Splitter1\Ports\Inlet": inlet_port,
-        r"\Data\Blocks\Splitter1\Ports\Outlet": outlet_port,
-    })
+    dummy_tree = DummyTree(
+        {
+            r"\Data\Blocks\Splitter1\Ports": splitter_ports,
+            r"\Data\Blocks\Splitter1\Ports\Inlet": inlet_port,
+            r"\Data\Blocks\Splitter1\Ports\Outlet": outlet_port,
+        }
+    )
     dummy_aspen = DummyAspen(dummy_tree)
-    connections_data = {
-        "StreamIn": {"target_component": "Splitter1"},
-        "StreamOut": {"source_component": "Splitter1"}
-    }
+    connections_data = {"StreamIn": {"target_component": "Splitter1"}, "StreamOut": {"source_component": "Splitter1"}}
     parser = AspenModelParser("dummy.apw")
     parser.assign_splitter_connectors("Splitter1", dummy_aspen, connections_data)
     assert connections_data["StreamIn"].get("target_connector") == 0
     assert connections_data["StreamOut"].get("source_connector") == 0
+
 
 def test_assign_combustion_chamber_connectors():
     """
@@ -458,20 +480,20 @@ def test_assign_combustion_chamber_connectors():
     outlet_port.Elements = DummyCollection([outlet_elem])
     ports_node = DummyNode("Ports")
     ports_node.Elements = DummyCollection([inlet_port, outlet_port])
-    dummy_tree = DummyTree({
-        r"\Data\Blocks\Combustion1\Ports": ports_node,
-        r"\Data\Blocks\Combustion1\Ports\Air(IN)": inlet_port,
-        r"\Data\Blocks\Combustion1\Ports\Exhaust(OUT)": outlet_port,
-    })
+    dummy_tree = DummyTree(
+        {
+            r"\Data\Blocks\Combustion1\Ports": ports_node,
+            r"\Data\Blocks\Combustion1\Ports\Air(IN)": inlet_port,
+            r"\Data\Blocks\Combustion1\Ports\Exhaust(OUT)": outlet_port,
+        }
+    )
     dummy_aspen = DummyAspen(dummy_tree)
-    connections_data = {
-        "StreamAir": {"molar_composition": {"O2": 0.2}},
-        "StreamExhaust": {}
-    }
+    connections_data = {"StreamAir": {"molar_composition": {"O2": 0.2}}, "StreamExhaust": {}}
     parser = AspenModelParser("dummy.apw")
     parser.assign_combustion_chamber_connectors("Combustion1", dummy_aspen, connections_data)
     assert connections_data["StreamAir"].get("target_connector") == 0
     assert connections_data["StreamExhaust"].get("source_connector") == 0
+
 
 def test_assign_generic_connectors():
     """
@@ -485,16 +507,13 @@ def test_assign_generic_connectors():
     dummy_mapping = {"GenericType": {"PortX": 5}}
     port_node = DummyNode("PortX")
     port_node.Elements = DummyCollection([DummyNode("StreamGeneric")])
-    dummy_tree = DummyTree({
-        r"\Data\Blocks\Generic1\Ports\PortX": port_node
-    })
+    dummy_tree = DummyTree({r"\Data\Blocks\Generic1\Ports\PortX": port_node})
     dummy_aspen = DummyAspen(dummy_tree)
-    connections_data = {
-        "StreamGeneric": {"target_component": "Generic1"}
-    }
+    connections_data = {"StreamGeneric": {"target_component": "Generic1"}}
     parser = AspenModelParser("dummy.apw")
     parser.assign_generic_connectors("Generic1", "GenericType", dummy_aspen, connections_data, dummy_mapping)
     assert connections_data["StreamGeneric"].get("target_connector") == 5
+
 
 def test_group_component():
     """
@@ -506,13 +525,16 @@ def test_group_component():
     """
     dummy_grouped = {"GroupA": ["TypeA"], "GroupB": ["TypeB"]}
     import exerpy.parser.from_aspen.aspen_parser as ap
+
     ap.grouped_components = dummy_grouped
     parser = AspenModelParser("dummy.apw")
     component_data = {"name": "Comp1", "type": "TypeA"}
     parser.group_component(component_data, "Comp1")
     assert "Comp1" in parser.components_data.get("GroupA", {})
 
+
 # --- Integration Test for parse_model ---
+
 
 def test_parse_model_integration(dummy_convert_to_SI, dummy_fluid_property_data):
     """
@@ -522,12 +544,13 @@ def test_parse_model_integration(dummy_convert_to_SI, dummy_fluid_property_data)
     Verifies that parse_model correctly calls ambient, stream, and block parsing.
     """
     import exerpy.parser.from_aspen.aspen_parser as ap
+
     ap.convert_to_SI = dummy_convert_to_SI
     ap.fluid_property_data = dummy_fluid_property_data
 
     nodes = {
         r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", 290, "K"),
-        r"\Data\Setup\Sim-Options\Input\REF_PRES": DummyNode("REF_PRES", 100000, "Pa")
+        r"\Data\Setup\Sim-Options\Input\REF_PRES": DummyNode("REF_PRES", 100000, "Pa"),
     }
     stream = DummyNode("StreamX")
     streams_parent = DummyNode("Streams")
@@ -551,7 +574,9 @@ def test_parse_model_integration(dummy_convert_to_SI, dummy_fluid_property_data)
     assert parser.pamb == 100000
     assert "StreamX" in parser.connections_data
 
+
 # --- run_aspen Tests ---
+
 
 def test_run_aspen_file_not_found(tmp_path):
     """
@@ -566,6 +591,5 @@ def test_run_aspen_file_not_found(tmp_path):
     --------
     - FileNotFoundError is raised with an appropriate error message.
     """
-    with patch('os.path.exists', return_value=False):
-        with pytest.raises(FileNotFoundError, match="Model file not found"):
-            run_aspen("nonexistent.apw", str(tmp_path / "output.json"))
+    with patch("os.path.exists", return_value=False), pytest.raises(FileNotFoundError, match="Model file not found"):
+        run_aspen("nonexistent.apw", str(tmp_path / "output.json"))

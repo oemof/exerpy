@@ -19,7 +19,8 @@ from exerpy.analyses import _load_json
 
 _basepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../examples/")
 directories = [
-    os.path.join(_basepath, dirname) for dirname in os.listdir(_basepath)
+    os.path.join(_basepath, dirname)
+    for dirname in os.listdir(_basepath)
     if os.path.isdir(os.path.join(_basepath, dirname))
 ]
 examples_json = []
@@ -29,19 +30,14 @@ for directory in directories:
         if file.endswith(".json"):
             examples_json[-1][file.removesuffix(".json")] = os.path.join(directory, file)
 
-TESTCASES = [
-    {c: example[c] for c in case} for example in examples_json
-    for case in combinations(example, 2)
-]
+TESTCASES = [{c: example[c] for c in case} for example in examples_json for case in combinations(example, 2)]
 
 
-@pytest.mark.parametrize(
-        "testcase", TESTCASES
-    )
+@pytest.mark.parametrize("testcase", TESTCASES)
 def test_validate_simulators_connection_data(testcase, caplog):
-    if any("hightemp_hp" in p for p in testcase.values()):
+    if any("hp_cascade" in p for p in testcase.values()):
         pytest.skip("ignoring the high‐temp/high‐pressure example")
-        
+
     simulator_results = []
 
     caplog.set_level(logging.INFO)
@@ -53,9 +49,7 @@ def test_validate_simulators_connection_data(testcase, caplog):
         if "settings" not in contents:
             contents["settings"] = {}
 
-        simulator_results += [
-            ExergyAnalysis.from_json(path, **contents["settings"])
-        ]
+        simulator_results += [ExergyAnalysis.from_json(path, **contents["settings"])]
 
     sim1 = simulator_results[0]
     sim2 = simulator_results[1]
@@ -69,25 +63,17 @@ def test_validate_simulators_connection_data(testcase, caplog):
     else:
         columns.append("e_PH")
 
-    df_sim1 = pd.DataFrame.from_dict(
-        sim1._connection_data, orient="index"
-    ).sort_index()[columns].dropna(how="all")
-    df_sim2 = pd.DataFrame.from_dict(
-        sim2._connection_data, orient="index"
-    ).sort_index()[columns].dropna(how="all")
+    df_sim1 = pd.DataFrame.from_dict(sim1._connection_data, orient="index").sort_index()[columns].dropna(how="all")
+    df_sim2 = pd.DataFrame.from_dict(sim2._connection_data, orient="index").sort_index()[columns].dropna(how="all")
 
-    overlapping_index = list(
-        set(df_sim1.index.tolist()) & set(df_sim2.index.tolist())
-    )
+    overlapping_index = list(set(df_sim1.index.tolist()) & set(df_sim2.index.tolist()))
     df_sim1 = df_sim1.loc[overlapping_index].round(6)
     df_sim2 = df_sim2.loc[overlapping_index].round(6)
 
     # inf means that sim2 has 0 value, comparison does not make sense there
     # and sometimes there seem to be NaN values in the dataframes, those are
     # removed as well
-    diff_to_sim2 = (
-        (df_sim1 - df_sim2) / df_sim2
-    ).abs().replace(np.inf, 0).fillna(0)
+    diff_to_sim2 = ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
     assert (diff_to_sim2 < 2e-2).all().all()
 
 
@@ -95,20 +81,16 @@ def test_validate_simulators_connection_data(testcase, caplog):
 def exergy_analysis():
     """Set up the ExergyAnalysis object using the data from cgam_ebs.json."""
     # Define the path to the JSON file
-    file_path = os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__), '../examples/cgam/cgam_ebs.json'
-        )
-    )
+    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples/cgam/cgam_ebs.json"))
     # Return an initialized ExergyAnalysis object
     return ExergyAnalysis.from_json(file_path, split_physical_exergy=False)
 
 
 def test_exergy_analysis_results(exergy_analysis):
     """Test the overall exergy analysis results, allowing for a tolerance of 100."""
-    fuel = {"inputs": ['1', '10'], "outputs": []}
-    product = {"inputs": ['E1', '9'], "outputs": ['8']}
-    loss = {"inputs": ['7'], "outputs": []}
+    fuel = {"inputs": ["1", "10"], "outputs": []}
+    product = {"inputs": ["E1", "9"], "outputs": ["8"]}
+    loss = {"inputs": ["7"], "outputs": []}
     exergy_analysis.analyse(fuel, product, loss)
 
     # Check the calculated values with a tolerance of 100

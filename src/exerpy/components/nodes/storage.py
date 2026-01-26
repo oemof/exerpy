@@ -2,8 +2,7 @@ import logging
 
 import numpy as np
 
-from exerpy.components.component import Component
-from exerpy.components.component import component_registry
+from exerpy.components.component import Component, component_registry
 
 
 @component_registry
@@ -88,7 +87,7 @@ class Storage(Component):
         .. math::
             \dot{E}_\mathrm{P} = (\dot{m}_\mathrm{in} - \dot{m}_\mathrm{out}) \cdot e_\mathrm{out}^\mathrm{PH}
 
-            
+
         Case 2 (Discharging):
 
         .. math::
@@ -98,25 +97,29 @@ class Storage(Component):
         .. math::
 
             \dot{E}_\mathrm{P} = \dot{E}_\mathrm{out}^\mathrm{PH} - \dot{E}_\mathrm{in}^\mathrm{PH}
-         
+
         """
 
-        if self.outl[0]['m'] < self.inl[0]['m']:
+        if self.outl[0]["m"] < self.inl[0]["m"]:
             logging.info(f"Storage '{self.name}' is charged.")
-            self.E_F = self.inl[0]['m'] * self.inl[0]['e_PH'] - self.outl[0]['m'] * self.outl[0]['e_PH']
-            self.E_P = (self.inl[0]['m'] - self.outl[0]['m']) * self.outl[0]['e_PH']  # assuming that exergy is stored at the same temperature as the outlet
+            self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self.outl[0]["m"] * self.outl[0]["e_PH"]
+            self.E_P = (self.inl[0]["m"] - self.outl[0]["m"]) * self.outl[0][
+                "e_PH"
+            ]  # assuming that exergy is stored at the same temperature as the outlet
             self.E_D = self.E_F - self.E_P
-        elif self.outl[0]['m'] > self.inl[0]['m']:
+        elif self.outl[0]["m"] > self.inl[0]["m"]:
             logging.info(f"Storage '{self.name}' is discharged.")
-            self.E_F =  (self.outl[0]['m'] - self.inl[0]['m']) * self.outl[0]['e_PH']  # assuming that exergy is stored at the same temperature as the outlet
-            self.E_P =  self.outl[0]['m'] * self.outl[0]['e_PH'] - self.inl[0]['m'] * self.inl[0]['e_PH']  
+            self.E_F = (self.outl[0]["m"] - self.inl[0]["m"]) * self.outl[0][
+                "e_PH"
+            ]  # assuming that exergy is stored at the same temperature as the outlet
+            self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"] - self.inl[0]["m"] * self.inl[0]["e_PH"]
             self.E_D = self.E_F - self.E_P
 
         self.epsilon = self.E_P / self.E_F if self.E_F != 0 else np.nan
 
         # Log the results.
         logging.info(
-            f"Storage exergy balance calculated: "
+            f"Exergy balance of Storage {self.name} calculated: "
             f"E_F = {self.E_F:.2f} W, E_P = {self.E_P:.2f} W, E_D = {self.E_D:.2f} W, "
         )
 

@@ -69,7 +69,7 @@ At the system level, the total exergy balance is established by evaluating the e
 
 ## Validation
 
-Validation has been conducted based on three different case studies documented in the online documentation of the framework [@ExerPy-web]. The results of the exergy analysis of a combined cycle power plant simulated with Aspen Plus® and with TESPy show a maximum difference of 1% compared to the simulation results from Ebsilon®Professional, validating the accuracy and confirming the flexibility of the tool. Additional applications and validation of ExerPy, e.g., the CGAM process [@valero1994cgam] and a heat pump, are also available in the documentation and on the GitHub repository.
+Validation has been conducted based on three different case studies documented in the online documentation of the framework [@exerpy-web]. The results of the exergy analysis of a combined cycle power plant simulated with Aspen Plus® and with TESPy show a maximum difference of 1% compared to the simulation results from Ebsilon®Professional, validating the accuracy and confirming the flexibility of the tool. Additional applications and validation of ExerPy, e.g., the CGAM process [@valero1994cgam] and a heat pump, are also available in the documentation and on the GitHub repository.
 
 # Research impact statement
 

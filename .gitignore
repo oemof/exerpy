@@ -177,3 +177,7 @@ examples/ccpp/_0108erv
 
 # macOS
 .DS_Store
+
+# Local AI assistant files (not for GitHub)
+CLAUDE.md
+.claude/

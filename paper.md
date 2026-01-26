@@ -77,6 +77,9 @@ The demand for automated, publicly accessible exergy-analysis workflows is evide
 
 ExerPy translates this demonstrated demand into a community-ready software by offering a dedicated, versioned, and openly developed package within the oemof ecosystem. Community-readiness signals include an OSI-approved license, public source repository, automated test infrastructure, and user documentation with worked examples and contribution guidance, supporting reproducible analyses and facilitating external adoption.
 
+# AI usage disclosure
+Generative AI tools (multiple ChatGPT models, Claude Code, and DeepL Write) were used to generate and modify portions of the codebase and to support language editing of this manuscript. All AI-assisted changes were reviewed and validated by the authors.
+
 # Acknowledgements
 
 Parts of this work were funded by the German Federal Ministry for Economic Affairs and Climate Action through the research project SecöndLife, grant number 03EI1076A.

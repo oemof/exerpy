@@ -49,7 +49,7 @@ Although TESPy had already incorporated an automated exergy-analysis tool [@Witt
 
 ExerPy is divided into two main modules: the data-processing module, which manages the extraction and preparation of simulation data, and the exergy-analysis module, which conducts the detailed exergy calculations. The initial implementation supports Ebsilon®Professional, Aspen Plus®, and TESPy. The architecture is outlined in the following sections and is shown in \autoref{fig:structure}.
 
-![Structure of the ExerPy framework.\label{fig:structure}](ExerPy_vertical.svg){width="80%"}
+![Structure of the ExerPy framework.\label{fig:structure}](exerpy_vertical.svg){width="80%"}
 
 ## Data processing
 

@@ -1548,26 +1548,26 @@ class ExergoeconomicAnalysis:
                     E_M = m_val * e_M  # mechanical exergy flow [kW]
 
                     conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
-                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else np.nan
+                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else 0.0
 
                     conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
-                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else np.nan
+                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else 0.0
 
                     conn["C_PH"] = conn["C_T"] + conn["C_M"]
-                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else np.nan
+                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else 0.0
 
                     if self.chemical_exergy_enabled:
                         e_CH = conn.get("e_CH", 0)  # chemical specific exergy [kJ/kg]
                         E_CH = m_val * e_CH  # chemical exergy flow [kW]
                         conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
-                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else np.nan
+                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else 0.0
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
                         total_E = E_T + E_M + E_CH
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                     else:
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"]
                         total_E = E_T + E_M
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)

@@ -13,17 +13,15 @@ from tespy.components import (
 from tespy.connections import Connection, PowerConnection
 from tespy.networks import Network
 
-from exerpy import ExergyAnalysis
+from exerpy import ExergoeconomicAnalysis, ExergyAnalysis
 
+# Reference environment conditions
+p0 = 101300
+T0 = 283.15
+
+# TESPy model
 nw = Network()
-nw.units.set_defaults(
-    temperature="degC",
-    pressure="bar",
-    enthalpy="kJ / kg",
-    mass_flow="kg / s",
-    heat="kW",
-    power="kW"
-)
+nw.units.set_defaults(temperature="degC", pressure="bar", enthalpy="kJ / kg", mass_flow="kg / s", heat="kW", power="kW")
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
@@ -106,20 +104,46 @@ nw.solve("design")
 nw.assert_convergence()
 
 nw.print_results()
-# %%[tespy_model_section_end]
-p0 = 101300
-T0 = 283.15
 
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
-# %%[exergy_analysis_setup]
+# Exergy analysis
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+
 fuel = {"inputs": ["e1"], "outputs": []}
 
 product = {"inputs": ["23"], "outputs": ["21"]}
 
 loss = {"inputs": ["13"], "outputs": ["11"]}
-# %%[exergy_analysis_flows]
+
+
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/heatpump/hp_tespy.json")
 df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")
-# %%[exergy_analysis_results]
+
+# Exergoeconomic analysis
+exergoeco_analysis = ExergoeconomicAnalysis(ean)
+
+# Component Z factors [EUR/h] - directly specified
+component_costs = {
+    "COMP_Z": 47.380,
+    "COND_Z": 17.205,
+    "EVA_Z": 15.210,
+    "FAN_Z": 39.460,
+    "MOT1_Z": 9.994,
+    "MOT2_Z": 10.965,
+    "MOT3_Z": 0.000,
+    "PUMP_Z": 0.775,
+    "VAL_Z": 0.000,
+}
+
+# Boundary stream costs [EUR/GJ]
+boundary_costs = {
+    "e1_c": 110.0,
+    "11_c": 0.0,
+    "21_c": 5.0,
+}
+
+# Combine all costs and run analysis
+all_costs = {**component_costs, **boundary_costs}
+exergoeco_analysis.run(all_costs, Tamb=T0)
+exergoeco_analysis.exergoeconomic_results()

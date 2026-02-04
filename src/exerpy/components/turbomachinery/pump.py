@@ -262,17 +262,45 @@ class Pump(Component):
             else:
                 logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
-            A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
-            A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
-            equations[row_index] = {
-                "kind": "aux_p_rule",
-                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T, c_M",
-            }
+            # Case 2: Inlet at/below ambient, outlet above ambient
+            # Handle potential zero values for robustness
+            if self.outl[0]["e_T"] != 0 and dEM != 0:
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+                A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
+                A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+                equations[row_index] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "property": "c_T, c_M",
+                }
+            else:
+                logging.warning(
+                    f"Pump '{self.name}' Case 2: outlet thermal exergy or mechanical exergy "
+                    "difference is zero, auxiliary equation may be degenerate."
+                )
+                # Fallback: set identity equation for thermal cost
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
+                equations[row_index] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "property": "c_T",
+                }
         else:
-            A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+            # Case 3: Both temperatures at or below ambient - apply F-rule for thermal exergy
+            # Handle zero thermal exergy cases to avoid division by zero
+            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+            elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
+                # Inlet thermal exergy is zero, constrain C_T_in = 0
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
+            elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
+                # Outlet thermal exergy is zero, constrain C_T_out = 0
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
+            else:
+                # Both thermal exergies are zero, set identity equation
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = -1
             equations[row_index] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],

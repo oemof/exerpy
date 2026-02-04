@@ -313,7 +313,7 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
     - For 'power' connections, the energy flow value is used directly.
     - For 'heat' connections, if the associated component is of class
       SimpleHeatExchanger, the thermal exergy difference is computed as:
-      ..math::
+      .. math::
           E = (e^\mathrm{T}_\mathrm{in} \cdot \dot m_\mathrm{in})
           - (e^\mathrm{T}_\mathrm{out} \cdot \dot m_\mathrm{out})
 

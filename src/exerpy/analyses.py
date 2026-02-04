@@ -619,10 +619,10 @@ class ExergyAnalysis:
 
         Examples
         --------
-        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
-        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
-        >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')
-        >>> fig.savefig('exergy_waterfall.pdf')
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
+        >>> fig.savefig('exergy_waterfall.pdf')  # doctest: +SKIP
 
         See Also
         --------
@@ -750,9 +750,9 @@ class ExergyAnalysis:
 
         Examples
         --------
-        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
-        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
-        >>> analysis.print_exergy_summary()
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> analysis.print_exergy_summary()  # doctest: +SKIP
         Exergy Analysis Summary:
         Exergetic Fuel: 100.00%
         Total Exergy Destruction: 35.42%
@@ -1693,7 +1693,7 @@ class ExergoeconomicAnalysis:
         dict
             Mapping from component name to tuple (balance, is_balanced),
             where balance is the residual and is_balanced is True if
-            |balance| <= tol.
+            abs(balance) <= tol.
         """
         from .components.helpers.cycle_closer import CycleCloser
 

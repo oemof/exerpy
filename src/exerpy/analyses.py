@@ -198,6 +198,13 @@ class ExergyAnalysis:
             else:
                 # Calculate E_F, E_D, E_P
                 component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
+
+                # Update is_dissipative flag based on actual E_P value for Valve components
+                # This is needed because when split_physical_exergy=False, valves may become
+                # dissipative (E_P = nan) even if not initially marked as such based on temperatures
+                if component.__class__.__name__ == "Valve" and np.isnan(component.E_P):
+                    component.is_dissipative = True
+
                 # Safely calculate y and y* avoiding division by zero
                 if self.E_F != 0:
                     component.y = component.E_D / self.E_F
@@ -1397,7 +1404,15 @@ class ExergoeconomicAnalysis:
                         self.equations[counter] = {"kind": "boundary", "object": [name], "property": "c_TOT"}
                         counter += 1
                     else:
-                        continue
+                        # When there are power outlets, we still need at least one boundary condition
+                        # for power inlets to fix the absolute cost value. The aux_power_eq only
+                        # equalizes specific costs but doesn't set the actual value.
+                        if conn.get("C_TOT"):
+                            idx = conn["CostVar_index"]["exergy"]
+                            self._A[counter, idx] = 1
+                            self._b[counter] = conn.get("C_TOT", 0)
+                            self.equations[counter] = {"kind": "boundary", "object": [name], "property": "c_TOT"}
+                            counter += 1
 
         # 3. Auxiliary equations for the equality of the specific costs
         # of all power flows at the input or output of the system.

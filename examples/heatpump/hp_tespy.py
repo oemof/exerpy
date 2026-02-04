@@ -13,7 +13,7 @@ from tespy.components import (
 from tespy.connections import Connection, PowerConnection
 from tespy.networks import Network
 
-from exerpy import ExergoeconomicAnalysis, ExergyAnalysis
+from exerpy import ExergyAnalysis
 
 # Reference environment conditions
 p0 = 101300
@@ -106,7 +106,7 @@ nw.assert_convergence()
 nw.print_results()
 
 # Exergy analysis
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=True)
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
 
 fuel = {"inputs": ["e1"], "outputs": []}
 
@@ -120,7 +120,8 @@ df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/heatpump/hp_tespy.json")
 df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")
 
-# Exergoeconomic analysis
+# Set split_physical_exergy=True in order to conduct exergoeconomic analysis
+"""# Exergoeconomic analysis
 exergoeco_analysis = ExergoeconomicAnalysis(ean)
 
 # Component Z factors [EUR/h] - directly specified
@@ -147,3 +148,4 @@ boundary_costs = {
 all_costs = {**component_costs, **boundary_costs}
 exergoeco_analysis.run(all_costs, Tamb=T0)
 exergoeco_analysis.exergoeconomic_results()
+"""

@@ -221,8 +221,8 @@ class Condenser(Component):
         # Equality equation for mechanical and chemical exergy costs.
         def set_equal(A, row, in_item, out_item, var):
             if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
-                A[row, in_item["CostVar_index"][var]] = 1 / in_item["e_" + var]
-                A[row, out_item["CostVar_index"][var]] = -1 / out_item["e_" + var]
+                A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
+                A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
             elif in_item["e_" + var] == 0 and out_item["e_" + var] != 0:
                 A[row, in_item["CostVar_index"][var]] = 1
             elif in_item["e_" + var] != 0 and out_item["e_" + var] == 0:

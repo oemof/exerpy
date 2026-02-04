@@ -1704,10 +1704,20 @@ class ExergoeconomicAnalysis:
             inlet_sum = 0.0
             outlet_sum = 0.0
             for conn in self.connections.values():
+                # Use sum of cost components instead of C_TOT, because C_TOT may have been
+                # modified by loss attribution (Step 6) which is not part of the matrix equation.
+                kind = conn.get("kind", "material")
+                if kind == "material":
+                    cost = (conn.get("C_T", 0) or 0) + (conn.get("C_M", 0) or 0)
+                    if self.chemical_exergy_enabled:
+                        cost += conn.get("C_CH", 0) or 0
+                else:
+                    # For heat/power streams, use C_TOT directly (no loss attribution applies)
+                    cost = conn.get("C_TOT", 0) or 0
                 if conn.get("target_component") == name:
-                    inlet_sum += conn.get("C_TOT", 0) or 0
+                    inlet_sum += cost
                 if conn.get("source_component") == name:
-                    outlet_sum += conn.get("C_TOT", 0) or 0
+                    outlet_sum += cost
             comp.C_in = inlet_sum
             comp.C_out = outlet_sum
             z_cost = getattr(comp, "Z_costs", 0)
@@ -1717,11 +1727,11 @@ class ExergoeconomicAnalysis:
 
         all_ok = all(flag for _, flag in balances.values())
         if all_ok:
-            print("Everything is fine: all component cost balances are fulfilled.")
+            logging.info("All component cost balances are fulfilled.")
         else:
             for name, (bal, ok) in balances.items():
                 if not ok:
-                    print(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
+                    logging.warning(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
 
         return balances
 
@@ -1750,7 +1760,6 @@ class ExergoeconomicAnalysis:
         self.solve_exergoeconomic_analysis(Tamb)
         logging.info("Exergoeconomic analysis completed successfully.")
         self.check_cost_balance()
-        print("stop")
 
     def print_equations(self):
         """

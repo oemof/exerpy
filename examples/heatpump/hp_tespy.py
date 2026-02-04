@@ -125,14 +125,14 @@ exergoeco_analysis = ExergoeconomicAnalysis(ean)
 
 # Component Z factors [EUR/h] - directly specified
 component_costs = {
-    "COMP_Z": 47.380,
-    "COND_Z": 17.205,
-    "EVA_Z": 15.210,
-    "FAN_Z": 39.460,
-    "MOT1_Z": 9.994,
-    "MOT2_Z": 10.965,
-    "MOT3_Z": 0.000,
-    "PUMP_Z": 0.775,
+    "COMP_Z": 48.0,
+    "COND_Z": 17.0,
+    "EVA_Z": 15.2,
+    "FAN_Z": 39.5,
+    "MOT1_Z": 10.0,
+    "MOT2_Z": 11.0,
+    "MOT3_Z": 0.10,
+    "PUMP_Z": 0.78,
     "VAL_Z": 0.000,
 }
 

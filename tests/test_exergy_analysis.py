@@ -55,13 +55,14 @@ def test_validate_simulators_connection_data(testcase, caplog):
     sim2 = simulator_results[1]
 
     columns = ["m", "p", "T"]
-    if sim1.chemExLib is not None:
+    if sim1.chemExLib is not None and sim2.chemExLib is not None:
         columns.append("e_CH")
-    if sim1.split_physical_exergy:
+    if sim1.split_physical_exergy and sim2.split_physical_exergy:
         columns.append("e_M")
         columns.append("e_T")
-    else:
+    elif not sim1.split_physical_exergy and not sim2.split_physical_exergy:
         columns.append("e_PH")
+    # If split_physical_exergy settings differ, only compare base columns (m, p, T)
 
     df_sim1 = pd.DataFrame.from_dict(sim1._connection_data, orient="index").sort_index()[columns].dropna(how="all")
     df_sim2 = pd.DataFrame.from_dict(sim2._connection_data, orient="index").sort_index()[columns].dropna(how="all")

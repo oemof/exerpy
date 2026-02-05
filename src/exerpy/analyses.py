@@ -801,6 +801,7 @@ class ExergyAnalysis:
         -----
         This method serializes the model using the internal _serialize method
         and writes the resulting data to a JSON file with indentation.
+        NaN values are converted to null for valid JSON output.
         """
         data = self._serialize()
         with open(output_path, "w") as json_file:
@@ -830,21 +831,21 @@ class ExergyAnalysis:
             for comp_name, comp_data in comps.items():
                 comp = self.components[comp_name]
                 comp_data["exergy_results"] = {
-                    "E_F": getattr(comp, "E_F", None),
-                    "E_P": getattr(comp, "E_P", None),
-                    "E_D": getattr(comp, "E_D", None),
-                    "epsilon": getattr(comp, "epsilon", None),
-                    "y": getattr(comp, "y", None),
-                    "y_star": getattr(comp, "y_star", None),
+                    "E_F": _nan_to_none(getattr(comp, "E_F", None)),
+                    "E_P": _nan_to_none(getattr(comp, "E_P", None)),
+                    "E_D": _nan_to_none(getattr(comp, "E_D", None)),
+                    "epsilon": _nan_to_none(getattr(comp, "epsilon", None)),
+                    "y": _nan_to_none(getattr(comp, "y", None)),
+                    "y_star": _nan_to_none(getattr(comp, "y_star", None)),
                 }
 
         # add overall system exergy results
         export["system_results"] = {
-            "E_F": getattr(self, "E_F", None),
-            "E_P": getattr(self, "E_P", None),
-            "E_D": getattr(self, "E_D", None),
-            "E_L": getattr(self, "E_L", None),
-            "epsilon": getattr(self, "epsilon", None),
+            "E_F": _nan_to_none(getattr(self, "E_F", None)),
+            "E_P": _nan_to_none(getattr(self, "E_P", None)),
+            "E_D": _nan_to_none(getattr(self, "E_D", None)),
+            "E_L": _nan_to_none(getattr(self, "E_L", None)),
+            "epsilon": _nan_to_none(getattr(self, "epsilon", None)),
         }
 
         return export
@@ -966,6 +967,13 @@ def _construct_components(component_data, connection_data, Tamb):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _nan_to_none(value):
+    """Convert NaN/Inf floats to None for valid JSON serialization."""
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
 
 
 def _load_json(json_path):

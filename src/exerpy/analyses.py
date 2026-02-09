@@ -425,7 +425,7 @@ class ExergyAnalysis:
             "E_P [kW]": [],
             "E_D [kW]": [],
             "E_L [kW]": [],
-            "ε [%]": [],
+            "epsilon [%]": [],
             "y [%]": [],
             "y* [%]": [],
         }
@@ -451,7 +451,7 @@ class ExergyAnalysis:
             component_results["E_P [kW]"].append(E_P_kW)
             component_results["E_D [kW]"].append(E_D_kW + E_L_kW)
             component_results["E_L [kW]"].append(0)
-            component_results["ε [%]"].append(epsilon_percent)
+            component_results["epsilon [%]"].append(epsilon_percent)
             component_results["y [%]"].append(convert(component.y, 1e2))
             component_results["y* [%]"].append(convert(component.y_star, 1e2))
 
@@ -467,7 +467,7 @@ class ExergyAnalysis:
         df_component_results.loc["TOT", "E_L [kW]"] = convert(self.E_L, 1e-3)
         df_component_results.loc["TOT", "E_P [kW]"] = convert(self.E_P, 1e-3)
         df_component_results.loc["TOT", "E_D [kW]"] = convert(self.E_D, 1e-3)
-        df_component_results.loc["TOT", "ε [%]"] = convert(self.epsilon, 1e2)
+        df_component_results.loc["TOT", "epsilon [%]"] = convert(self.epsilon, 1e2)
         # Calculate the total y [%] and y* [%] as the sum of the values for all components
         df_component_results.loc["TOT", "y [%]"] = df_component_results["y [%]"].sum()
         df_component_results.loc["TOT", "y* [%]"] = df_component_results["y* [%]"].sum()
@@ -642,7 +642,7 @@ class ExergyAnalysis:
 
         # Get total values from df_component_results
         total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["ε [%]"]
+        epsilon_total = total_row["epsilon [%]"]
         E_L_total = total_row["E_L [kW]"]
         E_F_total = total_row["E_F [kW]"]
         exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
@@ -746,7 +746,7 @@ class ExergyAnalysis:
         - Exergetic Fuel: Normalized to 100%
         - Total Exergy Destruction: Sum of all component exergy destructions as % of fuel
         - Exergetic Loss: Exergy losses to the environment as % of fuel
-        - Exergetic Product (ε): Overall system exergy efficiency as %
+        - Exergetic Product (epsilon): Overall system exergy efficiency as %
 
         Examples
         --------
@@ -757,7 +757,7 @@ class ExergyAnalysis:
         Exergetic Fuel: 100.00%
         Total Exergy Destruction: 35.42%
         Exergetic Loss: 5.12%
-        Exergetic Product (ε): 59.46%
+        Exergetic Product (epsilon): 59.46%
 
         See Also
         --------
@@ -772,7 +772,7 @@ class ExergyAnalysis:
         df_component_results, _, _ = self.exergy_results(print_results=False)
 
         total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["ε [%]"]
+        epsilon_total = total_row["epsilon [%]"]
         E_L_total = total_row["E_L [kW]"]
         E_F_total = total_row["E_F [kW]"]
         exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
@@ -1271,6 +1271,7 @@ class ExergoeconomicAnalysis:
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
+        valid_component_names = {comp.name for comp in self.components.values()}
         for conn_name, conn in self.connections.items():
             kind = conn.get("kind", "material")
 
@@ -1280,8 +1281,11 @@ class ExergoeconomicAnalysis:
 
             cost_key = f"{conn_name}_c"
 
-            # Check if the connection is an input (but also not an output)
-            is_input = not conn.get("source_component") and conn.get("target_component")
+            # Check if the connection is an input to the system: source is missing or not a registered
+            # component (e.g. TESPy Source/Sink), while target is a valid component in the system.
+            source = conn.get("source_component")
+            target = conn.get("target_component")
+            is_input = (source is None or source not in valid_component_names) and (target in valid_component_names)
 
             # For input connections (except for power connections) a cost is mandatory.
             if is_input and kind != "power" and cost_key not in Exe_Eco_Costs:

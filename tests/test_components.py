@@ -783,7 +783,7 @@ def test_motor_calc_exergy_balance_basic(motor):
       - E_F = 100000 W
       - E_P = 80000 W
       - E_D = 20000 W
-      - ε = 0.8
+      - epsilon = 0.8
     """
     # Set up inlet and outlet streams
     motor.inl = {0: {"energy_flow": 100000}}
@@ -1205,7 +1205,7 @@ def charging_streams():
       E_F = 10*100 - 5*80 = 600
       E_P = (10 - 5)*80 = 400
       E_D = 600 - 400 = 200
-      ε = 400/600 ≈ 0.6667
+      epsilon = 400/600 ≈ 0.6667
     """
     inl = {0: {"m": 10, "e_PH": 100}}
     outl = {0: {"m": 5, "e_PH": 80}}
@@ -1241,7 +1241,7 @@ def discharging_streams():
       E_F = (15 - 10)*80 = 400
       E_P = 15*80 - 10*100 = 200
       E_D = 400 - 200 = 200
-      ε = 200/400 = 0.5
+      epsilon = 200/400 = 0.5
     """
     inl = {0: {"m": 10, "e_PH": 100}}
     outl = {0: {"m": 15, "e_PH": 80}}

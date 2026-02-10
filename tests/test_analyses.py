@@ -187,7 +187,7 @@ def test_exergy_results(exergy_analysis):
     # Check component results
     assert isinstance(comp_results, pd.DataFrame)
     assert "E_F [kW]" in comp_results.columns
-    assert "ε [%]" in comp_results.columns
+    assert "epsilon [%]" in comp_results.columns
     assert len(comp_results) == 3  # Two components plus total
 
     # Check connection results

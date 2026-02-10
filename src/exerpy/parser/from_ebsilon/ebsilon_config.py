@@ -1051,7 +1051,7 @@ connector_mapping = {
     24: {  # Compressor / Fan
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
-        3: 0,  # Power inlet
+        3: 1,  # Power inlet
     },
     25: {  # Air Preheater
         1: 1,  # Inlet cold stream

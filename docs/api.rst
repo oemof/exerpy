@@ -205,7 +205,7 @@ The results include the following key parameters:
     - Product exergy (:code:`E_P`) in kW
     - Destruction exergy (:code:`E_D`) in kW
     - Loss exergy (:code:`E_L`) in kW
-    - Exergy efficiency (:code:`ε`) in %
+    - Exergy efficiency (:code:`epsilon`) in %
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
 These values are provided both for each component and for the entire system.

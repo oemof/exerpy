@@ -9,7 +9,15 @@
                 "Q": 0.0,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 84120820.27083592,
+                    "E_P": 58760934.35067461,
+                    "E_D": 25359885.920161314,
+                    "epsilon": 0.6985302112067802,
+                    "y": 0.297866249209242,
+                    "y_star": 0.6417182630370727
+                }
             }
         },
         "Compressor": {
@@ -21,7 +29,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 29665814.099999998,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 29665814.099999998,
+                    "E_P": 27565991.636090476,
+                    "E_D": 2099822.4639095217,
+                    "epsilon": 0.9292174333449517,
+                    "y": 0.024663606267754833,
+                    "y_star": 0.05313487720206878
+                }
             }
         },
         "Generator": {
@@ -34,7 +50,15 @@
                 "Q_unit": "W",
                 "P": null,
                 "P_unit": "W",
-                "eta_el": 1.0
+                "eta_el": 1.0,
+                "exergy_results": {
+                    "E_F": 30000000.0,
+                    "E_P": 30000000.0,
+                    "E_D": 0.0,
+                    "epsilon": 1.0,
+                    "y": 0.0,
+                    "y_star": 0.0
+                }
             }
         },
         "HeatExchanger": {
@@ -46,7 +70,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 16233817.410837546,
+                    "E_P": 13676840.59024829,
+                    "E_D": 2556976.8205892555,
+                    "epsilon": 0.8424907244008891,
+                    "y": 0.0300331435741352,
+                    "y_star": 0.06470292213065904
+                }
             },
             "EV": {
                 "name": "EV",
@@ -56,7 +88,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 15161684.067363802,
+                    "E_P": 10567701.102000002,
+                    "E_D": 4593982.9653638005,
+                    "epsilon": 0.6970004819416761,
+                    "y": 0.05395893653197325,
+                    "y_star": 0.1162482661884311
+                }
             },
             "PH": {
                 "name": "PH",
@@ -66,7 +106,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 4100608.1510229004,
+                    "E_P": 2185936.86402,
+                    "E_D": 1914671.2870029001,
+                    "epsilon": 0.5330762617429603,
+                    "y": 0.022488900641101865,
+                    "y_star": 0.0484497263296302
+                }
             }
         },
         "Turbine": {
@@ -78,7 +126,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 59665814.1,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 62659207.75827101,
+                    "E_P": 59665814.099999994,
+                    "E_D": 2993393.6582710147,
+                    "epsilon": 0.9522273937803517,
+                    "y": 0.0351591069535161,
+                    "y_star": 0.07574621530315012
+                }
             }
         }
     },
@@ -571,17 +627,19 @@
             "target_component": null,
             "target_connector": null,
             "energy_flow": 30000000.0,
+            "_aspen_power_sign": -1,
             "E": 30000000.0,
             "E_unit": "W"
         },
         "W1": {
             "name": "W1",
             "kind": "power",
-            "source_component": "AC",
-            "source_connector": 1,
-            "target_component": "EXP",
+            "source_component": "EXP",
+            "source_connector": 2,
+            "target_component": "AC",
             "target_connector": 1,
             "energy_flow": 29665814.099999998,
+            "_aspen_power_sign": 1,
             "E": 29665814.099999998,
             "E_unit": "W"
         },
@@ -593,6 +651,7 @@
             "target_component": "GEN",
             "target_connector": 0,
             "energy_flow": 30000000.0,
+            "_aspen_power_sign": -1,
             "E": 30000000.0,
             "E_unit": "W"
         }
@@ -606,5 +665,12 @@
     "settings": {
         "split_physical_exergy": false,
         "chemExLib": "Ahrendts"
+    },
+    "system_results": {
+        "E_F": 85138500.87912029,
+        "E_P": 42753637.96602,
+        "E_D": 39518722.4376942,
+        "E_L": 2866140.47540609,
+        "epsilon": 0.5021657361188642
     }
 }

@@ -16,10 +16,12 @@ from tespy.networks import Network
 from exerpy import ExergyAnalysis
 
 # Reference environment conditions
-p0 = 101300
-T0 = 283.15
+pamb = 101300
+Tamb = 283.15
 
-# TESPy model
+# ----------------------------------------------------------------------------------------------------------------------
+# 1. Create TESPy network and components
+# ----------------------------------------------------------------------------------------------------------------------
 nw = Network()
 nw.units.set_defaults(temperature="degC", pressure="bar", enthalpy="kJ / kg", mass_flow="kg / s", heat="kW", power="kW")
 
@@ -105,47 +107,16 @@ nw.assert_convergence()
 
 nw.print_results()
 
-# Exergy analysis
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, split_physical_exergy=False)
+# ----------------------------------------------------------------------------------------------------------------------
+# 2. Exergy analysis
+# ----------------------------------------------------------------------------------------------------------------------
+ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=False)
 
 fuel = {"inputs": ["e1"], "outputs": []}
-
 product = {"inputs": ["23"], "outputs": ["21"]}
-
 loss = {"inputs": ["13"], "outputs": ["11"]}
-
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
-ean.export_to_json("examples/heatpump/hp_tespy.json")
+ean.export_to_json("examples/exergy_analysis/heatpump/hp_tespy.json")
 df_component_results.to_csv("examples/heatpump/hp_components_tespy.csv")
-
-# Set split_physical_exergy=True in order to conduct exergoeconomic analysis
-"""# Exergoeconomic analysis
-exergoeco_analysis = ExergoeconomicAnalysis(ean)
-
-# Component Z factors [EUR/h] - directly specified
-component_costs = {
-    "COMP_Z": 48.0,
-    "COND_Z": 17.0,
-    "EVA_Z": 15.2,
-    "FAN_Z": 39.5,
-    "MOT1_Z": 10.0,
-    "MOT2_Z": 11.0,
-    "MOT3_Z": 0.10,
-    "PUMP_Z": 0.78,
-    "VAL_Z": 0.000,
-}
-
-# Boundary stream costs [EUR/GJ]
-boundary_costs = {
-    "e1_c": 110.0,
-    "11_c": 0.0,
-    "21_c": 5.0,
-}
-
-# Combine all costs and run analysis
-all_costs = {**component_costs, **boundary_costs}
-exergoeco_analysis.run(all_costs, Tamb=T0)
-exergoeco_analysis.exergoeconomic_results()
-"""

@@ -23,6 +23,9 @@ from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
 
+# ----------------------------------------------------------------------------------------------------------------------
+# 1. Create TESPy network and components
+# ----------------------------------------------------------------------------------------------------------------------
 nw = Network(T_unit="C", p_unit="bar")
 
 air_in = Source("air inlet")
@@ -203,20 +206,19 @@ nw.solve("design")
 nw.assert_convergence()
 
 nw.print_results()
-# %%[tespy_model_section_end]
+
+# ----------------------------------------------------------------------------------------------------------------------
+# 2. Exergy analysis
+# ----------------------------------------------------------------------------------------------------------------------
 p0 = 101300
 T0 = 288.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
-# %%[exergy_analysis_setup]
 fuel = {"inputs": ["1", "3"], "outputs": []}
-
 product = {"inputs": ["e15", "h1"], "outputs": []}
-
 loss = {"inputs": ["8", "15"], "outputs": ["14"]}
-# %%[exergy_analysis_flows]
+
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
-ean.export_to_json("examples/ccpp/ccpp_tespy.json")
+ean.export_to_json("examples/exergy_analysis/ccpp/ccpp_tespy.json")
 df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")
-# %%[exergy_analysis_results]

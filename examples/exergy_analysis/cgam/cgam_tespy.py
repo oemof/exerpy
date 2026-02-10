@@ -15,6 +15,9 @@ from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
 
+# ----------------------------------------------------------------------------------------------------------------------
+# 1. Create TESPy network and components
+# ----------------------------------------------------------------------------------------------------------------------
 nwk = Network(p_unit="bar", T_unit="C")
 
 air_molar = {"O2": 0.2059, "N2": 0.7748, "CO2": 0.0003, "H2O": 0.019, "CH4": 0}
@@ -97,6 +100,10 @@ nwk.solve("design")
 nwk.assert_convergence()
 
 nwk.print_results()
+
+# ----------------------------------------------------------------------------------------------------------------------
+# 2. Exergy analysis
+# ----------------------------------------------------------------------------------------------------------------------
 p0 = 101300
 T0 = 298.15
 
@@ -107,5 +114,5 @@ loss = {"inputs": ["7"], "outputs": []}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
-# ean.export_to_json("examples/cgam/cgam_tespy.json")
+# ean.export_to_json("examples/exergy_analysis/cgam/cgam_tespy.json")
 # df_component_results.to_csv("examples/cgam/cgam_components_tespy.csv")

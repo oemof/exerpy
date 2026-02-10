@@ -9,7 +9,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 894044.6190000001,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 894044.6114369547,
+                    "E_P": 768230.7976068733,
+                    "E_D": 125813.81383008137,
+                    "epsilon": 0.8592756868945646,
+                    "y": 0.07747068511652684,
+                    "y_star": 0.11052856335859769
+                }
             },
             "FAN": {
                 "name": "FAN",
@@ -19,7 +27,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 705909.531,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 705909.52667745,
+                    "E_P": 600980.3586997092,
+                    "E_D": 104929.16797774087,
+                    "epsilon": 0.8513560675804762,
+                    "y": 0.0646108267802874,
+                    "y_star": 0.09218121474845344
+                }
             }
         },
         "HeatExchanger": {
@@ -31,7 +47,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 575359.2592836292,
+                    "E_P": 483864.18299999996,
+                    "E_D": 91495.07628362929,
+                    "epsilon": 0.8409774852714661,
+                    "y": 0.05633869627427908,
+                    "y_star": 0.08037924475982247
+                }
             },
             "EVA": {
                 "name": "EVA",
@@ -41,7 +65,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 649279.9582786482,
+                    "E_P": 1808.4878958582963,
+                    "E_D": 647471.47038279,
+                    "epsilon": 0.002785374587339652,
+                    "y": 0.39868482543342765,
+                    "y_star": 0.5688094912514132
+                }
             }
         },
         "Motor": {
@@ -59,7 +91,15 @@
                 "P_el": 716498.174,
                 "P_el_unit": "W",
                 "P_mech": 705909.531,
-                "P_mech_unit": "W"
+                "P_mech_unit": "W",
+                "exergy_results": {
+                    "E_F": 716498.174,
+                    "E_P": 705909.531,
+                    "E_D": 10588.64300000004,
+                    "epsilon": 0.9852216748287205,
+                    "y": 0.006520026717989753,
+                    "y_star": 0.00930221780167714
+                }
             },
             "MOT2": {
                 "name": "MOT2",
@@ -75,7 +115,15 @@
                 "P_el": 907455.288,
                 "P_el_unit": "W",
                 "P_mech": 894044.6190000001,
-                "P_mech_unit": "W"
+                "P_mech_unit": "W",
+                "exergy_results": {
+                    "E_F": 907455.288,
+                    "E_P": 894044.6190000001,
+                    "E_D": 13410.668999999878,
+                    "epsilon": 0.9852216751862711,
+                    "y": 0.008257707827727858,
+                    "y_star": 0.011781392941871601
+                }
             },
             "PUMP-MOTOR": {
                 "name": "PUMP-MOTOR",
@@ -84,7 +132,15 @@
                 "P_el_unit": "W",
                 "P_mech": 63.9097693,
                 "P_mech_unit": "W",
-                "eta_el": 0.985
+                "eta_el": 0.985,
+                "exergy_results": {
+                    "E_F": 64.8830145,
+                    "E_P": 63.9097693,
+                    "E_D": 0.9732452000000009,
+                    "epsilon": 0.9850000002697162,
+                    "y": 5.992821466504501e-07,
+                    "y_star": 8.550046332506253e-07
+                }
             }
         },
         "Pump": {
@@ -96,7 +152,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": 63.9097693,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 63.9097693,
+                    "E_P": 53.36300000002666,
+                    "E_D": 10.546769299973342,
+                    "epsilon": 0.8349740671028625,
+                    "y": 6.494242711204826e-06,
+                    "y_star": 9.265431380809947e-06
+                }
             }
         },
         "Valve": {
@@ -108,7 +172,15 @@
                 "Q": null,
                 "Q_unit": "W",
                 "P": null,
-                "P_unit": "W"
+                "P_unit": "W",
+                "exergy_results": {
+                    "E_F": 144571.93874430493,
+                    "E_P": null,
+                    "E_D": 144571.93874430493,
+                    "epsilon": null,
+                    "y": 0.0890211241690217,
+                    "y_star": 0.1270077442605483
+                }
             }
         }
     },
@@ -469,6 +541,7 @@
             "target_component": null,
             "target_connector": null,
             "energy_flow": 716498.174,
+            "_aspen_power_sign": 1,
             "E": 716498.174,
             "E_unit": "W"
         },
@@ -480,6 +553,7 @@
             "target_component": null,
             "target_connector": null,
             "energy_flow": 907455.288,
+            "_aspen_power_sign": 1,
             "E": 907455.288,
             "E_unit": "W"
         },
@@ -491,6 +565,7 @@
             "target_component": null,
             "target_connector": null,
             "energy_flow": 64.8830145,
+            "_aspen_power_sign": 1,
             "E": 64.8830145,
             "E_unit": "W"
         },
@@ -526,6 +601,7 @@
             "target_component": "MOT1",
             "target_connector": 0,
             "energy_flow": 705909.531,
+            "_aspen_power_sign": 1,
             "E": 705909.531,
             "E_unit": "W"
         },
@@ -537,6 +613,7 @@
             "target_component": "MOT2",
             "target_connector": 0,
             "energy_flow": 894044.6190000001,
+            "_aspen_power_sign": 1,
             "E": 894044.6190000001,
             "E_unit": "W"
         }
@@ -550,5 +627,12 @@
     "settings": {
         "split_physical_exergy": false,
         "chemExLib": null
+    },
+    "system_results": {
+        "E_F": 1624018.3450145,
+        "E_P": 483917.546,
+        "E_D": 1138292.3111186416,
+        "E_L": 1808.4878958582963,
+        "epsilon": 0.29797541849546
     }
 }

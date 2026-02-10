@@ -19,11 +19,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 637.8688906804568,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "CC"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 632230850.0181688,
+                    "E_P": 436464247.14822793,
+                    "E_D": 195766602.86994088,
+                    "epsilon": 0.6903558204027611,
+                    "y": 0.3051929429071146,
+                    "y_star": 0.7697760600265358
+                }
             }
         },
         "Compressor": {
@@ -45,11 +53,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 637.8688906804568,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "COMP"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 241982147.4165336,
+                    "E_P": 231036650.94522184,
+                    "E_D": 10945496.471311748,
+                    "epsilon": 0.9547673388794636,
+                    "y": 0.01706362694498178,
+                    "y_star": 0.04303890972822525
+                }
             }
         },
         "Condenser": {
@@ -71,11 +87,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 1181.8194874579754,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": 30.11301041134036,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "COND"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": null,
+                    "E_P": null,
+                    "E_D": 2337275.5033377577,
+                    "epsilon": null,
+                    "y": 0.003643726656084734,
+                    "y_star": 0.00919042728320303
+                }
             }
         },
         "CycleCloser": {
@@ -97,11 +121,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "SEP"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": null,
+                    "E_P": null,
+                    "E_D": null,
+                    "epsilon": null,
+                    "y": null,
+                    "y_star": null
+                }
             }
         },
         "Deaerator": {
@@ -123,11 +155,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": 8.789150274607149,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "DEA"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 8202655.360123031,
+                    "E_P": 6439994.781360575,
+                    "E_D": 1762660.5787624558,
+                    "epsilon": 0.78511097914322,
+                    "y": 0.0027479230956276245,
+                    "y_star": 0.0069309774782437905
+                }
             }
         },
         "Generator": {
@@ -149,11 +189,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": 251827804.941329,
-                "label": "GEN1"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 251827804.941329,
+                    "E_P": 248050387.8672091,
+                    "E_D": 3777417.0741198957,
+                    "epsilon": 0.9850000000000002,
+                    "y": 0.005888854465151711,
+                    "y_star": 0.014853224144287651
+                }
             },
             "GEN2": {
                 "name": "GEN2",
@@ -173,11 +221,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": 53248978.97416295,
-                "label": "GEN2"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 53248978.97416295,
+                    "E_P": 52450244.28954477,
+                    "E_D": 798734.6846181825,
+                    "epsilon": 0.9849999999998922,
+                    "y": 0.0012451980339187809,
+                    "y_star": 0.003140713633062329
+                }
             }
         },
         "HeatExchanger": {
@@ -199,11 +255,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 80.76138826670152,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "ECO"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 13423931.358411081,
+                    "E_P": 11948556.40900151,
+                    "E_D": 1475374.9494095705,
+                    "epsilon": 0.8900936759867191,
+                    "y": 0.0023000553521423943,
+                    "y_star": 0.005801338425292416
+                }
             },
             "EVA": {
                 "name": "EVA",
@@ -223,11 +287,19 @@
                 "A": 31334.631486731,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "EVA"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 74131357.02117455,
+                    "E_P": 62483060.68775399,
+                    "E_D": 11648296.33342056,
+                    "epsilon": 0.8428695116144522,
+                    "y": 0.018159266114519807,
+                    "y_star": 0.04580239696716319
+                }
             },
             "SH": {
                 "name": "SH",
@@ -247,11 +319,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 80.76138826670164,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": 650.2399425410983,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "SH"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 33353109.178596526,
+                    "E_P": 29007845.893795058,
+                    "E_D": 4345263.284801468,
+                    "epsilon": 0.8697193937292681,
+                    "y": 0.006774105849279256,
+                    "y_star": 0.017086058613248935
+                }
             }
         },
         "Mixer": {
@@ -273,11 +353,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "MIX"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 3090530.5987264696,
+                    "E_P": 1668445.3678903356,
+                    "E_D": 1422085.230836134,
+                    "epsilon": 0.539857255766327,
+                    "y": 0.0022169786383429324,
+                    "y_star": 0.0055917973237867855
+                }
             }
         },
         "Motor": {
@@ -299,11 +387,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": 38217.57256737605,
-                "label": "MOT1"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 38217.57256737605,
+                    "E_P": 37644.30897886541,
+                    "E_D": 573.2635885106429,
+                    "epsilon": 0.985,
+                    "y": 8.936968771700538e-07,
+                    "y_star": 2.254136201227167e-06
+                }
             },
             "MOT2": {
                 "name": "MOT2",
@@ -323,11 +419,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": null,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": 462388.69502952823,
-                "label": "MOT2"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 462388.69502952823,
+                    "E_P": 455452.86460408533,
+                    "E_D": 6935.830425442895,
+                    "epsilon": 0.9850000000000001,
+                    "y": 1.0812704863923663e-05,
+                    "y_star": 2.7272456791093394e-05
+                }
             }
         },
         "Pump": {
@@ -349,11 +453,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 30.11301041133352,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "PUMP1"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 37644.30897886541,
+                    "E_P": 30556.43831686336,
+                    "E_D": 7087.870662002049,
+                    "epsilon": 0.8117146826634172,
+                    "y": 1.1049730007924397e-05,
+                    "y_star": 2.7870295914561063e-05
+                }
             },
             "PUMP2": {
                 "name": "PUMP2",
@@ -373,11 +485,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 80.7613882667014,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "PUMP2"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 455452.86460408533,
+                    "E_P": 397602.6951004019,
+                    "E_D": 57850.16950368346,
+                    "epsilon": 0.8729831910180842,
+                    "y": 9.018628928364312e-05,
+                    "y_star": 0.0002274733018787565
+                }
             }
         },
         "SimpleHeatExchanger": {
@@ -399,11 +519,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 41.859227580751416,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "HC"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 39720971.46648153,
+                    "E_P": 39720971.46648153,
+                    "E_D": 0.0,
+                    "epsilon": 1.0,
+                    "y": 0.0,
+                    "y_star": 0.0
+                }
             }
         },
         "Turbine": {
@@ -425,11 +553,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 650.2399425410983,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "GT"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 509779503.9584749,
+                    "E_P": 493809952.3578626,
+                    "E_D": 15969551.600612283,
+                    "epsilon": 0.9686736099105445,
+                    "y": 0.024895944346216344,
+                    "y_star": 0.0627940533844617
+                }
             },
             "ST1": {
                 "name": "ST1",
@@ -449,11 +585,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 80.7613882667016,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "ST1"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 28464838.148393393,
+                    "E_P": 27469826.974470276,
+                    "E_D": 995011.1739231162,
+                    "epsilon": 0.9650442005418789,
+                    "y": 0.001551185871048723,
+                    "y_star": 0.003912494623272235
+                }
             },
             "ST2": {
                 "name": "ST2",
@@ -473,11 +617,19 @@
                 "A": null,
                 "A_unit": "m2",
                 "mass_flow_1": 30.11301041134332,
-                "mass_flow_1_unit": "W",
+                "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
                 "energy_flow_1": null,
-                "label": "ST2"
+                "energy_flow_1_unit": "W",
+                "exergy_results": {
+                    "E_F": 28779239.93564731,
+                    "E_P": 25779151.999692675,
+                    "E_D": 3000087.935954634,
+                    "epsilon": 0.8957551365962731,
+                    "y": 0.004677026891877037,
+                    "y_star": 0.011796679501082041
+                }
             }
         }
     },
@@ -1626,7 +1778,7 @@
             "source_connector": 1,
             "target_component": "COMP",
             "target_component_type": 24,
-            "target_connector": 3,
+            "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
             "energy_flow": 241982147.4165336,
@@ -1690,7 +1842,7 @@
             "source_connector": 0,
             "target_component": "PUMP1",
             "target_component_type": 8,
-            "target_connector": 3,
+            "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
             "energy_flow": 37644.30897886541,
@@ -1706,7 +1858,7 @@
             "source_connector": 0,
             "target_component": "PUMP2",
             "target_component_type": 8,
-            "target_connector": 3,
+            "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
             "energy_flow": 455452.86460408533,
@@ -1724,5 +1876,12 @@
     "settings": {
         "split_physical_exergy": false,
         "chemExLib": "Ahrendts"
+    },
+    "system_results": {
+        "E_F": 641451932.0308216,
+        "E_P": 339720997.3556032,
+        "E_D": 254316304.48885667,
+        "E_L": 47414630.18636166,
+        "epsilon": 0.529612556127245
     }
 }

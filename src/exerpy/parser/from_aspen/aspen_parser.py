@@ -31,7 +31,7 @@ class AspenModelParser:
             "Mixer": self.assign_mixer_connectors,
             "RStoic": self.assign_combustion_chamber_connectors,
             "FSplit": self.assign_splitter_connectors,
-            # Add other specific component functions here
+            "Turbine": self.assign_turbine_connectors,
         }
 
     def initialize_model(self):
@@ -101,15 +101,15 @@ class AspenModelParser:
             # HEAT AND POWER STREAMS
             if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Input\WORK") is not None:
                 connection_data["kind"] = "power"
-                connection_data["energy_flow"] = (
-                    convert_to_SI(
-                        "power",
-                        abs(self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT").Value),
-                        self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT").UnitString,
-                    )
-                    if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT") is not None
-                    else None
-                )
+                power_node = self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT")
+                if power_node is not None:
+                    raw_power = power_node.Value
+                    connection_data["energy_flow"] = convert_to_SI("power", abs(raw_power), power_node.UnitString)
+                    # Store the sign of the raw Aspen value for direction determination
+                    # in custom connector assignment functions (e.g., Turbine)
+                    connection_data["_aspen_power_sign"] = 1 if raw_power >= 0 else -1
+                else:
+                    connection_data["energy_flow"] = None
             elif self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Input\HEAT") is not None:
                 connection_data["kind"] = "heat"
                 connection_data["energy_flow"] = (
@@ -607,6 +607,77 @@ class AspenModelParser:
         for idx, (port_label, stream_name) in enumerate(outlet_streams):
             connections_data[stream_name]["source_connector"] = idx
             logging.debug(f"Assigned connector {idx} to outlet stream: {stream_name}")
+
+    def assign_turbine_connectors(self, block_name, aspen, connections_data):
+        """
+        Assign connectors for a Turbine (Compr with MODEL_TYPE=TURBINE).
+
+        In Aspen, a gas turbine has up to one input and one output power connection:
+        - F(IN): inlet gas flow → inlet connector 0
+        - P(OUT): outlet gas flow → outlet connector 0
+        - WS(OUT): power output → outlet connector 1
+        - WS(IN): direction depends on the sign of the Aspen power value:
+            - positive → power leaves the turbine → outlet connector 2 (source/target swapped)
+            - negative → power enters the turbine → inlet connector 1 (kept as-is)
+
+        The ``_aspen_power_sign`` field (set during ``parse_streams``) carries the sign
+        of the raw Aspen POWER_OUT value.  ``energy_flow`` is always stored as a positive
+        value because ExerPy does not work with negative values.
+        """
+        ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
+        if ports_node is None:
+            logging.warning(f"No Ports node found for Turbine block: {block_name}")
+            return
+
+        for port in ports_node.Elements:
+            port_label = port.Name
+            port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
+            if port_node is None or port_node.Elements.Count == 0:
+                continue
+
+            for element in port_node.Elements:
+                stream_name = element.Name
+                if stream_name not in connections_data:
+                    continue
+
+                stream = connections_data[stream_name]
+
+                if port_label == "F(IN)":
+                    if stream.get("target_component") == block_name:
+                        stream["target_connector"] = 0
+                elif port_label == "P(OUT)":
+                    if stream.get("source_component") == block_name:
+                        stream["source_connector"] = 0
+                elif port_label == "WS(OUT)":
+                    if stream.get("source_component") == block_name:
+                        stream["source_connector"] = 1
+                elif port_label == "WS(IN)":
+                    if stream.get("kind") != "power":
+                        continue
+                    power_sign = stream.get("_aspen_power_sign", -1)
+                    if power_sign >= 0:
+                        # Positive value: power actually leaves the turbine (e.g., shaft to compressor).
+                        # Swap source/target so the turbine becomes the source (outlet).
+                        old_source = stream["source_component"]
+                        old_source_connector = stream.get("source_connector")
+                        stream["source_component"] = block_name
+                        stream["source_connector"] = 2
+                        stream["target_component"] = old_source
+                        stream["target_connector"] = old_source_connector
+                        logging.info(
+                            f"Turbine {block_name}: WS(IN) power stream '{stream_name}' has positive "
+                            f"value — swapped direction, turbine is now the source, "
+                            f"'{old_source}' is the target."
+                        )
+                    else:
+                        # Negative value: power truly enters the turbine (input).
+                        # Keep direction as-is, assign inlet connector 1.
+                        if stream.get("target_component") == block_name:
+                            stream["target_connector"] = 1
+                        logging.info(
+                            f"Turbine {block_name}: WS(IN) power stream '{stream_name}' has negative "
+                            f"value — kept as inlet (power enters turbine)."
+                        )
 
     def assign_combustion_chamber_connectors(self, block_name, aspen, connections_data):
         """

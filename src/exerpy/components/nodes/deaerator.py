@@ -226,9 +226,10 @@ class Deaerator(Component):
                     else:
                         A[counter, inlet["CostVar_index"]["CH"]] = 1
             else:
-                # Outlet chemical exergy is zero: assign fallback for all inlets.
+                # Outlet chemical exergy is zero: enforce cost conservation sum(C_CH_inlets) - C_CH_outlet = 0
                 for inlet in self.inl.values():
                     A[counter, inlet["CostVar_index"]["CH"]] = 1
+                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
             equations[counter] = {
                 "kind": "aux_mixing",
                 "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
@@ -248,8 +249,10 @@ class Deaerator(Component):
                 else:
                     A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
         else:
+            # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
             for inlet in self.inl.values():
                 A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
+            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1
         equations[counter + chem_row] = {
             "kind": "aux_mixing",
             "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],

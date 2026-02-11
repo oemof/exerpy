@@ -2055,6 +2055,9 @@ class ExergoeconomicAnalysis:
             / df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
         ) * 100
 
+        # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf
+        df_comp["r [%]"] = df_comp["r [%]"].where(df_comp["r [%]"].abs() <= 1e8, np.inf)
+
         # -------------------------
         # Add cost columns to material connections.
         # -------------------------
@@ -2209,6 +2212,116 @@ class ExergoeconomicAnalysis:
             print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
 
         return df_comp, df_mat1, df_mat2, df_non_mat
+
+    def evaluate_results(self, top_n=5, sort_by="C_D+Z"):
+        """
+        Analyze and print the most important components from the exergoeconomic analysis.
+
+        This method ranks components by the selected criterion and prints a summary
+        table highlighting where the highest cost increases occur and whether they
+        are driven by investment (Z) or by inefficiency (C_D).
+
+        Parameters
+        ----------
+        top_n : int, optional
+            Number of top components to display (default is 5).
+        sort_by : str, optional
+            Column to sort by. Valid options:
+
+            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default)
+            - ``"C_D"`` : cost rate of exergy destruction (inefficiency-driven cost)
+            - ``"Z"`` : investment cost rate
+            - ``"r"`` : relative cost difference [%]
+            - ``"f"`` : exergoeconomic factor [%]
+
+        Returns
+        -------
+        pandas.DataFrame
+            The sorted component DataFrame (excluding the TOT row).
+
+        Notes
+        -----
+        The exergoeconomic factor *f* indicates whether the cost increase in a
+        component is dominated by investment (*f* close to 100 %) or by exergy
+        destruction (*f* close to 0 %).  A low *f* suggests that improving
+        component efficiency would be more effective, while a high *f* suggests
+        that reducing investment cost is the priority.
+        """
+        # Get full results without printing
+        df_comp, _, _, _ = self.exergoeconomic_results(print_results=False)
+
+        # Remove TOT row for ranking
+        df = df_comp[df_comp["Component"] != "TOT"].copy()
+
+        # Map user-friendly names to actual column names
+        col_map = {
+            "C_D+Z": f"C_D+Z [{self.currency}/h]",
+            "C_D": f"C_D [{self.currency}/h]",
+            "Z": f"Z [{self.currency}/h]",
+            "r": "r [%]",
+            "f": "f [%]",
+        }
+
+        if sort_by not in col_map:
+            raise ValueError(f"Invalid sort_by='{sort_by}'. Choose from: {list(col_map.keys())}")
+
+        sort_col = col_map[sort_by]
+        df_sorted = df.sort_values(by=sort_col, ascending=False).reset_index(drop=True)
+
+        # Select columns for display
+        display_cols = [
+            "Component",
+            f"C_D [{self.currency}/h]",
+            f"Z [{self.currency}/h]",
+            f"C_D+Z [{self.currency}/h]",
+            "f [%]",
+            "r [%]",
+            f"c_F [{self.currency}/GJ]",
+            f"c_P [{self.currency}/GJ]",
+        ]
+        display_cols = [c for c in display_cols if c in df_sorted.columns]
+
+        # Print ranking header
+        n_show = min(top_n, len(df_sorted))
+        print(f"\n{'=' * 70}")
+        print(f"  EXERGOECONOMIC EVALUATION - Top {n_show} components by {sort_by}")
+        print(f"{'=' * 70}")
+        print(
+            tabulate(
+                df_sorted[display_cols].head(n_show).reset_index(drop=True),
+                headers="keys",
+                tablefmt="psql",
+                floatfmt=".3f",
+            )
+        )
+
+        # Print interpretation guide
+        print(f"\n--- Interpretation (top {n_show} by {sort_by}) ---")
+        for i in range(n_show):
+            row = df_sorted.iloc[i]
+            name = row["Component"]
+            c_d = row[f"C_D [{self.currency}/h]"]
+            z = row[f"Z [{self.currency}/h]"]
+            f_val = row["f [%]"]
+
+            if f_val < 25:
+                driver = "inefficiency (C_D dominates)"
+                suggestion = "improve component efficiency"
+            elif f_val > 75:
+                driver = "investment (Z dominates)"
+                suggestion = "reduce investment cost"
+            else:
+                driver = "both investment and inefficiency"
+                suggestion = "consider trade-off between efficiency and cost"
+
+            print(
+                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f} {self.currency}/h, "
+                f"f={f_val:.1f}% -> {driver} -> {suggestion}"
+            )
+
+        print()
+
+        return df_sorted
 
 
 class EconomicAnalysis:

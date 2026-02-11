@@ -105,7 +105,11 @@ class ExergyAnalysis:
         self._component_data = component_data
         self._connection_data = connection_data
         self.chemExLib = chemExLib
-        self.chemical_exergy_enabled = self.chemExLib is not None
+        self.chemical_exergy_enabled = self.chemExLib is not None or any(
+            conn_data.get("e_CH") is not None
+            for conn_data in connection_data.values()
+            if isinstance(conn_data, dict) and conn_data.get("kind") == "material"
+        )
         self.split_physical_exergy = split_physical_exergy
 
         # Convert the parsed data into components
@@ -260,7 +264,9 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = to_exerpy(model, Tamb, pamb)
-        data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib, split_physical_exergy)
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
+            data, Tamb, pamb, chemExLib, split_physical_exergy
+        )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
@@ -301,7 +307,7 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
             pamb=pamb,
@@ -349,7 +355,7 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
             pamb=pamb,
@@ -360,7 +366,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None):
         """
         Create an ExergyAnalysis instance from a JSON file.
 
@@ -390,7 +396,7 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
@@ -1013,7 +1019,7 @@ def _load_json(json_path):
 
 
 def _process_json(
-    data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, required_component_fields=None
+    data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, required_component_fields=None
 ):
     """Process JSON data to prepare it for exergy analysis.
     This function validates the data structure, ensures all required fields are present,
@@ -1049,8 +1055,32 @@ def _process_json(
     if missing_sections:
         raise ValueError(f"Missing required sections: {missing_sections}")
 
-    # Check for mass_composition in material streams if chemical exergy is requested
-    if chemExLib:
+    # Detect what data is already present in connections
+    material_streams = [conn_data for conn_data in data["connections"].values() if conn_data.get("kind") == "material"]
+    has_split_data = len(material_streams) > 0 and all(
+        conn_data.get("e_T") is not None and conn_data.get("e_M") is not None for conn_data in material_streams
+    )
+    has_chemical_data = any(conn_data.get("e_CH") is not None for conn_data in material_streams)
+
+    # Read settings from JSON as fallbacks when not explicitly provided
+    settings = data.get("settings", {})
+    if chemExLib is None:
+        chemExLib = settings.get("chemExLib")
+    if split_physical_exergy is None:
+        split_physical_exergy = settings.get("split_physical_exergy")
+
+    # Auto-detect from data if still not resolved
+    if split_physical_exergy is None:
+        split_physical_exergy = has_split_data
+    if split_physical_exergy and not has_split_data:
+        raise ValueError(
+            "split_physical_exergy=True requested but the JSON data does not contain "
+            "thermal (e_T) and mechanical (e_M) exergy values. Either provide a JSON "
+            "with split physical exergy data or set split_physical_exergy=False."
+        )
+
+    # Check for mass_composition in material streams if chemical exergy needs to be computed
+    if chemExLib and not has_chemical_data:
         for conn_name, conn_data in data["connections"].items():
             if conn_data.get("kind") == "material" and "mass_composition" not in conn_data:
                 raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
@@ -1082,18 +1112,21 @@ def _process_json(
         if missing_fields:
             raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
 
-    # Add chemical exergy if library provided
+    # Add chemical exergy if library provided and values not already present
     if chemExLib:
-        data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
-        logging.info("Added chemical exergy values")
-    else:
-        logging.warning("You haven't provided a chemical exergy library. Chemical exergy values will not be added.")
+        if has_chemical_data:
+            logging.info("Chemical exergy values already present in JSON data, skipping recalculation.")
+        else:
+            data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
+            logging.info("Added chemical exergy values")
+    elif not has_chemical_data:
+        logging.warning("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
 
     # Calculate total exergy flows
     data = add_total_exergy_flow(data, split_physical_exergy)
     logging.info("Added total exergy flows")
 
-    return data, Tamb, pamb
+    return data, Tamb, pamb, chemExLib, split_physical_exergy
 
 
 class ExergoeconomicAnalysis:
@@ -1164,6 +1197,13 @@ class ExergoeconomicAnalysis:
         This class inherits all exergy analysis results from the provided instance
         and prepares data structures for economic equations and cost variables.
         """
+        if not exergy_analysis_instance.split_physical_exergy:
+            raise ValueError(
+                "ExergoeconomicAnalysis requires split_physical_exergy=True. "
+                "The exergoeconomic cost allocation uses separate thermal (C_T) and mechanical (C_M) "
+                "cost variables for material streams. Please re-run the exergy analysis with "
+                "split_physical_exergy=True."
+            )
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components

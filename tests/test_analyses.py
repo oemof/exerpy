@@ -590,8 +590,10 @@ def test_round_trip_export_import(tmp_path, mock_component_data, mock_connection
     """
     Tamb = 298.15
     pamb = 101325
-    # Create an analysis instance
-    analysis_original = ExergyAnalysis(mock_component_data, mock_connection_data, Tamb, pamb)
+    # Create an analysis instance (split_physical_exergy=False because mock data lacks e_T/e_M)
+    analysis_original = ExergyAnalysis(
+        mock_component_data, mock_connection_data, Tamb, pamb, split_physical_exergy=False
+    )
 
     # Export the analysis to a temporary JSON file.
     export_file = tmp_path / "roundtrip.json"

@@ -213,7 +213,9 @@ def test_from_ebsilon_load_existing_json(tmp_path):
     Test that the from_ebsilon() method can load existing JSON data when simulate=False.
     """
     # Setup
-    ebsilon_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples", "cgam", "cgam.ebs"))
+    ebsilon_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "examples", "exergy_analysis", "cgam", "cgam.ebs")
+    )
     ebsilon_file.replace(".ebs", "_ebs.json")
 
     # Call the method and verify the output

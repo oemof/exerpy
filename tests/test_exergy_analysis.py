@@ -82,7 +82,9 @@ def test_validate_simulators_connection_data(testcase, caplog):
 def exergy_analysis():
     """Set up the ExergyAnalysis object using the data from cgam_ebs.json."""
     # Define the path to the JSON file
-    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples/cgam/cgam_ebs.json"))
+    file_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../examples/exergy_analysis/cgam/cgam_ebs.json")
+    )
     # Return an initialized ExergyAnalysis object
     return ExergyAnalysis.from_json(file_path, split_physical_exergy=False)
 

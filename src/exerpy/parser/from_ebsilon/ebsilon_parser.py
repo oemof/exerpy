@@ -81,6 +81,7 @@ class EbsilonModelParser:
         self.pamb: float | None = None  # Ambient pressure
 
         self._storages_to_postprocess: list[dict[str, Any]] = []
+        self._power_bus_mul_data: dict[str, dict[int, float]] = {}  # {comp_name: {connector_idx: MUL_value}}
 
     @require_ebsilon
     def initialize_model(self):
@@ -173,6 +174,9 @@ class EbsilonModelParser:
                 # Check if the object is a pipe (epObjectKindPipe = 16)
                 if obj.IsKindOf(16):
                     self.parse_connection(obj)
+
+            # Reclassify Power Summarizer connections based on MUL signs
+            self._reclassify_power_bus_connections()
 
             # After parsing all components and connections, create storage connections
             self._create_storage_connections()
@@ -391,7 +395,9 @@ class EbsilonModelParser:
                             "E_unit": fluid_property_data["power"]["SI_unit"],
                         }
                     )
-                if comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in power_components:
+                if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in power_components) or (
+                    comp1 is not None and comp1.Kind is not None and comp1.Kind - 10000 in power_components
+                ):
                     connection_data.update(
                         {
                             "kind": "power",
@@ -581,6 +587,19 @@ class EbsilonModelParser:
                 )
                 logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
+        if type_index == 31:
+            comp31 = self.oc.CastToComp31(obj)
+            mul_signs = {}
+            for i in range(1, 11):
+                mul_attr = f"MUL{i}"
+                if hasattr(comp31, mul_attr):
+                    mul_value = getattr(comp31, mul_attr).Value
+                    mul_signs[connector_mapping[31][i]] = mul_value
+            self._power_bus_mul_data[comp31.Name] = mul_signs
+            # Also store in component_data so it persists to JSON
+            if "PowerBus" in self.components_data and comp31.Name in self.components_data["PowerBus"]:
+                self.components_data["PowerBus"][comp31.Name]["mul_signs"] = mul_signs
+
         if type_index == 118:
             storage = self.oc.CastToComp118(obj)
             self._storages_to_postprocess.append(
@@ -663,6 +682,134 @@ class EbsilonModelParser:
                 ),
             }
             self.connections_data[prefix] = new_conn
+
+    def _reclassify_power_bus_connections(self):
+        """
+        Link Power Summarizer (type 31) logic connections to their corresponding
+        power connections (Electric/Shaft) by matching energy_flow values.
+
+        In Ebsilon, power flows (Electric/Shaft) are connected to the Power Summarizer
+        via intermediate Logic connections that carry the same energy_flow value.
+        All 10 Logic connections target the PowerBus regardless of MUL sign.
+        The MUL sign determines the linking direction:
+        - MUL >= 0 (inlet): the power connection's free target is linked to POWER
+        - MUL < 0 (outlet): the power connection's free source is linked to POWER
+
+        This method:
+        1. Finds Logic connections targeting type 31 components
+        2. Uses MUL signs to determine if the connection is an inlet or outlet
+        3. Matches them to power connections (Electric/Shaft) with equal energy_flow
+        4. Updates the power connection to point to/from the PowerBus directly
+        5. Removes the now-redundant Logic connection
+
+        Logic connections with no matching power connection (e.g. the net output ETOT)
+        are left unchanged.
+        """
+        logic_conns_to_remove = []
+
+        for conn_name, conn_data in list(self.connections_data.items()):
+            # Only process Logic fluid connections connected to type 31
+            if conn_data.get("fluid_type_id") != 13:
+                continue
+
+            # Handle logic connections targeting POWER (all 10 inputs in Ebsilon)
+            if conn_data.get("target_component_type") == 31:
+                comp_name = conn_data["target_component"]
+                connector_idx = conn_data["target_connector"]
+
+                logic_energy = conn_data.get("energy_flow")
+                if logic_energy is None:
+                    continue
+
+                # Determine direction from MUL sign
+                mul_value = self._power_bus_mul_data.get(comp_name, {}).get(connector_idx, 1.0)
+                is_power_inlet = mul_value >= 0  # positive MUL = power flows into POWER
+
+                # Find matching power connection (Electric/Shaft) by energy_flow
+                matched_power_name = None
+                for power_name, power_data in self.connections_data.items():
+                    if power_name == conn_name:
+                        continue
+                    if power_data.get("fluid_type_id") not in {9, 10}:  # Electric, Shaft
+                        continue
+                    power_energy = power_data.get("energy_flow")
+                    if power_energy is None:
+                        continue
+                    if abs(power_energy - logic_energy) < 1e-6 and (
+                        is_power_inlet
+                        and power_data.get("target_component") is None
+                        or not is_power_inlet
+                        and power_data.get("source_component") is None
+                    ):
+                        matched_power_name = power_name
+                        break
+
+                if matched_power_name is None:
+                    continue
+
+                matched_power_data = self.connections_data[matched_power_name]
+
+                if is_power_inlet:
+                    # Positive MUL: power flows into POWER → link power target to POWER
+                    matched_power_data["target_component"] = comp_name
+                    matched_power_data["target_component_type"] = 31
+                    matched_power_data["target_connector"] = connector_idx
+                    logging.info(
+                        f"Linked power connection {matched_power_name} to PowerBus "
+                        f"{comp_name} (inlet, connector {connector_idx})"
+                    )
+                else:
+                    # Negative MUL: power flows out of POWER → link power source to POWER
+                    matched_power_data["source_component"] = comp_name
+                    matched_power_data["source_component_type"] = 31
+                    matched_power_data["source_connector"] = connector_idx
+                    logging.info(
+                        f"Linked power connection {matched_power_name} to PowerBus "
+                        f"{comp_name} (outlet, connector {connector_idx})"
+                    )
+
+                logic_conns_to_remove.append(conn_name)
+
+            # Handle logic connections sourced from POWER (e.g. already-directed outlets)
+            elif conn_data.get("source_component_type") == 31:
+                comp_name = conn_data["source_component"]
+                connector_idx = conn_data["source_connector"]
+
+                logic_energy = conn_data.get("energy_flow")
+                if logic_energy is None:
+                    continue
+
+                # Find matching power connection with free source
+                matched_power_name = None
+                for power_name, power_data in self.connections_data.items():
+                    if power_name == conn_name:
+                        continue
+                    if power_data.get("fluid_type_id") not in {9, 10}:
+                        continue
+                    power_energy = power_data.get("energy_flow")
+                    if power_energy is None:
+                        continue
+                    if abs(power_energy - logic_energy) < 1e-6 and power_data.get("source_component") is None:
+                        matched_power_name = power_name
+                        break
+
+                if matched_power_name is None:
+                    continue
+
+                matched_power_data = self.connections_data[matched_power_name]
+                matched_power_data["source_component"] = comp_name
+                matched_power_data["source_component_type"] = 31
+                matched_power_data["source_connector"] = connector_idx
+                logging.info(
+                    f"Linked power connection {matched_power_name} to PowerBus "
+                    f"{comp_name} (outlet, connector {connector_idx})"
+                )
+                logic_conns_to_remove.append(conn_name)
+
+        # Remove the matched Logic connections
+        for name in logic_conns_to_remove:
+            del self.connections_data[name]
+            logging.info(f"Removed redundant Logic connection: {name}")
 
     def get_sorted_data(self) -> dict[str, Any]:
         """

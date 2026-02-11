@@ -482,10 +482,12 @@ class ExergyAnalysis:
             "s [J/kgK]": [],
             "E [kW]": [],
             "e^PH [kJ/kg]": [],
-            "e^T [kJ/kg]": [],
-            "e^M [kJ/kg]": [],
-            "e^CH [kJ/kg]": [],
         }
+        if self.split_physical_exergy:
+            material_connection_results["e^T [kJ/kg]"] = []
+            material_connection_results["e^M [kJ/kg]"] = []
+        if self.chemical_exergy_enabled:
+            material_connection_results["e^CH [kJ/kg]"] = []
 
         # NON-MATERIAL CONNECTIONS
         non_material_connection_results = {"Connection": [], "Kind": [], "Energy Flow [kW]": [], "Exergy Flow [kW]": []}
@@ -525,15 +527,17 @@ class ExergyAnalysis:
                 material_connection_results["e^PH [kJ/kg]"].append(
                     convert(conn_data.get("e_PH"), 1e-3)
                 )  # Convert to kJ/kg
-                material_connection_results["e^T [kJ/kg]"].append(
-                    convert(conn_data.get("e_T"), 1e-3)
-                )  # Convert to kJ/kg
-                material_connection_results["e^M [kJ/kg]"].append(
-                    convert(conn_data.get("e_M"), 1e-3)
-                )  # Convert to kJ/kg
-                material_connection_results["e^CH [kJ/kg]"].append(
-                    convert(conn_data.get("e_CH"), 1e-3)
-                )  # Convert to kJ/kg
+                if self.split_physical_exergy:
+                    material_connection_results["e^T [kJ/kg]"].append(
+                        convert(conn_data.get("e_T"), 1e-3)
+                    )  # Convert to kJ/kg
+                    material_connection_results["e^M [kJ/kg]"].append(
+                        convert(conn_data.get("e_M"), 1e-3)
+                    )  # Convert to kJ/kg
+                if self.chemical_exergy_enabled:
+                    material_connection_results["e^CH [kJ/kg]"].append(
+                        convert(conn_data.get("e_CH"), 1e-3)
+                    )  # Convert to kJ/kg
                 material_connection_results["E [kW]"].append(convert(conn_data.get("E"), 1e-3))  # Convert to kW
 
         # Convert the material and non-material connection dictionaries into DataFrames
@@ -1167,6 +1171,8 @@ class ExergoeconomicAnalysis:
         self.E_F_dict = exergy_analysis_instance.E_F_dict
         self.E_P_dict = exergy_analysis_instance.E_P_dict
         self.E_L_dict = exergy_analysis_instance.E_L_dict
+        self.Tamb = exergy_analysis_instance.Tamb
+        self.pamb = exergy_analysis_instance.pamb
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
@@ -1320,14 +1326,12 @@ class ExergoeconomicAnalysis:
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
 
-    def construct_matrix(self, Tamb):
+    def construct_matrix(self):
         """
         Construct the exergoeconomic cost matrix and vector.
 
         Parameters
         ----------
-        Tamb : float
-            Ambient temperature in Kelvin.
 
         Returns
         -------
@@ -1427,19 +1431,13 @@ class ExergoeconomicAnalysis:
                             counter += 1
 
         # 3. Auxiliary equations for the equality of the specific costs
-        # of all power flows at the input or output of the system.
+        # of all inlet power flows to the system.
         power_conns = [
             conn
             for conn in self.connections.values()
             if conn.get("kind") == "power"
-            and (
-                conn.get("source_component") not in valid_component_names
-                or conn.get("target_component") not in valid_component_names
-            )
-            and not (
-                conn.get("source_component") not in valid_component_names
-                and conn.get("target_component") not in valid_component_names
-            )
+            and conn.get("source_component") not in valid_component_names
+            and conn.get("target_component") in valid_component_names
         ]
 
         # Only add auxiliary equations if there is more than one power connection.
@@ -1470,7 +1468,7 @@ class ExergoeconomicAnalysis:
                     # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                     # and return the updated (A, b, counter).
                     self._A, self._b, counter, self.equations = comp.aux_eqs(
-                        self._A, self._b, counter, Tamb, self.equations, self.chemical_exergy_enabled
+                        self._A, self._b, counter, self.Tamb, self.equations, self.chemical_exergy_enabled
                     )
                 else:
                     # If no auxiliary equations are provided.
@@ -1487,20 +1485,18 @@ class ExergoeconomicAnalysis:
                     self._A,
                     self._b,
                     counter,
-                    Tamb,
+                    self.Tamb,
                     self.equations,
                     self.chemical_exergy_enabled,
                     list(self.components.values()),
                 )
 
-    def solve_exergoeconomic_analysis(self, Tamb):
+    def solve_exergoeconomic_analysis(self):
         """
         Solve the exergoeconomic cost balance equations and assign the results to connections and components.
 
         Parameters
         ----------
-        Tamb : float
-            Ambient temperature in Kelvin.
 
         Returns
         -------
@@ -1524,7 +1520,7 @@ class ExergoeconomicAnalysis:
         6. Computes system-level cost variables
         """
         # Step 1: Construct the cost matrix
-        self.construct_matrix(Tamb)
+        self.construct_matrix()
 
         # Step 2: Solve the system of equations
         try:
@@ -1588,6 +1584,9 @@ class ExergoeconomicAnalysis:
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
                 comp.exergoeconomic_balance(self.exergy_analysis.Tamb, self.chemical_exergy_enabled)
+
+        # Check cost balances before loss attribution (Step 6) modifies C_TOT values
+        self.check_cost_balance()
 
         # Step 6: Distribute the cost of loss streams to the product streams.
         # For each loss stream (provided in E_L_dict), its C_TOT is distributed among the product streams (in E_P_dict)
@@ -1681,6 +1680,8 @@ class ExergoeconomicAnalysis:
         """
         # find all indices of variables named "dissipative_*"
         diss_indices = [int(idx) for idx, name in self.variables.items() if name.startswith("dissipative_")]
+        if not diss_indices:
+            return
         total_C_diff = sum(C_solution[i] for i in diss_indices)
         # assign to each component that got a serving_weight
         for comp in self.exergy_analysis.components.values():
@@ -1747,7 +1748,7 @@ class ExergoeconomicAnalysis:
 
         return balances
 
-    def run(self, Exe_Eco_Costs, Tamb):
+    def run(self, Exe_Eco_Costs):
         """
         Execute the full exergoeconomic analysis.
 
@@ -1757,8 +1758,6 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
-        Tamb : float
-            Ambient temperature in Kelvin.
 
         Notes
         -----
@@ -1769,9 +1768,8 @@ class ExergoeconomicAnalysis:
         """
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
-        self.solve_exergoeconomic_analysis(Tamb)
+        self.solve_exergoeconomic_analysis()
         logging.info("Exergoeconomic analysis completed successfully.")
-        self.check_cost_balance()
 
     def print_equations(self):
         """

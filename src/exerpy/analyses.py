@@ -2063,42 +2063,40 @@ class ExergoeconomicAnalysis:
         # -------------------------
         # Split the material connections into two tables according to your specifications.
         # -------------------------
-        # df_mat1: Columns from mass flow until e^CH.
-        df_mat1 = df_mat[
-            [
-                "Connection",
-                "m [kg/s]",
-                "T [°C]",
-                "p [bar]",
-                "h [kJ/kg]",
-                "s [J/kgK]",
-                "E [kW]",
-                "e^PH [kJ/kg]",
-                "e^T [kJ/kg]",
-                "e^M [kJ/kg]",
-                "e^CH [kJ/kg]",
-            ]
-        ].copy()
+        # df_mat1: Columns from mass flow until e^CH (only include columns that exist).
+        mat1_cols = [
+            "Connection",
+            "m [kg/s]",
+            "T [°C]",
+            "p [bar]",
+            "h [kJ/kg]",
+            "s [J/kgK]",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]",
+        ]
+        df_mat1 = df_mat[[c for c in mat1_cols if c in df_mat.columns]].copy()
 
         # df_mat2: Columns from E onward, plus the uppercase and lowercase cost columns.
-        df_mat2 = df_mat[
-            [
-                "Connection",
-                "E [kW]",
-                "e^PH [kJ/kg]",
-                "e^T [kJ/kg]",
-                "e^M [kJ/kg]",
-                "e^CH [kJ/kg]",
-                f"C^T [{self.currency}/h]",
-                f"C^M [{self.currency}/h]",
-                f"C^CH [{self.currency}/h]",
-                f"C^TOT [{self.currency}/h]",
-                f"c^T [{self.currency}/GJ_ex]",
-                f"c^M [{self.currency}/GJ_ex]",
-                f"c^CH [{self.currency}/GJ_ex]",
-                f"c^TOT [{self.currency}/GJ_ex]",
-            ]
-        ].copy()
+        mat2_cols = [
+            "Connection",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]",
+            f"C^T [{self.currency}/h]",
+            f"C^M [{self.currency}/h]",
+            f"C^CH [{self.currency}/h]",
+            f"C^TOT [{self.currency}/h]",
+            f"c^T [{self.currency}/GJ_ex]",
+            f"c^M [{self.currency}/GJ_ex]",
+            f"c^CH [{self.currency}/GJ_ex]",
+            f"c^TOT [{self.currency}/GJ_ex]",
+        ]
+        df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
         # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
         df_mat1.dropna(axis=1, how="all", inplace=True)

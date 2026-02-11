@@ -55,3 +55,4 @@ cost_estimator.print_estimated_costs()
 all_costs = {**estimated_costs, "E1_c": 100.0, "11_c": 20.0, "21_c": 0.0}  # currency/GJ
 exergoeco_analysis.run(all_costs)
 exergoeco_analysis.exergoeconomic_results()
+exergoeco_analysis.print_dependency_report()

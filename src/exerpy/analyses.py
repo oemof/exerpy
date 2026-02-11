@@ -1491,12 +1491,15 @@ class ExergoeconomicAnalysis:
                     list(self.components.values()),
                 )
 
-    def solve_exergoeconomic_analysis(self):
+    def solve_exergoeconomic_analysis(self, allow_singular=False):
         """
         Solve the exergoeconomic cost balance equations and assign the results to connections and components.
 
         Parameters
         ----------
+        allow_singular : bool, optional
+            If True, use least-squares solver as fallback when the matrix is singular.
+            The solution may not be physically consistent. Default is False.
 
         Returns
         -------
@@ -1507,7 +1510,8 @@ class ExergoeconomicAnalysis:
         Raises
         ------
         ValueError
-            If the exergoeconomic system is singular or if the cost balance is not satisfied.
+            If the exergoeconomic system is singular (and allow_singular is False)
+            or if the cost balance is not satisfied.
 
         Notes
         -----
@@ -1530,10 +1534,26 @@ class ExergoeconomicAnalysis:
                     "The solution of the cost matrix contains NaN values, indicating an issue with the cost balance equations or specifications."
                 )
         except np.linalg.LinAlgError:
-            raise ValueError(
-                f"Exergoeconomic system is singular and cannot be solved. "
-                f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}"
+            rank = np.linalg.matrix_rank(self._A)
+            n = self._A.shape[0]
+            if not allow_singular:
+                print(f"\nExergoeconomic system is singular (rank {rank}/{n}). Dependency report:")
+                self.print_dependency_report()
+                raise ValueError(
+                    f"Exergoeconomic system is singular (rank {rank}/{n}) and cannot be solved. "
+                    f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}. "
+                    f"Use run(allow_singular=True) to attempt a least-squares solution."
+                )
+            logging.warning(
+                f"Exergoeconomic matrix is singular (rank {rank}/{n}). "
+                f"Using least-squares solver (minimum-norm solution). Results may not be physically consistent."
             )
+            C_solution, residuals, rank_lstsq, sv = np.linalg.lstsq(self._A, self._b, rcond=None)
+            if np.isnan(C_solution).any():
+                raise ValueError(
+                    f"Exergoeconomic system is singular (rank {rank}/{n}) and the least-squares "
+                    f"solver also produced NaN values. The equation system may be fundamentally ill-posed."
+                )
 
         # Step 3: Distribute the cost differences of dissipative components to the serving components
         self.distribute_all_Z_diff(C_solution)
@@ -1688,6 +1708,14 @@ class ExergoeconomicAnalysis:
             if hasattr(comp, "serving_weight"):
                 comp.Z_diss = comp.serving_weight * total_C_diff
 
+        # Store each dissipative component's own C_diff for balance checking
+        for idx in diss_indices:
+            var_name = self.variables[str(idx)]  # e.g., "dissipative_VAL1"
+            comp_name = var_name.replace("dissipative_", "", 1)
+            comp = self.exergy_analysis.components.get(comp_name)
+            if comp is not None:
+                comp.C_diff = C_solution[idx]
+
     def check_cost_balance(self, tol=1e-6):
         """
         Check the exergoeconomic cost balance for each component.
@@ -1735,7 +1763,8 @@ class ExergoeconomicAnalysis:
             comp.C_out = outlet_sum
             z_cost = getattr(comp, "Z_costs", 0)
             z_diss = getattr(comp, "Z_diss", 0)
-            balance = inlet_sum - outlet_sum + z_cost + z_diss
+            c_diff = getattr(comp, "C_diff", 0)
+            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff
             balances[name] = (balance, abs(balance) <= tol)
 
         all_ok = all(flag for _, flag in balances.values())
@@ -1748,7 +1777,7 @@ class ExergoeconomicAnalysis:
 
         return balances
 
-    def run(self, Exe_Eco_Costs):
+    def run(self, Exe_Eco_Costs, allow_singular=False):
         """
         Execute the full exergoeconomic analysis.
 
@@ -1758,6 +1787,9 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+        allow_singular : bool, optional
+            If True, use least-squares solver as fallback when the matrix is singular.
+            The solution may not be physically consistent. Default is False.
 
         Notes
         -----
@@ -1768,7 +1800,7 @@ class ExergoeconomicAnalysis:
         """
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
-        self.solve_exergoeconomic_analysis()
+        self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
         logging.info("Exergoeconomic analysis completed successfully.")
 
     def print_equations(self):
@@ -1795,8 +1827,12 @@ class ExergoeconomicAnalysis:
 
     def detect_linear_dependencies(self, tol_strict: float = 1e-12, tol_near: float = 1e-8):
         """
-        Scan A for zero-rows, zero-cols, exactly colinear equation pairs
-        (error ≤ tol_strict), and near-colinear pairs (≤ tol_near but > tol_strict).
+        Scan A for zero-rows, zero-cols, pairwise colinear equation pairs,
+        and use SVD null-space analysis to identify multi-equation dependencies.
+
+        The SVD analysis finds the actual null space of A^T, revealing which
+        equations participate in linear dependencies even when no two equations
+        are pairwise colinear.
         """
         A = self._A
 
@@ -1804,7 +1840,7 @@ class ExergoeconomicAnalysis:
         zero_rows = np.where((np.abs(A) < tol_strict).all(axis=1))[0].tolist()
         zero_cols = np.where((np.abs(A) < tol_strict).all(axis=0))[0].tolist()
 
-        # 2) norms once
+        # 2) pairwise colinearity using cosine similarity (more robust than dot-product difference)
         norms = np.linalg.norm(A, axis=1)
 
         strict = []
@@ -1814,33 +1850,75 @@ class ExergoeconomicAnalysis:
             for j in range(i + 1, n):
                 ni, nj = norms[i], norms[j]
                 if ni > tol_strict and nj > tol_strict:
-                    dot = float(np.dot(A[i], A[j]))
-                    diff = abs(dot - ni * nj)
-                    if diff <= tol_strict:
+                    cosine = float(np.dot(A[i], A[j])) / (ni * nj)
+                    if abs(abs(cosine) - 1.0) <= tol_strict:
                         strict.append((i, j))
-                    elif diff <= tol_near:
+                    elif abs(abs(cosine) - 1.0) <= tol_near:
                         near.append((i, j))
 
         # drop any strict pairs from the near list
         near_only = [pair for pair in near if pair not in strict]
+
+        # 3) SVD null-space analysis to find multi-equation dependencies
+        svd_dependencies = []
+        matrix_rank = None
+        try:
+            U, s, Vt = np.linalg.svd(A)
+            # Use same tolerance as np.linalg.matrix_rank for consistency
+            sv_tol = s[0] * max(A.shape) * np.finfo(A.dtype).eps
+            matrix_rank = int(np.sum(s > sv_tol))
+            rank_deficiency = A.shape[0] - matrix_rank
+
+            if rank_deficiency > 0:
+                # The last `rank_deficiency` columns of U span the left null space of A
+                # These tell us which *equations* (rows) are involved in dependencies
+                null_vectors = U[:, matrix_rank:]  # shape: (n_eqs, rank_deficiency)
+
+                for k in range(rank_deficiency):
+                    null_vec = null_vectors[:, k]
+                    # Find equations with significant contributions to this null vector
+                    max_coeff = np.max(np.abs(null_vec))
+                    if max_coeff > tol_strict:
+                        threshold = max_coeff * 0.01  # 1% of max coefficient
+                        involved = []
+                        for idx in range(len(null_vec)):
+                            if abs(null_vec[idx]) > threshold:
+                                involved.append((idx, float(null_vec[idx])))
+                        svd_dependencies.append(
+                            {
+                                "null_vector_index": k,
+                                "singular_value": float(s[matrix_rank + k]) if (matrix_rank + k) < len(s) else 0.0,
+                                "involved_equations": involved,
+                            }
+                        )
+        except np.linalg.LinAlgError:
+            pass  # SVD failed, skip this analysis
 
         return {
             "zero_rows": zero_rows,
             "zero_columns": zero_cols,
             "colinear_equations_strict": strict,
             "colinear_equations_near_only": near_only,
+            "svd_dependencies": svd_dependencies,
+            "matrix_rank": matrix_rank,
         }
 
     def print_dependency_report(self, tol_strict: float = 1e-12, tol_near: float = 1e-8):
         """
         Nicely print which equations or variables are under- or over-determined,
-        distinguishing exact vs. near colinearities.
+        distinguishing exact vs. near colinearities, and showing SVD null-space analysis.
         """
         deps = self.detect_linear_dependencies(tol_strict, tol_near)
 
+        # Matrix rank
+        if deps.get("matrix_rank") is not None:
+            n = self._A.shape[0]
+            rank = deps["matrix_rank"]
+            print(f"Matrix size: {n}x{n}, Rank: {rank}, Rank deficiency: {n - rank}")
+
         # empty equations
         if deps["zero_rows"]:
-            print("⚠ Equations with no variables:")
+            print("\n⚠ Equations with no variables:")
             for eq in deps["zero_rows"]:
                 print(f"  • Eq[{eq}]: {self.equations.get(eq)}")
         else:
@@ -1865,11 +1943,25 @@ class ExergoeconomicAnalysis:
 
         # near-colinear
         if deps["colinear_equations_near_only"]:
-            print("\n⚠ Nearly colinear equation pairs (|dot−‖i‖‖j‖| ≤ tol_near):")
+            print("\n⚠ Nearly colinear equation pairs (|cosine| ≈ 1):")
             for i, j in deps["colinear_equations_near_only"]:
                 print(f"  • Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
         else:
             print("✓ No near-colinear equation pairs detected.")
+
+        # SVD null-space analysis
+        svd_deps = deps.get("svd_dependencies", [])
+        if svd_deps:
+            print(f"\n⚠ SVD null-space analysis found {len(svd_deps)} dependency(ies):")
+            for dep in svd_deps:
+                print(f"\n  Dependency #{dep['null_vector_index'] + 1} (singular value: {dep['singular_value']:.2e}):")
+                print("  Equations involved (with coefficients in null vector):")
+                sorted_eqs = sorted(dep["involved_equations"], key=lambda x: abs(x[1]), reverse=True)
+                for eq_idx, coeff in sorted_eqs:
+                    eq_info = self.equations.get(eq_idx, "unknown")
+                    print(f"    • Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
+        else:
+            print("\n✓ SVD analysis: no linear dependencies detected (matrix is full rank).")
 
     def exergoeconomic_results(self, print_results=True):
         """

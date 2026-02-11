@@ -114,5 +114,5 @@ loss = {"inputs": ["7"], "outputs": []}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
-# ean.export_to_json("examples/exergy_analysis/cgam/cgam_tespy.json")
-# df_component_results.to_csv("examples/cgam/cgam_components_tespy.csv")
+ean.export_to_json("examples/exergy_analysis/cgam/cgam_tespy.json")
+df_component_results.to_csv("examples/exergy_analysis/cgam/cgam_components_tespy.csv")

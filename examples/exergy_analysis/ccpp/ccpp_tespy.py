@@ -221,4 +221,4 @@ loss = {"inputs": ["8", "15"], "outputs": ["14"]}
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/ccpp/ccpp_tespy.json")
-df_component_results.to_csv("examples/ccpp/ccpp_components_tespy.csv")
+df_component_results.to_csv("examples/exergy_analysis/ccpp/ccpp_components_tespy.csv")

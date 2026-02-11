@@ -406,29 +406,40 @@ class Deaerator(Component):
         self.C_P = 0
         self.C_F = 0
         if self.outl[0]["T"] > T0:
-            for i in self.inl:
+            for i in self.inl.values():
                 if i["T"] < self.outl[0]["T"]:
                     # cold inlets
-                    self.C_F += i["C_M"] + i["C_CH"]
+                    self.C_F += i["C_M"]
+                    if chemical_exergy_enabled:
+                        self.C_F += i["C_CH"]
                 else:
                     # hot inlets
-                    self.C_F += -i["M"] * i["C_T"] * i["e_T"] + (i["C_T"] + i["C_M"] + i["C_CH"])
-            self.C_F += -self.outl[0]["C_M"] - self.outl[0]["C_CH"]
+                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    if chemical_exergy_enabled:
+                        self.C_F += i["C_CH"]
+            self.C_F += -self.outl[0]["C_M"]
+            if chemical_exergy_enabled:
+                self.C_F += -self.outl[0]["C_CH"]
         elif self.outl[0]["T"] - 1e-6 < T0 and self.outl[0]["T"] + 1e-6 > T0:
             # dissipative
-            for i in self.inl:
+            for i in self.inl.values():
                 self.C_F += i["C_TOT"]
         else:
-            for i in self.inl:
+            for i in self.inl.values():
                 if i["T"] > self.outl[0]["T"]:
                     # hot inlets
-                    self.C_F += i["C_M"] + i["C_CH"]
+                    self.C_F += i["C_M"]
+                    if chemical_exergy_enabled:
+                        self.C_F += i["C_CH"]
                 else:
                     # cold inlets
-                    self.C_F += -i["M"] * i["C_T"] * i["e_T"] + (i["C_T"] + i["C_M"] + i["C_CH"])
-            self.C_F += -self.outl[0]["C_M"] - self.outl[0]["C_CH"]
-        self.C_P = self.C_F + self.Z_costs  # +1/num_serving_comps * C_diff
-        # ToDo: add case that merge profits from dissipative component(s)
+                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    if chemical_exergy_enabled:
+                        self.C_F += i["C_CH"]
+            self.C_F += -self.outl[0]["C_M"]
+            if chemical_exergy_enabled:
+                self.C_F += -self.outl[0]["C_CH"]
+        self.C_P = self.C_F + self.Z_costs + getattr(self, "Z_diss", 0)
 
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P

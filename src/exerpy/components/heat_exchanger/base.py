@@ -628,7 +628,7 @@ class HeatExchanger(Component):
             equations[counter + 4] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_M",
+                "property": "c_CH",
             }
             num_aux_eqs = 5
         else:

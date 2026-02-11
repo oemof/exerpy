@@ -89,9 +89,39 @@ class PowerBus(Component):
                 b[counter] = 0
                 counter += 1
 
-        # Mixer case with multiple inputs and outputs
-        else:
-            logging.error(f"PowerBus {self.name} has multiple inputs and outputs, which has not been implemented yet.")
+        # General case with multiple inputs and outputs
+        elif len(self.inl) > 1 and len(self.outl) > 1:
+            logging.info(
+                f"PowerBus {self.name} has multiple inputs and outputs, "
+                f"adding cost balance and outlet equality equations."
+            )
+
+            # Cost balance equation: sum(C_in) - sum(C_out) = 0  (Z = 0 for PowerBus)
+            for inl in self.inl.values():
+                A[counter, inl["CostVar_index"]["exergy"]] = 1
+            for out in self.outl.values():
+                A[counter, out["CostVar_index"]["exergy"]] = -1
+            equations[counter] = {
+                "kind": "cost_balance",
+                "objects": [self.name],
+                "property": "c_TOT",
+            }
+            b[counter] = 0
+            counter += 1
+
+            # Equalize specific costs of all outlets: c_ref = c_out_i
+            outlet_list = list(self.outl.values())
+            ref_out = outlet_list[0]
+            for out in outlet_list[1:]:
+                A[counter, ref_out["CostVar_index"]["exergy"]] = (1 / ref_out["E"]) if ref_out["E"] != 0 else 1
+                A[counter, out["CostVar_index"]["exergy"]] = (-1 / out["E"]) if out["E"] != 0 else -1
+                equations[counter] = {
+                    "kind": "aux_power_eq",
+                    "objects": [self.name, ref_out["name"], out["name"]],
+                    "property": "c_TOT",
+                }
+                b[counter] = 0
+                counter += 1
 
         return A, b, counter, equations
 

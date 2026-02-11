@@ -140,17 +140,17 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Extra examples
-
-
 # Aspen files
 examples/ccpp/ccpp.ads
 examples/ccpp/_0108erv.def
 examples/ccpp/_0108erv
 
-# Cost correlation data and Turton estimator (copyrighted)
+# Copyrighted cost correlation data
 src/exerpy/data/cost_correlations/
 src/exerpy/cost_estimation/
+examples/exergoeconomic_analysis/cgam/
+examples/exergoeconomic_analysis/ccpp/
+examples/exergoeconomic_analysis/heatpump/
 
 # macOS
 .DS_Store

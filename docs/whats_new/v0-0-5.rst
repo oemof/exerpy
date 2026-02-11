@@ -1,0 +1,39 @@
+v0.0.5 (11.02.2026)
+++++++++++++++++++++++
+
+Bug fixes
+#########
+- Fixed bugs in Mixer and Deaerator exergoeconomic balance equations.
+- Fixed Splitter exergoeconomic analysis implementation.
+- Fixed CycleCloser and Compressor parsing from Ebsilon.
+- Fixed parsing of turbines from Aspen.
+- Fixed ``from_json`` method to correctly handle ``split_physical_exergy`` and ``chemical_exergy`` options.
+- Fixed bugs in various component exergoeconomic balance and auxiliary equations.
+- Removed E_M, E_T or E_CH columns from result tables when not imported.
+
+New features
+###############
+- Added ``evaluate_results()`` method to ``ExergoeconomicAnalysis`` for ranking components by cost improvement potential.
+- Added least-squares solver option (``allow_singular=True``) for handling singular cost matrices.
+- Added ``print_dependency_report()`` method for diagnosing singular matrix issues.
+- Added ``check_cost_balance()`` method for verifying cost balance closure.
+
+Documentation
+#############
+- Added comprehensive exergoeconomic analysis documentation with workflow guide, cost input format, and result interpretation.
+- Added exergoeconomic analysis section to the API documentation.
+- Added exergoeconomic analysis example tutorial with manually defined costs.
+
+Testing
+########
+- Added 55 unit tests for the ``ExergoeconomicAnalysis`` class.
+- Added integration tests for ``ExergyAnalysis`` covering ``from_json`` and ``from_tespy`` workflows.
+
+Examples
+########
+- Reorganized example directory structure for exergy and exergoeconomic analysis.
+- Added exergoeconomic analysis example with JSON-based manual cost definitions.
+
+Contributors
+##########
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

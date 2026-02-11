@@ -108,3 +108,20 @@ In the following example, we demonstrate how to use ExerPy to perform exergy ana
                 ...
         }
 
+In the following example, we demonstrate how to extend the exergy analysis with exergoeconomic analysis to allocate costs to exergy streams.
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    examples/json_exergoeconomic.rst
+
+.. card::
+    :link: examples_json_exergoeconomic_label
+    :link-type: ref
+
+    **JSON Exergoeconomic Example**
+    ^^^
+
+    Exergoeconomic analysis with manually defined component investment costs and
+    input stream specific costs.

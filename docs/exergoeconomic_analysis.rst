@@ -157,3 +157,184 @@ The relative increase in specific cost from fuel to product exergy for component
 
 where :math:`c_{P,k}` and :math:`c_{F,k}` are the specific product and fuel costs. Lowering
 :math:`r_k` through efficiency improvements is recommended for cost optimization :cite:`Bejan1996`.
+
+
+*************************************************
+Getting started with exergoeconomic analysis
+*************************************************
+
+Prerequisites
+=============
+
+Before performing an exergoeconomic analysis, you need:
+
+1. A completed exergy analysis with the split of the physical exergy into thermal and mechanical 
+parts (:code:`split_physical_exergy=True`)
+2. Chemical exergy enabled (recommended for systems with combustion)
+3. Component investment cost rates and input stream specific costs
+
+.. note::
+
+    The exergoeconomic analysis is not applicable to models parsed from Aspen Plus, as
+    Aspen does not provide the thermal and mechanical exergy splitting. In future version, 
+    we plan to implement an alternative costing approach that does not require this splitting.
+
+Workflow overview
+=================
+
+The exergoeconomic analysis in ExerPy follows four steps:
+
+1. **Perform the exergy analysis** with physical exergy splitting enabled:
+
+.. code-block:: python
+
+    from exerpy import ExergyAnalysis, ExergoeconomicAnalysis
+
+    ean = ExergyAnalysis.from_json(model_path, chemExLib="Ahrendts", split_physical_exergy=True)
+
+    fuel = {"inputs": ["1", "10"], "outputs": []}
+    product = {"inputs": ["E1", "9"], "outputs": ["8"]}
+    loss = {"inputs": ["7"], "outputs": []}
+
+    ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+
+2. **Create the exergoeconomic analysis** instance:
+
+.. code-block:: python
+
+    eco = ExergoeconomicAnalysis(ean)
+
+3. **Define costs and run** the analysis:
+
+.. code-block:: python
+
+    costs = {
+        # Component investment cost rates [EUR/h]
+        "AC_Z": 80,
+        "CC_Z": 30,
+        "EXP_Z": 100,
+        "GEN_Z": 40,
+        # Input stream specific costs [EUR/GJ]
+        "1_c": 0.0,    # Ambient air (free)
+        "10_c": 10.0,   # Natural gas fuel
+        "8_c": 0.5,     # Feedwater
+    }
+
+    eco.run(costs)
+
+4. **View results**:
+
+.. code-block:: python
+
+    eco.exergoeconomic_results()
+    eco.evaluate_results()
+
+Cost input format
+=================
+
+The cost dictionary passed to :code:`run()` requires two types of entries:
+
+.. list-table:: Cost dictionary format
+    :widths: 25 20 15 40
+    :header-rows: 1
+    :class: tight-table
+
+    * - Key format
+      - Type
+      - Unit
+      - Description
+    * - :code:`"<component_name>_Z"`
+      - Component cost
+      - currency/h
+      - Investment and O&M cost rate for each component
+    * - :code:`"<connection_name>_c"`
+      - Stream cost
+      - currency/GJ
+      - Specific cost for each input stream crossing the system boundary
+
+**Mandatory costs:**
+
+- All components must have a :code:`_Z` cost (except :code:`CycleCloser` and :code:`PowerBus`, which are helper components)
+- All material and power/heat streams entering the system boundary must have a :code:`_c` cost
+
+**Examples:**
+
+- :code:`"COMP_Z": 80.0` — compressor investment cost of 80 EUR/h
+- :code:`"1_c": 0.0` — ambient air enters the system at zero cost
+- :code:`"10_c": 25.0` — natural gas enters the system at 25 EUR/GJ
+
+
+Interpreting results
+====================
+
+After running the analysis, use :code:`exergoeconomic_results()` to display the full results,
+and :code:`evaluate_results()` to identify the components with the highest cost improvement potential.
+
+.. code-block:: python
+
+    # Display all results (4 DataFrames)
+    df_comp, df_mat_props, df_mat_costs, df_non_mat = eco.exergoeconomic_results()
+
+    # Identify top components for optimization
+    eco.evaluate_results(sort_by="C_D+Z", top_n=5)
+
+The component results table includes these key indicators:
+
+- :math:`\dot{C}_F`, :math:`\dot{C}_P` — cost rates of fuel and product
+- :math:`\dot{C}_D` — cost of exergy destruction
+- :math:`\dot{Z}` — investment and O&M cost rate
+- :math:`\dot{C}_D + \dot{Z}` — total cost rate (primary optimization target)
+- :math:`f` — exergoeconomic factor:
+    - **High** :math:`f` (close to 1): capital costs dominate — consider cheaper equipment or less material
+    - **Low** :math:`f` (close to 0): inefficiency costs dominate — consider improving component efficiency
+- :math:`r` — relative cost difference: indicates how much the specific cost increases from fuel to product
+
+The :code:`evaluate_results()` method accepts the following :code:`sort_by` options:
+:code:`"C_D+Z"` (default), :code:`"C_D"`, :code:`"Z"`, :code:`"r"`, :code:`"f"`.
+
+To verify the integrity of the solution, use :code:`check_cost_balance()`:
+
+.. code-block:: python
+
+    balances = eco.check_cost_balance(tol=1e-3)
+    for name, (residual, is_balanced) in balances.items():
+        print(f"{name}: residual={residual:.6f}, balanced={is_balanced}")
+
+Troubleshooting
+===============
+
+**Singular matrix error**
+
+If the cost matrix is singular, the system of equations cannot be solved uniquely. To diagnose
+the issue:
+
+.. code-block:: python
+
+    eco.print_dependency_report()
+
+This reports zero rows/columns, colinear equations, and SVD null-space analysis. Common causes
+include missing auxiliary equations for a component or redundant cost specifications.
+
+As a workaround, you can use a least-squares solver:
+
+.. code-block:: python
+
+    eco.run(costs, allow_singular=True)
+
+.. warning::
+
+    The least-squares solution may not be physically consistent. Always verify the results
+    with :code:`check_cost_balance()` when using :code:`allow_singular=True`.
+
+**Missing cost error**
+
+If you see :code:`ValueError: ... mandatory but not provided`, ensure that:
+
+- Every component (except CycleCloser and PowerBus) has a :code:`"<name>_Z"` entry
+- Every input stream crossing the system boundary has a :code:`"<name>_c"` entry
+
+**split_physical_exergy requirement**
+
+The exergoeconomic analysis requires :code:`split_physical_exergy=True` in the preceding exergy
+analysis. If you see :code:`ValueError: split_physical_exergy must be True`, recreate the
+:code:`ExergyAnalysis` instance with this parameter enabled.

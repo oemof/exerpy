@@ -35,7 +35,7 @@ autodoc_mock_imports = ["tespy", "win32com", "EbsOpen", "CoolProp"]
 # master_doc = 'contents'
 # names, years, etc
 project = "ExerPy"
-year = "2025"
+year = "2026"
 author = "Sergio Tomasinelli"
 copyright = f"{year}, {author}"
 

@@ -11,7 +11,14 @@ include = [
     "tests/",
     "examples/",
 ]
-exclude = ["docs/_build"]
+exclude = [
+    "docs/_build",
+    "src/exerpy/cost_estimation/**",
+    "src/exerpy/data/cost_correlations/**",
+    "examples/exergoeconomic_analysis/cgam/**",
+    "examples/exergoeconomic_analysis/ccpp/**",
+    "examples/exergoeconomic_analysis/heatpump/**",
+]
 
 [project]
 name = "exerpy"

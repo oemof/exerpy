@@ -231,7 +231,7 @@ class CombustionChamber(Component):
             A[counter + 1, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:
             A[counter + 1, inlets[1]["CostVar_index"]["CH"]] = 1
-        equations[counter] = {
+        equations[counter + 1] = {
             "kind": "aux_mixing",
             "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
             "property": "c_CH",

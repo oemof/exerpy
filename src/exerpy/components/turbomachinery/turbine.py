@@ -247,7 +247,7 @@ class Turbine(Component):
                 A[counter + row_offset, outlet["CostVar_index"]["T"]] = -1 / outlet["E_T"] if outlet["e_T"] != 0 else -1
                 equations[counter + row_offset] = {
                     "kind": "aux_f_rule",
-                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "objects": [self.name, self.inl[0]["name"], outlet["name"]],
                     "property": "c_T",
                 }
 
@@ -260,7 +260,7 @@ class Turbine(Component):
                 )
                 equations[counter + row_offset + 1] = {
                     "kind": "aux_f_rule",
-                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "objects": [self.name, self.inl[0]["name"], outlet["name"]],
                     "property": "c_M",
                 }
 
@@ -274,7 +274,7 @@ class Turbine(Component):
                     )
                     equations[counter + row_offset + 2] = {
                         "kind": "aux_equality",
-                        "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                        "objects": [self.name, self.inl[0]["name"], outlet["name"]],
                         "property": "c_CH",
                     }
 

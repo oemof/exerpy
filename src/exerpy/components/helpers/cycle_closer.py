@@ -94,9 +94,11 @@ class CycleCloser(Component):
 
         if chemical_exergy_enabled:
             # Chemical cost equality equation:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_C"]) if self.inl[0]["e_CH"] != 0 else 1
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
+                (1 / self.inl[0]["e_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+            )
             A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                (-1 / self.outl[0]["e_C"]) if self.outl[0]["e_CH"] != 0 else -1
+                (-1 / self.outl[0]["e_CH"]) if self.outl[0]["e_CH"] != 0 else -1
             )
             equations[counter] = {
                 "kind": "aux_equality",

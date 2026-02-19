@@ -274,7 +274,7 @@ class Condenser(Component):
         # Case 1: All temperatures > T0.
         if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             set_thermal_f_hot(A, counter + 0)
-            self.equations[counter] = {
+            equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
                 "property": "c_T",
@@ -282,7 +282,7 @@ class Condenser(Component):
         # Case 2: All temperatures <= T0.
         elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
             set_thermal_f_cold(A, counter + 0)
-            self.equations[counter] = {
+            equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
                 "property": "c_T",
@@ -367,7 +367,7 @@ class Condenser(Component):
             equations[counter + 4] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
-                "property": "c_M",
+                "property": "c_CH",
             }
             num_aux_eqs = 5
         else:

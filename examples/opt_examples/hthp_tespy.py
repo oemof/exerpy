@@ -82,12 +82,12 @@ nw.add_conns(e1, e2, e3, e4, e5, e6, e7)
 c11.set_attr(fluid={"Ar": 0.0129, "CO2": 0.0005, "N2": 0.7552, "O2": 0.2314}, T=20, p=1.013)
 c13.set_attr(T=Ref(c11, 1, -5), p=Ref(c11, 1, 0))
 
-c21.set_attr(fluid={"R245FA": 1}, td_dew=5)
+c21.set_attr(fluid={"R290": 1}, td_dew=5)
 c22.set_attr(p=6.4)
 c23.set_attr(td_bubble=5)
 c24.set_attr(p=0.823)
 
-c31.set_attr(fluid={"R1233zdE": 1}, td_dew=5)
+c31.set_attr(fluid={"R600a": 1}, td_dew=5)
 c32.set_attr(p=17.5)
 c33.set_attr(x=0)
 c34.set_attr(T=60)
@@ -185,7 +185,7 @@ cost_estimator.print_estimated_costs()
 # Add boundary stream costs and run analysis
 # Cost keys must match connection names exactly: "<connection_name>_c"
 all_costs = {**estimated_costs, "e1_c": 111.111, "11_c": 0.0, "41_c": 0.0}  # currency/GJ
-exergoeco_analysis.run(all_costs, Tamb=293.15)
+exergoeco_analysis.run(all_costs)
 exergoeco_analysis.exergoeconomic_results()
 
 
@@ -195,7 +195,7 @@ exergoeco_analysis.exergoeconomic_results()
 
 from exerpy.optimization import ExergoeconomicOptimizer
 from exerpy.optimization.adapters import TESPyAdapter
-from exerpy.optimization.objectives import MinimizeProductCost
+from exerpy.optimization.objectives import MinimizeLevelizedCost
 
 
 def calculate_costs(ea: ExergyAnalysis) -> dict:
@@ -301,7 +301,7 @@ optimizer = (
         unit="K",
         description="Dew point temperature of R1233zdE at COMP2 inlet (affects mass flow and size)",
     )
-    .add_objective(MinimizeProductCost())
+    .add_objective(MinimizeLevelizedCost())
     .set_exergy_definitions(E_F=fuel, E_P=product, E_L=loss)  # Exergy balance definitions
     .set_cost_function(calculate_costs)  # Dynamic cost estimation
     .set_seed(42)
@@ -311,8 +311,8 @@ optimizer = (
 # E_F, E_P, E_L are already set via set_exergy_definitions()
 result = optimizer.optimize(
     algorithm="GA",
-    n_gen=8,
-    pop_size=15,
+    n_gen=5,
+    pop_size=7,
     verbose=True,
 )
 

@@ -184,10 +184,7 @@ class ExergoeconomicProblem:
 
         try:
             eea = ExergoeconomicAnalysis(exergy_analysis)
-            eea.run(
-                Exe_Eco_Costs=costs,
-                Tamb=exergy_analysis.Tamb,
-            )
+            eea.run(Exe_Eco_Costs=costs)
             return eea
 
         except Exception as e:

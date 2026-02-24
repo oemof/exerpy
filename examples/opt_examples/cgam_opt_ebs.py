@@ -71,7 +71,7 @@ cost_estimator.print_estimated_costs()
 # Add boundary stream costs and run analysis
 # Cost keys must match connection names exactly: "<connection_name>_c"
 all_costs = {**estimated_costs, "8_c": 1.0, "10_c": 25.0, "1_c": 0.0}  # currency/GJ
-exergoeco_analysis.run(all_costs, Tamb=298.15)
+exergoeco_analysis.run(all_costs)
 exergoeco_analysis.exergoeconomic_results()
 
 

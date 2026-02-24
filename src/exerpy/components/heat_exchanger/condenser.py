@@ -54,6 +54,58 @@ class Condenser(Component):
         """
         super().__init__(**kwargs)
 
+    def _temperature_case(self, T0):
+        """Classify the condenser temperature configuration.
+
+        Uses a tolerance of 0.01 K to handle floating-point edge cases
+        where stream temperatures are numerically very close to T0.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature (K).
+
+        Returns
+        -------
+        int
+            Case number (1-7).
+        """
+        tol = 0.01  # K
+
+        T0_in = self.inl[0]["T"]
+        T1_in = self.inl[1]["T"]
+        T0_out = self.outl[0]["T"]
+        T1_out = self.outl[1]["T"]
+
+        all_T = [T0_in, T1_in, T0_out, T1_out]
+
+        def above(T):
+            return T0 + tol < T
+
+        def at_or_below(T):
+            return T0 + tol >= T
+
+        # Case 1: All streams at or above T0
+        if all(T0 - tol <= T for T in all_T):
+            return 1
+        # Case 2: All streams at or below T0
+        if all(at_or_below(T) for T in all_T):
+            return 2
+        # Case 3: Both streams crossing T0
+        if above(T0_in) and above(T1_out) and at_or_below(T0_out) and at_or_below(T1_in):
+            return 3
+        # Case 4: Only hot inlet above T0
+        if above(T0_in) and at_or_below(T1_in) and at_or_below(T0_out) and at_or_below(T1_out):
+            return 4
+        # Case 5: Only cold inlet below T0
+        if above(T0_in) and at_or_below(T1_in) and above(T0_out) and above(T1_out):
+            return 5
+        # Case 6: Hot stream always above, cold stream always below (dissipative)
+        if above(T0_in) and at_or_below(T1_in) and above(T0_out) and at_or_below(T1_out):
+            return 6
+        # Case 7: Unrecognized
+        return 7
+
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Compute the exergy balance of the condenser.
@@ -271,8 +323,9 @@ class Condenser(Component):
                 A[row, self.outl[1]["CostVar_index"]["T"]] = -1
 
         # Determine the thermal case based on temperatures.
+        case = self._temperature_case(T0)
         # Case 1: All temperatures > T0.
-        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+        if case == 1:
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
@@ -280,7 +333,7 @@ class Condenser(Component):
                 "property": "c_T",
             }
         # Case 2: All temperatures <= T0.
-        elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
+        elif case == 2:
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
@@ -292,7 +345,7 @@ class Condenser(Component):
                 "This is not a typical case for a dissipative condenser."
             )
         # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
-        elif self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0:
+        elif case == 3:
             set_thermal_p_rule(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_p_rule",
@@ -301,11 +354,11 @@ class Condenser(Component):
             }
             logging.warning(
                 f"Hot inlet and cold outlet in {self.name} are above ambient temperature, "
-                "while hot outlet and cold inlet are below. This is not a typical case for a dissipative condenser."
+                "while hot outlet and cold inlet are below. This is not a typical case for a dissipative condenser. "
                 "The exergoeconomic analysis is counting the outlets as products."
             )
         # Case 4: Only hot inlet > T0
-        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0:
+        elif case == 4:
             set_thermal_f_cold(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
@@ -317,7 +370,7 @@ class Condenser(Component):
                 "This is not a typical case for a dissipative condenser."
             )
         # Case 5: Only cold inlet <= T0
-        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] > T0:
+        elif case == 5:
             set_thermal_f_hot(A, counter + 0)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
@@ -329,9 +382,12 @@ class Condenser(Component):
                 "This is not a typical case for a dissipative condenser."
             )
         # Case 6: hot stream always above T0, cold stream always below T0
-        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] > T0 and self.outl[1]["T"] <= T0:
-            print("you shouldn't see this")
-            return
+        elif case == 6:
+            logging.info(
+                f"Condenser {self.name}: dissipative temperature configuration detected in aux_eqs. "
+                "Skipping auxiliary equations (handled by dis_eqs)."
+            )
+            return A, b, counter, equations
         # Case 7: Default case.
         else:
             set_thermal_f_hot(A, counter + 0)
@@ -379,97 +435,170 @@ class Condenser(Component):
 
         return A, b, counter + num_aux_eqs, equations
 
+    def dis_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled=False, all_components=None):
+        r"""
+        Construct cost equations for a dissipative Condenser.
+
+        Distributes the condenser's extra cost difference (C_diff) to all other productive
+        components (non-dissipative and non-CycleCloser) in proportion to their exergy destruction (E_D)
+        and adds an overall cost balance row that enforces:
+
+        .. math::
+           (\dot C_{\mathrm{in},1} - \dot C_{\mathrm{out},1})
+           + (\dot C_{\mathrm{in},2} - \dot C_{\mathrm{out},2})
+           - \dot C_{\mathrm{diff}}
+           = -\,\dot Z_{\mathrm{costs}}
+
+        The equality equations enforce that specific costs are equal between inlet and outlet
+        for each exergy component (thermal, mechanical, chemical) on both the hot and cold streams.
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            The current cost matrix.
+        b : numpy.ndarray
+            The current right-hand-side vector.
+        counter : int
+            The current row index in the cost matrix.
+        T0 : float
+            Ambient temperature (K).
+        equations : dict
+            Dictionary mapping row indices to equation labels.
+        chemical_exergy_enabled : bool, optional
+            Flag indicating whether chemical exergy is considered.
+        all_components : list, optional
+            Global list of all component objects; if not provided, defaults to [].
+
+        Returns
+        -------
+        tuple
+            Updated (A, b, counter, equations).
+        """
+
+        def set_equal_dis(A, row, in_item, out_item, var):
+            if in_item.get("E_" + var, 0) and out_item.get("E_" + var, 0):
+                A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
+                A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
+            else:
+                A[row, in_item["CostVar_index"][var]] = 1
+                A[row, out_item["CostVar_index"][var]] = -1
+
+        # --- Thermal equality for hot stream ---
+        set_equal_dis(A, counter, self.inl[0], self.outl[0], "T")
+        b[counter] = 0
+        equations[counter] = {
+            "kind": "dis_equality",
+            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+            "property": "c_T",
+        }
+        counter += 1
+
+        # --- Thermal equality for cold stream ---
+        set_equal_dis(A, counter, self.inl[1], self.outl[1], "T")
+        b[counter] = 0
+        equations[counter] = {
+            "kind": "dis_equality",
+            "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
+            "property": "c_T",
+        }
+        counter += 1
+
+        # --- Mechanical equality for hot stream ---
+        set_equal_dis(A, counter, self.inl[0], self.outl[0], "M")
+        b[counter] = 0
+        equations[counter] = {
+            "kind": "dis_equality",
+            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+            "property": "c_M",
+        }
+        counter += 1
+
+        # --- Mechanical equality for cold stream ---
+        set_equal_dis(A, counter, self.inl[1], self.outl[1], "M")
+        b[counter] = 0
+        equations[counter] = {
+            "kind": "dis_equality",
+            "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
+            "property": "c_M",
+        }
+        counter += 1
+
+        # --- Chemical equality (if enabled) ---
+        if chemical_exergy_enabled:
+            set_equal_dis(A, counter, self.inl[0], self.outl[0], "CH")
+            b[counter] = 0
+            equations[counter] = {
+                "kind": "dis_equality",
+                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                "property": "c_CH",
+            }
+            counter += 1
+
+            set_equal_dis(A, counter, self.inl[1], self.outl[1], "CH")
+            b[counter] = 0
+            equations[counter] = {
+                "kind": "dis_equality",
+                "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
+                "property": "c_CH",
+            }
+            counter += 1
+
+        # --- Distribution of dissipative cost difference to other components based on E_D ---
+        if all_components is None:
+            all_components = []
+        serving = [
+            comp
+            for comp in all_components
+            if comp is not self
+            and hasattr(comp, "exergy_cost_line")
+            and not comp.__class__.__name__.endswith("PowerBus")
+            and hasattr(comp, "E_D")
+            and not np.isnan(comp.E_D)
+        ]
+        total_E_D = sum(comp.E_D for comp in serving)
+        diss_col = self.inl[0]["CostVar_index"].get("dissipative")
+        if diss_col is None:
+            logging.error(f"No 'dissipative' column allocated for {self.name}.")
+        else:
+            if total_E_D == 0:
+                if len(serving) > 0:
+                    for comp in serving:
+                        A[comp.exergy_cost_line, diss_col] = 1 / len(serving)
+                else:
+                    logging.warning(f"No serving components found for dissipative component {self.name}")
+            else:
+                for comp in serving:
+                    weight = getattr(comp, "E_D", 0) / total_E_D
+                    comp.serving_weight = weight
+                    A[comp.exergy_cost_line, diss_col] = weight
+
+        # --- Overall cost balance row ---
+        # (C_in_hot - C_out_hot) + (C_in_cold - C_out_cold) - C_diff = -Z_costs
+        A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
+        A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
+        A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+        A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+        A[counter, self.inl[1]["CostVar_index"]["T"]] = 1
+        A[counter, self.outl[1]["CostVar_index"]["T"]] = -1
+        A[counter, self.inl[1]["CostVar_index"]["M"]] = 1
+        A[counter, self.outl[1]["CostVar_index"]["M"]] = -1
+        if chemical_exergy_enabled:
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1
+            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
+            A[counter, self.inl[1]["CostVar_index"]["CH"]] = 1
+            A[counter, self.outl[1]["CostVar_index"]["CH"]] = -1
+        A[counter, self.inl[0]["CostVar_index"]["dissipative"]] = -1
+        b[counter] = -self.Z_costs
+        equations[counter] = {"kind": "dis_balance", "objects": [self.name], "property": "dissipative_cost_balance"}
+        counter += 1
+
+        return A, b, counter, equations
+
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
         r"""
         Perform exergoeconomic cost balance for the condenser.
 
-        Even though this class should only consider dissipative condensers, the exergoeconomic balance is
-        still performed to ensure consistency. Please note that same of the following cases cases are not
-        typical for dissipative condensers. This may change in a future version of ExerPy.
-
-        .. math::
-            \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in},1}
-            + \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in},2}
-            - \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}
-            - \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}
-            + \dot{Z}
-            = 0
-
-        In case the chemical exergy of the streams is know:
-
-        .. math::
-            \dot{C}^{\mathrm{CH}}_{\mathrm{in},1} =
-            \dot{C}^{\mathrm{CH}}_{\mathrm{out},1}
-
-        .. math::
-            \dot{C}^{\mathrm{CH}}_{\mathrm{in},2} =
-            \dot{C}^{\mathrm{CH}}_{\mathrm{out},2}
-
-        This method computes cost coefficients and ratios:
-
-        Case 1: All streams above ambient temperature
-
-        .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},2}
-
-        .. math::
-            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
-                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
-                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},2}
-                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
-
-        Case 2: All streams below or equal to ambient temperature
-
-        .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-                    - \dot{C}^{\mathrm{T}}_{\mathrm{in},1}
-
-        .. math::
-            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
-                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
-                    + \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{in},1}
-                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
-
-        Case 3: Both stream crossing ambient temperature
-
-        .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-                    + \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-
-        .. math::
-            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
-                    + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
-                    - \bigl(\dot{C}^{\mathrm{M}}_{\mathrm{out},1}
-                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
-
-        Case 4: Only the hot inlet above ambient temperature
-
-        .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-
-        .. math::
-            \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
-                            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}\bigr)
-                    - \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
-                            + \dot{C}^{\mathrm{M}}_{\mathrm{out},1}\bigr)
-
-        Case 5: Only the cold inlet below ambient temperature
-
-        .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-
-        .. math::
-            \dot{C}_F = \dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
-                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}
-                    + \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
-                            - \dot{C}^{\mathrm{M}}_{\mathrm{out},2}\bigr)
-
-        Case 6: Hot stream always above and cold stream always below ambient temperature (dissipative case):
+        The condenser is always dissipative (no identifiable product), so:
 
         .. math::
             \dot{C}_P = \mathrm{NaN}
@@ -477,8 +606,12 @@ class Condenser(Component):
         .. math::
             \dot{C}_F = \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},1}
                     - \dot{C}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
-            - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}
-            + \dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+            + \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{in},2}
+                    - \dot{C}^{\mathrm{PH}}_{\mathrm{out},2}\bigr)
+
+        Since :math:`\dot{E}_F` and :math:`\dot{E}_P` are not defined for a dissipative condenser,
+        the specific costs :math:`c_F`, :math:`c_P`, the cost of exergy destruction :math:`\dot{C}_D`,
+        the relative cost difference :math:`r`, and the exergoeconomic factor :math:`f` are all NaN.
 
         Parameters
         ----------
@@ -487,24 +620,11 @@ class Condenser(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
         """
-        if all([c["T"] > T0 for c in list(self.inl.values()) + list(self.outl.values())]):
-            self.C_P = self.outl[1]["C_T"] - self.inl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_M"] - self.outl[1]["C_M"])
-        elif all([c["T"] <= T0 for c in list(self.inl.values()) + list(self.outl.values())]):
-            self.C_P = self.outl[0]["C_T"] - self.inl[0]["C_T"]
-            self.C_F = self.inl[1]["C_PH"] - self.outl[1]["C_PH"] + (self.inl[0]["C_M"] - self.outl[0]["C_M"])
-        elif self.inl[0]["T"] > T0 and self.outl[1]["T"] > T0 and self.outl[0]["T"] <= T0 and self.inl[1]["T"] <= T0:
-            self.C_P = self.outl[0]["C_T"] + self.outl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (self.outl[0]["C_M"] + self.outl[1]["C_M"])
-        elif self.inl[0]["T"] > T0 and self.inl[1]["T"] <= T0 and self.outl[0]["T"] <= T0 and self.outl[1]["T"] <= T0:
-            self.C_P = self.outl[0]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] + self.inl[1]["C_PH"] - (self.outl[1]["C_PH"] + self.outl[0]["C_M"])
-        else:
-            self.C_P = self.outl[1]["C_T"]
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_M"])
-
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
-        self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        # Condenser is always dissipative: no identifiable product
+        self.C_P = np.nan
+        self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_PH"])
+        self.c_F = np.nan
+        self.c_P = np.nan
+        self.C_D = np.nan
+        self.r = np.nan
+        self.f = np.nan

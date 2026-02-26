@@ -203,10 +203,11 @@ class ExergyAnalysis:
                 # Calculate E_F, E_D, E_P
                 component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
 
-                # Update is_dissipative flag based on actual E_P value for Valve components
-                # This is needed because when split_physical_exergy=False, valves may become
-                # dissipative (E_P = nan) even if not initially marked as such based on temperatures
-                if component.__class__.__name__ == "Valve" and np.isnan(component.E_P):
+                # Update is_dissipative flag based on actual E_P value for components that
+                # can become dissipative. This is needed because certain conditions (e.g.
+                # split_physical_exergy=False for valves, or explicit dissipative flag for
+                # heat exchangers) may make E_P = nan even if not initially detected.
+                if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
                     component.is_dissipative = True
 
                 # Safely calculate y and y* avoiding division by zero
@@ -955,12 +956,10 @@ def _construct_components(component_data, connection_data, Tamb):
                     source_connector_idx = conn_info["source_connector"]  # Use 0-based indexing
                     component.outl[source_connector_idx] = conn_info  # Assign outlet stream
 
-            # --- NEW: Automatically mark Valve components as dissipative ---
-            # Here we assume that if a Valve's first inlet and first outlet have temperatures (key "T")
-            # above the ambient temperature (Tamb), it is dissipative.
+            # --- Automatically mark components as dissipative based on temperature conditions ---
             if component_type == "Valve":
+                # A Valve is dissipative if both inlet and outlet are above ambient temperature.
                 try:
-                    # Grab the temperature from the first inlet and outlet
                     T_in = list(component.inl.values())[0].get("T", None)
                     T_out = list(component.outl.values())[0].get("T", None)
                     if T_in is not None and T_out is not None and T_in > Tamb and T_out > Tamb:
@@ -970,6 +969,36 @@ def _construct_components(component_data, connection_data, Tamb):
                 except Exception as e:
                     logging.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
+            elif component_type == "HeatExchanger":
+                # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
+                # above T0 and the cold stream stays below T0 (case 6).
+                if getattr(component, "dissipative", False):
+                    component.is_dissipative = True
+                else:
+                    try:
+                        T_in0 = component.inl[0].get("T", None)
+                        T_in1 = component.inl[1].get("T", None)
+                        T_out0 = component.outl[0].get("T", None)
+                        T_out1 = component.outl[1].get("T", None)
+                        if (
+                            T_in0 is not None
+                            and T_in1 is not None
+                            and T_out0 is not None
+                            and T_out1 is not None
+                            and T_in0 > Tamb
+                            and T_in1 <= Tamb
+                            and T_out0 > Tamb
+                            and T_out1 <= Tamb
+                        ):
+                            component.is_dissipative = True
+                        else:
+                            component.is_dissipative = False
+                    except Exception as e:
+                        logging.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
+                        component.is_dissipative = False
+            elif component_type == "Condenser":
+                # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
+                component.is_dissipative = True
             else:
                 component.is_dissipative = False
 
@@ -1237,6 +1266,7 @@ class ExergoeconomicAnalysis:
         """
         col_number = 0
         valid_components = {comp.name for comp in self.components.values()}
+        dissipative_columns = {}  # Track dissipative column per component to avoid duplicates
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
         for name, conn in self.connections.items():
@@ -1266,10 +1296,15 @@ class ExergoeconomicAnalysis:
                     if target in valid_components:
                         comp = self.exergy_analysis.components.get(target)
                         if comp is not None and getattr(comp, "is_dissipative", False):
-                            # Add an extra index for the dissipative cost difference.
-                            conn["CostVar_index"]["dissipative"] = col_number
-                            self.variables[str(col_number)] = f"dissipative_{comp.name}"
-                            col_number += 1
+                            # Reuse existing dissipative column for the same component,
+                            # or allocate a new one if this is the first connection targeting it.
+                            if comp.name in dissipative_columns:
+                                conn["CostVar_index"]["dissipative"] = dissipative_columns[comp.name]
+                            else:
+                                conn["CostVar_index"]["dissipative"] = col_number
+                                self.variables[str(col_number)] = f"dissipative_{comp.name}"
+                                dissipative_columns[comp.name] = col_number
+                                col_number += 1
                 # For non-material streams (e.g., heat, power), assign one index.
                 elif kind in ("heat", "power"):
                     conn["CostVar_index"] = {"exergy": col_number}

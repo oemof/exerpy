@@ -51,6 +51,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pandas",
     "numpy",
+    "fluprodia",
 ]
 license = {text = "MIT"}
 
@@ -79,14 +80,14 @@ dev = [
 tespy = [
     "tespy>=0.9",
 ]
-plotting = [
-    "fluprodia",
-]
 ebsilon = [
     "pywin32"
 ]
 aspen = [
     "pywin32"
+]
+optimization = [
+    "pymoo",
 ]
 
 [tool.black]

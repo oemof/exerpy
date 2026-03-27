@@ -79,6 +79,9 @@ dev = [
 tespy = [
     "tespy>=0.9",
 ]
+plotting = [
+    "fluprodia",
+]
 ebsilon = [
     "pywin32"
 ]

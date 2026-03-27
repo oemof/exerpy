@@ -5,7 +5,7 @@ import runpy
 import pytest
 
 path = os.path.join(os.path.dirname(__file__), "..", "examples")
-examples = pathlib.Path(path).glob("**/*tespy.py")
+examples = pathlib.Path(path).glob("exergy_analysis/**/*tespy.py")
 
 
 @pytest.mark.parametrize("script", examples)

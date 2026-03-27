@@ -111,6 +111,7 @@ class ExergyAnalysis:
             if isinstance(conn_data, dict) and conn_data.get("kind") == "material"
         )
         self.split_physical_exergy = split_physical_exergy
+        self._nw = None  # TESPy network reference, set by from_tespy()
 
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data, Tamb)
@@ -264,11 +265,24 @@ class ExergyAnalysis:
             msg = "Model parameter must be a path to a valid tespy network " "export or a tespy network"
             raise TypeError(msg)
 
+        # Validate the TESPy network before proceeding
+        if not getattr(model, "converged", False):
+            raise ValueError("TESPy network has not converged. Cannot perform exergy analysis on unconverged results.")
+        for conn in model.conns["object"]:
+            if hasattr(conn, "m") and conn.m.val_SI < 0:
+                raise ValueError(
+                    f"TESPy network has negative mass flow ({conn.m.val_SI:.4f} kg/s) "
+                    f"on connection '{conn.label}' ({conn.source.label} -> {conn.target.label}). "
+                    f"Cannot perform exergy analysis on non-physical results."
+                )
+
         data = to_exerpy(model, Tamb, pamb)
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb, pamb, chemExLib, split_physical_exergy
         )
-        return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
+        instance = cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
+        instance._nw = model
+        return instance
 
     @classmethod
     def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -738,6 +752,162 @@ class ExergyAnalysis:
             plt.show()
 
         return fig, ax
+
+    def plot_logph(
+        self,
+        connection_label,
+        title=None,
+        figsize=(12, 8),
+        show_labels=True,
+        show_plot=True,
+        save_path=None,
+        dpi=150,
+        return_fig=False,
+        ax=None,
+        color="tab:red",
+    ):
+        """Plot a log(p)-h diagram for a fluid cycle.
+
+        Uses TESPy's ``get_plotting_data`` for physically accurate process
+        lines and fluprodia for background isolines. Only available when
+        the analysis was created via :meth:`from_tespy`.
+
+        Parameters
+        ----------
+        connection_label : str
+            Label of any connection in the cycle to plot (e.g. ``"c1"``).
+            TESPy traces the full cycle from this starting connection.
+        title : str, optional
+            Figure title. Auto-generated from fluid name if ``None``.
+        figsize : tuple, optional
+            Figure size ``(width, height)`` in inches. Default ``(12, 8)``.
+        show_labels : bool, optional
+            If ``True``, annotate each state point with its connection label.
+        show_plot : bool, optional
+            If ``True``, call ``plt.show()``.
+        save_path : str, optional
+            File path to save the figure (e.g. ``"logph.png"``).
+        dpi : int, optional
+            Resolution for saved figure. Default 150.
+        return_fig : bool, optional
+            If ``True``, return ``(fig, ax)`` instead of ``None``.
+        ax : matplotlib.axes.Axes, optional
+            Existing axes to plot on. If ``None``, a new figure is created.
+        color : str, optional
+            Color for the cycle process lines. Default ``"tab:red"``.
+
+        Returns
+        -------
+        tuple of (Figure, Axes) or None
+            Returned only when *return_fig* is ``True``.
+
+        Raises
+        ------
+        RuntimeError
+            If the analysis was not created from a TESPy network.
+
+        Examples
+        --------
+        >>> ea = ExergyAnalysis.from_tespy(nw, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> ea.plot_logph("c1", save_path="logph.png")  # doctest: +SKIP
+        """
+        if self._nw is None:
+            raise RuntimeError(
+                "plot_logph requires a TESPy network. Use ExergyAnalysis.from_tespy() to create the analysis."
+            )
+        from .parser.from_tespy.plotting import plot_logph
+
+        return plot_logph(
+            self._nw,
+            connection_label,
+            title=title,
+            figsize=figsize,
+            show_labels=show_labels,
+            show_plot=show_plot,
+            save_path=save_path,
+            dpi=dpi,
+            return_fig=return_fig,
+            ax=ax,
+            color=color,
+        )
+
+    def plot_Ts(
+        self,
+        connection_label,
+        title=None,
+        figsize=(12, 8),
+        show_labels=True,
+        show_plot=True,
+        save_path=None,
+        dpi=150,
+        return_fig=False,
+        ax=None,
+        color="tab:red",
+    ):
+        """Plot a T-s diagram for a fluid cycle.
+
+        Uses TESPy's ``get_plotting_data`` for physically accurate process
+        lines and fluprodia for background isolines. Only available when
+        the analysis was created via :meth:`from_tespy`.
+
+        Parameters
+        ----------
+        connection_label : str
+            Label of any connection in the cycle to plot (e.g. ``"c1"``).
+            TESPy traces the full cycle from this starting connection.
+        title : str, optional
+            Figure title. Auto-generated from fluid name if ``None``.
+        figsize : tuple, optional
+            Figure size ``(width, height)`` in inches. Default ``(12, 8)``.
+        show_labels : bool, optional
+            If ``True``, annotate each state point with its connection label.
+        show_plot : bool, optional
+            If ``True``, call ``plt.show()``.
+        save_path : str, optional
+            File path to save the figure (e.g. ``"Ts.png"``).
+        dpi : int, optional
+            Resolution for saved figure. Default 150.
+        return_fig : bool, optional
+            If ``True``, return ``(fig, ax)`` instead of ``None``.
+        ax : matplotlib.axes.Axes, optional
+            Existing axes to plot on. If ``None``, a new figure is created.
+        color : str, optional
+            Color for the cycle process lines. Default ``"tab:red"``.
+
+        Returns
+        -------
+        tuple of (Figure, Axes) or None
+            Returned only when *return_fig* is ``True``.
+
+        Raises
+        ------
+        RuntimeError
+            If the analysis was not created from a TESPy network.
+
+        Examples
+        --------
+        >>> ea = ExergyAnalysis.from_tespy(nw, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> ea.plot_Ts("c1", save_path="Ts.png")  # doctest: +SKIP
+        """
+        if self._nw is None:
+            raise RuntimeError(
+                "plot_Ts requires a TESPy network. Use ExergyAnalysis.from_tespy() to create the analysis."
+            )
+        from .parser.from_tespy.plotting import plot_Ts
+
+        return plot_Ts(
+            self._nw,
+            connection_label,
+            title=title,
+            figsize=figsize,
+            show_labels=show_labels,
+            show_plot=show_plot,
+            save_path=save_path,
+            dpi=dpi,
+            return_fig=return_fig,
+            ax=ax,
+            color=color,
+        )
 
     def print_exergy_summary(self):
         """

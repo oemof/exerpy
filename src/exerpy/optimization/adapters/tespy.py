@@ -225,7 +225,8 @@ class TESPyAdapter(SimulatorAdapter):
         Returns
         -------
         bool
-            True if the solver converged successfully.
+            True if the solver converged successfully and the solution is
+            physically valid (no negative mass flows).
         """
         try:
             mode = "design" if design else "offdesign"
@@ -238,11 +239,39 @@ class TESPyAdapter(SimulatorAdapter):
             self._last_solve_success = getattr(self.model, "converged", True)
             if not self._last_solve_success:
                 logger.warning("TESPy solve did not converge.")
-            return self._last_solve_success
+                return False
+
+            # Validate physical plausibility of the converged solution
+            if not self._validate_solution():
+                self._last_solve_success = False
+                return False
+
+            return True
         except Exception as e:
             logger.error(f"TESPy solve failed with exception: {e}")
             self._last_solve_success = False
             return False
+
+    def _validate_solution(self) -> bool:
+        """Check the converged solution for physical plausibility.
+
+        Returns
+        -------
+        bool
+            True if the solution passes all checks.
+        """
+        for conn in self.model.conns["object"]:
+            # Skip non-material connections (power, etc.)
+            if not hasattr(conn, "m"):
+                continue
+            if conn.m.val_SI < 0:
+                logger.warning(
+                    "TESPy solution rejected: negative mass flow "
+                    f"({conn.m.val_SI:.4f} kg/s) on connection '{conn.label}' "
+                    f"({conn.source.label} -> {conn.target.label})."
+                )
+                return False
+        return True
 
     def export_to_exerpy(self) -> dict[str, Any]:
         """
@@ -320,6 +349,33 @@ class TESPyAdapter(SimulatorAdapter):
             "T": conn.T.val_SI,
             "s": conn.s.val_SI,
         }
+
+    def save_baseline_state(self) -> None:
+        """Save the current converged state for restoration between optimization evaluations.
+
+        During optimization, failed TESPy solves corrupt the internal connection
+        values (m, p, h). Calling restore_baseline_state() before each evaluation
+        ensures the solver always starts from a known-good state.
+        """
+        self._baseline_conn_state = {}
+        for conn in self.model.conns["object"]:
+            if hasattr(conn, "m") and hasattr(conn, "p") and hasattr(conn, "h"):
+                self._baseline_conn_state[conn.label] = {
+                    "m": conn.m.val_SI,
+                    "p": conn.p.val_SI,
+                    "h": conn.h.val_SI,
+                }
+
+    def restore_baseline_state(self) -> None:
+        """Restore the baseline state so the solver starts from a clean point."""
+        if not hasattr(self, "_baseline_conn_state"):
+            return
+        for conn in self.model.conns["object"]:
+            if conn.label in self._baseline_conn_state:
+                state = self._baseline_conn_state[conn.label]
+                conn.m.val_SI = state["m"]
+                conn.p.val_SI = state["p"]
+                conn.h.val_SI = state["h"]
 
     def save_state(self) -> dict[str, Any]:
         """

@@ -524,6 +524,23 @@ class ExergoeconomicOptimizer:
         self._seed = seed
         return self
 
+    @staticmethod
+    def _create_seeded_sampling(x_baseline: np.ndarray, pop_size: int, problem: Any) -> np.ndarray:
+        """Create an initial population that includes the baseline design point.
+
+        The first row is the baseline; remaining rows are Latin Hypercube samples.
+        """
+        from pymoo.operators.sampling.lhs import LHS
+
+        # Generate LHS samples for the rest of the population
+        lhs = LHS()
+        lhs_pop = lhs(problem, pop_size - 1)
+        lhs_x = lhs_pop.get("X")
+
+        # Prepend baseline
+        initial_pop = np.vstack([x_baseline.reshape(1, -1), lhs_x])
+        return initial_pop
+
     def _get_algorithm(self, algorithm: str, pop_size: int, **kwargs) -> Any:
         """Get a pymoo algorithm instance."""
         try:
@@ -541,6 +558,14 @@ class ExergoeconomicOptimizer:
             from pymoo.algorithms.soo.nonconvex.pso import PSO
         except ImportError:
             raise ImportError("pymoo is required for optimization. Install with: pip install pymoo")
+
+        # NSGA3 and MOEAD require reference directions
+        if algorithm in ("NSGA3", "MOEAD") and "ref_dirs" not in kwargs:
+            from pymoo.util.ref_dirs import get_reference_directions
+
+            n_obj = len(self._objectives)
+            n_partitions = max(4, 12 // max(1, n_obj - 1))
+            kwargs["ref_dirs"] = get_reference_directions("das-dennis", n_obj, n_partitions=n_partitions)
 
         algorithm_map = {
             "GA": lambda: GA(pop_size=pop_size, **kwargs),
@@ -598,8 +623,8 @@ class ExergoeconomicOptimizer:
         print("=" * 70)
         print()
 
-    def _evaluate_baseline(self, problem: ExergoeconomicProblem) -> dict[str, float]:
-        """Evaluate baseline values at current design point."""
+    def _evaluate_baseline(self, problem: ExergoeconomicProblem) -> tuple[dict[str, float], dict]:
+        """Evaluate baseline values and diagnostics at current design point."""
         baseline = {}
 
         # Get current variable values from the model
@@ -609,12 +634,12 @@ class ExergoeconomicOptimizer:
 
         # Evaluate objectives at current point
         x_current = np.array([baseline[var.name] for var in self._variables])
-        f, g, feasible = problem.evaluate_single(x_current)
+        f, g, feasible, diagnostics = problem.evaluate_single(x_current)
 
         for i, obj in enumerate(self._objectives):
             baseline[obj.name] = f[i]
 
-        return baseline
+        return baseline, diagnostics
 
     def _print_baseline(self, baseline: dict[str, float]) -> None:
         """Print baseline values before optimization."""
@@ -717,6 +742,10 @@ class ExergoeconomicOptimizer:
         if verbose:
             self._print_setup(algorithm, n_gen, pop_size)
 
+        # Save baseline state for restoration between evaluations
+        if hasattr(self.adapter, "save_baseline_state"):
+            self.adapter.save_baseline_state()
+
         # Create problem
         problem = ExergoeconomicProblem(
             adapter=self.adapter,
@@ -734,14 +763,19 @@ class ExergoeconomicOptimizer:
         )
 
         # Evaluate and print baseline values
-        baseline = self._evaluate_baseline(problem)
+        baseline, baseline_diagnostics = self._evaluate_baseline(problem)
         if verbose:
             self._print_baseline(baseline)
 
         pymoo_problem = problem.get_pymoo_problem()
 
-        # Get algorithm
-        algo = self._get_algorithm(algorithm, pop_size, **algorithm_kwargs)
+        # Seed the baseline design into the initial population so the
+        # optimizer always considers the current operating point.
+        x_baseline = np.array([baseline[var.name] for var in self._variables])
+        sampling = self._create_seeded_sampling(x_baseline, pop_size, pymoo_problem)
+
+        # Get algorithm with seeded sampling
+        algo = self._get_algorithm(algorithm, pop_size, sampling=sampling, **algorithm_kwargs)
 
         # Termination
         termination = get_termination("n_gen", n_gen)
@@ -749,17 +783,32 @@ class ExergoeconomicOptimizer:
         # Run optimization
         logger.info(f"Starting optimization with {algorithm}, {n_gen} generations, pop_size={pop_size}")
 
-        res = pymoo_minimize(
-            pymoo_problem,
-            algo,
-            termination,
-            seed=self._seed,
-            verbose=verbose,
-            save_history=save_history,
-        )
+        # Suppress noisy logging during optimization (TESPy errors on failed
+        # evaluations, cost estimation warnings, etc.)
+        _loggers_to_suppress = [
+            logging.getLogger("TESPyLogger"),
+            logging.getLogger("exerpy.cost_estimation"),
+            logging.getLogger("exerpy.optimization.adapters"),
+        ]
+        _saved_levels = {lgr: lgr.level for lgr in _loggers_to_suppress}
+        for lgr in _loggers_to_suppress:
+            lgr.setLevel(logging.CRITICAL)
+
+        try:
+            res = pymoo_minimize(
+                pymoo_problem,
+                algo,
+                termination,
+                seed=self._seed,
+                verbose=verbose,
+                save_history=save_history,
+            )
+        finally:
+            for lgr, lvl in _saved_levels.items():
+                lgr.setLevel(lvl)
 
         # Process results
-        return self._process_results(res, problem, algorithm, n_gen, save_history, baseline)
+        return self._process_results(res, problem, algorithm, n_gen, save_history, baseline, baseline_diagnostics)
 
     def _process_results(
         self,
@@ -769,6 +818,7 @@ class ExergoeconomicOptimizer:
         n_gen: int,
         save_history: bool,
         baseline: dict[str, float] | None = None,
+        baseline_diagnostics: dict | None = None,
     ) -> OptimizationResult:
         """Process pymoo results into OptimizationResult."""
         variable_names = problem.get_variable_names()
@@ -787,7 +837,9 @@ class ExergoeconomicOptimizer:
             if G is not None and G.ndim == 1:
                 G = G.reshape(1, -1)
 
+            # Re-evaluate Pareto solutions to capture exergoeconomic diagnostics
             for i in range(X.shape[0]):
+                _, _, _, diagnostics = problem.evaluate_single(X[i])
                 sol = Solution(
                     x=X[i],
                     f=F[i],
@@ -796,6 +848,7 @@ class ExergoeconomicOptimizer:
                     variable_names=variable_names,
                     objective_names=objective_names,
                     constraint_names=constraint_names,
+                    diagnostics=diagnostics,
                 )
                 solutions.append(sol)
                 pareto_front.append(sol)
@@ -812,8 +865,30 @@ class ExergoeconomicOptimizer:
             if best_per_gen:
                 history["best_per_generation"] = best_per_gen
 
-        # Determine best solution
-        best_solution = solutions[0] if solutions else None
+        # Determine best solution: pick the feasible solution with best (lowest)
+        # primary objective, but only if it actually improves over the baseline.
+        best_solution = None
+        if solutions:
+            feasible_solutions = [s for s in solutions if s.feasible]
+            candidates = feasible_solutions if feasible_solutions else solutions
+            # Sort by primary objective (minimization)
+            candidates = sorted(candidates, key=lambda s: s.f[0])
+            best_candidate = candidates[0]
+
+            # Compare against baseline: only accept if strictly better
+            if baseline is not None:
+                baseline_obj = baseline.get(objective_names[0])
+                if baseline_obj is not None and best_candidate.f[0] >= baseline_obj:
+                    logger.warning(
+                        f"Best optimized solution ({objective_names[0]}={best_candidate.f[0]:.4f}) "
+                        f"is not better than baseline ({baseline_obj:.4f}). "
+                        f"Keeping baseline design."
+                    )
+                    best_solution = None
+                else:
+                    best_solution = best_candidate
+            else:
+                best_solution = best_candidate
 
         # Determine termination reason
         termination_reason = "max_gen"
@@ -833,6 +908,7 @@ class ExergoeconomicOptimizer:
             termination_reason=termination_reason,
             history=history,
             baseline_values=baseline,
+            baseline_diagnostics=baseline_diagnostics,
         )
 
     def list_available_algorithms(self) -> dict[str, str]:

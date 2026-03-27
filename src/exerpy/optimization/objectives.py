@@ -265,20 +265,22 @@ class MinimizeCostOfExergyDestruction(ObjectiveFunction):
 
 class MinimizeLevelizedCost(ObjectiveFunction):
     """
-    Minimize the levelized cost of the product (e.g., $/kWh for electricity).
+    Minimize the levelized cost of a single product stream.
 
-    This is computed as the specific cost of the product exergy stream.
+    This is computed as the specific cost (c_TOT) of the product exergy stream,
+    as determined by the exergoeconomic analysis.
+
+    Parameters
+    ----------
+    product_stream : str
+        The connection identifier for the product stream.
+    name : str
+        Human-readable name for the objective.
     """
 
     def __init__(self, product_stream: str, name: str = "Levelized Cost"):
-        """
-        Parameters
-        ----------
-        product_stream : str
-            The connection identifier for the product stream.
-        """
         self.product_stream = product_stream
-        super().__init__(name=name, sense=OptimizationSense.MINIMIZE, unit="$/kWh")
+        super().__init__(name=name, sense=OptimizationSense.MINIMIZE, unit="EUR/GJ")
 
     def _compute(
         self,
@@ -291,10 +293,94 @@ class MinimizeLevelizedCost(ObjectiveFunction):
             raise ValueError(f"Product stream '{self.product_stream}' not found")
 
         conn = exergoeconomic_analysis.connections[self.product_stream]
-        # c is the specific cost ($/kJ or similar)
-        if hasattr(conn, "c"):
-            return conn.c
-        raise ValueError(f"Specific cost 'c' not available for stream '{self.product_stream}'")
+        c_TOT = conn.get("c_TOT")
+        if c_TOT is None:
+            raise ValueError(f"Specific cost 'c_TOT' not available for stream '{self.product_stream}'")
+        # c_TOT is in currency/kJ after solving; convert to currency/GJ
+        return c_TOT * 1e6
+
+
+class MinimizeProductSubsetCost(ObjectiveFunction):
+    """
+    Minimize the specific cost of a product defined as a difference of streams.
+
+    This is the key objective for multi-product systems where each product is
+    defined as a set of input and output streams (same format as the E_P
+    definition in ExergyAnalysis).
+
+    The specific cost is computed as:
+
+        c_P = (sum C_TOT_inputs - sum C_TOT_outputs) / (sum E_inputs - sum E_outputs)
+
+    converted to currency/GJ.
+
+    Parameters
+    ----------
+    inputs : list[str]
+        Connection identifiers for the product input streams (higher exergy).
+    outputs : list[str]
+        Connection identifiers for the product output streams (lower exergy).
+    name : str
+        Human-readable name for the objective.
+
+    Examples
+    --------
+    For a heat pump with heating product (water heated from stream 41 to 42):
+
+    >>> obj = MinimizeProductSubsetCost(
+    ...     inputs=["42"], outputs=["41"], name="c_P Heating"
+    ... )
+
+    For a cooling product (water cooled from stream 11 to 13):
+
+    >>> obj = MinimizeProductSubsetCost(
+    ...     inputs=["13"], outputs=["11"], name="c_P Cooling"
+    ... )
+    """
+
+    def __init__(
+        self,
+        inputs: list[str],
+        outputs: list[str] | None = None,
+        name: str = "Specific Product Cost",
+    ):
+        self.inputs = inputs
+        self.outputs = outputs or []
+        super().__init__(name=name, sense=OptimizationSense.MINIMIZE, unit="EUR/GJ")
+
+    def _compute(
+        self,
+        exergy_analysis: ExergyAnalysis,
+        exergoeconomic_analysis: ExergoeconomicAnalysis | None = None,
+    ) -> float:
+        if exergoeconomic_analysis is None:
+            raise ValueError("ExergoeconomicAnalysis required for MinimizeProductSubsetCost objective")
+
+        connections = exergoeconomic_analysis.connections
+
+        # Sum cost rates: C_TOT is in currency/s after solving
+        C_product = 0.0
+        for name in self.inputs:
+            if name not in connections:
+                raise ValueError(f"Input stream '{name}' not found in connections")
+            C_product += connections[name].get("C_TOT", 0)
+        for name in self.outputs:
+            if name not in connections:
+                raise ValueError(f"Output stream '{name}' not found in connections")
+            C_product -= connections[name].get("C_TOT", 0)
+
+        # Sum exergy flows: E is in kW after exergy analysis
+        E_product = 0.0
+        for name in self.inputs:
+            E_product += connections[name].get("E", 0)
+        for name in self.outputs:
+            E_product -= connections[name].get("E", 0)
+
+        if E_product <= 0:
+            return 1e10  # Penalty for invalid product exergy
+
+        # c_P [currency/GJ] = C [currency/s] / E [kW=kJ/s] * 1e6
+        return C_product / E_product * 1e6
 
 
 class MinimizeProductCost(ObjectiveFunction):

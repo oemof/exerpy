@@ -191,7 +191,44 @@ class ExergoeconomicProblem:
             logger.warning(f"Exergoeconomic analysis failed: {e}")
             return None
 
-    def evaluate_single(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, bool]:
+    def _extract_diagnostics(self, eea: ExergoeconomicAnalysis) -> dict:
+        """Extract exergoeconomic parameters per component.
+
+        Values are converted to display-friendly units matching
+        ``ExergoeconomicAnalysis.exergoeconomic_results()``:
+
+        - c_F, c_P: currency/GJ  (raw currency/J * 1e9)
+        - C_D, Z: currency/h  (raw currency/s * 3600)
+        - E_D: kW  (raw W * 1e-3)
+        - y, y_star: %  (raw ratio * 100)
+        - f, r: %  (already 0–100 from component)
+        - epsilon: dimensionless (0–1)
+        """
+        components = {}
+        for name, comp in eea.exergy_analysis.components.items():
+            if hasattr(comp, "f") and hasattr(comp, "r"):
+
+                def _safe(obj, attr, factor=1.0):
+                    val = getattr(obj, attr, None)
+                    if val is not None and np.isfinite(val):
+                        return float(val) * factor
+                    return None
+
+                components[name] = {
+                    "f": _safe(comp, "f"),
+                    "r": _safe(comp, "r"),
+                    "C_D": _safe(comp, "C_D", 3600),  # currency/s -> currency/h
+                    "Z": _safe(comp, "Z_costs", 3600),  # currency/s -> currency/h
+                    "c_F": _safe(comp, "c_F", 1e9),  # currency/J -> currency/GJ
+                    "c_P": _safe(comp, "c_P", 1e9),  # currency/J -> currency/GJ
+                    "E_D": _safe(comp, "E_D", 1e-3),  # W -> kW
+                    "epsilon": _safe(comp, "epsilon"),
+                    "y": _safe(comp, "y", 100),  # ratio -> %
+                    "y_star": _safe(comp, "y_star", 100),  # ratio -> %
+                }
+        return {"components": components}
+
+    def evaluate_single(self, x: np.ndarray) -> tuple[np.ndarray, np.ndarray, bool, dict]:
         """
         Evaluate a single solution.
 
@@ -202,8 +239,8 @@ class ExergoeconomicProblem:
 
         Returns
         -------
-        tuple[np.ndarray, np.ndarray, bool]
-            Objective values, constraint values, and feasibility flag.
+        tuple[np.ndarray, np.ndarray, bool, dict]
+            Objective values, constraint values, feasibility flag, and diagnostics.
         """
         self._n_evals += 1
 
@@ -211,21 +248,27 @@ class ExergoeconomicProblem:
         f = np.full(self.n_obj, self.infeasible_penalty)
         g = np.full(self.n_constr, self.infeasible_penalty) if self.n_constr > 0 else np.array([])
         feasible = False
+        diagnostics = {}
 
         try:
+            # Restore baseline state so solver starts from a clean point
+            # (failed TESPy solves corrupt internal connection values)
+            if hasattr(self.adapter, "restore_baseline_state"):
+                self.adapter.restore_baseline_state()
+
             # Apply design variables
             self._apply_variables(x)
 
             # Run simulation
             if not self._run_simulation():
                 logger.debug(f"Simulation did not converge for x={x}")
-                return f, g, feasible
+                return f, g, feasible, diagnostics
 
             # Run exergy analysis
             ea = self._run_exergy_analysis()
             if ea is None:
                 logger.debug(f"Exergy analysis failed for x={x}")
-                return f, g, feasible
+                return f, g, feasible, diagnostics
 
             # Run exergoeconomic analysis if needed
             eea = self._run_exergoeconomic_analysis(ea)
@@ -233,6 +276,10 @@ class ExergoeconomicProblem:
             # Cache results
             self._last_exergy_analysis = ea
             self._last_exergoeconomic_analysis = eea
+
+            # Extract exergoeconomic diagnostics (f, r, C_D, Z per component)
+            if eea is not None:
+                diagnostics = self._extract_diagnostics(eea)
 
             # Evaluate objectives
             for i, obj in enumerate(self.objectives):
@@ -258,7 +305,7 @@ class ExergoeconomicProblem:
         except Exception as e:
             logger.error(f"Evaluation failed: {e}")
 
-        return f, g, feasible
+        return f, g, feasible, diagnostics
 
     def evaluate(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -279,7 +326,7 @@ class ExergoeconomicProblem:
         G = np.zeros((n_pop, self.n_constr)) if self.n_constr > 0 else None
 
         for i in range(n_pop):
-            f, g, _ = self.evaluate_single(X[i])
+            f, g, _, _ = self.evaluate_single(X[i])
             F[i] = f
             if G is not None:
                 G[i] = g

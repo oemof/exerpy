@@ -147,7 +147,6 @@ examples/ccpp/_0108erv
 
 # Copyrighted cost correlation data
 src/exerpy/data/cost_correlations/
-src/exerpy/cost_estimation/
 examples/exergoeconomic_analysis/cgam/
 examples/exergoeconomic_analysis/ccpp/
 examples/exergoeconomic_analysis/heatpump/

@@ -51,7 +51,6 @@ requires-python = ">=3.10"
 dependencies = [
     "pandas",
     "numpy",
-    "tespy>=0.10.0",
 ]
 license = {text = "MIT"}
 
@@ -72,13 +71,13 @@ dev = [
     "sphinx-copybutton",
     "sphinx-design",
     "sphinxcontrib.bibtex",
-    "tespy>=0.9",
+    "tespy>=0.10.0",
     "tox",
     "black>=24.10.0",
     "ruff>=0.6.9",
 ]
 tespy = [
-    "tespy>=0.9",
+    "tespy>=0.10.0",
 ]
 ebsilon = [
     "pywin32"

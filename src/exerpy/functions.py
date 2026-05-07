@@ -360,9 +360,12 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                 # For power connections, use the energy flow value directly.
                 conn_data["E"] = conn_data["energy_flow"]
             elif conn_data["kind"] == "heat":
-                # For heat connections, attempt the new calculation.
-                # Identify the associated component (either source or target)
-                comp_name = conn_data["source_component"] or conn_data["target_component"]
+                # For heat connections, find the heat exchanger component on either end.
+                # The other end is typically a HeatSource/HeatSink which is not in our component dict.
+                source_component = conn_data["source_component"]
+                target_component = conn_data["target_component"]
+                she_comps = my_json["components"].get("SimpleHeatExchanger", {})
+                comp_name = source_component if source_component in she_comps else target_component
                 # Check if the component is either a SimpleHeatExchanger or a SteamGenerator.
                 if (
                     "SimpleHeatExchanger" in my_json["components"]

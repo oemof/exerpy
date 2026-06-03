@@ -6,6 +6,7 @@ from tespy.components import (
     Drum,
     Generator,
     HeatExchanger,
+    HeatSink,
     Merge,
     Motor,
     PowerBus,
@@ -18,7 +19,7 @@ from tespy.components import (
     Turbine,
     Valve,
 )
-from tespy.connections import Connection, PowerConnection, Ref
+from tespy.connections import Connection, PowerConnection, HeatConnection, Ref
 from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
@@ -131,9 +132,8 @@ e15 = PowerConnection(distribution, "power_out4", grid, "power", label="e15")
 
 nw.add_conns(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15)
 
-heating = PowerSink("heating")
-heating_condenser.set_attr(power_connector_location="outlet")
-h1 = PowerConnection(heating_condenser, "heat", heating, "power", label="h1")
+heating = HeatSink("heating")
+h1 = HeatConnection(heating_condenser, "heat", heating, "heat", label="h1")
 nw.add_conns(h1)
 
 gt_generator.set_attr(eta=0.985)

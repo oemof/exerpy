@@ -23,7 +23,15 @@ Tamb = 283.15
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
 nw = Network()
-nw.units.set_defaults(temperature="degC", pressure="bar", enthalpy="kJ / kg", mass_flow="kg / s", heat="kW", power="kW")
+nw.units.set_defaults(
+    temperature="degC",
+    pressure="bar",
+    pressure_difference="bar",
+    enthalpy="kJ / kg",
+    mass_flow="kg / s",
+    heat="kW",
+    power="kW"
+)
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")

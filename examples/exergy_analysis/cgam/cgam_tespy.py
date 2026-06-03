@@ -19,7 +19,11 @@ from exerpy import ExergyAnalysis
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
 nwk = Network()
-nwk.units.set_defaults(pressure="bar", pressure_difference="bar", temperature="degC")
+nwk.units.set_defaults(
+    pressure="bar",
+    pressure_difference="bar",
+    temperature="degC"
+)
 
 air_molar = {"O2": 0.2059, "N2": 0.7748, "CO2": 0.0003, "H2O": 0.019, "CH4": 0}
 molar_masses = {key: CPSI("M", key) * 1000 for key in air_molar}

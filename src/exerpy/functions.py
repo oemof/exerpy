@@ -135,11 +135,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
         aliases_water = CP.get_aliases("H2O")
 
         # Handle pure substance (Case A)
-        molar_fractions = {
-            key: value
-            for key, value in molar_fractions.items()
-            if value > 1e-6
-        }
+        molar_fractions = {key: value for key, value in molar_fractions.items() if value > 1e-6}
         if len(molar_fractions) == 1:
             logging.info("Handling pure substance case (Case A).")
             substance = next(iter(molar_fractions))  # Get the single key

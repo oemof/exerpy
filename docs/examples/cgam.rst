@@ -140,7 +140,7 @@ The import of the exerpy dependency is the same for all simulators:
 
         .. dropdown:: Code of the tespy model
 
-            .. literalinclude:: /../examples/cgam/cgam_tespy.py
+            .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
                 :language: python
                 :end-before: [tespy_model_section_end]
 
@@ -159,7 +159,7 @@ The import of the exerpy dependency is the same for all simulators:
             set to :code:`False` because ASPEN cannot handle this, and we wanted to
             cross validate the results of the examples for all three simulators.
 
-        .. literalinclude:: /../examples/cgam/cgam_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
             :language: python
             :start-after: [tespy_model_section_end]
             :end-before: [exergy_analysis_setup]
@@ -175,7 +175,7 @@ The import of the exerpy dependency is the same for all simulators:
         total exergy between the flow of water entering the economizer
         :code:`8`and the saturated steam leaving the drum :code:`9`.
 
-        .. literalinclude:: /../examples/cgam/cgam_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
             :language: python
             :start-after: [exergy_analysis_setup]
             :end-before: [exergy_analysis_flows]

@@ -145,7 +145,7 @@ The import of the exerpy dependency is the same for all simulators:
 
         .. dropdown:: Code of the tespy model
 
-            .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
+            .. literalinclude:: /../examples/exergy_analysis/ccpp/ccpp_tespy.py
                 :language: python
                 :end-before: [tespy_model_section_end]
 
@@ -164,7 +164,7 @@ The import of the exerpy dependency is the same for all simulators:
             set to :code:`False` because ASPEN cannot handle this, and we wanted to
             cross validate the results of the examples for all three simulators.
 
-        .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/ccpp/ccpp_tespy.py
             :language: python
             :start-after: [tespy_model_section_end]
             :end-before: [exergy_analysis_setup]
@@ -180,7 +180,7 @@ The import of the exerpy dependency is the same for all simulators:
         sum of the electrical energy :code:`E_TOT` and the exergy of the heat
         :code:`H1`.
 
-        .. literalinclude:: /../examples/ccpp/ccpp_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/ccpp/ccpp_tespy.py
             :language: python
             :start-after: [exergy_analysis_setup]
             :end-before: [exergy_analysis_flows]

@@ -133,7 +133,7 @@ The import of the exerpy dependency is the same for all simulators:
 
         .. dropdown:: Code of the tespy model
 
-            .. literalinclude:: /../examples/heatpump/hp_tespy.py
+            .. literalinclude:: /../examples/exergy_analysis/heatpump/hp_tespy.py
                 :language: python
                 :end-before: [tespy_model_section_end]
 
@@ -152,7 +152,7 @@ The import of the exerpy dependency is the same for all simulators:
             set to :code:`False` because ASPEN cannot handle this, and we wanted to
             cross validate the results of the examples for all three simulators.
 
-        .. literalinclude:: /../examples/heatpump/hp_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/heatpump/hp_tespy.py
             :language: python
             :start-after: [tespy_model_section_end]
             :end-before: [exergy_analysis_setup]
@@ -165,7 +165,7 @@ The import of the exerpy dependency is the same for all simulators:
         loss of the system (:code:`E_L`), and the change of exergy from the
         liquid water to steam is considered the exergy product (:code:`E_P`).
 
-        .. literalinclude:: /../examples/heatpump/hp_tespy.py
+        .. literalinclude:: /../examples/exergy_analysis/heatpump/hp_tespy.py
             :language: python
             :start-after: [exergy_analysis_setup]
             :end-before: [exergy_analysis_flows]

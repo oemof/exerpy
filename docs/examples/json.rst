@@ -12,7 +12,7 @@ analysis with external simulation data.
 ExerPy requires specific data formatting in a JSON file. This is the required
 format:
 
-.. code-block:: json
+.. code-block:: text
 
     {
         "components": {

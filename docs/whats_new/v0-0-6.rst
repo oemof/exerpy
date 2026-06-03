@@ -7,5 +7,5 @@ Build & Packaging
 - Added CI verification step in the packaging workflow to check wheels for blocked paths.
 
 Contributors
-##########
+############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

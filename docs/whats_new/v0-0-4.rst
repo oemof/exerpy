@@ -17,6 +17,6 @@ Examples
 - Updated heat pump example to latest TESPy API.
 
 Contributors
-##########
+############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
 - Francesco Witte (`@fwitte <https://github.com/fwitte>`__)

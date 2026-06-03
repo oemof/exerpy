@@ -1,0 +1,31 @@
+v0.0.8 (03.06.2026)
+++++++++++++++++++++++
+
+Bug Fixes
+#########
+- Chemical exergy: trace components are now filtered out of the molar
+  composition (fractions below ``1e-6``) before the pure-substance check in
+  ``calc_chemical_exergy()``. Mixtures carrying tiny residual species are no
+  longer misclassified as pure substances (`#26 <https://github.com/oemof/exerpy/issues/26>`__).
+- Heat connections: ``add_total_exergy_flow()`` now identifies the
+  ``SimpleHeatExchanger`` component on whichever end of a heat connection it
+  sits, instead of assuming the source side. The opposite end is a
+  heat source/sink that is not part of the component dictionary
+  (`#27 <https://github.com/oemof/exerpy/issues/27>`__).
+
+Other Changes
+#############
+- Updated ExerPy for the latest TESPy API; the minimum supported TESPy
+  version is now ``>=0.10.0`` (`#32 <https://github.com/oemof/exerpy/issues/32>`__).
+  The TESPy example scripts (CCPP, CGAM) were adapted accordingly.
+- Bumped the ``tespy`` dependency pin to ``>=0.10.0``. TESPy remains an
+  optional dependency (the core install requires only ``pandas`` and
+  ``numpy``).
+- Dropped support for Python 3.10. ExerPy now requires Python ``>=3.11``,
+  following TESPy 0.10, which no longer supports Python 3.10.
+- Fixed the installation links in the documentation.
+
+Contributors
+############
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

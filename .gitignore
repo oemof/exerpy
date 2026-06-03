@@ -152,5 +152,8 @@ examples/exergoeconomic_analysis/cgam/
 examples/exergoeconomic_analysis/ccpp/
 examples/exergoeconomic_analysis/heatpump/
 
+# Optimization examples (local only; kept on the optimization branch)
+examples/opt_examples/
+
 # macOS
 .DS_Store

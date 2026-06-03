@@ -129,7 +129,7 @@ ongoing development. Use the following BibTeX entry:
          title = {{ExerPy}: Exergy Analysis in Python},
          note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou}
          url = {https://github.com/oemof/exerpy},
-         version = {0.0.7},
+         version = {0.0.8},
          year = {2026}
     }
 

@@ -47,7 +47,7 @@ The import of the exerpy dependency is the same for all simulators:
     .. tab-item:: Ebsilon
 
         Download the Ebsilon simulation model here:
-        :download:`cgam.ebs </../examples/cgam/cgam.ebs>`
+        :download:`cgam.ebs </../examples/exergy_analysis/cgam/cgam.ebs>`
 
         2. **Initialize the Exergy Analysis**
 
@@ -183,7 +183,7 @@ The import of the exerpy dependency is the same for all simulators:
     .. tab-item:: Aspen Plus
 
         Download the Aspen simulation model here:
-        :download:`cgam.bkp </../examples/cgam/cgam.bkp>`
+        :download:`cgam.bkp </../examples/exergy_analysis/cgam/cgam.bkp>`
 
         2. **Initialize the Exergy Analysis**
 

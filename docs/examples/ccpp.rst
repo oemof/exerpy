@@ -50,7 +50,7 @@ The import of the exerpy dependency is the same for all simulators:
    .. tab-item:: Ebsilon
 
         Download the Ebsilon simulation model here:
-        :download:`ccpp.ebs </../examples/ccpp/ccpp.ebs>`
+        :download:`ccpp.ebs </../examples/exergy_analysis/ccpp/ccpp.ebs>`
 
         2. **Initialize the Exergy Analysis**
 
@@ -188,7 +188,7 @@ The import of the exerpy dependency is the same for all simulators:
    .. tab-item:: Aspen Plus
 
         Download the Aspen simulation model here:
-        :download:`ccpp.bkp </../examples/ccpp/ccpp.bkp>`
+        :download:`ccpp.bkp </../examples/exergy_analysis/ccpp/ccpp.bkp>`
 
         2. **Initialize the Exergy Analysis**
 

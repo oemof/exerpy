@@ -40,7 +40,7 @@ The import of the exerpy dependency is the same for all simulators:
     .. tab-item:: Ebsilon
 
         Download the Ebsilon simulation model here:
-        :download:`hp.ebs </../examples/heatpump/hp.ebs>`
+        :download:`hp.ebs </../examples/exergy_analysis/heatpump/hp.ebs>`
 
         2. **Initialize the Exergy Analysis**
 
@@ -173,7 +173,7 @@ The import of the exerpy dependency is the same for all simulators:
     .. tab-item:: Aspen Plus
 
         Download the Aspen simulation model here:
-        :download:`hp.bkp </../examples/heatpump/hp.bkp>`
+        :download:`hp.bkp </../examples/exergy_analysis/heatpump/hp.bkp>`
 
         2. **Initialize the Exergy Analysis**
 

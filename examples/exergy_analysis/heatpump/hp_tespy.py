@@ -105,11 +105,6 @@ motor3.set_attr(eta=0.985)
 
 nw.solve("design")
 
-# Run final simulation with ttd_l in condenser set
-condenser.set_attr(ttd_l=5)
-c31.set_attr(T=None)
-nw.solve("design")
-
 # assert convergence of calculation
 nw.assert_convergence()
 

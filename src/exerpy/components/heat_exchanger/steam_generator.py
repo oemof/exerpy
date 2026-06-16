@@ -1,6 +1,6 @@
-import logging
-
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -154,7 +154,7 @@ class SteamGenerator(Component):
             "m", 0
         ) * self.inl.get(3, {}).get(exergy_type, 0)
         self.E_F = E_F_HP + E_F_IP - E_F_w_inj
-        logging.warning(
+        logger.warning(
             "Since the temperature level of the heat source of the steam generator is unknown, "
             "the exergy fuel of this component is calculated based on the thermal exergy value of the water streams."
         )
@@ -176,7 +176,7 @@ class SteamGenerator(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of SteamGenerator {self.name} calculated: "
             f"E_P = {self.E_P:.2f} W, E_F = {self.E_F:.2f} W, "
             f"E_D = {self.E_D:.2f} W, Efficiency = {self.epsilon:.2%}"
@@ -188,7 +188,7 @@ class SteamGenerator(Component):
 
         The exergoeconomic analysis of SteamGenerator is not implemented yet.
         """
-        logging.error(
+        logger.error(
             "The exergoeconomic analysis of SteamGenerator is not implemented yet. "
             "This method will be implemented in a future release."
         )
@@ -244,7 +244,7 @@ class SteamGenerator(Component):
         The exergoeconomic analysis of SteamGenerator is not implemented yet.
         """
 
-        logging.error(
+        logger.error(
             "The exergoeconomic analysis of SteamGenerator is not implemented yet. "
             "This method will be implemented in a future release."
         )

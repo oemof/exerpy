@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -283,11 +283,11 @@ class SimpleHeatExchanger(Component):
         # Validate the number of inlets and outlets
         if not hasattr(self, "inl") or not hasattr(self, "outl") or len(self.inl) < 1 or len(self.outl) < 1:
             msg = "SimpleHeatExchanger requires at least one inlet and one outlet as well as one heat flow."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
         if len(self.inl) > 2 or len(self.outl) > 2:
             msg = "SimpleHeatExchanger requires a maximum of two inlets and two outlets."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # Extract inlet and outlet streams
@@ -340,7 +340,7 @@ class SimpleHeatExchanger(Component):
 
             else:
                 # Unimplemented corner case
-                logging.warning("SimpleHeatExchanger: unimplemented case (Q < 0, T_in < T0 < T_out?).")
+                logger.warning("SimpleHeatExchanger: unimplemented case (Q < 0, T_in < T0 < T_out?).")
                 self.E_P = np.nan
                 self.E_F = np.nan
 
@@ -376,7 +376,7 @@ class SimpleHeatExchanger(Component):
                     )
                     self.E_F = inlet["m"] * (inlet["e_PH"] - outlet["e_PH"])
             else:
-                logging.warning("SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?).")
+                logger.warning("SimpleHeatExchanger: unimplemented case (Q > 0, T_in > T0 > T_out?).")
                 self.E_P = np.nan
                 self.E_F = np.nan
 
@@ -395,7 +395,7 @@ class SimpleHeatExchanger(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of SimpleHeatExchanger {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -461,14 +461,14 @@ class SimpleHeatExchanger(Component):
 
             elif T_in >= T0 and T_out < T0:
                 # Tricky case: inlet above T0, outlet below T0
-                logging.warning(
+                logger.warning(
                     f"SimpleHeatExchanger '{self.name}': Stream crossing ambient temperature "
                     f"during heat release not implemented in exergoeconomics yet!"
                 )
 
             else:
                 # Tricky case: both streams below T0 while heat is released
-                logging.warning(
+                logger.warning(
                     f"SimpleHeatExchanger '{self.name}': Both streams below T0 during heat release "
                     f"not implemented in exergoeconomics yet!"
                 )
@@ -483,7 +483,7 @@ class SimpleHeatExchanger(Component):
 
             elif T_in < T0 and T_out >= T0:
                 # Tricky case: inlet below T0, outlet above T0
-                logging.warning(
+                logger.warning(
                     f"SimpleHeatExchanger '{self.name}': Stream crossing ambient temperature "
                     f"during heat absorption not implemented in exergoeconomics yet!"
                 )

@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -130,7 +130,7 @@ class Mixer(Component):
         for outlet in outlet_list:
             if outlet["T"] != T_out or outlet["e_PH"] != e_out_PH:
                 msg = "All outlets in Mixer must have the same thermodynamic state."
-                logging.error(msg)
+                logger.error(msg)
                 raise ValueError(msg)
         # Sum the mass of all outlet streams (if needed for further analysis)
         sum(outlet.get("m", 0) for outlet in outlet_list)
@@ -176,7 +176,7 @@ class Mixer(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Mixer {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

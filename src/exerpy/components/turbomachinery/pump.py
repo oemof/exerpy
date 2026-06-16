@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -112,7 +112,7 @@ class Pump(Component):
 
         # First, check for the invalid case: outlet temperature smaller than inlet temperature.
         if self.inl[0]["T"] > self.outl[0]["T"]:
-            logging.warning(
+            logger.warning(
                 f"Exergy balance of pump '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
                 f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
             )
@@ -132,7 +132,7 @@ class Pump(Component):
                 )
                 self.E_F = abs(self.P) + self.inl[0]["m"] * self.inl[0]["e_T"]
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with pump below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -145,7 +145,7 @@ class Pump(Component):
                 self.E_P = self.outl[0]["m"] * (self.outl[0]["e_M"] - self.inl[0]["e_M"])
                 self.E_F = abs(self.P) + self.inl[0]["m"] * (self.inl[0]["e_T"] - self.outl[0]["e_T"])
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with pump below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -154,7 +154,7 @@ class Pump(Component):
 
         # Invalid case: outlet temperature smaller than inlet
         else:
-            logging.warning(
+            logger.warning(
                 "Exergy balance of a pump where outlet temperature is smaller "
                 "than inlet temperature is not implemented."
             )
@@ -166,7 +166,7 @@ class Pump(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of Pump {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -260,7 +260,7 @@ class Pump(Component):
                     "property": "c_T, c_M",
                 }
             else:
-                logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
+                logger.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
             # Case 2: Inlet at/below ambient, outlet above ambient
             # Handle potential zero values for robustness
@@ -274,7 +274,7 @@ class Pump(Component):
                     "property": "c_T, c_M",
                 }
             else:
-                logging.warning(
+                logger.warning(
                     f"Pump '{self.name}' Case 2: outlet thermal exergy or mechanical exergy "
                     "difference is zero, auxiliary equation may be degenerate."
                 )
@@ -436,7 +436,7 @@ class Pump(Component):
                 power_cost = stream.get("C_TOT")
                 break
         if power_cost is None:
-            logging.error("No inlet power stream found to determine power cost (C_TOT).")
+            logger.error("No inlet power stream found to determine power cost (C_TOT).")
             raise ValueError("No inlet power stream found for exergoeconomic_balance.")
 
         # Compute product and fuel costs depending on inlet/outlet temperatures relative to T0.

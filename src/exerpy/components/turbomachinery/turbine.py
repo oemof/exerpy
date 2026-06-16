@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -117,7 +117,7 @@ class Turbine(Component):
                     - self._total_outlet("m", "e_M")
                 )
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with expander below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -130,7 +130,7 @@ class Turbine(Component):
                 self.E_P = abs(self.P) + (self._total_outlet("m", "e_T") - self.inl[0]["m"] * self.inl[0]["e_T"])
                 self.E_F = self.inl[0]["m"] * self.inl[0]["e_M"] - self._total_outlet("m", "e_M")
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with expander below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -138,7 +138,7 @@ class Turbine(Component):
                 self.E_F = np.nan
         # Invalid case: outlet temperature larger than inlet
         else:
-            logging.warning(
+            logger.warning(
                 "Exergy balance of a turbine where outlet temperature is larger "
                 "than inlet temperature is not implemented."
             )
@@ -152,7 +152,7 @@ class Turbine(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of Turbine {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -284,7 +284,7 @@ class Turbine(Component):
                 b[counter + j] = 0
             counter += num_material_rows
         else:
-            logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
+            logger.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
 
         # --- Auxiliary equation for shaft power equality ---
         power_outlets = [
@@ -445,7 +445,7 @@ class Turbine(Component):
             self.C_F = inlet.get("C_M", 0) - sum_C_M_out
 
         else:
-            logging.warning(
+            logger.warning(
                 "Exergoeconomic balance of a turbine with outlet temperature larger than inlet is not implemented."
             )
             self.C_P = np.nan

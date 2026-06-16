@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -26,7 +26,7 @@ class CycleCloser(Component):
         self.epsilon = np.nan
 
         # Log the results
-        logging.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
+        logger.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """

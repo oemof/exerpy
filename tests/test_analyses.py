@@ -331,8 +331,8 @@ def test_zero_fuel_exergy(exergy_analysis, mock_connection_data, monkeypatch):
     """
     # Modify connection "1" (used for fuel) so that its E becomes 0.
     mock_connection_data["1"]["E"] = 0
-    # Patch logging.info in the analyses module to prevent formatting of None.
-    monkeypatch.setattr("exerpy.analyses.logging.info", lambda msg: None)
+    # Patch logger.info in the analyses module to prevent formatting of None.
+    monkeypatch.setattr("exerpy.analyses.logger.info", lambda msg: None)
     # Create a fresh analysis with the modified connection data.
     analysis = ExergyAnalysis(exergy_analysis._component_data, mock_connection_data, 298.15, 101325)
     fuel = {"inputs": ["1"]}

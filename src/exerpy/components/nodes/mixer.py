@@ -94,6 +94,9 @@ class Mixer(Component):
     def __init__(self, **kwargs):
         r"""Initialize mixer component with given parameters."""
         super().__init__(**kwargs)
+        # Number of identical parallel branches each modelled inlet represents (1 for an
+        # ordinary mixer; >1 when one branch stands in for a field of parallel branches).
+        self.num_branches = kwargs.get("num_branches", 1) or 1
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -170,6 +173,10 @@ class Mixer(Component):
                         self.E_P += inlet["m"] * (e_out_PH - inlet["e_PH"])
                 else:  # inlet['T'] <= T_out
                     self.E_F += inlet["m"] * (inlet["e_PH"] - e_out_PH)
+
+        # Each modelled inlet represents num_branches identical parallel branches.
+        self.E_P *= self.num_branches
+        self.E_F *= self.num_branches
 
         # Calculate exergy destruction and efficiency.
         self.E_D = self.E_F - self.E_P

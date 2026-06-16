@@ -17,10 +17,15 @@ from exerpy.components.nodes.deaerator import Deaerator
 from exerpy.components.nodes.drum import Drum
 from exerpy.components.nodes.flash_tank import FlashTank
 from exerpy.components.nodes.mixer import Mixer
+from exerpy.components.nodes.splitter import Splitter
 from exerpy.components.nodes.storage import Storage
 from exerpy.components.piping.valve import Valve
 from exerpy.components.power_machines.generator import Generator
 from exerpy.components.power_machines.motor import Motor
+from exerpy.components.solar_thermal import T_SUN
+from exerpy.components.solar_thermal.heliostatfield import Heliostatfield
+from exerpy.components.solar_thermal.parabolictrough import ParabolicTrough
+from exerpy.components.solar_thermal.solartower import SolarTower
 from exerpy.components.turbomachinery.compressor import Compressor
 from exerpy.components.turbomachinery.pump import Pump
 from exerpy.components.turbomachinery.turbine import Turbine
@@ -1344,3 +1349,286 @@ def test_flash_tank_missing_streams_raises(flash_tank):
     flash_tank.outl = {0: {"m": 1, "e_PH": 90, "e_T": 45}}
     with pytest.raises(ValueError, match="Flash tank requires one inlet and two outlets."):
         flash_tank.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+
+# ---------------------------------------------------------------------------
+# Solar-thermal components and their supporting changes
+#
+# calc_exergy_balance reads the inlet/outlet dictionaries directly, so these
+# components unit-test without any simulator. Solar radiation is converted to
+# exergy with the Petela/Spanner factor alpha = 1 - (4/3) * T0 / T_SUN.
+# ---------------------------------------------------------------------------
+def _petela_spanner(T0):
+    """Reference Petela/Spanner factor used by the solar components."""
+    return 1 - (4 / 3) * (T0 / T_SUN)
+
+
+def test_heliostatfield_balance_and_writeback():
+    """E_F = Q_Solar*alpha, E_P = P*alpha, and the heat connections are written back."""
+    hf = Heliostatfield(name="HF", Q_Solar=1000.0)
+    # outl[0] = internal receiver link (both ends connected) -> product.
+    # outl[None] = synthetic boundary solar connection (target None) -> fuel.
+    receiver = {"kind": "heat", "energy_flow": 600.0, "source_component": "HF", "target_component": "Tower"}
+    solar_in = {"kind": "heat", "energy_flow": 1000.0, "source_component": "HF", "target_component": None}
+    hf.inl = {}
+    hf.outl = {0: receiver, None: solar_in}
+
+    hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+    alpha = _petela_spanner(300)
+    assert pytest.approx(1000.0 * alpha, rel=1e-9) == hf.E_F
+    assert pytest.approx(600.0 * alpha, rel=1e-9) == hf.E_P
+    assert pytest.approx(400.0 * alpha, rel=1e-9) == hf.E_D
+    assert hf.epsilon == pytest.approx(0.6, rel=1e-9)
+    # Write-back: boundary -> E_F, internal -> E_P.
+    assert solar_in["E"] == pytest.approx(hf.E_F, rel=1e-9)
+    assert receiver["E"] == pytest.approx(hf.E_P, rel=1e-9)
+
+
+def test_heliostatfield_no_outlets_is_graceful():
+    """With no outlet connections the component reports zeros and NaN efficiency."""
+    hf = Heliostatfield(name="HF", Q_Solar=1000.0)
+    hf.inl = {}
+    hf.outl = {}
+    hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert hf.E_F == 0
+    assert hf.E_P == 0
+    assert hf.E_D == 0
+    assert np.isnan(hf.epsilon)
+
+
+def test_heliostatfield_missing_outl_attr_raises():
+    hf = Heliostatfield(name="HF", Q_Solar=1000.0)  # no 'outl' attribute at all
+    with pytest.raises(ValueError, match="requires outlet connections"):
+        hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_heliostatfield_missing_q_solar_raises():
+    hf = Heliostatfield(name="HF")  # Q_Solar not provided
+    hf.inl = {}
+    hf.outl = {0: {"kind": "heat", "energy_flow": 600.0, "source_component": "HF", "target_component": "Tower"}}
+    with pytest.raises(ValueError, match="no solar heat input"):
+        hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_heliostatfield_no_heat_output_raises():
+    hf = Heliostatfield(name="HF", Q_Solar=1000.0)
+    hf.inl = {}
+    hf.outl = {0: {"kind": "material", "m": 1.0}}  # not a heat connection -> P stays None
+    with pytest.raises(ValueError, match="no valid heat output"):
+        hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_heliostatfield_exergoeconomics_not_implemented():
+    hf = Heliostatfield(name="HF", Q_Solar=1000.0)
+    with pytest.raises(NotImplementedError):
+        hf.exergoeconomic_balance(T0=300)
+    with pytest.raises(NotImplementedError):
+        hf.aux_eqs(None, None, 0, 300, {}, False)
+
+
+def _trough_streams():
+    inlet = {"kind": "material", "T": 400.0, "m": 3.0, "e_PH": 100.0, "e_T": 95.0, "e_M": 5.0}
+    outlet = {"kind": "material", "T": 500.0, "m": 3.0, "e_PH": 200.0, "e_T": 190.0, "e_M": 10.0}
+    boundary = {"kind": "heat", "source_component": "PT", "target_component": None}
+    return inlet, outlet, boundary
+
+
+def test_parabolic_trough_no_split():
+    pt = ParabolicTrough(name="PT", Q_Solar=1000.0, num_branches=2)
+    inlet, outlet, boundary = _trough_streams()
+    pt.inl = {0: inlet}
+    pt.outl = {0: outlet, None: boundary}
+
+    pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+    alpha = _petela_spanner(300)
+    e_solar = 1000.0 * alpha * 2  # Q_Solar * alpha * beta
+    expected_E_P = 2 * 3.0 * (200.0 - 100.0)  # beta * m * delta e_PH
+    assert pt.beta == 2
+    assert pt.E_Solar == pytest.approx(e_solar, rel=1e-9)
+    assert pytest.approx(e_solar, rel=1e-9) == pt.E_F
+    assert pytest.approx(expected_E_P, rel=1e-9) == pt.E_P
+    assert pytest.approx(e_solar - expected_E_P, rel=1e-9) == pt.E_D
+    assert boundary["E"] == pytest.approx(pt.E_F, rel=1e-9)
+
+
+def test_parabolic_trough_split_same_destruction():
+    """Split product is thermal; the mechanical decrease goes to the fuel; E_D unchanged."""
+    pt_ns = ParabolicTrough(name="PTns", Q_Solar=1000.0, num_branches=2)
+    pt_s = ParabolicTrough(name="PTs", Q_Solar=1000.0, num_branches=2)
+    for pt in (pt_ns, pt_s):
+        inlet, outlet, boundary = _trough_streams()
+        pt.inl = {0: inlet}
+        pt.outl = {0: outlet, None: boundary}
+    pt_ns.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    pt_s.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    # Split product = thermal-exergy gain.
+    assert pytest.approx(2 * 3.0 * (190.0 - 95.0), rel=1e-9) == pt_s.E_P
+    # Split fuel = E_solar + mechanical-exergy decrease.
+    alpha = _petela_spanner(300)
+    assert pytest.approx(1000.0 * alpha * 2 + 2 * 3.0 * (5.0 - 10.0), rel=1e-9) == pt_s.E_F
+    # Destruction must match the non-split case.
+    assert pytest.approx(pt_ns.E_D, rel=1e-9) == pt_s.E_D
+
+
+def test_parabolic_trough_default_num_branches_is_one():
+    pt = ParabolicTrough(name="PT", Q_Solar=1000.0)  # num_branches not given
+    assert pt.beta == 1
+
+
+def test_parabolic_trough_off_design_is_nan():
+    pt = ParabolicTrough(name="PT", Q_Solar=1000.0, num_branches=1)
+    inlet, outlet, boundary = _trough_streams()
+    inlet["T"] = 200.0  # below ambient -> off-design
+    pt.inl = {0: inlet}
+    pt.outl = {0: outlet, None: boundary}
+    pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert np.isnan(pt.E_P)
+    assert np.isnan(pt.E_F)
+    assert np.isnan(pt.E_D)
+
+
+def test_parabolic_trough_missing_material_raises():
+    pt = ParabolicTrough(name="PT", Q_Solar=1000.0, num_branches=1)
+    pt.inl = {0: {"kind": "heat"}}  # no material inlet
+    pt.outl = {0: {"kind": "material", "T": 500.0, "m": 3.0, "e_PH": 200.0}}
+    with pytest.raises(ValueError, match="material inlet"):
+        pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_parabolic_trough_missing_q_solar_raises():
+    pt = ParabolicTrough(name="PT", num_branches=1)  # no Q_Solar
+    inlet, outlet, _ = _trough_streams()
+    pt.inl = {0: inlet}
+    pt.outl = {0: outlet}
+    with pytest.raises(ValueError, match="no solar heat input"):
+        pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_parabolic_trough_exergoeconomics_not_implemented():
+    pt = ParabolicTrough(name="PT", Q_Solar=1000.0, num_branches=1)
+    with pytest.raises(NotImplementedError):
+        pt.exergoeconomic_balance(T0=300)
+    with pytest.raises(NotImplementedError):
+        pt.aux_eqs(None, None, 0, 300, {}, False)
+
+
+def _tower_streams(heat_conn):
+    inlet = {"kind": "material", "T": 400.0, "m": 3.0, "e_PH": 100.0, "e_T": 95.0, "e_M": 5.0}
+    outlet = {"kind": "material", "T": 500.0, "m": 3.0, "e_PH": 200.0, "e_T": 190.0, "e_M": 10.0}
+    return inlet, outlet, heat_conn
+
+
+def test_solar_tower_no_split_with_exergy_input():
+    """Heat input already carries exergy (E) -> used directly, no Petela factor."""
+    st = SolarTower(name="ST")
+    inlet, outlet, heat = _tower_streams({"kind": "heat", "E": 5000.0})
+    st.inl = {0: inlet, 1: heat}
+    st.outl = {0: outlet}
+
+    st.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+    assert pytest.approx(5000.0, rel=1e-9) == st.E_F
+    assert pytest.approx(3.0 * (200.0 - 100.0), rel=1e-9) == st.E_P
+    assert pytest.approx(5000.0 - 300.0, rel=1e-9) == st.E_D
+
+
+def test_solar_tower_split_same_destruction():
+    st_ns = SolarTower(name="STns")
+    st_s = SolarTower(name="STs")
+    for st in (st_ns, st_s):
+        inlet, outlet, heat = _tower_streams({"kind": "heat", "E": 5000.0})
+        st.inl = {0: inlet, 1: heat}
+        st.outl = {0: outlet}
+    st_ns.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    st_s.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+    assert pytest.approx(3.0 * (190.0 - 95.0), rel=1e-9) == st_s.E_P
+    assert pytest.approx(5000.0 + 3.0 * (5.0 - 10.0), rel=1e-9) == st_s.E_F
+    assert pytest.approx(st_ns.E_D, rel=1e-9) == st_s.E_D
+
+
+def test_solar_tower_energy_flow_fallback_applies_alpha():
+    """If the heat input has no exergy yet, the raw energy flow is converted with alpha."""
+    st = SolarTower(name="ST")
+    inlet, outlet, heat = _tower_streams({"kind": "heat", "energy_flow": 5000.0})
+    st.inl = {0: inlet, 1: heat}
+    st.outl = {0: outlet}
+    st.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert pytest.approx(5000.0 * _petela_spanner(300), rel=1e-9) == st.E_F
+
+
+def test_solar_tower_selects_heat_by_kind_not_slot():
+    """The heat input is found by kind, independent of its connector index."""
+    st = SolarTower(name="ST")
+    inlet, outlet, heat = _tower_streams({"kind": "heat", "E": 5000.0})
+    st.inl = {0: inlet, 2: heat}  # heat at slot 2 instead of 1
+    st.outl = {0: outlet}
+    st.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert pytest.approx(5000.0, rel=1e-9) == st.E_F
+
+
+def test_solar_tower_no_heat_input_raises():
+    st = SolarTower(name="ST")
+    inlet = {"kind": "material", "T": 400.0, "m": 3.0, "e_PH": 100.0}
+    outlet = {"kind": "material", "T": 500.0, "m": 3.0, "e_PH": 200.0}
+    st.inl = {0: inlet}  # no heat connection
+    st.outl = {0: outlet}
+    with pytest.raises(ValueError, match="no solar heat input connection"):
+        st.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def test_solar_tower_exergoeconomics_not_implemented():
+    st = SolarTower(name="ST")
+    with pytest.raises(NotImplementedError):
+        st.exergoeconomic_balance(T0=300)
+    with pytest.raises(NotImplementedError):
+        st.aux_eqs(None, None, 0, 300, {}, False)
+
+
+def test_splitter_default_conserves_exergy():
+    sp = Splitter(name="SP")  # num_branches defaults to 1
+    assert sp.num_branches == 1
+    sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}
+    sp.outl = {0: {"m": 6.0, "e_PH": 100.0}, 1: {"m": 4.0, "e_PH": 100.0}}
+    sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert pytest.approx(0.0, abs=1e-9) == sp.E_D
+    assert np.isnan(sp.E_F)
+    assert np.isnan(sp.E_P)
+
+
+def test_splitter_num_branches_scales_outlets():
+    """One modelled branch (+ a dummy) standing in for 10 branches conserves exergy."""
+    sp = Splitter(name="SP", num_branches=10)
+    assert sp.num_branches == 10
+    sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}  # full flow
+    sp.outl = {0: {"m": 1.0, "e_PH": 100.0}, 1: {"m": 0.0, "e_PH": 100.0}}  # one branch + dummy
+    sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    # E_out = 10 * (1*100 + 0) = 1000 = E_in -> E_D = 0.
+    assert pytest.approx(0.0, abs=1e-9) == sp.E_D
+
+
+def test_mixer_num_branches_scales_product_and_fuel():
+    """num_branches multiplies the mixer's E_P and E_F (default 1 leaves it unchanged)."""
+    base = Mixer(name="M1")  # default num_branches=1
+    scaled = Mixer(name="M2", num_branches=2)
+    for mx in (base, scaled):
+        mx.inl = {0: {"T": 310.0, "m": 10.0, "e_PH": 800.0}, 1: {"T": 330.0, "m": 5.0, "e_PH": 850.0}}
+        mx.outl = {0: {"T": 320.0, "m": 15.0, "e_PH": 810.0}}
+        mx.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+    assert base.num_branches == 1
+    assert pytest.approx(2 * base.E_P, rel=1e-9) == scaled.E_P
+    assert pytest.approx(2 * base.E_F, rel=1e-9) == scaled.E_F
+
+
+def test_turbine_main_outlet_not_at_slot_zero():
+    """The turbine uses the lowest-indexed material outlet, not a hard-coded outl[0]."""
+    tb = Turbine(name="T")
+    tb.inl = {0: {"T": 320.0, "m": 5.0, "h": 400.0, "e_PH": 1000.0}}
+    tb.outl = {1: {"T": 310.0, "m": 5.0, "h": 380.0, "e_PH": 950.0}}  # outlet at slot 1 only
+    tb.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+    assert pytest.approx(100.0, rel=1e-3) == tb.E_P
+    assert pytest.approx(250.0, rel=1e-3) == tb.E_F
+    assert pytest.approx(150.0, rel=1e-3) == tb.E_D

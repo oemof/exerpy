@@ -132,6 +132,12 @@ class ExergyAnalysis:
         # Initialize class attributes for the exergy value of the total system
         if E_L is None:
             E_L = {}
+
+        # Resolve a name to its "<name>_Q" heat connection (created earlier during parsing).
+        E_F = self._resolve_heat_connection_names(E_F)
+        E_P = self._resolve_heat_connection_names(E_P)
+        E_L = self._resolve_heat_connection_names(E_L)
+
         self.E_F = 0.0
         self.E_P = 0.0
         self.E_L = 0.0
@@ -145,6 +151,17 @@ class ExergyAnalysis:
                     if connection not in self.connections:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
+
+        # Run component balances first: a component may write exergy back onto its
+        # connections, which must happen before summing the system E_F/E_P/E_L below.
+        for _component_name, component in self.components.items():
+            if component.__class__.__name__ == "CycleCloser":
+                continue
+            component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
+
+            # Re-flag components that only turn out dissipative once E_P is known (E_P = nan).
+            if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
+                component.is_dissipative = True
 
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
         if "inputs" in E_F:
@@ -184,6 +201,9 @@ class ExergyAnalysis:
         # The rest is counted as total exergy destruction with all components of the system
         self.E_D = self.E_F - self.E_P - self.E_L
 
+        # Suspicious results are flagged with warnings
+        self._check_exergy_balance_sanity(E_F, E_P, E_L)
+
         # Check for unaccounted connections in the system
         self._check_unaccounted_system_conns()
 
@@ -194,32 +214,23 @@ class ExergyAnalysis:
             f"Efficiency = {eff_str}"
         )
 
-        # Perform exergy balance for each individual component in the system
+        # Now that the system totals are known, compute the exergy destruction ratios
+        # (y, y*) for each component and accumulate the total component destruction.
+        # The component balances themselves were already evaluated above.
         total_component_E_D = 0.0
         for _component_name, component in self.components.items():
             if component.__class__.__name__ == "CycleCloser":
                 continue
+            # Safely calculate y and y* avoiding division by zero
+            if self.E_F != 0:
+                component.y = component.E_D / self.E_F
+                component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
             else:
-                # Calculate E_F, E_D, E_P
-                component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
-
-                # Update is_dissipative flag based on actual E_P value for components that
-                # can become dissipative. This is needed because certain conditions (e.g.
-                # split_physical_exergy=False for valves, or explicit dissipative flag for
-                # heat exchangers) may make E_P = nan even if not initially detected.
-                if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
-                    component.is_dissipative = True
-
-                # Safely calculate y and y* avoiding division by zero
-                if self.E_F != 0:
-                    component.y = component.E_D / self.E_F
-                    component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
-                else:
-                    component.y = np.nan
-                    component.y_star = np.nan
-                # Sum component destruction if available
-                if component.E_D is not np.nan:
-                    total_component_E_D += component.E_D
+                component.y = np.nan
+                component.y_star = np.nan
+            # Sum component destruction if available
+            if component.E_D is not np.nan:
+                total_component_E_D += component.E_D
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
@@ -861,6 +872,87 @@ class ExergyAnalysis:
 
         return export
 
+    def _resolve_heat_connection_names(self, ex_flow):
+        """
+        Rewrite each E_F/E_P/E_L name to its ``"<name>_Q"`` heat connection when the name
+        itself is not a connection. Names that already match a connection are left unchanged.
+        """
+        resolved = {}
+        for direction, names in ex_flow.items():
+            resolved[direction] = [
+                f"{name}_Q" if name not in self.connections and f"{name}_Q" in self.connections else name
+                for name in names
+            ]
+        return resolved
+
+    def _check_exergy_balance_sanity(self, E_F, E_P, E_L):
+        """
+        Emit warnings for physically impossible or suspicious exergy-balance results.
+
+        These checks do not stop the analysis; they make problems visible that would
+        otherwise be printed silently in the results table, namely:
+
+        - a stream listed in E_F/E_P/E_L that carries no exergy (``None`` or ``nan``),
+          which usually means its exergy was never assigned;
+        - a non-positive system fuel exergy (efficiency undefined);
+        - a negative total exergy destruction (impossible);
+        - a component with negative exergy destruction or efficiency above 100 %.
+
+        Parameters
+        ----------
+        E_F, E_P, E_L : dict
+            The fuel, product and loss definitions passed to :meth:`analyse`.
+        """
+
+        def _is_unset(value):
+            return value is None or (isinstance(value, float) and np.isnan(value))
+
+        # Streams assigned to E_F/E_P/E_L that carry no exergy contribute nothing to the
+        # totals and almost always indicate an exergy value that was never computed.
+        for label, ex_flow in (("E_F", E_F), ("E_P", E_P), ("E_L", E_L)):
+            for direction in ("inputs", "outputs"):
+                for conn in ex_flow.get(direction, []):
+                    if _is_unset(self.connections.get(conn, {}).get("E")):
+                        logging.warning(
+                            f"{label} stream '{conn}' carries no exergy "
+                            f"(E={self.connections.get(conn, {}).get('E')}); it contributes 0 "
+                            f"to {label}. Check that its exergy is assigned."
+                        )
+
+        # Overall balance sanity.
+        if _is_unset(self.E_F) or self.E_F <= 0:
+            logging.warning(
+                f"System fuel exergy E_F = {self.E_F} kW is not positive; the exergetic "
+                f"efficiency is undefined. Check the E_F definition and the fuel streams."
+            )
+        if not _is_unset(self.E_D) and self.E_D < -1e-6:
+            logging.warning(
+                f"System exergy destruction E_D = {self.E_D:.2f} kW is negative, which is "
+                f"physically impossible. Check the E_F/E_P/E_L definitions and stream exergies."
+            )
+
+        # Per-component sanity.
+        for name, component in self.components.items():
+            if component.__class__.__name__ == "CycleCloser":
+                continue
+            E_D = getattr(component, "E_D", None)
+            epsilon = getattr(component, "epsilon", None)
+            if not _is_unset(E_D) and E_D < -1e-6:
+                logging.warning(
+                    f"Component '{name}' has a negative exergy destruction "
+                    f"E_D = {E_D:.2f} kW, which is physically impossible."
+                )
+            if not _is_unset(epsilon) and epsilon > 1 + 1e-6:
+                logging.warning(
+                    f"Component '{name}' has an exergetic efficiency {epsilon:.2%} > 100 %, "
+                    f"which is physically impossible."
+                )
+            if not _is_unset(E_D) and not _is_unset(self.E_D) and self.E_D > 0 and E_D > self.E_D + 1e-6:
+                logging.warning(
+                    f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} kW) than the "
+                    f"whole system ({self.E_D:.2f} kW); the exergy balance does not close."
+                )
+
     def _check_unaccounted_system_conns(self):
         """
         Check if system boundary connections are not included in E_F, E_P, or E_L dictionaries.
@@ -883,7 +975,10 @@ class ExergyAnalysis:
             # Connection is at system boundary if one side is not connected
             if source is None or target is None:
                 kind = conn_data.get("kind", "")
-                exergy = conn_data.get("E", 0)
+                # Treat an explicit None exergy as zero to avoid a TypeError in abs().
+                exergy = conn_data.get("E")
+                if exergy is None:
+                    exergy = 0
                 # Only consider material/heat/power streams with significant exergy
                 if kind in ["material", "heat", "power"] and abs(exergy) > 1e-3:
                     system_boundary_conns.append(conn_name)

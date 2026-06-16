@@ -1,9 +1,8 @@
-import logging
-
 import numpy as np
 
 from exerpy.components.component import Component, component_registry
 from exerpy.functions import fluid_property_data
+from exerpy.logger import logger
 
 from . import T_SUN
 
@@ -101,13 +100,13 @@ class Heliostatfield(Component):
         # Validate the number of inlets and outlets
         if not hasattr(self, "outl"):
             msg = f"Heliostat field {self.name} requires outlet connections."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # The heliostat field has heat outlet connection(s) only (the link to the receiver
         # and the synthetic solar heat-flux connection) and no material inlet.
         if len(self.outl) == 0:
-            logging.warning(f"Heliostat Field '{self.name}' has no outlet connections.")
+            logger.warning(f"Heliostat Field '{self.name}' has no outlet connections.")
             self.E_F = 0
             self.E_P = 0
             self.E_D = 0
@@ -128,11 +127,11 @@ class Heliostatfield(Component):
             self.P = out0.get("energy_flow") if out0.get("energy_flow") is not None else out0.get("E")
         if self.P is None:
             msg = f"Heliostat field {self.name} has no valid heat output on its receiver link."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
         if self.Q_Solar is None:
             msg = f"Heliostat field {self.name} has no solar heat input (Q_Solar)."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # Convert the incoming solar heat to exergy with the Petela/Spanner factor.
@@ -167,13 +166,13 @@ class Heliostatfield(Component):
                     conn["E"] = self.E_P
                 conn["E_unit"] = fluid_property_data["heat"]["SI_unit"]
         except (KeyError, TypeError) as e:
-            logging.warning(f"Could not write back exergy to connection for Heliostat '{self.name}': {e}")
+            logger.warning(f"Could not write back exergy to connection for Heliostat '{self.name}': {e}")
 
         # Calculate exergy efficiency
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Heliostat Field Exergy Balance: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

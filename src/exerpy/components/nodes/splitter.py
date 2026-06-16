@@ -1,8 +1,7 @@
-import logging
-
 import numpy as np
 
 from exerpy.components.component import Component, component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -72,7 +71,7 @@ class Splitter(Component):
         self.epsilon = np.nan
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Splitter {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

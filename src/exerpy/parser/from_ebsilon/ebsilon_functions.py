@@ -1,21 +1,26 @@
-import logging
 from typing import Any
 
 from CoolProp.CoolProp import PropsSI as CP
 
+from exerpy.logger import logger
+
 from . import __ebsilon_available__
-from .utils import EpGasTableStub, EpSteamTableStub, require_ebsilon
+from .utils import EpGasTableStub
+from .utils import EpSteamTableStub
+from .utils import require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpGasTable, EpSteamTable
+    from EbsOpen import EpGasTable
+    from EbsOpen import EpSteamTable
 else:
     EpSteamTable = EpSteamTableStub
     EpGasTable = EpGasTableStub
 
 from exerpy.functions import convert_to_SI
 
-from .ebsilon_config import substance_mapping, unit_id_to_string
+from .ebsilon_config import substance_mapping
+from .ebsilon_config import unit_id_to_string
 
 
 @require_ebsilon
@@ -91,7 +96,7 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
 
     # Validate property input
     if property not in ["S", "H"]:
-        logging.error('Invalid property selected. You can choose between "H" (enthalpy) and "S" (entropy).')
+        logger.error('Invalid property selected. You can choose between "H" (enthalpy) and "S" (entropy).')
         return None
 
     try:
@@ -115,7 +120,7 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
     except Exception as e:
         if isinstance(e, ValueError):
             raise
-        logging.error(f"An error occurred during property calculation: {e}")
+        logger.error(f"An error occurred during property calculation: {e}")
         return None
 
 
@@ -210,7 +215,6 @@ def calc_eph_from_min(pipe: Any, Tamb: float) -> float | None:
     - This approach is for now only suitable for ThermoLiquid fluids where conventional
       dead state properties may not be available or valid.
     """
-    import logging
 
     try:
         # 1) Get current state from the pipe
@@ -229,7 +233,7 @@ def calc_eph_from_min(pipe: Any, Tamb: float) -> float | None:
         # 3) Calculate physical exergy using Tamb as reference temperature
         e_ph = h_i - h_min - Tamb * (s_i - s_min)
 
-        logging.info(
+        logger.info(
             f"e_PH(min) for {getattr(pipe, 'Name', '<unknown>')}: "
             f"T_min={t_min-273.15:.2f} °C, h_min={h_min:.1f} J/kg, s_min={s_min:.3f} J/kgK, "
             f"Tamb={Tamb-273.15:.2f} °C, e_PH={e_ph:.1f} J/kg"
@@ -238,7 +242,7 @@ def calc_eph_from_min(pipe: Any, Tamb: float) -> float | None:
         return e_ph
 
     except Exception as e:
-        logging.error(f"Failed to calculate e_PH from min for {getattr(pipe, 'Name', '<unknown>')}: {e}")
+        logger.error(f"Failed to calculate e_PH from min for {getattr(pipe, 'Name', '<unknown>')}: {e}")
         return None
 
 

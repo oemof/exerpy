@@ -6,11 +6,11 @@ simulate them, extract data about components and connections, and write the data
 """
 
 import json
-import logging
 import os
 from typing import Any
 
 from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy.logger import logger
 
 from . import __ebsilon_available__, is_ebsilon_available
 from .ebsilon_functions import calc_eph_from_min
@@ -37,9 +37,6 @@ from .ebsilon_config import (
     two_phase_fluids_mapping,
     unit_id_to_string,
 )
-
-# Configure logging to display info-level messages
-logging.basicConfig(level=logging.ERROR)
 
 
 def _thermoliquid_name(pipe_cast):
@@ -76,7 +73,7 @@ class EbsilonModelParser:
         """
         # Check if Ebsilon is available
         if not is_ebsilon_available():
-            logging.warning(
+            logger.warning(
                 "EbsilonModelParser initialized without Ebsilon support. "
                 "EBS environment variable is not set or EbsOpen could not be imported; "
                 "Ebsilon functionality will not be available."
@@ -114,24 +111,24 @@ class EbsilonModelParser:
         try:
             self.app = Dispatch("EbsOpen.Application")
         except Exception as e:
-            logging.error(f"Failed to start Ebsilon COM server: {e}")
+            logger.error(f"Failed to start Ebsilon COM server: {e}")
             raise RuntimeError(f"Could not start Ebsilon COM server: {e}")
 
         # 2) try to open the .ebs model
         try:
             self.model = self.app.Open(self.model_path)
         except Exception as e:
-            logging.error(f"Failed to open model file: {e}")
+            logger.error(f"Failed to open model file: {e}")
             raise FileNotFoundError(f"File not found at: {self.model_path}") from e
 
         # 3) grab the ObjectCaster
         try:
             self.oc = self.app.ObjectCaster
         except Exception as e:
-            logging.error(f"Failed to obtain ObjectCaster: {e}")
+            logger.error(f"Failed to obtain ObjectCaster: {e}")
             raise RuntimeError(f"Could not get ObjectCaster: {e}")
 
-        logging.info(f"Model opened successfully: {self.model_path}")
+        logger.info(f"Model opened successfully: {self.model_path}")
 
     @require_ebsilon
     def simulate_model(self):
@@ -147,14 +144,14 @@ class EbsilonModelParser:
             # Run the simulation
             self.model.SimulateNew()
             error_count = calc_errors.Count
-            logging.warning(f"Simulation has {error_count} warning(s).")
+            logger.warning(f"Simulation has {error_count} warning(s).")
             # Log each error if any exist
             if error_count > 0:
                 for i in range(1, error_count + 1):
                     error = calc_errors.Item(i)
-                    logging.warning(f"Warning {i}: {error.Description}")
+                    logger.warning(f"Warning {i}: {error.Description}")
         except Exception as e:
-            logging.error(f"Failed during simulation: {e}")
+            logger.error(f"Failed during simulation: {e}")
             raise
 
     @require_ebsilon
@@ -168,7 +165,7 @@ class EbsilonModelParser:
         """
         try:
             total_objects = self.model.Objects.Count
-            logging.info(f"Parsing {total_objects} objects from the model")
+            logger.info(f"Parsing {total_objects} objects from the model")
             # Iterate over all objects in the model and select the components
             for j in range(1, total_objects + 1):
                 obj = self.model.Objects.Item(j)
@@ -183,7 +180,7 @@ class EbsilonModelParser:
                     "Please ensure that your Ebsilon model includes component(s) of type 46 (Measuring Point) "
                     "with a setting for the Ambient Temperature and the Ambient Pressure in MEASM."
                 )
-                logging.error(error_msg)
+                logger.error(error_msg)
                 raise ValueError(error_msg)
 
             # Iterate over all objects in the model and select the connections
@@ -202,10 +199,10 @@ class EbsilonModelParser:
             try:
                 self._create_heatflow_connections()
             except Exception:
-                logging.warning("_create_heatflow_connections failed; continuing without synthetic heat connections")
+                logger.warning("_create_heatflow_connections failed; continuing without synthetic heat connections")
 
         except Exception as e:
-            logging.error(f"Error while parsing the model: {e}")
+            logger.error(f"Error while parsing the model: {e}")
             raise
 
     @require_ebsilon
@@ -301,12 +298,12 @@ class EbsilonModelParser:
                     try:
                         e_PH_value = calc_eph_from_min(pipe_cast, self.Tamb)
                         if e_PH_value is not None:
-                            logging.info(
+                            logger.info(
                                 f"Physical exergy calculated using min-based formula for {pipe_cast.Name}: "
                                 f"{e_PH_value:.2f} J/kg"
                             )
                     except ValueError as ve:
-                        logging.error(f"Failed to calculate e_PH from min for {pipe_cast.Name}: {ve}")
+                        logger.error(f"Failed to calculate e_PH from min for {pipe_cast.Name}: {ve}")
                         e_PH_value = None
 
                 connection_data.update(
@@ -385,7 +382,7 @@ class EbsilonModelParser:
                         connection_data["mass_composition"] = two_phase_fluids_mapping[fmed_value]
                     else:
                         connection_data["mass_composition"] = {}  # Default if no mapping found
-                        logging.warning(
+                        logger.warning(
                             f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it."
                         )
                 elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ["ThermoLiquid"]:
@@ -489,7 +486,7 @@ class EbsilonModelParser:
             self.connections_data[obj.Name] = connection_data
 
         else:
-            logging.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
+            logger.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
 
     @require_ebsilon
     def parse_component(self, obj: Any):
@@ -509,9 +506,9 @@ class EbsilonModelParser:
         # Check if the method exists and call it, otherwise fallback to general casting
         if hasattr(self.oc, cast_method_name):
             comp_cast = getattr(self.oc, cast_method_name)(obj)
-            logging.info(f"Using method {cast_method_name} to cast the component.")
+            logger.info(f"Using method {cast_method_name} to cast the component.")
         else:
-            logging.warning(f"No specific cast method for type_index {type_index}, using generic CastToComp.")
+            logger.warning(f"No specific cast method for type_index {type_index}, using generic CastToComp.")
             comp_cast = self.oc.CastToComp(obj)
 
         # Get the human-readable type name of the component
@@ -640,12 +637,12 @@ class EbsilonModelParser:
                 self.Tamb = convert_to_SI(
                     "T", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
                 )
-                logging.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
+                logger.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
             elif comp46.FTYP.Value == 13:
                 self.pamb = convert_to_SI(
                     "p", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
                 )
-                logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
+                logger.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
         if type_index == 31:
             comp31 = self.oc.CastToComp31(obj)
@@ -688,7 +685,7 @@ class EbsilonModelParser:
                 elif type_index == 113:
                     heatflow = self.oc.CastToComp113(obj)
             except Exception as e:
-                logging.warning(f"Failed to cast component to type {type_index}: {e}")
+                logger.warning(f"Failed to cast component to type {type_index}: {e}")
                 heatflow = None
 
             # Append only when cast succeeded and QSOLAR is available
@@ -841,7 +838,7 @@ class EbsilonModelParser:
                     if type_index == 113 and nbranch is not None:
                         energy_flow = energy_flow * nbranch
                 except Exception as e:
-                    logging.warning(f"Exception during energy_flow calculation for '{name}': {e}")
+                    logger.warning(f"Exception during energy_flow calculation for '{name}': {e}")
                     energy_flow = q_raw
 
             # Compute exergy for concentrated solar heat if ambient temperature is known
@@ -947,7 +944,7 @@ class EbsilonModelParser:
                     matched_power_data["target_component"] = comp_name
                     matched_power_data["target_component_type"] = 31
                     matched_power_data["target_connector"] = connector_idx
-                    logging.info(
+                    logger.info(
                         f"Linked power connection {matched_power_name} to PowerBus "
                         f"{comp_name} (inlet, connector {connector_idx})"
                     )
@@ -956,7 +953,7 @@ class EbsilonModelParser:
                     matched_power_data["source_component"] = comp_name
                     matched_power_data["source_component_type"] = 31
                     matched_power_data["source_connector"] = connector_idx
-                    logging.info(
+                    logger.info(
                         f"Linked power connection {matched_power_name} to PowerBus "
                         f"{comp_name} (outlet, connector {connector_idx})"
                     )
@@ -993,7 +990,7 @@ class EbsilonModelParser:
                 matched_power_data["source_component"] = comp_name
                 matched_power_data["source_component_type"] = 31
                 matched_power_data["source_connector"] = connector_idx
-                logging.info(
+                logger.info(
                     f"Linked power connection {matched_power_name} to PowerBus "
                     f"{comp_name} (outlet, connector {connector_idx})"
                 )
@@ -1002,7 +999,7 @@ class EbsilonModelParser:
         # Remove the matched Logic connections
         for name in logic_conns_to_remove:
             del self.connections_data[name]
-            logging.info(f"Removed redundant Logic connection: {name}")
+            logger.info(f"Removed redundant Logic connection: {name}")
 
     def get_sorted_data(self) -> dict[str, Any]:
         """
@@ -1045,9 +1042,9 @@ class EbsilonModelParser:
             # Write the data to a JSON file with indentation for readability
             with open(output_path, "w") as json_file:
                 json.dump(data, json_file, indent=4)
-            logging.info(f"Data successfully written to {output_path}")
+            logger.info(f"Data successfully written to {output_path}")
         except Exception as e:
-            logging.error(f"Failed to write data to JSON: {e}")
+            logger.error(f"Failed to write data to JSON: {e}")
             raise
 
 
@@ -1078,7 +1075,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     # Check if the model file exists at the specified path
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
     # Initialize the Ebsilon model parser with the model file path
@@ -1086,7 +1083,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
         parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
     except RuntimeError as e:
         # This will catch the RuntimeError raised in __init__ if Ebsilon is not available
-        logging.error(f"Failed to initialize EbsilonModelParser: {e}")
+        logger.error(f"Failed to initialize EbsilonModelParser: {e}")
         raise
 
     try:
@@ -1098,7 +1095,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception:
         # other COM/server errors should still be RuntimeErrors
         error_msg = f"File not found: {model_path}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     try:
@@ -1107,7 +1104,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception as e:
         # Log and raise an error if something goes wrong during simulation
         error_msg = f"An error occurred during model simulation: {e}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     try:
@@ -1116,7 +1113,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception as e:
         # Log and raise an error if something goes wrong during parsing
         error_msg = f"An error occurred during model parsing: {e}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     # Get the parsed and sorted data
@@ -1126,11 +1123,11 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
         try:
             # Write the parsed data to the JSON file
             parser.write_to_json(output_dir)
-            logging.info(f"Data successfully written to {output_dir}")
+            logger.info(f"Data successfully written to {output_dir}")
         except Exception as e:
             # Log and raise an error if something goes wrong while writing the output file
             error_msg = f"An error occurred while writing the output file: {e}"
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise RuntimeError(error_msg)
 
     # Return the parsed data as a dictionary (not as a JSON string)

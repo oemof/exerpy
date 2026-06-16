@@ -1,4 +1,5 @@
-from tespy.connections import Connection, PowerConnection
+from tespy.connections import Connection
+from tespy.connections import PowerConnection
 from tespy.networks import Network
 
 from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS

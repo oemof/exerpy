@@ -1,9 +1,8 @@
-import logging
-
 import numpy as np
 
 from exerpy.components.component import Component, component_registry
 from exerpy.functions import fluid_property_data
+from exerpy.logger import logger
 
 from . import T_SUN
 
@@ -58,11 +57,11 @@ class ParabolicTrough(Component):
         super().__init__(**kwargs)
         self.Q_Solar = kwargs.get("Q_Solar")
         if self.Q_Solar is None:
-            logging.warning(f"Q_Solar not provided for Parabolic Trough component '{self.name}'.")
+            logger.warning(f"Q_Solar not provided for Parabolic Trough component '{self.name}'.")
 
         num_branches = kwargs.get("num_branches")
         if num_branches is None:
-            logging.warning(f"num_branches not provided for Parabolic Trough component '{self.name}'; assuming 1.")
+            logger.warning(f"num_branches not provided for Parabolic Trough component '{self.name}'; assuming 1.")
         self.beta = num_branches or 1
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
@@ -116,12 +115,12 @@ class ParabolicTrough(Component):
         # Validate connections exist
         if not hasattr(self, "inl") or not hasattr(self, "outl"):
             msg = f"Parabolic trough {self.name} requires inlet and outlet connections."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         if self.Q_Solar is None:
             msg = f"Parabolic trough {self.name} has no solar heat input (Q_Solar)."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # Pick the heat-transfer-fluid inlet/outlet. Do not assume fixed connection counts or
@@ -135,7 +134,7 @@ class ParabolicTrough(Component):
         ]
         if not material_inlets or not material_outlets:
             msg = f"Parabolic trough {self.name} requires at least one material inlet " "and one material outlet."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         inlet = material_inlets[0]
@@ -154,7 +153,7 @@ class ParabolicTrough(Component):
                 self.E_P = self.beta * outlet["m"] * (outlet["e_PH"] - inlet["e_PH"])
                 self.E_F = self.E_Solar
         else:
-            logging.warning(
+            logger.warning(
                 f"Parabolic trough {self.name}: fluid not above ambient temperature; "
                 "exergy fuel and product set to NaN (off-design not implemented)."
             )
@@ -182,10 +181,10 @@ class ParabolicTrough(Component):
                     conn["E"] = self.E_F
                     conn["E_unit"] = fluid_property_data["heat"]["SI_unit"]
         except (KeyError, TypeError) as e:
-            logging.warning(f"Could not write back exergy to connection for Parabolic Trough '{self.name}': {e}")
+            logger.warning(f"Could not write back exergy to connection for Parabolic Trough '{self.name}': {e}")
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Parabolic-Trough exergy balance calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

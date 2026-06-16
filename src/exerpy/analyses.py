@@ -1,11 +1,12 @@
 import json
-import logging
 import os
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
+
+from exerpy.logger import logger
 
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
@@ -208,7 +209,7 @@ class ExergyAnalysis:
         self._check_unaccounted_system_conns()
 
         eff_str = f"{self.epsilon:.2%}" if self.epsilon is not None else "N/A"
-        logging.info(
+        logger.info(
             f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, "
             f"E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, "
             f"Efficiency = {eff_str}"
@@ -234,12 +235,12 @@ class ExergyAnalysis:
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logging.warning(
+            logger.warning(
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
             )
         else:
-            logging.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
+            logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
     def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -311,9 +312,9 @@ class ExergyAnalysis:
         _, file_extension = os.path.splitext(path)
 
         if file_extension == ".bkp":
-            logging.info("Running Aspen parsing and generating JSON data.")
+            logger.info("Running Aspen parsing and generating JSON data.")
             data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy)
-            logging.info("Parsing completed successfully.")
+            logger.info("Parsing completed successfully.")
 
         else:
             # If the file format is not supported
@@ -359,9 +360,9 @@ class ExergyAnalysis:
         _, file_extension = os.path.splitext(path)
 
         if file_extension == ".ebs":
-            logging.info("Running Ebsilon simulation and generating JSON data.")
+            logger.info("Running Ebsilon simulation and generating JSON data.")
             data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
-            logging.info("Simulation completed successfully.")
+            logger.info("Simulation completed successfully.")
 
         else:
             # If the file format is not supported
@@ -828,7 +829,7 @@ class ExergyAnalysis:
         data = self._serialize()
         with open(output_path, "w") as json_file:
             json.dump(data, json_file, indent=4)
-            logging.info(f"Model exported to JSON file: {output_path}.")
+            logger.info(f"Model exported to JSON file: {output_path}.")
 
     def _serialize(self):
         """
@@ -913,7 +914,7 @@ class ExergyAnalysis:
             for direction in ("inputs", "outputs"):
                 for conn in ex_flow.get(direction, []):
                     if _is_unset(self.connections.get(conn, {}).get("E")):
-                        logging.warning(
+                        logger.warning(
                             f"{label} stream '{conn}' carries no exergy "
                             f"(E={self.connections.get(conn, {}).get('E')}); it contributes 0 "
                             f"to {label}. Check that its exergy is assigned."
@@ -921,12 +922,12 @@ class ExergyAnalysis:
 
         # Overall balance sanity.
         if _is_unset(self.E_F) or self.E_F <= 0:
-            logging.warning(
+            logger.warning(
                 f"System fuel exergy E_F = {self.E_F} kW is not positive; the exergetic "
                 f"efficiency is undefined. Check the E_F definition and the fuel streams."
             )
         if not _is_unset(self.E_D) and self.E_D < -1e-6:
-            logging.warning(
+            logger.warning(
                 f"System exergy destruction E_D = {self.E_D:.2f} kW is negative, which is "
                 f"physically impossible. Check the E_F/E_P/E_L definitions and stream exergies."
             )
@@ -938,17 +939,17 @@ class ExergyAnalysis:
             E_D = getattr(component, "E_D", None)
             epsilon = getattr(component, "epsilon", None)
             if not _is_unset(E_D) and E_D < -1e-6:
-                logging.warning(
+                logger.warning(
                     f"Component '{name}' has a negative exergy destruction "
                     f"E_D = {E_D:.2f} kW, which is physically impossible."
                 )
             if not _is_unset(epsilon) and epsilon > 1 + 1e-6:
-                logging.warning(
+                logger.warning(
                     f"Component '{name}' has an exergetic efficiency {epsilon:.2%} > 100 %, "
                     f"which is physically impossible."
                 )
             if not _is_unset(E_D) and not _is_unset(self.E_D) and self.E_D > 0 and E_D > self.E_D + 1e-6:
-                logging.warning(
+                logger.warning(
                     f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} kW) than the "
                     f"whole system ({self.E_D:.2f} kW); the exergy balance does not close."
                 )
@@ -988,7 +989,7 @@ class ExergyAnalysis:
 
         if unaccounted:
             conn_list = ", ".join(f"'{conn}'" for conn in sorted(unaccounted))
-            logging.warning(
+            logger.warning(
                 f"The following system boundary connections are not included in E_F, E_P, or E_L: {conn_list}"
             )
 
@@ -1022,14 +1023,14 @@ def _construct_components(component_data, connection_data, Tamb):
         for component_name, component_information in component_instances.items():
             # Skip components of type 'Splitter'
             """if component_type == "Splitter" or component_information.get('type') == "Splitter":
-            logging.info(f"Skipping 'Splitter' component during the exergy analysis: {component_name}")
+            logger.info(f"Skipping 'Splitter' component during the exergy analysis: {component_name}")
             continue  # Skip this component"""
 
             # Fetch the corresponding class from the registry using the component type
             component_class = component_registry.items.get(component_type)
 
             if component_class is None:
-                logging.warning(f"Component type '{component_type}' is not registered.")
+                logger.warning(f"Component type '{component_type}' is not registered.")
                 continue
 
             # Instantiate the component with its attributes
@@ -1062,7 +1063,7 @@ def _construct_components(component_data, connection_data, Tamb):
                     else:
                         component.is_dissipative = False
                 except Exception as e:
-                    logging.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
+                    logger.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
             elif component_type == "HeatExchanger":
                 # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
@@ -1089,7 +1090,7 @@ def _construct_components(component_data, connection_data, Tamb):
                         else:
                             component.is_dissipative = False
                     except Exception as e:
-                        logging.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
+                        logger.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
                         component.is_dissipative = False
             elif component_type == "Condenser":
                 # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
@@ -1239,16 +1240,16 @@ def _process_json(
     # Add chemical exergy if library provided and values not already present
     if chemExLib:
         if has_chemical_data:
-            logging.info("Chemical exergy values already present in JSON data, skipping recalculation.")
+            logger.info("Chemical exergy values already present in JSON data, skipping recalculation.")
         else:
             data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
-            logging.info("Added chemical exergy values")
+            logger.info("Added chemical exergy values")
     elif not has_chemical_data:
-        logging.warning("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
+        logger.warning("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
 
     # Calculate total exergy flows
     data = add_total_exergy_flow(data, split_physical_exergy)
-    logging.info("Added total exergy flows")
+    logger.info("Added total exergy flows")
 
     return data, Tamb, pamb, chemExLib, split_physical_exergy
 
@@ -1642,7 +1643,7 @@ class ExergoeconomicAnalysis:
                     )
                 else:
                     # If no auxiliary equations are provided.
-                    logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
+                    logger.warning(f"No auxiliary equations provided for component '{comp.name}'.")
 
         # 5. Dissipative components:
         # Now, for each dissipative component, call its dis_eqs() method.
@@ -1714,7 +1715,7 @@ class ExergoeconomicAnalysis:
                     f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}. "
                     f"Use run(allow_singular=True) to attempt a least-squares solution."
                 )
-            logging.warning(
+            logger.warning(
                 f"Exergoeconomic matrix is singular (rank {rank}/{n}). "
                 f"Using least-squares solver (minimum-norm solution). Results may not be physically consistent."
             )
@@ -1939,11 +1940,11 @@ class ExergoeconomicAnalysis:
 
         all_ok = all(flag for _, flag in balances.values())
         if all_ok:
-            logging.info("All component cost balances are fulfilled.")
+            logger.info("All component cost balances are fulfilled.")
         else:
             for name, (bal, ok) in balances.items():
                 if not ok:
-                    logging.warning(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
+                    logger.warning(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
 
         return balances
 
@@ -1971,7 +1972,7 @@ class ExergoeconomicAnalysis:
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
         self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
-        logging.info("Exergoeconomic analysis completed successfully.")
+        logger.info("Exergoeconomic analysis completed successfully.")
 
     def print_equations(self):
         """

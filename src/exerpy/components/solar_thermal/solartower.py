@@ -1,8 +1,7 @@
-import logging
-
 import numpy as np
 
 from exerpy.components.component import Component, component_registry
+from exerpy.logger import logger
 
 from . import T_SUN
 
@@ -89,12 +88,12 @@ class SolarTower(Component):
         # Validate the number of inlets and outlets
         if not hasattr(self, "inl") or not hasattr(self, "outl") or len(self.outl) != 1:
             msg = "SolarTower requires at least one inlet and exactly one outlet."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         if len(self.inl) < 1:
             msg = "SolarTower requires at least one inlet stream."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # Extract inlet and outlet streams
@@ -108,7 +107,7 @@ class SolarTower(Component):
         heat_inlets = [c for c in self.inl.values() if c is not None and c.get("kind") == "heat"]
         if not heat_inlets:
             msg = f"SolarTower {self.name} has no solar heat input connection."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
         heat_in = heat_inlets[0]
         if heat_in.get("E") is not None:
@@ -117,7 +116,7 @@ class SolarTower(Component):
             self.F = heat_in["energy_flow"] * (1 - (4 / 3) * (T0 / T_SUN))
         else:
             msg = f"SolarTower {self.name} has no valid solar heat input."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # The receiver's useful output is the THERMAL exergy delivered to the working fluid
@@ -141,7 +140,7 @@ class SolarTower(Component):
             self.E_D = self.E_F
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Solar Tower exergy balance calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

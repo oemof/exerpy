@@ -21,7 +21,8 @@ from unittest.mock import patch
 
 import pytest
 
-from exerpy.parser.from_aspen.aspen_parser import AspenModelParser, run_aspen
+from exerpy.parser.from_aspen.aspen_parser import AspenModelParser
+from exerpy.parser.from_aspen.aspen_parser import run_aspen
 
 # --- DummyCollection class to simulate COM collection behavior ---
 

@@ -12,8 +12,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from exerpy.analyses import ExergoeconomicAnalysis, ExergyAnalysis
-from exerpy.components.component import Component, component_registry
+from exerpy.analyses import ExergoeconomicAnalysis
+from exerpy.analyses import ExergyAnalysis
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
 
 # =============================================================================

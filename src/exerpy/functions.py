@@ -445,9 +445,16 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                         )
                 else:
                     conn_data["E"] = None
-                    logger.warning(
-                        f"Heat connection {conn_name} is not associated with a recognized heat exchanger component."
-                    )
+                    # Solar-thermal components compute the exergy of their own heat
+                    # connections during the exergy balance, so they are not heat
+                    # exchangers and must not trigger this warning.
+                    solar_comps = set()
+                    for solar_type in ("Heliostatfield", "SolarTower", "ParabolicTrough"):
+                        solar_comps.update(my_json["components"].get(solar_type, {}))
+                    if source_component not in solar_comps and target_component not in solar_comps:
+                        logger.warning(
+                            f"Heat connection {conn_name} is not associated with a recognized heat exchanger component."
+                        )
             elif conn_data["kind"] == "other":
                 # No exergy flow calculation for 'other' kind.
                 pass

@@ -28,7 +28,15 @@ for directory in directories:
     examples_json.append({})
     for file in os.listdir(directory):
         if file.endswith(".json"):
-            examples_json[-1][file.removesuffix(".json")] = os.path.join(directory, file)
+            path = os.path.join(directory, file)
+            # Skip JSON files that are not analysis exports (e.g. optimizer result
+            # dumps in opt_examples); only exports carry a "components" section.
+            try:
+                if "components" not in _load_json(path):
+                    continue
+            except (ValueError, OSError):
+                continue
+            examples_json[-1][file.removesuffix(".json")] = path
 
 TESTCASES = [{c: example[c] for c in case} for example in examples_json for case in combinations(example, 2)]
 

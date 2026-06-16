@@ -16,7 +16,7 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ccpp.bkp")
 ean = ExergyAnalysis.from_aspen(model_path, chemExLib="Ahrendts", split_physical_exergy=False)
 
 fuel = {"inputs": ["1", "3"], "outputs": []}
-product = {"inputs": ["ETOT", "HC_HEAT"], "outputs": ["PUMP1_ELEC", "PUMP2_ELEC"]}
+product = {"inputs": ["ETOT", "HC_HEAT"], "outputs": []}
 loss = {"inputs": ["8", "15"], "outputs": ["14"]}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)

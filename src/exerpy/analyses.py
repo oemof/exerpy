@@ -920,15 +920,19 @@ class ExergyAnalysis:
                             f"to {label}. Check that its exergy is assigned."
                         )
 
+        # Tolerance scaled to the system destruction, so small numerical round-off (e.g. an
+        # ideal splitter at a few negative milliwatts) does not trip the checks below.
+        tol = 1e-6 * abs(self.E_D) if (not _is_unset(self.E_D) and self.E_D) else 1e-6
+
         # Overall balance sanity.
         if _is_unset(self.E_F) or self.E_F <= 0:
             logger.warning(
-                f"System fuel exergy E_F = {self.E_F} kW is not positive; the exergetic "
+                f"System fuel exergy E_F = {self.E_F} W is not positive; the exergetic "
                 f"efficiency is undefined. Check the E_F definition and the fuel streams."
             )
-        if not _is_unset(self.E_D) and self.E_D < -1e-6:
+        if not _is_unset(self.E_D) and -tol > self.E_D:
             logger.warning(
-                f"System exergy destruction E_D = {self.E_D:.2f} kW is negative, which is "
+                f"System exergy destruction E_D = {self.E_D:.2f} W is negative, which is "
                 f"physically impossible. Check the E_F/E_P/E_L definitions and stream exergies."
             )
 
@@ -938,20 +942,20 @@ class ExergyAnalysis:
                 continue
             E_D = getattr(component, "E_D", None)
             epsilon = getattr(component, "epsilon", None)
-            if not _is_unset(E_D) and E_D < -1e-6:
+            if not _is_unset(E_D) and -tol > E_D:
                 logger.warning(
                     f"Component '{name}' has a negative exergy destruction "
-                    f"E_D = {E_D:.2f} kW, which is physically impossible."
+                    f"E_D = {E_D:.2f} W, which is physically impossible."
                 )
             if not _is_unset(epsilon) and epsilon > 1 + 1e-6:
                 logger.warning(
                     f"Component '{name}' has an exergetic efficiency {epsilon:.2%} > 100 %, "
                     f"which is physically impossible."
                 )
-            if not _is_unset(E_D) and not _is_unset(self.E_D) and self.E_D > 0 and E_D > self.E_D + 1e-6:
+            if not _is_unset(E_D) and not _is_unset(self.E_D) and self.E_D > 0 and self.E_D + tol < E_D:
                 logger.warning(
-                    f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} kW) than the "
-                    f"whole system ({self.E_D:.2f} kW); the exergy balance does not close."
+                    f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} W) than the "
+                    f"whole system ({self.E_D:.2f} W); the exergy balance does not close."
                 )
 
     def _check_unaccounted_system_conns(self):
@@ -1245,7 +1249,7 @@ def _process_json(
             data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
             logger.info("Added chemical exergy values")
     elif not has_chemical_data:
-        logger.warning("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
+        logger.info("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
 
     # Calculate total exergy flows
     data = add_total_exergy_flow(data, split_physical_exergy)

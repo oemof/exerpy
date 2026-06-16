@@ -144,12 +144,20 @@ class EbsilonModelParser:
             # Run the simulation
             self.model.SimulateNew()
             error_count = calc_errors.Count
-            logger.warning(f"Simulation has {error_count} warning(s).")
-            # Log each error if any exist
+            logger.info(f"Simulation completed with {error_count} solver message(s).")
+            # Log only solver messages that carry an actual description; Ebsilon also
+            # returns rows whose description is empty or a bare number (no information).
             if error_count > 0:
                 for i in range(1, error_count + 1):
-                    error = calc_errors.Item(i)
-                    logger.warning(f"Warning {i}: {error.Description}")
+                    desc = str(calc_errors.Item(i).Description).strip()
+                    if not desc:
+                        continue
+                    try:
+                        float(desc)
+                        continue  # purely numeric row, nothing actionable
+                    except ValueError:
+                        pass
+                    logger.warning(f"Ebsilon solver warning {i}: {desc}")
         except Exception as e:
             logger.error(f"Failed during simulation: {e}")
             raise

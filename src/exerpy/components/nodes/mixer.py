@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -94,6 +94,9 @@ class Mixer(Component):
     def __init__(self, **kwargs):
         r"""Initialize mixer component with given parameters."""
         super().__init__(**kwargs)
+        # Number of identical parallel branches each modelled inlet represents (1 for an
+        # ordinary mixer; >1 when one branch stands in for a field of parallel branches).
+        self.num_branches = kwargs.get("num_branches", 1) or 1
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -130,7 +133,7 @@ class Mixer(Component):
         for outlet in outlet_list:
             if outlet["T"] != T_out or outlet["e_PH"] != e_out_PH:
                 msg = "All outlets in Mixer must have the same thermodynamic state."
-                logging.error(msg)
+                logger.error(msg)
                 raise ValueError(msg)
         # Sum the mass of all outlet streams (if needed for further analysis)
         sum(outlet.get("m", 0) for outlet in outlet_list)
@@ -171,12 +174,16 @@ class Mixer(Component):
                 else:  # inlet['T'] <= T_out
                     self.E_F += inlet["m"] * (inlet["e_PH"] - e_out_PH)
 
+        # Each modelled inlet represents num_branches identical parallel branches.
+        self.E_P *= self.num_branches
+        self.E_F *= self.num_branches
+
         # Calculate exergy destruction and efficiency.
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Mixer {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -238,9 +245,10 @@ class Mixer(Component):
                     else:
                         A[counter, inlet["CostVar_index"]["CH"]] = 1
             else:
-                # Outlet chemical exergy is zero: assign fallback for all inlets.
+                # Outlet chemical exergy is zero: enforce cost conservation sum(C_CH_inlets) - C_CH_outlet = 0
                 for inlet in self.inl.values():
                     A[counter, inlet["CostVar_index"]["CH"]] = 1
+                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
             equations[counter] = {
                 "kind": "aux_mixing",
                 "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
@@ -260,8 +268,10 @@ class Mixer(Component):
                 else:
                     A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
         else:
+            # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
             for inlet in self.inl.values():
                 A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
+            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1
 
         # Dynamically build the list of inlet names
         inlet_names = [inlet["name"] for inlet in self.inl.values()]
@@ -486,15 +496,15 @@ class Mixer(Component):
                 self.C_F += -self.outl[0]["C_CH"]
         elif self.outl[0]["T"] - 1e-6 < T0 and self.outl[0]["T"] + 1e-6 > T0:
             # dissipative
-            for i in self.inl:
+            for i in self.inl.values():
                 self.C_F += i["C_TOT"]
         else:
-            for i in self.inl:
+            for i in self.inl.values():
                 if i["T"] > self.outl[0]["T"]:
                     # hot inlets
                     self.C_F += i["C_M"]
                     if chemical_exergy_enabled:
-                        self.C_F += i["C_M"] + i["C_CH"]
+                        self.C_F += i["C_CH"]
                 else:
                     # cold inlets
                     self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
@@ -503,8 +513,7 @@ class Mixer(Component):
             self.C_F += -self.outl[0]["C_M"]
             if chemical_exergy_enabled:
                 self.C_F += -self.outl[0]["C_CH"]
-        self.C_P = self.C_F + self.Z_costs  # +1/num_serving_comps * C_diff
-        # ToDo: add case that merge profits from dissipative component(s)
+        self.C_P = self.C_F + self.Z_costs + getattr(self, "Z_diss", 0)
 
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P

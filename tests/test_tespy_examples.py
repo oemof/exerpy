@@ -6,9 +6,6 @@ import pytest
 
 path = os.path.join(os.path.dirname(__file__), "..", "examples")
 examples = pathlib.Path(path).glob("**/*tespy.py")
-examples = [
-    e for e in examples if "hp_cascade" not in os.path.basename(e) and "simple_steam_cycle" not in os.path.basename(e)
-]
 
 
 @pytest.mark.parametrize("script", examples)

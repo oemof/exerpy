@@ -8,7 +8,8 @@ and validate the EBS environment variable.
 import os
 import sys
 
-from exerpy.parser.from_ebsilon import __ebsilon_available__, __ebsilon_path__
+from exerpy.parser.from_ebsilon import __ebsilon_available__
+from exerpy.parser.from_ebsilon import __ebsilon_path__
 
 
 def check_ebsilon_installation() -> tuple[bool, str | None]:

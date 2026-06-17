@@ -31,6 +31,20 @@ jobs:
       run: python -m build .
     - name: Run twine check
       run: twine check dist/*
+    - name: Verify excluded paths not in wheel
+      run: |
+        BLOCKED="cost_estimation cost_correlations"
+        for whl in dist/*.whl; do
+          echo "Inspecting $whl ..."
+          for pattern in $BLOCKED; do
+            if unzip -l "$whl" | grep -q "$pattern"; then
+              echo "FAIL: '$pattern' found in $whl"
+              unzip -l "$whl" | grep "$pattern"
+              exit 1
+            fi
+          done
+          echo "OK – no blocked paths found"
+        done
     - uses: actions/upload-artifact@v4
       with:
         name: tox-gh-actions-dist

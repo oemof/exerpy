@@ -1,0 +1,22 @@
+v0.0.4 (05.02.2026)
+++++++++++++++++++++++
+
+Bug fixes
+#########
+- Fixed problem with exergoeconomic balance equations check.
+- Fixed issue in heat exchanger auxiliary equations (aux_eqs).
+- Minor fixes in turbomachinery components.
+
+New features
+###############
+- Added waterfall diagram visualization for exergy analysis results.
+
+Examples
+########
+- Added exergoeconomic analysis example for a heat pump system.
+- Updated heat pump example to latest TESPy API.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)

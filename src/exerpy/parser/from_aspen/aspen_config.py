@@ -30,11 +30,15 @@ This is the mapping of component groups to their respective component IDs:
 """
 
 connector_mappings = {
+    # Turbine uses a custom connector assignment function (assign_turbine_connectors).
+    # WS(IN) direction depends on the sign of the Aspen POWER_OUT value:
+    #   positive → power leaves turbine → swapped to outlet connector 2
+    #   negative → power enters turbine → kept as inlet connector 1
     "Turbine": {
         "F(IN)": 0,  # inlet gas flow
         "P(OUT)": 0,  # outlet gas flow
-        "WS(IN)": 1,  # inlet work flow (e.g. from compressor)
-        "WS(OUT)": 1,  # outlet work flow
+        "WS(OUT)": 1,  # power outlet (e.g. to generator)
+        "WS(IN)": 2,  # outlet if positive (swapped), inlet 1 if negative (kept)
     },
     "Compressor": {"F(IN)": 0, "P(OUT)": 0, "WS(OUT)": 1},  # inlet gas flow  # outlet gas flow  # outlet work flow
     "HeatX": {

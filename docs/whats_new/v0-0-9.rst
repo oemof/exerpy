@@ -1,0 +1,43 @@
+v0.0.9 (17.06.2026)
+++++++++++++++++++++++
+
+New Features
+############
+- Solar thermal components for the exergy analysis of concentrating-solar-power
+  plants: ``Heliostatfield``, ``ParabolicTrough`` and ``SolarTower``. Incoming
+  solar radiation is converted to exergy with the Petela/Spanner factor. These new
+  components can be currently parsed only from Ebsilon models. Two examples were
+  added (solar tower and parabolic trough). This contribution originates from
+  the Bachelor thesis of Alexandros Breous (TU Berlin, 2025).
+- ``Mixer`` and ``Splitter`` now accept a ``num_branches`` scaling factor, so a
+  single modelled branch can represent several identical parallel branches
+  (collecting and distributing headers).
+
+Bug Fixes
+#########
+- ``Turbine``: the main outlet is now selected as the lowest-indexed material
+  outlet, so models with extraction ports on other connectors no longer fail.
+
+Other Changes
+#############
+- Logging: exerpy uses a dedicated ``exerpy`` logger instead of the root logger,
+  so it no longer interferes with the logging of other libraries (e.g. TESPy).
+  Its warnings are shown by default and are captured normally once an
+  application configures logging.
+- ``analyse()`` now runs the component balances before summing the system
+  ``E_F``/``E_P``/``E_L`` and performs sanity checks that surface physically
+  impossible or suspicious results: negative exergy destruction, efficiency
+  above 100 %, streams in ``E_F``/``E_P``/``E_L`` that carry no exergy, and
+  system boundary connections missing from the fuel/product/loss definitions.
+- A component name may be used directly in the ``E_F``/``E_P``/``E_L``
+  definitions; it is resolved to the component's synthetic heat connection.
+- Ebsilon solver messages are filtered: empty or purely numeric rows are
+  skipped and only informative warnings are logged.
+- Import sorting: ruff's isort rules were aligned with the project's
+  ``force_single_line`` style so the two import sorters no longer conflict.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Alexandros Breous (`@SheePill <https://github.com/SheePill>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)

@@ -193,7 +193,6 @@ non_thermodynamic_unit_operators = [
     1,  # Boundary Input Value
     12,  # Controller (with external default value)
     30,  # Difference Meter
-    31,  # Power Summarizer
     32,  # Efficiency Meter
     33,  # Start Value
     36,  # Value Transmitter
@@ -917,11 +916,15 @@ grouped_components = {
     "Deaerator": [9, 63],
     "SimpleHeatExchanger": [15, 16, 35],
     "SteamGenerator": [5],
-    "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
+    "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161, 115],
     "FlashTank": [34],
     "Storage": [118],
-    "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
+    "Splitter": [4, 17, 18, 19, 52, 109, 140, 157, 114],
     "CycleCloser": [80],
+    "PowerBus": [31],
+    "ParabolicTrough": [113],
+    "Heliostatfield": [121],
+    "SolarTower": [120],
 }
 """
 This is the mapping of component groups to their respective component IDs:
@@ -940,7 +943,8 @@ This is the mapping of component groups to their respective component IDs:
     - "FlashTank" : [34],
     - "Storage": [118],
     - "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
-    - "CycleCloser": [80]
+    - "CycleCloser": [80],
+    - "PowerBus": [31]
 
 """
 
@@ -1051,7 +1055,7 @@ connector_mapping = {
     24: {  # Compressor / Fan
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
-        3: 0,  # Power inlet
+        3: 1,  # Power inlet
     },
     25: {  # Air Preheater
         1: 1,  # Inlet cold stream
@@ -1086,6 +1090,19 @@ connector_mapping = {
     29: {  # Motor
         1: 0,  # Connector 1 in Ebsilon is inlet(0)
         2: 0,  # Connector 2 in Ebsilon is outlet(0)
+    },
+    31: {  # Power Summerizer
+        1: 0,  # Power inlet 1
+        2: 1,  # Power inlet 2
+        3: 2,  # Power inlet 3
+        4: 3,  # Power inlet 4
+        5: 4,  # Power inlet 5
+        6: 5,  # Power inlet 6
+        7: 6,  # Power inlet 7
+        8: 7,  # Power inlet 8
+        9: 8,  # Power inlet 9
+        10: 9,  # Power inlet 10
+        11: 0,  # Power outlet
     },
     34: {  # Flash box
         1: 0,  # General inlet
@@ -1150,8 +1167,23 @@ connector_mapping = {
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
     },
+    113: {  # Parabolic Trough Collector
+        1: 0,  # Inlet fluid
+        2: 0,  # Outlet fluid
+        3: 1,  # Solar heat input connection
+    },
     118: {  # Storage
         1: 0,  # Inlet
         2: 0,  # Outlet
+    },
+    120: {  # Solar Tower Receiver
+        1: 0,  # Inlet fluid
+        2: 0,  # Outlet fluid
+        3: 1,  # Solar heat input connection to Heliostatfield
+    },
+    121: {  # Heliostat Field
+        1: 0,  # Outlet link to receiver
+        2: 0,  # Inlet link / limit input
+        3: 1,  # Heat flow input
     },
 }

@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -119,7 +119,7 @@ class Compressor(Component):
 
         # First, check for the invalid case: outlet temperature smaller than inlet temperature.
         if self.inl[0]["T"] > self.outl[0]["T"]:
-            logging.warning(
+            logger.warning(
                 f"Exergy balance of compressor '{self.name}' where outlet temperature ({self.outl[0]['T']}) "
                 f"is smaller than inlet temperature ({self.inl[0]['T']}) is not implemented."
             )
@@ -139,7 +139,7 @@ class Compressor(Component):
                 )
                 self.E_F = abs(self.P) + self.inl[0]["m"] * self.inl[0]["e_T"]
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with compressor below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -152,7 +152,7 @@ class Compressor(Component):
                 self.E_P = self.outl[0]["m"] * (self.outl[0]["e_M"] - self.inl[0]["e_M"])
                 self.E_F = abs(self.P) + self.inl[0]["m"] * (self.inl[0]["e_T"] - self.outl[0]["e_T"])
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with compressor below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -161,7 +161,7 @@ class Compressor(Component):
 
         # Invalid case: outlet temperature smaller than inlet
         else:
-            logging.warning(
+            logger.warning(
                 f"Exergy balance of compressor '{self.name}' where outlet temperature is smaller "
                 "than inlet temperature is not implemented."
             )
@@ -173,7 +173,7 @@ class Compressor(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of Compressor {self.name} calculated: "
             f"E_P={self.E_P:.2f} W, E_F={self.E_F:.2f} W, E_D={self.E_D:.2f} W, "
             f"Efficiency={self.epsilon:.2%}"
@@ -267,19 +267,47 @@ class Compressor(Component):
                     "property": "c_T, c_M",
                 }
             else:
-                logging.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
+                logger.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
-            A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
-            A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
-            equations[row_index] = {
-                "kind": "aux_p_rule",
-                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_T, c_M",
-            }
+            # Case 2: Inlet at/below ambient, outlet above ambient
+            # Handle potential zero values for robustness
+            if self.outl[0]["e_T"] != 0 and dEM != 0:
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+                A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
+                A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
+                equations[row_index] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "property": "c_T, c_M",
+                }
+            else:
+                logger.warning(
+                    f"Compressor '{self.name}' Case 2: outlet thermal exergy or mechanical exergy "
+                    "difference is zero, auxiliary equation may be degenerate."
+                )
+                # Fallback: set identity equation for thermal cost
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
+                equations[row_index] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                    "property": "c_T",
+                }
         else:
-            A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
-            A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+            # Case 3: Both temperatures at or below ambient - apply F-rule for thermal exergy
+            # Handle zero thermal exergy cases to avoid division by zero
+            if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
+            elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
+                # Inlet thermal exergy is zero, constrain C_T_in = 0
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
+            elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
+                # Outlet thermal exergy is zero, constrain C_T_out = 0
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
+            else:
+                # Both thermal exergies are zero, set identity equation
+                A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
+                A[row_index, self.outl[0]["CostVar_index"]["T"]] = -1
             equations[row_index] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -415,7 +443,7 @@ class Compressor(Component):
                 power_cost = stream.get("C_TOT")
                 break
         if power_cost is None:
-            logging.error("No inlet power stream found to determine power cost (C_TOT).")
+            logger.error("No inlet power stream found to determine power cost (C_TOT).")
             raise ValueError("No inlet power stream found for exergoeconomic_balance.")
 
         # Compute product and fuel costs depending on inlet/outlet temperatures relative to T0.

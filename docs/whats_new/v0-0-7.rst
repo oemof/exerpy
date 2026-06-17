@@ -1,0 +1,22 @@
+v0.0.7 (24.02.2026)
+++++++++++++++++++++++
+
+Bug Fixes
+#########
+- Fixed floating-point temperature comparison in ``HeatExchanger`` and ``Condenser`` components.
+  Added ``_temperature_case()`` helper with 0.01 K tolerance to prevent misclassification
+  when stream temperatures are at exactly Tamb.
+- Changed case 6 (all streams at Tamb) log level from ``warning`` to ``info`` in
+  ``HeatExchanger`` and ``Condenser``.
+
+New Features
+############
+- Added full dissipative component support for ``Condenser``:
+  ``dis_eqs()`` method, ``is_dissipative`` detection in ``_construct_components()`` and
+  ``analyse()``, and NaN-safe ``exergoeconomic_balance()``.
+- Added dissipative ``HeatExchanger`` support: ``dis_eqs()`` method and
+  ``is_dissipative`` detection in ``_construct_components()`` and ``analyse()``.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

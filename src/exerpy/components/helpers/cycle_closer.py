@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -26,7 +26,7 @@ class CycleCloser(Component):
         self.epsilon = np.nan
 
         # Log the results
-        logging.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
+        logger.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
@@ -94,9 +94,11 @@ class CycleCloser(Component):
 
         if chemical_exergy_enabled:
             # Chemical cost equality equation:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (1 / self.inl[0]["e_C"]) if self.inl[0]["e_CH"] != 0 else 1
+            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
+                (1 / self.inl[0]["e_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+            )
             A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                (-1 / self.outl[0]["e_C"]) if self.outl[0]["e_CH"] != 0 else -1
+                (-1 / self.outl[0]["e_CH"]) if self.outl[0]["e_CH"] != 0 else -1
             )
             equations[counter] = {
                 "kind": "aux_equality",

@@ -28,7 +28,15 @@ for directory in directories:
     examples_json.append({})
     for file in os.listdir(directory):
         if file.endswith(".json"):
-            examples_json[-1][file.removesuffix(".json")] = os.path.join(directory, file)
+            path = os.path.join(directory, file)
+            # Skip JSON files that are not analysis exports (e.g. optimizer result
+            # dumps in opt_examples); only exports carry a "components" section.
+            try:
+                if "components" not in _load_json(path):
+                    continue
+            except (ValueError, OSError):
+                continue
+            examples_json[-1][file.removesuffix(".json")] = path
 
 TESTCASES = [{c: example[c] for c in case} for example in examples_json for case in combinations(example, 2)]
 
@@ -55,13 +63,14 @@ def test_validate_simulators_connection_data(testcase, caplog):
     sim2 = simulator_results[1]
 
     columns = ["m", "p", "T"]
-    if sim1.chemExLib is not None:
+    if sim1.chemExLib is not None and sim2.chemExLib is not None:
         columns.append("e_CH")
-    if sim1.split_physical_exergy:
+    if sim1.split_physical_exergy and sim2.split_physical_exergy:
         columns.append("e_M")
         columns.append("e_T")
-    else:
+    elif not sim1.split_physical_exergy and not sim2.split_physical_exergy:
         columns.append("e_PH")
+    # If split_physical_exergy settings differ, only compare base columns (m, p, T)
 
     df_sim1 = pd.DataFrame.from_dict(sim1._connection_data, orient="index").sort_index()[columns].dropna(how="all")
     df_sim2 = pd.DataFrame.from_dict(sim2._connection_data, orient="index").sort_index()[columns].dropna(how="all")
@@ -81,7 +90,9 @@ def test_validate_simulators_connection_data(testcase, caplog):
 def exergy_analysis():
     """Set up the ExergyAnalysis object using the data from cgam_ebs.json."""
     # Define the path to the JSON file
-    file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples/cgam/cgam_ebs.json"))
+    file_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../examples/exergy_analysis/cgam/cgam_ebs.json")
+    )
     # Return an initialized ExergyAnalysis object
     return ExergyAnalysis.from_json(file_path, split_physical_exergy=False)
 
@@ -98,3 +109,29 @@ def test_exergy_analysis_results(exergy_analysis):
     assert pytest.approx(exergy_analysis.E_P, abs=100) == 42753645
     assert pytest.approx(exergy_analysis.E_D, abs=100) == 39466737
     assert pytest.approx(exergy_analysis.E_L, abs=100) == 2860633
+
+
+@pytest.fixture
+def solar_tower_analysis():
+    """Set up the ExergyAnalysis object from the solar-tower example JSON."""
+    file_path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../examples/exergy_analysis/solar_thermal/solar_tower_ebs.json")
+    )
+    return ExergyAnalysis.from_json(file_path, split_physical_exergy=False)
+
+
+def test_solar_tower_example_results(solar_tower_analysis):
+    """End-to-end check of the solar-tower example (heliostat field + receiver).
+
+    The fuel 'SF' is a component name; analyse() resolves it to the synthetic SF_Q
+    heat connection. Reference values are from solar_tower_ebs.json system_results.
+    """
+    fuel = {"inputs": ["SF"], "outputs": []}
+    product = {"inputs": ["ETOT"], "outputs": []}
+    loss = {"inputs": ["C2"], "outputs": ["C1"]}
+    solar_tower_analysis.analyse(E_F=fuel, E_P=product, E_L=loss)
+
+    assert pytest.approx(solar_tower_analysis.E_F, rel=1e-4) == 134258774.662513
+    assert pytest.approx(solar_tower_analysis.E_P, rel=1e-4) == 29406492.324328158
+    assert pytest.approx(solar_tower_analysis.E_D, rel=1e-4) == 103316169.97763622
+    assert pytest.approx(solar_tower_analysis.E_L, rel=1e-4) == 1536112.3605486117

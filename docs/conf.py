@@ -35,7 +35,7 @@ autodoc_mock_imports = ["tespy", "win32com", "EbsOpen", "CoolProp"]
 # master_doc = 'contents'
 # names, years, etc
 project = "ExerPy"
-year = "2025"
+year = "2026"
 author = "Sergio Tomasinelli"
 copyright = f"{year}, {author}"
 
@@ -146,4 +146,8 @@ htmlhelp_basename = "exerpy_doc"
 # -- Options for linkcheck ----------------------------------------------
 
 # we can insert links to be ignored by the docs linkcheck
-linkcheck_ignore = [r"https://doi.org*"]
+linkcheck_ignore = [
+    r"^https://doi\.org/.*$",
+    r"^https://docutils\.sourceforge\.io/.*$",
+    r"^https://www\.ebsilon\.com/.*$",  # site has a misconfigured TLS certificate
+]

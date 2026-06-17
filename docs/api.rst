@@ -10,10 +10,11 @@ that includes data parsing, physical and chemical exergy calculations, and the
 generation of comprehensive exergy analysis results.
 
 This section provides detailed information about the Application Programming
-Interface (API) of ExerPy. The API is divided into two main modules:
+Interface (API) of ExerPy. The API is divided into three main modules:
 
 1. **Parsing and Data Preparation**
 2. **Exergy Analysis**
+3. **Exergoeconomic Analysis**
 
 
 *************************************
@@ -166,10 +167,24 @@ The exergy analysis in ExerPy requires three structured inputs, each defined by 
 
     - ``outputs``: flows entering the system that reduce the net product (e.g., the power flow to a motor)
 
-- **Exergy loss** (:code:`E_L`): 
+- **Exergy loss** (:code:`E_L`):
     - ``inputs``: flows leaving the system and released to the environment (e.g., exhaust gases, cold outlet flow of a condenser in a steam cycle)
 
     - ``outputs``: flows entering the system that will later exit as losses (e.g., cold inlet flow of a condenser in a steam cycle)
+
+.. note::
+
+    **Solar thermal components (Ebsilon only).** The heliostat field, parabolic
+    trough and solar tower are currently produced only by the Ebsilon parser
+    (:code:`from_ebsilon`); the Aspen and TESPy parsers do not provide solar
+    components. These componente receive their exergy from incoming solar radiation, 
+    which the parser represents as a synthetic ``<name>_Q`` heat connection (there 
+    is no ordinary inlet stream carrying it). To declare this solar input as fuel, 
+    put the **name of the component** — not a connection name — in ``E_F["inputs"]``,
+    e.g. ``{"inputs": ["SF"], "outputs": []}`` for a heliostat field named
+    ``SF``. ExerPy resolves the component name to its ``<name>_Q`` connection
+    automatically. The same applies if such a flow ever needs to appear in
+    ``E_P`` or ``E_L``.
 
 .. code-block:: python
 
@@ -205,10 +220,85 @@ The results include the following key parameters:
     - Product exergy (:code:`E_P`) in kW
     - Destruction exergy (:code:`E_D`) in kW
     - Loss exergy (:code:`E_L`) in kW
-    - Exergy efficiency (:code:`ε`) in %
+    - Exergy efficiency (:code:`epsilon`) in %
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
 These values are provided both for each component and for the entire system.
+
+
+****************************
+3. Exergoeconomic Analysis
+****************************
+
+The exergoeconomic analysis module extends exergy analysis by allocating monetary costs to all exergy
+streams in the system. It solves a linear equation system based on the SPECO method (Specific Exergy Costing)
+to determine cost rates and specific costs for every connection and component.
+
+.. note::
+
+    Exergoeconomic analysis requires the exergy analysis to be performed with
+    :code:`split_physical_exergy=True`, which separates thermal and mechanical exergy components.
+    This is currently not available for Aspen Plus models.
+
+======
+Inputs
+======
+
+The exergoeconomic analysis requires the following inputs:
+
+- **Completed ExergyAnalysis**: An :code:`ExergyAnalysis` instance with :code:`split_physical_exergy=True`
+  on which :code:`analyse()` has already been called.
+
+- **Cost dictionary**: A dictionary containing:
+
+  - **Component investment costs**: :code:`"<component_name>_Z"` in currency/h (mandatory for all
+    components except CycleCloser and PowerBus)
+  - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
+    entering the system boundary)
+
+.. code-block:: python
+
+    from exerpy import ExergoeconomicAnalysis
+
+    eco = ExergoeconomicAnalysis(ean)
+
+    costs = {
+        "COMP_Z": 80.0,   # Component investment cost [EUR/h]
+        "CC_Z": 30.0,
+        "1_c": 0.0,        # Input stream cost [EUR/GJ]
+        "10_c": 10.0,
+    }
+
+    eco.run(costs)
+
+=======
+Outputs
+=======
+
+The results are retrieved using the :code:`exergoeconomic_results` method, which returns four
+:code:`pandas.DataFrames`:
+
+.. code-block:: python
+
+    df_comp, df_mat_props, df_mat_costs, df_non_mat = eco.exergoeconomic_results()
+
+The results include:
+
+- **Component results**: Cost of fuel (:code:`C_F`), cost of product (:code:`C_P`),
+  cost of exergy destruction (:code:`C_D`), investment cost rate (:code:`Z`),
+  total cost (:code:`C_D+Z`), exergoeconomic factor (:code:`f`), and
+  relative cost difference (:code:`r`)
+- **Material connection costs**: Thermal (:code:`C_T`), mechanical (:code:`C_M`),
+  chemical (:code:`C_CH`), and total (:code:`C_TOT`) cost rates with their specific costs
+- **Non-material connection costs**: Total cost rate (:code:`C_TOT`) and specific cost (:code:`c_TOT`)
+  for power and heat streams
+
+Additionally, the :code:`evaluate_results` method identifies the components with the highest
+cost improvement potential:
+
+.. code-block:: python
+
+    eco.evaluate_results(sort_by="C_D+Z", top_n=5)
 
 **************
 API References

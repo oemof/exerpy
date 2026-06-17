@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -34,6 +34,9 @@ class Splitter(Component):
     def __init__(self, **kwargs):
         r"""Initialize splitter component with given parameters."""
         super().__init__(**kwargs)
+        # Number of identical parallel branches each modelled outlet represents (1 for an
+        # ordinary splitter; >1 when one branch stands in for a field of parallel branches).
+        self.num_branches = kwargs.get("num_branches", 1) or 1
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -61,14 +64,15 @@ class Splitter(Component):
         outlet_list = list(self.outl.values())
         inlet_list = list(self.inl.values())
         E_in = sum(inlet.get("m", 0) * inlet.get("e_PH") for inlet in inlet_list)
-        E_out = sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
+        # Each modelled outlet represents num_branches identical parallel branches.
+        E_out = self.num_branches * sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
         self.E_P = np.nan
         self.E_F = np.nan
         self.E_D = E_in - E_out
         self.epsilon = np.nan
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Splitter {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -110,10 +114,13 @@ class Splitter(Component):
         """
         inlet = self.inl[0]
 
-        # Thermal cost equality for each outlet
+        # Thermal cost equality for each outlet: c_T_inlet = c_T_outlet
+        # where c_T = C_T / (m * e_T), so we divide by (m * e_T) to equate specific costs.
         for outlet in self.outl.values():
-            A[counter, inlet["CostVar_index"]["T"]] = (1 / inlet["e_T"]) if inlet["e_T"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["T"]] = (-1 / outlet["e_T"]) if outlet["e_T"] != 0 else -1
+            E_T_in = inlet["m"] * inlet["e_T"]
+            E_T_out = outlet["m"] * outlet["e_T"]
+            A[counter, inlet["CostVar_index"]["T"]] = (1 / E_T_in) if E_T_in != 0 else 1
+            A[counter, outlet["CostVar_index"]["T"]] = (-1 / E_T_out) if E_T_out != 0 else -1
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, inlet["name"], outlet["name"]],
@@ -122,10 +129,12 @@ class Splitter(Component):
             b[counter] = 0
             counter += 1
 
-        # Mechanical cost equality for each outlet
+        # Mechanical cost equality for each outlet: c_M_inlet = c_M_outlet
         for outlet in self.outl.values():
-            A[counter, inlet["CostVar_index"]["M"]] = (1 / inlet["e_M"]) if inlet["e_M"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["M"]] = (-1 / outlet["e_M"]) if outlet["e_M"] != 0 else -1
+            E_M_in = inlet["m"] * inlet["e_M"]
+            E_M_out = outlet["m"] * outlet["e_M"]
+            A[counter, inlet["CostVar_index"]["M"]] = (1 / E_M_in) if E_M_in != 0 else 1
+            A[counter, outlet["CostVar_index"]["M"]] = (-1 / E_M_out) if E_M_out != 0 else -1
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, inlet["name"], outlet["name"]],
@@ -137,8 +146,10 @@ class Splitter(Component):
         # Chemical cost equality for each outlet (if enabled)
         if chemical_exergy_enabled:
             for outlet in self.outl.values():
-                A[counter, inlet["CostVar_index"]["CH"]] = (1 / inlet["e_CH"]) if inlet["e_CH"] != 0 else 1
-                A[counter, outlet["CostVar_index"]["CH"]] = (-1 / outlet["e_CH"]) if outlet["e_CH"] != 0 else -1
+                E_CH_in = inlet["m"] * inlet["e_CH"]
+                E_CH_out = outlet["m"] * outlet["e_CH"]
+                A[counter, inlet["CostVar_index"]["CH"]] = (1 / E_CH_in) if E_CH_in != 0 else 1
+                A[counter, outlet["CostVar_index"]["CH"]] = (-1 / E_CH_out) if E_CH_out != 0 else -1
                 equations[counter] = {
                     "kind": "aux_equality",
                     "objects": [self.name, inlet["name"], outlet["name"]],

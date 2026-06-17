@@ -1,6 +1,6 @@
-import logging
-
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -98,7 +98,7 @@ class CombustionChamber(Component):
         # Check for necessary inlet and outlet data
         if not hasattr(self, "inl") or not hasattr(self, "outl") or len(self.inl) < 2 or len(self.outl) < 1:
             msg = "CombustionChamber requires at least two inlets (air and fuel) and one outlet (exhaust)."
-            logging.error(msg)
+            logger.error(msg)
             raise ValueError(msg)
 
         # Calculate total physical exergy of outlets
@@ -126,7 +126,7 @@ class CombustionChamber(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of CombustionChamber {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -231,7 +231,7 @@ class CombustionChamber(Component):
             A[counter + 1, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:
             A[counter + 1, inlets[1]["CostVar_index"]["CH"]] = 1
-        equations[counter] = {
+        equations[counter + 1] = {
             "kind": "aux_mixing",
             "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
             "property": "c_CH",

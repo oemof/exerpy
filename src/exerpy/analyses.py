@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 
 import matplotlib.pyplot as plt
@@ -7,11 +6,14 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
+from exerpy.logger import logger
+
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
 from .components.nodes.splitter import Splitter
-from .functions import add_chemical_exergy, add_total_exergy_flow
+from .functions import add_chemical_exergy
+from .functions import add_total_exergy_flow
 
 
 class ExergyAnalysis:
@@ -57,28 +59,6 @@ class ExergyAnalysis:
         Dictionary specifying loss connections.
     epsilon : float
         Overall exergy efficiency of the system.
-
-    Methods
-    -------
-    analyse(E_F, E_P, E_L={})
-        Performs exergy analysis based on specified fuel, product, and loss definitions.
-    from_tespy(model, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from a TESPy network model.
-    from_aspen(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from an Aspen model file.
-    from_ebsilon(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from an Ebsilon model file.
-    from_json(json_path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from a JSON file containing system data.
-    exergy_results(print_results=True)
-        Displays and returns tables of exergy analysis results.
-    plot_exergy_waterfall(title=None, figsize=(12, 10), exclude_components=None, show_plot=True)
-        Creates an exergy destruction waterfall diagram visualizing exergy flow through the system.
-    print_exergy_summary()
-        Prints a concise text summary of the exergy analysis results.
-    export_to_json(output_path)
-        Exports the model and analysis results to a JSON file.
-    _serialize()
     """
 
     def __init__(self, component_data, connection_data, Tamb, pamb, chemExLib=None, split_physical_exergy=True) -> None:
@@ -105,7 +85,11 @@ class ExergyAnalysis:
         self._component_data = component_data
         self._connection_data = connection_data
         self.chemExLib = chemExLib
-        self.chemical_exergy_enabled = self.chemExLib is not None
+        self.chemical_exergy_enabled = self.chemExLib is not None or any(
+            conn_data.get("e_CH") is not None
+            for conn_data in connection_data.values()
+            if isinstance(conn_data, dict) and conn_data.get("kind") == "material"
+        )
         self.split_physical_exergy = split_physical_exergy
 
         # Convert the parsed data into components
@@ -128,6 +112,12 @@ class ExergyAnalysis:
         # Initialize class attributes for the exergy value of the total system
         if E_L is None:
             E_L = {}
+
+        # Resolve a name to its "<name>_Q" heat connection (created earlier during parsing).
+        E_F = self._resolve_heat_connection_names(E_F)
+        E_P = self._resolve_heat_connection_names(E_P)
+        E_L = self._resolve_heat_connection_names(E_L)
+
         self.E_F = 0.0
         self.E_P = 0.0
         self.E_L = 0.0
@@ -141,6 +131,17 @@ class ExergyAnalysis:
                     if connection not in self.connections:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
+
+        # Run component balances first: a component may write exergy back onto its
+        # connections, which must happen before summing the system E_F/E_P/E_L below.
+        for _component_name, component in self.components.items():
+            if component.__class__.__name__ == "CycleCloser":
+                continue
+            component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
+
+            # Re-flag components that only turn out dissipative once E_P is known (E_P = nan).
+            if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
+                component.is_dissipative = True
 
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
         if "inputs" in E_F:
@@ -180,43 +181,45 @@ class ExergyAnalysis:
         # The rest is counted as total exergy destruction with all components of the system
         self.E_D = self.E_F - self.E_P - self.E_L
 
+        # Suspicious results are flagged with warnings
+        self._check_exergy_balance_sanity(E_F, E_P, E_L)
+
         # Check for unaccounted connections in the system
         self._check_unaccounted_system_conns()
 
         eff_str = f"{self.epsilon:.2%}" if self.epsilon is not None else "N/A"
-        logging.info(
+        logger.info(
             f"Overall exergy analysis completed: E_F = {self.E_F:.2f} kW, "
             f"E_P = {self.E_P:.2f} kW, E_L = {self.E_L:.2f} kW, "
             f"Efficiency = {eff_str}"
         )
 
-        # Perform exergy balance for each individual component in the system
+        # Now that the system totals are known, compute the exergy destruction ratios
+        # (y, y*) for each component and accumulate the total component destruction.
+        # The component balances themselves were already evaluated above.
         total_component_E_D = 0.0
         for _component_name, component in self.components.items():
             if component.__class__.__name__ == "CycleCloser":
                 continue
+            # Safely calculate y and y* avoiding division by zero
+            if self.E_F != 0:
+                component.y = component.E_D / self.E_F
+                component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
             else:
-                # Calculate E_F, E_D, E_P
-                component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
-                # Safely calculate y and y* avoiding division by zero
-                if self.E_F != 0:
-                    component.y = component.E_D / self.E_F
-                    component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
-                else:
-                    component.y = np.nan
-                    component.y_star = np.nan
-                # Sum component destruction if available
-                if component.E_D is not np.nan:
-                    total_component_E_D += component.E_D
+                component.y = np.nan
+                component.y_star = np.nan
+            # Sum component destruction if available
+            if component.E_D is not np.nan:
+                total_component_E_D += component.E_D
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logging.warning(
+            logger.warning(
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
             )
         else:
-            logging.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
+            logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
     def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
@@ -253,7 +256,9 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = to_exerpy(model, Tamb, pamb)
-        data, Tamb, pamb = _process_json(data, Tamb, pamb, chemExLib, split_physical_exergy)
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
+            data, Tamb, pamb, chemExLib, split_physical_exergy
+        )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
@@ -286,15 +291,15 @@ class ExergyAnalysis:
         _, file_extension = os.path.splitext(path)
 
         if file_extension == ".bkp":
-            logging.info("Running Aspen parsing and generating JSON data.")
+            logger.info("Running Aspen parsing and generating JSON data.")
             data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy)
-            logging.info("Parsing completed successfully.")
+            logger.info("Parsing completed successfully.")
 
         else:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
             pamb=pamb,
@@ -334,15 +339,15 @@ class ExergyAnalysis:
         _, file_extension = os.path.splitext(path)
 
         if file_extension == ".ebs":
-            logging.info("Running Ebsilon simulation and generating JSON data.")
+            logger.info("Running Ebsilon simulation and generating JSON data.")
             data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
-            logging.info("Simulation completed successfully.")
+            logger.info("Simulation completed successfully.")
 
         else:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
             pamb=pamb,
@@ -353,7 +358,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None):
         """
         Create an ExergyAnalysis instance from a JSON file.
 
@@ -383,7 +388,7 @@ class ExergyAnalysis:
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
@@ -418,7 +423,7 @@ class ExergyAnalysis:
             "E_P [kW]": [],
             "E_D [kW]": [],
             "E_L [kW]": [],
-            "ε [%]": [],
+            "epsilon [%]": [],
             "y [%]": [],
             "y* [%]": [],
         }
@@ -444,7 +449,7 @@ class ExergyAnalysis:
             component_results["E_P [kW]"].append(E_P_kW)
             component_results["E_D [kW]"].append(E_D_kW + E_L_kW)
             component_results["E_L [kW]"].append(0)
-            component_results["ε [%]"].append(epsilon_percent)
+            component_results["epsilon [%]"].append(epsilon_percent)
             component_results["y [%]"].append(convert(component.y, 1e2))
             component_results["y* [%]"].append(convert(component.y_star, 1e2))
 
@@ -460,7 +465,7 @@ class ExergyAnalysis:
         df_component_results.loc["TOT", "E_L [kW]"] = convert(self.E_L, 1e-3)
         df_component_results.loc["TOT", "E_P [kW]"] = convert(self.E_P, 1e-3)
         df_component_results.loc["TOT", "E_D [kW]"] = convert(self.E_D, 1e-3)
-        df_component_results.loc["TOT", "ε [%]"] = convert(self.epsilon, 1e2)
+        df_component_results.loc["TOT", "epsilon [%]"] = convert(self.epsilon, 1e2)
         # Calculate the total y [%] and y* [%] as the sum of the values for all components
         df_component_results.loc["TOT", "y [%]"] = df_component_results["y [%]"].sum()
         df_component_results.loc["TOT", "y* [%]"] = df_component_results["y* [%]"].sum()
@@ -475,10 +480,12 @@ class ExergyAnalysis:
             "s [J/kgK]": [],
             "E [kW]": [],
             "e^PH [kJ/kg]": [],
-            "e^T [kJ/kg]": [],
-            "e^M [kJ/kg]": [],
-            "e^CH [kJ/kg]": [],
         }
+        if self.split_physical_exergy:
+            material_connection_results["e^T [kJ/kg]"] = []
+            material_connection_results["e^M [kJ/kg]"] = []
+        if self.chemical_exergy_enabled:
+            material_connection_results["e^CH [kJ/kg]"] = []
 
         # NON-MATERIAL CONNECTIONS
         non_material_connection_results = {"Connection": [], "Kind": [], "Energy Flow [kW]": [], "Exergy Flow [kW]": []}
@@ -518,15 +525,17 @@ class ExergyAnalysis:
                 material_connection_results["e^PH [kJ/kg]"].append(
                     convert(conn_data.get("e_PH"), 1e-3)
                 )  # Convert to kJ/kg
-                material_connection_results["e^T [kJ/kg]"].append(
-                    convert(conn_data.get("e_T"), 1e-3)
-                )  # Convert to kJ/kg
-                material_connection_results["e^M [kJ/kg]"].append(
-                    convert(conn_data.get("e_M"), 1e-3)
-                )  # Convert to kJ/kg
-                material_connection_results["e^CH [kJ/kg]"].append(
-                    convert(conn_data.get("e_CH"), 1e-3)
-                )  # Convert to kJ/kg
+                if self.split_physical_exergy:
+                    material_connection_results["e^T [kJ/kg]"].append(
+                        convert(conn_data.get("e_T"), 1e-3)
+                    )  # Convert to kJ/kg
+                    material_connection_results["e^M [kJ/kg]"].append(
+                        convert(conn_data.get("e_M"), 1e-3)
+                    )  # Convert to kJ/kg
+                if self.chemical_exergy_enabled:
+                    material_connection_results["e^CH [kJ/kg]"].append(
+                        convert(conn_data.get("e_CH"), 1e-3)
+                    )  # Convert to kJ/kg
                 material_connection_results["E [kW]"].append(convert(conn_data.get("E"), 1e-3))  # Convert to kW
 
         # Convert the material and non-material connection dictionaries into DataFrames
@@ -612,10 +621,10 @@ class ExergyAnalysis:
 
         Examples
         --------
-        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
-        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
-        >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')
-        >>> fig.savefig('exergy_waterfall.pdf')
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
+        >>> fig.savefig('exergy_waterfall.pdf')  # doctest: +SKIP
 
         See Also
         --------
@@ -635,7 +644,7 @@ class ExergyAnalysis:
 
         # Get total values from df_component_results
         total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["ε [%]"]
+        epsilon_total = total_row["epsilon [%]"]
         E_L_total = total_row["E_L [kW]"]
         E_F_total = total_row["E_F [kW]"]
         exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
@@ -739,18 +748,18 @@ class ExergyAnalysis:
         - Exergetic Fuel: Normalized to 100%
         - Total Exergy Destruction: Sum of all component exergy destructions as % of fuel
         - Exergetic Loss: Exergy losses to the environment as % of fuel
-        - Exergetic Product (ε): Overall system exergy efficiency as %
+        - Exergetic Product (epsilon): Overall system exergy efficiency as %
 
         Examples
         --------
-        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)
-        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})
-        >>> analysis.print_exergy_summary()
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> analysis.print_exergy_summary()  # doctest: +SKIP
         Exergy Analysis Summary:
         Exergetic Fuel: 100.00%
         Total Exergy Destruction: 35.42%
         Exergetic Loss: 5.12%
-        Exergetic Product (ε): 59.46%
+        Exergetic Product (epsilon): 59.46%
 
         See Also
         --------
@@ -765,7 +774,7 @@ class ExergyAnalysis:
         df_component_results, _, _ = self.exergy_results(print_results=False)
 
         total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["ε [%]"]
+        epsilon_total = total_row["epsilon [%]"]
         E_L_total = total_row["E_L [kW]"]
         E_F_total = total_row["E_F [kW]"]
         exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
@@ -794,11 +803,12 @@ class ExergyAnalysis:
         -----
         This method serializes the model using the internal _serialize method
         and writes the resulting data to a JSON file with indentation.
+        NaN values are converted to null for valid JSON output.
         """
         data = self._serialize()
         with open(output_path, "w") as json_file:
             json.dump(data, json_file, indent=4)
-            logging.info(f"Model exported to JSON file: {output_path}.")
+            logger.info(f"Model exported to JSON file: {output_path}.")
 
     def _serialize(self):
         """
@@ -823,24 +833,109 @@ class ExergyAnalysis:
             for comp_name, comp_data in comps.items():
                 comp = self.components[comp_name]
                 comp_data["exergy_results"] = {
-                    "E_F": getattr(comp, "E_F", None),
-                    "E_P": getattr(comp, "E_P", None),
-                    "E_D": getattr(comp, "E_D", None),
-                    "epsilon": getattr(comp, "epsilon", None),
-                    "y": getattr(comp, "y", None),
-                    "y_star": getattr(comp, "y_star", None),
+                    "E_F": _nan_to_none(getattr(comp, "E_F", None)),
+                    "E_P": _nan_to_none(getattr(comp, "E_P", None)),
+                    "E_D": _nan_to_none(getattr(comp, "E_D", None)),
+                    "epsilon": _nan_to_none(getattr(comp, "epsilon", None)),
+                    "y": _nan_to_none(getattr(comp, "y", None)),
+                    "y_star": _nan_to_none(getattr(comp, "y_star", None)),
                 }
 
         # add overall system exergy results
         export["system_results"] = {
-            "E_F": getattr(self, "E_F", None),
-            "E_P": getattr(self, "E_P", None),
-            "E_D": getattr(self, "E_D", None),
-            "E_L": getattr(self, "E_L", None),
-            "epsilon": getattr(self, "epsilon", None),
+            "E_F": _nan_to_none(getattr(self, "E_F", None)),
+            "E_P": _nan_to_none(getattr(self, "E_P", None)),
+            "E_D": _nan_to_none(getattr(self, "E_D", None)),
+            "E_L": _nan_to_none(getattr(self, "E_L", None)),
+            "epsilon": _nan_to_none(getattr(self, "epsilon", None)),
         }
 
         return export
+
+    def _resolve_heat_connection_names(self, ex_flow):
+        """
+        Rewrite each E_F/E_P/E_L name to its ``"<name>_Q"`` heat connection when the name
+        itself is not a connection. Names that already match a connection are left unchanged.
+        """
+        resolved = {}
+        for direction, names in ex_flow.items():
+            resolved[direction] = [
+                f"{name}_Q" if name not in self.connections and f"{name}_Q" in self.connections else name
+                for name in names
+            ]
+        return resolved
+
+    def _check_exergy_balance_sanity(self, E_F, E_P, E_L):
+        """
+        Emit warnings for physically impossible or suspicious exergy-balance results.
+
+        These checks do not stop the analysis; they make problems visible that would
+        otherwise be printed silently in the results table, namely:
+
+        - a stream listed in E_F/E_P/E_L that carries no exergy (``None`` or ``nan``),
+          which usually means its exergy was never assigned;
+        - a non-positive system fuel exergy (efficiency undefined);
+        - a negative total exergy destruction (impossible);
+        - a component with negative exergy destruction or efficiency above 100 %.
+
+        Parameters
+        ----------
+        E_F, E_P, E_L : dict
+            The fuel, product and loss definitions passed to :meth:`analyse`.
+        """
+
+        def _is_unset(value):
+            return value is None or (isinstance(value, float) and np.isnan(value))
+
+        # Streams assigned to E_F/E_P/E_L that carry no exergy contribute nothing to the
+        # totals and almost always indicate an exergy value that was never computed.
+        for label, ex_flow in (("E_F", E_F), ("E_P", E_P), ("E_L", E_L)):
+            for direction in ("inputs", "outputs"):
+                for conn in ex_flow.get(direction, []):
+                    if _is_unset(self.connections.get(conn, {}).get("E")):
+                        logger.warning(
+                            f"{label} stream '{conn}' carries no exergy "
+                            f"(E={self.connections.get(conn, {}).get('E')}); it contributes 0 "
+                            f"to {label}. Check that its exergy is assigned."
+                        )
+
+        # Tolerance scaled to the system destruction, so small numerical round-off (e.g. an
+        # ideal splitter at a few negative milliwatts) does not trip the checks below.
+        tol = 1e-6 * abs(self.E_D) if (not _is_unset(self.E_D) and self.E_D) else 1e-6
+
+        # Overall balance sanity.
+        if _is_unset(self.E_F) or self.E_F <= 0:
+            logger.warning(
+                f"System fuel exergy E_F = {self.E_F} W is not positive; the exergetic "
+                f"efficiency is undefined. Check the E_F definition and the fuel streams."
+            )
+        if not _is_unset(self.E_D) and -tol > self.E_D:
+            logger.warning(
+                f"System exergy destruction E_D = {self.E_D:.2f} W is negative, which is "
+                f"physically impossible. Check the E_F/E_P/E_L definitions and stream exergies."
+            )
+
+        # Per-component sanity.
+        for name, component in self.components.items():
+            if component.__class__.__name__ == "CycleCloser":
+                continue
+            E_D = getattr(component, "E_D", None)
+            epsilon = getattr(component, "epsilon", None)
+            if not _is_unset(E_D) and -tol > E_D:
+                logger.warning(
+                    f"Component '{name}' has a negative exergy destruction "
+                    f"E_D = {E_D:.2f} W, which is physically impossible."
+                )
+            if not _is_unset(epsilon) and epsilon > 1 + 1e-6:
+                logger.warning(
+                    f"Component '{name}' has an exergetic efficiency {epsilon:.2%} > 100 %, "
+                    f"which is physically impossible."
+                )
+            if not _is_unset(E_D) and not _is_unset(self.E_D) and self.E_D > 0 and self.E_D + tol < E_D:
+                logger.warning(
+                    f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} W) than the "
+                    f"whole system ({self.E_D:.2f} W); the exergy balance does not close."
+                )
 
     def _check_unaccounted_system_conns(self):
         """
@@ -864,7 +959,10 @@ class ExergyAnalysis:
             # Connection is at system boundary if one side is not connected
             if source is None or target is None:
                 kind = conn_data.get("kind", "")
-                exergy = conn_data.get("E", 0)
+                # Treat an explicit None exergy as zero to avoid a TypeError in abs().
+                exergy = conn_data.get("E")
+                if exergy is None:
+                    exergy = 0
                 # Only consider material/heat/power streams with significant exergy
                 if kind in ["material", "heat", "power"] and abs(exergy) > 1e-3:
                     system_boundary_conns.append(conn_name)
@@ -874,7 +972,7 @@ class ExergyAnalysis:
 
         if unaccounted:
             conn_list = ", ".join(f"'{conn}'" for conn in sorted(unaccounted))
-            logging.warning(
+            logger.warning(
                 f"The following system boundary connections are not included in E_F, E_P, or E_L: {conn_list}"
             )
 
@@ -908,14 +1006,14 @@ def _construct_components(component_data, connection_data, Tamb):
         for component_name, component_information in component_instances.items():
             # Skip components of type 'Splitter'
             """if component_type == "Splitter" or component_information.get('type') == "Splitter":
-            logging.info(f"Skipping 'Splitter' component during the exergy analysis: {component_name}")
+            logger.info(f"Skipping 'Splitter' component during the exergy analysis: {component_name}")
             continue  # Skip this component"""
 
             # Fetch the corresponding class from the registry using the component type
             component_class = component_registry.items.get(component_type)
 
             if component_class is None:
-                logging.warning(f"Component type '{component_type}' is not registered.")
+                logger.warning(f"Component type '{component_type}' is not registered.")
                 continue
 
             # Instantiate the component with its attributes
@@ -937,12 +1035,10 @@ def _construct_components(component_data, connection_data, Tamb):
                     source_connector_idx = conn_info["source_connector"]  # Use 0-based indexing
                     component.outl[source_connector_idx] = conn_info  # Assign outlet stream
 
-            # --- NEW: Automatically mark Valve components as dissipative ---
-            # Here we assume that if a Valve's first inlet and first outlet have temperatures (key "T")
-            # above the ambient temperature (Tamb), it is dissipative.
+            # --- Automatically mark components as dissipative based on temperature conditions ---
             if component_type == "Valve":
+                # A Valve is dissipative if both inlet and outlet are above ambient temperature.
                 try:
-                    # Grab the temperature from the first inlet and outlet
                     T_in = list(component.inl.values())[0].get("T", None)
                     T_out = list(component.outl.values())[0].get("T", None)
                     if T_in is not None and T_out is not None and T_in > Tamb and T_out > Tamb:
@@ -950,8 +1046,38 @@ def _construct_components(component_data, connection_data, Tamb):
                     else:
                         component.is_dissipative = False
                 except Exception as e:
-                    logging.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
+                    logger.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
+            elif component_type == "HeatExchanger":
+                # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
+                # above T0 and the cold stream stays below T0 (case 6).
+                if getattr(component, "dissipative", False):
+                    component.is_dissipative = True
+                else:
+                    try:
+                        T_in0 = component.inl[0].get("T", None)
+                        T_in1 = component.inl[1].get("T", None)
+                        T_out0 = component.outl[0].get("T", None)
+                        T_out1 = component.outl[1].get("T", None)
+                        if (
+                            T_in0 is not None
+                            and T_in1 is not None
+                            and T_out0 is not None
+                            and T_out1 is not None
+                            and T_in0 > Tamb
+                            and T_in1 <= Tamb
+                            and T_out0 > Tamb
+                            and T_out1 <= Tamb
+                        ):
+                            component.is_dissipative = True
+                        else:
+                            component.is_dissipative = False
+                    except Exception as e:
+                        logger.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
+                        component.is_dissipative = False
+            elif component_type == "Condenser":
+                # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
+                component.is_dissipative = True
             else:
                 component.is_dissipative = False
 
@@ -959,6 +1085,13 @@ def _construct_components(component_data, connection_data, Tamb):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _nan_to_none(value):
+    """Convert NaN/Inf floats to None for valid JSON serialization."""
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    return value
 
 
 def _load_json(json_path):
@@ -994,7 +1127,7 @@ def _load_json(json_path):
 
 
 def _process_json(
-    data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, required_component_fields=None
+    data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, required_component_fields=None
 ):
     """Process JSON data to prepare it for exergy analysis.
     This function validates the data structure, ensures all required fields are present,
@@ -1030,8 +1163,32 @@ def _process_json(
     if missing_sections:
         raise ValueError(f"Missing required sections: {missing_sections}")
 
-    # Check for mass_composition in material streams if chemical exergy is requested
-    if chemExLib:
+    # Detect what data is already present in connections
+    material_streams = [conn_data for conn_data in data["connections"].values() if conn_data.get("kind") == "material"]
+    has_split_data = len(material_streams) > 0 and all(
+        conn_data.get("e_T") is not None and conn_data.get("e_M") is not None for conn_data in material_streams
+    )
+    has_chemical_data = any(conn_data.get("e_CH") is not None for conn_data in material_streams)
+
+    # Read settings from JSON as fallbacks when not explicitly provided
+    settings = data.get("settings", {})
+    if chemExLib is None:
+        chemExLib = settings.get("chemExLib")
+    if split_physical_exergy is None:
+        split_physical_exergy = settings.get("split_physical_exergy")
+
+    # Auto-detect from data if still not resolved
+    if split_physical_exergy is None:
+        split_physical_exergy = has_split_data
+    if split_physical_exergy and not has_split_data:
+        raise ValueError(
+            "split_physical_exergy=True requested but the JSON data does not contain "
+            "thermal (e_T) and mechanical (e_M) exergy values. Either provide a JSON "
+            "with split physical exergy data or set split_physical_exergy=False."
+        )
+
+    # Check for mass_composition in material streams if chemical exergy needs to be computed
+    if chemExLib and not has_chemical_data:
         for conn_name, conn_data in data["connections"].items():
             if conn_data.get("kind") == "material" and "mass_composition" not in conn_data:
                 raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
@@ -1063,18 +1220,21 @@ def _process_json(
         if missing_fields:
             raise ValueError(f"Connection '{conn_name}' missing required fields: {missing_fields}")
 
-    # Add chemical exergy if library provided
+    # Add chemical exergy if library provided and values not already present
     if chemExLib:
-        data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
-        logging.info("Added chemical exergy values")
-    else:
-        logging.warning("You haven't provided a chemical exergy library. Chemical exergy values will not be added.")
+        if has_chemical_data:
+            logger.info("Chemical exergy values already present in JSON data, skipping recalculation.")
+        else:
+            data = add_chemical_exergy(data, Tamb, pamb, chemExLib)
+            logger.info("Added chemical exergy values")
+    elif not has_chemical_data:
+        logger.info("No chemical exergy library provided and no e_CH values in data. Chemical exergy disabled.")
 
     # Calculate total exergy flows
     data = add_total_exergy_flow(data, split_physical_exergy)
-    logging.info("Added total exergy flows")
+    logger.info("Added total exergy flows")
 
-    return data, Tamb, pamb
+    return data, Tamb, pamb, chemExLib, split_physical_exergy
 
 
 class ExergoeconomicAnalysis:
@@ -1112,21 +1272,6 @@ class ExergoeconomicAnalysis:
         Currency symbol used in cost reporting.
     system_costs : dict
         Dictionary of system-level costs after analysis.
-
-    Methods
-    -------
-    initialize_cost_variables()
-        Defines and indexes all cost variables in the system.
-    assign_user_costs(Exe_Eco_Costs)
-        Assigns user-defined costs to components and input streams.
-    construct_matrix(Tamb)
-        Constructs the linear equation system for exergoeconomic analysis.
-    solve_exergoeconomic_analysis(Tamb)
-        Solves the cost equations and assigns results to connections and components.
-    run(Exe_Eco_Costs, Tamb)
-        Executes the complete exergoeconomic analysis workflow.
-    exergoeconomic_results(print_results=True)
-        Displays and returns tables of exergoeconomic analysis results.
     """
 
     def __init__(self, exergy_analysis_instance, currency="EUR"):
@@ -1145,6 +1290,13 @@ class ExergoeconomicAnalysis:
         This class inherits all exergy analysis results from the provided instance
         and prepares data structures for economic equations and cost variables.
         """
+        if not exergy_analysis_instance.split_physical_exergy:
+            raise ValueError(
+                "ExergoeconomicAnalysis requires split_physical_exergy=True. "
+                "The exergoeconomic cost allocation uses separate thermal (C_T) and mechanical (C_M) "
+                "cost variables for material streams. Please re-run the exergy analysis with "
+                "split_physical_exergy=True."
+            )
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
@@ -1152,6 +1304,8 @@ class ExergoeconomicAnalysis:
         self.E_F_dict = exergy_analysis_instance.E_F_dict
         self.E_P_dict = exergy_analysis_instance.E_P_dict
         self.E_L_dict = exergy_analysis_instance.E_L_dict
+        self.Tamb = exergy_analysis_instance.Tamb
+        self.pamb = exergy_analysis_instance.pamb
         self.num_variables = 0  # Track number of equations (or cost variables) for the matrix
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
@@ -1176,6 +1330,7 @@ class ExergoeconomicAnalysis:
         """
         col_number = 0
         valid_components = {comp.name for comp in self.components.values()}
+        dissipative_columns = {}  # Track dissipative column per component to avoid duplicates
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
         for name, conn in self.connections.items():
@@ -1205,10 +1360,15 @@ class ExergoeconomicAnalysis:
                     if target in valid_components:
                         comp = self.exergy_analysis.components.get(target)
                         if comp is not None and getattr(comp, "is_dissipative", False):
-                            # Add an extra index for the dissipative cost difference.
-                            conn["CostVar_index"]["dissipative"] = col_number
-                            self.variables[str(col_number)] = f"dissipative_{comp.name}"
-                            col_number += 1
+                            # Reuse existing dissipative column for the same component,
+                            # or allocate a new one if this is the first connection targeting it.
+                            if comp.name in dissipative_columns:
+                                conn["CostVar_index"]["dissipative"] = dissipative_columns[comp.name]
+                            else:
+                                conn["CostVar_index"]["dissipative"] = col_number
+                                self.variables[str(col_number)] = f"dissipative_{comp.name}"
+                                dissipative_columns[comp.name] = col_number
+                                col_number += 1
                 # For non-material streams (e.g., heat, power), assign one index.
                 elif kind in ("heat", "power"):
                     conn["CostVar_index"] = {"exergy": col_number}
@@ -1256,6 +1416,7 @@ class ExergoeconomicAnalysis:
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
+        valid_component_names = {comp.name for comp in self.components.values()}
         for conn_name, conn in self.connections.items():
             kind = conn.get("kind", "material")
 
@@ -1265,8 +1426,11 @@ class ExergoeconomicAnalysis:
 
             cost_key = f"{conn_name}_c"
 
-            # Check if the connection is an input (but also not an output)
-            is_input = not conn.get("source_component") and conn.get("target_component")
+            # Check if the connection is an input to the system: source is missing or not a registered
+            # component (e.g. TESPy Source/Sink), while target is a valid component in the system.
+            source = conn.get("source_component")
+            target = conn.get("target_component")
+            is_input = (source is None or source not in valid_component_names) and (target in valid_component_names)
 
             # For input connections (except for power connections) a cost is mandatory.
             if is_input and kind != "power" and cost_key not in Exe_Eco_Costs:
@@ -1301,14 +1465,12 @@ class ExergoeconomicAnalysis:
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
 
-    def construct_matrix(self, Tamb):
+    def construct_matrix(self):
         """
         Construct the exergoeconomic cost matrix and vector.
 
         Parameters
         ----------
-        Tamb : float
-            Ambient temperature in Kelvin.
 
         Returns
         -------
@@ -1397,22 +1559,24 @@ class ExergoeconomicAnalysis:
                         self.equations[counter] = {"kind": "boundary", "object": [name], "property": "c_TOT"}
                         counter += 1
                     else:
-                        continue
+                        # When there are power outlets, we still need at least one boundary condition
+                        # for power inlets to fix the absolute cost value. The aux_power_eq only
+                        # equalizes specific costs but doesn't set the actual value.
+                        if conn.get("C_TOT"):
+                            idx = conn["CostVar_index"]["exergy"]
+                            self._A[counter, idx] = 1
+                            self._b[counter] = conn.get("C_TOT", 0)
+                            self.equations[counter] = {"kind": "boundary", "object": [name], "property": "c_TOT"}
+                            counter += 1
 
         # 3. Auxiliary equations for the equality of the specific costs
-        # of all power flows at the input or output of the system.
+        # of all inlet power flows to the system.
         power_conns = [
             conn
             for conn in self.connections.values()
             if conn.get("kind") == "power"
-            and (
-                conn.get("source_component") not in valid_component_names
-                or conn.get("target_component") not in valid_component_names
-            )
-            and not (
-                conn.get("source_component") not in valid_component_names
-                and conn.get("target_component") not in valid_component_names
-            )
+            and conn.get("source_component") not in valid_component_names
+            and conn.get("target_component") in valid_component_names
         ]
 
         # Only add auxiliary equations if there is more than one power connection.
@@ -1443,11 +1607,11 @@ class ExergoeconomicAnalysis:
                     # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                     # and return the updated (A, b, counter).
                     self._A, self._b, counter, self.equations = comp.aux_eqs(
-                        self._A, self._b, counter, Tamb, self.equations, self.chemical_exergy_enabled
+                        self._A, self._b, counter, self.Tamb, self.equations, self.chemical_exergy_enabled
                     )
                 else:
                     # If no auxiliary equations are provided.
-                    logging.warning(f"No auxiliary equations provided for component '{comp.name}'.")
+                    logger.warning(f"No auxiliary equations provided for component '{comp.name}'.")
 
         # 5. Dissipative components:
         # Now, for each dissipative component, call its dis_eqs() method.
@@ -1460,20 +1624,21 @@ class ExergoeconomicAnalysis:
                     self._A,
                     self._b,
                     counter,
-                    Tamb,
+                    self.Tamb,
                     self.equations,
                     self.chemical_exergy_enabled,
                     list(self.components.values()),
                 )
 
-    def solve_exergoeconomic_analysis(self, Tamb):
+    def solve_exergoeconomic_analysis(self, allow_singular=False):
         """
         Solve the exergoeconomic cost balance equations and assign the results to connections and components.
 
         Parameters
         ----------
-        Tamb : float
-            Ambient temperature in Kelvin.
+        allow_singular : bool, optional
+            If True, use least-squares solver as fallback when the matrix is singular.
+            The solution may not be physically consistent. Default is False.
 
         Returns
         -------
@@ -1484,7 +1649,8 @@ class ExergoeconomicAnalysis:
         Raises
         ------
         ValueError
-            If the exergoeconomic system is singular or if the cost balance is not satisfied.
+            If the exergoeconomic system is singular (and allow_singular is False)
+            or if the cost balance is not satisfied.
 
         Notes
         -----
@@ -1497,7 +1663,7 @@ class ExergoeconomicAnalysis:
         6. Computes system-level cost variables
         """
         # Step 1: Construct the cost matrix
-        self.construct_matrix(Tamb)
+        self.construct_matrix()
 
         # Step 2: Solve the system of equations
         try:
@@ -1507,10 +1673,26 @@ class ExergoeconomicAnalysis:
                     "The solution of the cost matrix contains NaN values, indicating an issue with the cost balance equations or specifications."
                 )
         except np.linalg.LinAlgError:
-            raise ValueError(
-                f"Exergoeconomic system is singular and cannot be solved. "
-                f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}"
+            rank = np.linalg.matrix_rank(self._A)
+            n = self._A.shape[0]
+            if not allow_singular:
+                print(f"\nExergoeconomic system is singular (rank {rank}/{n}). Dependency report:")
+                self.print_dependency_report()
+                raise ValueError(
+                    f"Exergoeconomic system is singular (rank {rank}/{n}) and cannot be solved. "
+                    f"Provided equations: {len(self.equations)}, variables in system: {len(self.variables)}. "
+                    f"Use run(allow_singular=True) to attempt a least-squares solution."
+                )
+            logger.warning(
+                f"Exergoeconomic matrix is singular (rank {rank}/{n}). "
+                f"Using least-squares solver (minimum-norm solution). Results may not be physically consistent."
             )
+            C_solution, residuals, rank_lstsq, sv = np.linalg.lstsq(self._A, self._b, rcond=None)
+            if np.isnan(C_solution).any():
+                raise ValueError(
+                    f"Exergoeconomic system is singular (rank {rank}/{n}) and the least-squares "
+                    f"solver also produced NaN values. The equation system may be fundamentally ill-posed."
+                )
 
         # Step 3: Distribute the cost differences of dissipative components to the serving components
         self.distribute_all_Z_diff(C_solution)
@@ -1533,26 +1715,26 @@ class ExergoeconomicAnalysis:
                     E_M = m_val * e_M  # mechanical exergy flow [kW]
 
                     conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
-                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else np.nan
+                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else 0.0
 
                     conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
-                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else np.nan
+                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else 0.0
 
                     conn["C_PH"] = conn["C_T"] + conn["C_M"]
-                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else np.nan
+                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else 0.0
 
                     if self.chemical_exergy_enabled:
                         e_CH = conn.get("e_CH", 0)  # chemical specific exergy [kJ/kg]
                         E_CH = m_val * e_CH  # chemical exergy flow [kW]
                         conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
-                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else np.nan
+                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else 0.0
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
                         total_E = E_T + E_M + E_CH
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                     else:
                         conn["C_TOT"] = conn["C_T"] + conn["C_M"]
                         total_E = E_T + E_M
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else np.nan
+                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
@@ -1561,6 +1743,9 @@ class ExergoeconomicAnalysis:
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
                 comp.exergoeconomic_balance(self.exergy_analysis.Tamb, self.chemical_exergy_enabled)
+
+        # Check cost balances before loss attribution (Step 6) modifies C_TOT values
+        self.check_cost_balance()
 
         # Step 6: Distribute the cost of loss streams to the product streams.
         # For each loss stream (provided in E_L_dict), its C_TOT is distributed among the product streams (in E_P_dict)
@@ -1654,11 +1839,21 @@ class ExergoeconomicAnalysis:
         """
         # find all indices of variables named "dissipative_*"
         diss_indices = [int(idx) for idx, name in self.variables.items() if name.startswith("dissipative_")]
+        if not diss_indices:
+            return
         total_C_diff = sum(C_solution[i] for i in diss_indices)
         # assign to each component that got a serving_weight
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "serving_weight"):
                 comp.Z_diss = comp.serving_weight * total_C_diff
+
+        # Store each dissipative component's own C_diff for balance checking
+        for idx in diss_indices:
+            var_name = self.variables[str(idx)]  # e.g., "dissipative_VAL1"
+            comp_name = var_name.replace("dissipative_", "", 1)
+            comp = self.exergy_analysis.components.get(comp_name)
+            if comp is not None:
+                comp.C_diff = C_solution[idx]
 
     def check_cost_balance(self, tol=1e-6):
         """
@@ -1678,7 +1873,7 @@ class ExergoeconomicAnalysis:
         dict
             Mapping from component name to tuple (balance, is_balanced),
             where balance is the residual and is_balanced is True if
-            |balance| <= tol.
+            abs(balance) <= tol.
         """
         from .components.helpers.cycle_closer import CycleCloser
 
@@ -1689,28 +1884,39 @@ class ExergoeconomicAnalysis:
             inlet_sum = 0.0
             outlet_sum = 0.0
             for conn in self.connections.values():
+                # Use sum of cost components instead of C_TOT, because C_TOT may have been
+                # modified by loss attribution (Step 6) which is not part of the matrix equation.
+                kind = conn.get("kind", "material")
+                if kind == "material":
+                    cost = (conn.get("C_T", 0) or 0) + (conn.get("C_M", 0) or 0)
+                    if self.chemical_exergy_enabled:
+                        cost += conn.get("C_CH", 0) or 0
+                else:
+                    # For heat/power streams, use C_TOT directly (no loss attribution applies)
+                    cost = conn.get("C_TOT", 0) or 0
                 if conn.get("target_component") == name:
-                    inlet_sum += conn.get("C_TOT", 0) or 0
+                    inlet_sum += cost
                 if conn.get("source_component") == name:
-                    outlet_sum += conn.get("C_TOT", 0) or 0
+                    outlet_sum += cost
             comp.C_in = inlet_sum
             comp.C_out = outlet_sum
             z_cost = getattr(comp, "Z_costs", 0)
             z_diss = getattr(comp, "Z_diss", 0)
-            balance = inlet_sum - outlet_sum + z_cost + z_diss
+            c_diff = getattr(comp, "C_diff", 0)
+            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff
             balances[name] = (balance, abs(balance) <= tol)
 
         all_ok = all(flag for _, flag in balances.values())
         if all_ok:
-            print("Everything is fine: all component cost balances are fulfilled.")
+            logger.info("All component cost balances are fulfilled.")
         else:
             for name, (bal, ok) in balances.items():
                 if not ok:
-                    print(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
+                    logger.warning(f"Balance for component {name} not fulfilled: residual = {bal:.6f}")
 
         return balances
 
-    def run(self, Exe_Eco_Costs, Tamb):
+    def run(self, Exe_Eco_Costs, allow_singular=False):
         """
         Execute the full exergoeconomic analysis.
 
@@ -1720,8 +1926,9 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
-        Tamb : float
-            Ambient temperature in Kelvin.
+        allow_singular : bool, optional
+            If True, use least-squares solver as fallback when the matrix is singular.
+            The solution may not be physically consistent. Default is False.
 
         Notes
         -----
@@ -1732,10 +1939,8 @@ class ExergoeconomicAnalysis:
         """
         self.initialize_cost_variables()
         self.assign_user_costs(Exe_Eco_Costs)
-        self.solve_exergoeconomic_analysis(Tamb)
-        logging.info("Exergoeconomic analysis completed successfully.")
-        self.check_cost_balance()
-        print("stop")
+        self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
+        logger.info("Exergoeconomic analysis completed successfully.")
 
     def print_equations(self):
         """
@@ -1761,8 +1966,12 @@ class ExergoeconomicAnalysis:
 
     def detect_linear_dependencies(self, tol_strict: float = 1e-12, tol_near: float = 1e-8):
         """
-        Scan A for zero-rows, zero-cols, exactly colinear equation pairs
-        (error ≤ tol_strict), and near-colinear pairs (≤ tol_near but > tol_strict).
+        Scan A for zero-rows, zero-cols, pairwise colinear equation pairs,
+        and use SVD null-space analysis to identify multi-equation dependencies.
+
+        The SVD analysis finds the actual null space of A^T, revealing which
+        equations participate in linear dependencies even when no two equations
+        are pairwise colinear.
         """
         A = self._A
 
@@ -1770,7 +1979,7 @@ class ExergoeconomicAnalysis:
         zero_rows = np.where((np.abs(A) < tol_strict).all(axis=1))[0].tolist()
         zero_cols = np.where((np.abs(A) < tol_strict).all(axis=0))[0].tolist()
 
-        # 2) norms once
+        # 2) pairwise colinearity using cosine similarity (more robust than dot-product difference)
         norms = np.linalg.norm(A, axis=1)
 
         strict = []
@@ -1780,33 +1989,75 @@ class ExergoeconomicAnalysis:
             for j in range(i + 1, n):
                 ni, nj = norms[i], norms[j]
                 if ni > tol_strict and nj > tol_strict:
-                    dot = float(np.dot(A[i], A[j]))
-                    diff = abs(dot - ni * nj)
-                    if diff <= tol_strict:
+                    cosine = float(np.dot(A[i], A[j])) / (ni * nj)
+                    if abs(abs(cosine) - 1.0) <= tol_strict:
                         strict.append((i, j))
-                    elif diff <= tol_near:
+                    elif abs(abs(cosine) - 1.0) <= tol_near:
                         near.append((i, j))
 
         # drop any strict pairs from the near list
         near_only = [pair for pair in near if pair not in strict]
+
+        # 3) SVD null-space analysis to find multi-equation dependencies
+        svd_dependencies = []
+        matrix_rank = None
+        try:
+            U, s, Vt = np.linalg.svd(A)
+            # Use same tolerance as np.linalg.matrix_rank for consistency
+            sv_tol = s[0] * max(A.shape) * np.finfo(A.dtype).eps
+            matrix_rank = int(np.sum(s > sv_tol))
+            rank_deficiency = A.shape[0] - matrix_rank
+
+            if rank_deficiency > 0:
+                # The last `rank_deficiency` columns of U span the left null space of A
+                # These tell us which *equations* (rows) are involved in dependencies
+                null_vectors = U[:, matrix_rank:]  # shape: (n_eqs, rank_deficiency)
+
+                for k in range(rank_deficiency):
+                    null_vec = null_vectors[:, k]
+                    # Find equations with significant contributions to this null vector
+                    max_coeff = np.max(np.abs(null_vec))
+                    if max_coeff > tol_strict:
+                        threshold = max_coeff * 0.01  # 1% of max coefficient
+                        involved = []
+                        for idx in range(len(null_vec)):
+                            if abs(null_vec[idx]) > threshold:
+                                involved.append((idx, float(null_vec[idx])))
+                        svd_dependencies.append(
+                            {
+                                "null_vector_index": k,
+                                "singular_value": float(s[matrix_rank + k]) if (matrix_rank + k) < len(s) else 0.0,
+                                "involved_equations": involved,
+                            }
+                        )
+        except np.linalg.LinAlgError:
+            pass  # SVD failed, skip this analysis
 
         return {
             "zero_rows": zero_rows,
             "zero_columns": zero_cols,
             "colinear_equations_strict": strict,
             "colinear_equations_near_only": near_only,
+            "svd_dependencies": svd_dependencies,
+            "matrix_rank": matrix_rank,
         }
 
     def print_dependency_report(self, tol_strict: float = 1e-12, tol_near: float = 1e-8):
         """
         Nicely print which equations or variables are under- or over-determined,
-        distinguishing exact vs. near colinearities.
+        distinguishing exact vs. near colinearities, and showing SVD null-space analysis.
         """
         deps = self.detect_linear_dependencies(tol_strict, tol_near)
 
+        # Matrix rank
+        if deps.get("matrix_rank") is not None:
+            n = self._A.shape[0]
+            rank = deps["matrix_rank"]
+            print(f"Matrix size: {n}x{n}, Rank: {rank}, Rank deficiency: {n - rank}")
+
         # empty equations
         if deps["zero_rows"]:
-            print("⚠ Equations with no variables:")
+            print("\n⚠ Equations with no variables:")
             for eq in deps["zero_rows"]:
                 print(f"  • Eq[{eq}]: {self.equations.get(eq)}")
         else:
@@ -1831,11 +2082,25 @@ class ExergoeconomicAnalysis:
 
         # near-colinear
         if deps["colinear_equations_near_only"]:
-            print("\n⚠ Nearly colinear equation pairs (|dot−‖i‖‖j‖| ≤ tol_near):")
+            print("\n⚠ Nearly colinear equation pairs (|cosine| ≈ 1):")
             for i, j in deps["colinear_equations_near_only"]:
                 print(f"  • Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
         else:
             print("✓ No near-colinear equation pairs detected.")
+
+        # SVD null-space analysis
+        svd_deps = deps.get("svd_dependencies", [])
+        if svd_deps:
+            print(f"\n⚠ SVD null-space analysis found {len(svd_deps)} dependency(ies):")
+            for dep in svd_deps:
+                print(f"\n  Dependency #{dep['null_vector_index'] + 1} (singular value: {dep['singular_value']:.2e}):")
+                print("  Equations involved (with coefficients in null vector):")
+                sorted_eqs = sorted(dep["involved_equations"], key=lambda x: abs(x[1]), reverse=True)
+                for eq_idx, coeff in sorted_eqs:
+                    eq_info = self.equations.get(eq_idx, "unknown")
+                    print(f"    • Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
+        else:
+            print("\n✓ SVD analysis: no linear dependencies detected (matrix is full rank).")
 
     def exergoeconomic_results(self, print_results=True):
         """
@@ -1928,6 +2193,9 @@ class ExergoeconomicAnalysis:
             (df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"])
             / df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
         ) * 100
+
+        # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf
+        df_comp["r [%]"] = df_comp["r [%]"].where(df_comp["r [%]"].abs() <= 1e8, np.inf)
 
         # -------------------------
         # Add cost columns to material connections.
@@ -2029,42 +2297,40 @@ class ExergoeconomicAnalysis:
         # -------------------------
         # Split the material connections into two tables according to your specifications.
         # -------------------------
-        # df_mat1: Columns from mass flow until e^CH.
-        df_mat1 = df_mat[
-            [
-                "Connection",
-                "m [kg/s]",
-                "T [°C]",
-                "p [bar]",
-                "h [kJ/kg]",
-                "s [J/kgK]",
-                "E [kW]",
-                "e^PH [kJ/kg]",
-                "e^T [kJ/kg]",
-                "e^M [kJ/kg]",
-                "e^CH [kJ/kg]",
-            ]
-        ].copy()
+        # df_mat1: Columns from mass flow until e^CH (only include columns that exist).
+        mat1_cols = [
+            "Connection",
+            "m [kg/s]",
+            "T [°C]",
+            "p [bar]",
+            "h [kJ/kg]",
+            "s [J/kgK]",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]",
+        ]
+        df_mat1 = df_mat[[c for c in mat1_cols if c in df_mat.columns]].copy()
 
         # df_mat2: Columns from E onward, plus the uppercase and lowercase cost columns.
-        df_mat2 = df_mat[
-            [
-                "Connection",
-                "E [kW]",
-                "e^PH [kJ/kg]",
-                "e^T [kJ/kg]",
-                "e^M [kJ/kg]",
-                "e^CH [kJ/kg]",
-                f"C^T [{self.currency}/h]",
-                f"C^M [{self.currency}/h]",
-                f"C^CH [{self.currency}/h]",
-                f"C^TOT [{self.currency}/h]",
-                f"c^T [{self.currency}/GJ_ex]",
-                f"c^M [{self.currency}/GJ_ex]",
-                f"c^CH [{self.currency}/GJ_ex]",
-                f"c^TOT [{self.currency}/GJ_ex]",
-            ]
-        ].copy()
+        mat2_cols = [
+            "Connection",
+            "E [kW]",
+            "e^PH [kJ/kg]",
+            "e^T [kJ/kg]",
+            "e^M [kJ/kg]",
+            "e^CH [kJ/kg]",
+            f"C^T [{self.currency}/h]",
+            f"C^M [{self.currency}/h]",
+            f"C^CH [{self.currency}/h]",
+            f"C^TOT [{self.currency}/h]",
+            f"c^T [{self.currency}/GJ_ex]",
+            f"c^M [{self.currency}/GJ_ex]",
+            f"c^CH [{self.currency}/GJ_ex]",
+            f"c^TOT [{self.currency}/GJ_ex]",
+        ]
+        df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
         # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
         df_mat1.dropna(axis=1, how="all", inplace=True)
@@ -2085,6 +2351,116 @@ class ExergoeconomicAnalysis:
             print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
 
         return df_comp, df_mat1, df_mat2, df_non_mat
+
+    def evaluate_results(self, top_n=5, sort_by="C_D+Z"):
+        """
+        Analyze and print the most important components from the exergoeconomic analysis.
+
+        This method ranks components by the selected criterion and prints a summary
+        table highlighting where the highest cost increases occur and whether they
+        are driven by investment (Z) or by inefficiency (C_D).
+
+        Parameters
+        ----------
+        top_n : int, optional
+            Number of top components to display (default is 5).
+        sort_by : str, optional
+            Column to sort by. Valid options:
+
+            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default)
+            - ``"C_D"`` : cost rate of exergy destruction (inefficiency-driven cost)
+            - ``"Z"`` : investment cost rate
+            - ``"r"`` : relative cost difference [%]
+            - ``"f"`` : exergoeconomic factor [%]
+
+        Returns
+        -------
+        pandas.DataFrame
+            The sorted component DataFrame (excluding the TOT row).
+
+        Notes
+        -----
+        The exergoeconomic factor *f* indicates whether the cost increase in a
+        component is dominated by investment (*f* close to 100 %) or by exergy
+        destruction (*f* close to 0 %).  A low *f* suggests that improving
+        component efficiency would be more effective, while a high *f* suggests
+        that reducing investment cost is the priority.
+        """
+        # Get full results without printing
+        df_comp, _, _, _ = self.exergoeconomic_results(print_results=False)
+
+        # Remove TOT row for ranking
+        df = df_comp[df_comp["Component"] != "TOT"].copy()
+
+        # Map user-friendly names to actual column names
+        col_map = {
+            "C_D+Z": f"C_D+Z [{self.currency}/h]",
+            "C_D": f"C_D [{self.currency}/h]",
+            "Z": f"Z [{self.currency}/h]",
+            "r": "r [%]",
+            "f": "f [%]",
+        }
+
+        if sort_by not in col_map:
+            raise ValueError(f"Invalid sort_by='{sort_by}'. Choose from: {list(col_map.keys())}")
+
+        sort_col = col_map[sort_by]
+        df_sorted = df.sort_values(by=sort_col, ascending=False).reset_index(drop=True)
+
+        # Select columns for display
+        display_cols = [
+            "Component",
+            f"C_D [{self.currency}/h]",
+            f"Z [{self.currency}/h]",
+            f"C_D+Z [{self.currency}/h]",
+            "f [%]",
+            "r [%]",
+            f"c_F [{self.currency}/GJ]",
+            f"c_P [{self.currency}/GJ]",
+        ]
+        display_cols = [c for c in display_cols if c in df_sorted.columns]
+
+        # Print ranking header
+        n_show = min(top_n, len(df_sorted))
+        print(f"\n{'=' * 70}")
+        print(f"  EXERGOECONOMIC EVALUATION - Top {n_show} components by {sort_by}")
+        print(f"{'=' * 70}")
+        print(
+            tabulate(
+                df_sorted[display_cols].head(n_show).reset_index(drop=True),
+                headers="keys",
+                tablefmt="psql",
+                floatfmt=".3f",
+            )
+        )
+
+        # Print interpretation guide
+        print(f"\n--- Interpretation (top {n_show} by {sort_by}) ---")
+        for i in range(n_show):
+            row = df_sorted.iloc[i]
+            name = row["Component"]
+            c_d = row[f"C_D [{self.currency}/h]"]
+            z = row[f"Z [{self.currency}/h]"]
+            f_val = row["f [%]"]
+
+            if f_val < 25:
+                driver = "inefficiency (C_D dominates)"
+                suggestion = "improve component efficiency"
+            elif f_val > 75:
+                driver = "investment (Z dominates)"
+                suggestion = "reduce investment cost"
+            else:
+                driver = "both investment and inefficiency"
+                suggestion = "consider trade-off between efficiency and cost"
+
+            print(
+                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f} {self.currency}/h, "
+                f"f={f_val:.1f}% -> {driver} -> {suggestion}"
+            )
+
+        print()
+
+        return df_sorted
 
 
 class EconomicAnalysis:

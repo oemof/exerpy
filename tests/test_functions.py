@@ -12,14 +12,12 @@ Uses both basic test cases and realistic process data from Ebsilon simulations.
 
 import pytest
 
-from exerpy.functions import (
-    add_chemical_exergy,
-    add_total_exergy_flow,
-    calc_chemical_exergy,
-    convert_to_SI,
-    mass_to_molar_fractions,
-    molar_to_mass_fractions,
-)
+from exerpy.functions import add_chemical_exergy
+from exerpy.functions import add_total_exergy_flow
+from exerpy.functions import calc_chemical_exergy
+from exerpy.functions import convert_to_SI
+from exerpy.functions import mass_to_molar_fractions
+from exerpy.functions import molar_to_mass_fractions
 
 
 @pytest.fixture

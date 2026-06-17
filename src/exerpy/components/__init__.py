@@ -14,6 +14,9 @@ from .nodes.storage import Storage
 from .piping.valve import Valve
 from .power_machines.generator import Generator
 from .power_machines.motor import Motor
+from .solar_thermal.heliostatfield import Heliostatfield
+from .solar_thermal.parabolictrough import ParabolicTrough
+from .solar_thermal.solartower import SolarTower
 from .turbomachinery.compressor import Compressor
 from .turbomachinery.pump import Pump
 from .turbomachinery.turbine import Turbine

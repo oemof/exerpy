@@ -1,16 +1,15 @@
-from tespy.components import (
-    Compressor,
-    CycleCloser,
-    HeatExchanger,
-    Motor,
-    PowerBus,
-    PowerSource,
-    Pump,
-    Sink,
-    Source,
-    Valve,
-)
-from tespy.connections import Connection, PowerConnection
+from tespy.components import Compressor
+from tespy.components import CycleCloser
+from tespy.components import HeatExchanger
+from tespy.components import Motor
+from tespy.components import PowerBus
+from tespy.components import PowerSource
+from tespy.components import Pump
+from tespy.components import Sink
+from tespy.components import Source
+from tespy.components import Valve
+from tespy.connections import Connection
+from tespy.connections import PowerConnection
 from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
@@ -107,14 +106,19 @@ nw.assert_convergence()
 
 nw.print_results()
 
+# [tespy_model_section_end]
+
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
 ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=False)
+# [exergy_analysis_setup]
 
 fuel = {"inputs": ["e1"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}
 loss = {"inputs": ["13"], "outputs": ["11"]}
+
+# [exergy_analysis_flows]
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

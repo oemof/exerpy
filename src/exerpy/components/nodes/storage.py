@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -101,14 +101,14 @@ class Storage(Component):
         """
 
         if self.outl[0]["m"] < self.inl[0]["m"]:
-            logging.info(f"Storage '{self.name}' is charged.")
+            logger.info(f"Storage '{self.name}' is charged.")
             self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self.outl[0]["m"] * self.outl[0]["e_PH"]
             self.E_P = (self.inl[0]["m"] - self.outl[0]["m"]) * self.outl[0][
                 "e_PH"
             ]  # assuming that exergy is stored at the same temperature as the outlet
             self.E_D = self.E_F - self.E_P
         elif self.outl[0]["m"] > self.inl[0]["m"]:
-            logging.info(f"Storage '{self.name}' is discharged.")
+            logger.info(f"Storage '{self.name}' is discharged.")
             self.E_F = (self.outl[0]["m"] - self.inl[0]["m"]) * self.outl[0][
                 "e_PH"
             ]  # assuming that exergy is stored at the same temperature as the outlet
@@ -118,7 +118,7 @@ class Storage(Component):
         self.epsilon = self.E_P / self.E_F if self.E_F != 0 else np.nan
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Storage {self.name} calculated: "
             f"E_F = {self.E_F:.2f} W, E_P = {self.E_P:.2f} W, E_D = {self.E_D:.2f} W, "
         )

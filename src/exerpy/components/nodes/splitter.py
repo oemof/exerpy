@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -34,6 +34,9 @@ class Splitter(Component):
     def __init__(self, **kwargs):
         r"""Initialize splitter component with given parameters."""
         super().__init__(**kwargs)
+        # Number of identical parallel branches each modelled outlet represents (1 for an
+        # ordinary splitter; >1 when one branch stands in for a field of parallel branches).
+        self.num_branches = kwargs.get("num_branches", 1) or 1
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -61,14 +64,15 @@ class Splitter(Component):
         outlet_list = list(self.outl.values())
         inlet_list = list(self.inl.values())
         E_in = sum(inlet.get("m", 0) * inlet.get("e_PH") for inlet in inlet_list)
-        E_out = sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
+        # Each modelled outlet represents num_branches identical parallel branches.
+        E_out = self.num_branches * sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
         self.E_P = np.nan
         self.E_F = np.nan
         self.E_D = E_in - E_out
         self.epsilon = np.nan
 
         # Log the results.
-        logging.info(
+        logger.info(
             f"Exergy balance of Splitter {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"

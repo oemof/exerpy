@@ -1,10 +1,12 @@
 import json
-import logging
 import os
 
-from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy.functions import convert_to_SI
+from exerpy.functions import fluid_property_data
+from exerpy.logger import logger
 
-from .aspen_config import connector_mappings, grouped_components
+from .aspen_config import connector_mappings
+from .aspen_config import grouped_components
 
 
 class AspenModelParser:
@@ -45,9 +47,9 @@ class AspenModelParser:
             self.aspen = Dispatch("Apwn.Document")
             # Load the Aspen model file
             self.aspen.InitFromArchive2(self.model_path)
-            logging.info(f"Model opened successfully: {self.model_path}")
+            logger.info(f"Model opened successfully: {self.model_path}")
         except Exception as e:
-            logging.error(f"Failed to initialize the model: {e}")
+            logger.error(f"Failed to initialize the model: {e}")
             raise
 
     def parse_model(self):
@@ -65,7 +67,7 @@ class AspenModelParser:
             self.parse_blocks()
 
         except Exception as e:
-            logging.error(f"Error while parsing the model: {e}")
+            logger.error(f"Error while parsing the model: {e}")
             raise
 
     def parse_streams(self):
@@ -224,7 +226,7 @@ class AspenModelParser:
                                 rf"\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL"
                             )
                             is not None
-                            else (logging.warning(f"e_PH node not found for stream {stream_name}"), None)[1]
+                            else (logger.warning(f"e_PH node not found for stream {stream_name}"), None)[1]
                         ),
                         "e_PH_unit": fluid_property_data["e"]["SI_unit"],
                         "n": (
@@ -286,7 +288,7 @@ class AspenModelParser:
             if component_type == "Mixer":
                 mixer_value = component_type_node.Value
                 if mixer_value in ["TRIANGLE", "HEAT"]:
-                    logging.info(f"Ignoring Mixer {block_name} with value {mixer_value}.")
+                    logger.info(f"Ignoring Mixer {block_name} with value {mixer_value}.")
                     continue
 
             component_data = {
@@ -349,7 +351,7 @@ class AspenModelParser:
                             if elec_power_name in self.connections_data:
                                 elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
                             else:
-                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                logger.warning(f"No WS(IN) ports found for block {block_name}")
                                 elec_power = None
                             brake_power_node = self.aspen.Tree.FindNode(
                                 rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
@@ -358,7 +360,7 @@ class AspenModelParser:
                             if brake_power_name in self.connections_data:
                                 brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
                             else:
-                                logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                logger.warning(f"No WS(IN) ports found for block {block_name}")
                                 brake_power = None
                             component_data.update(
                                 {
@@ -387,7 +389,7 @@ class AspenModelParser:
                                 if elec_power_name in self.connections_data:
                                     elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
                                 else:
-                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
                                     elec_power = None
                                 brake_power_node = self.aspen.Tree.FindNode(
                                     rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
@@ -396,7 +398,7 @@ class AspenModelParser:
                                 if brake_power_name in self.connections_data:
                                     brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
                                 else:
-                                    logging.warning(f"No WS(IN) ports found for block {block_name}")
+                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
                                     brake_power = None
                                 component_data.update(
                                     {
@@ -531,7 +533,7 @@ class AspenModelParser:
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
-            logging.warning(f"No Ports node found for Mixer block: {block_name}")
+            logger.warning(f"No Ports node found for Mixer block: {block_name}")
             return
 
         inlet_streams = []
@@ -550,20 +552,20 @@ class AspenModelParser:
                         elif stream_data.get("source_component") == block_name:
                             outlet_streams.append((port_label, stream_name))
                         else:
-                            logging.warning(
+                            logger.warning(
                                 f"Stream {stream_name} connected to {block_name} but source/target components do not match."
                             )
 
         # Assign connectors to inlet streams
         for idx, (port_label, stream_name) in enumerate(inlet_streams):
             connections_data[stream_name]["target_connector"] = idx
-            logging.debug(f"Assigned connector {idx} to inlet stream: {stream_name}")
+            logger.debug(f"Assigned connector {idx} to inlet stream: {stream_name}")
 
         # Assign connector to outlet stream
         if outlet_streams:
             for idx, (port_label, stream_name) in enumerate(outlet_streams):
                 connections_data[stream_name]["source_connector"] = 0  # Assuming single outlet for mixer
-                logging.debug(f"Assigned connector 0 to outlet stream: {stream_name}")
+                logger.debug(f"Assigned connector 0 to outlet stream: {stream_name}")
 
     def assign_splitter_connectors(self, block_name, aspen, connections_data):
         """
@@ -573,7 +575,7 @@ class AspenModelParser:
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
-            logging.warning(f"No Ports node found for Splitter block: {block_name}")
+            logger.warning(f"No Ports node found for Splitter block: {block_name}")
             return
 
         inlet_streams = []
@@ -594,19 +596,19 @@ class AspenModelParser:
                         elif stream_data.get("source_component") == block_name:
                             outlet_streams.append((port_label, stream_name))
                         else:
-                            logging.warning(
+                            logger.warning(
                                 f"Stream {stream_name} connected to {block_name} but source/target components do not match."
                             )
 
         # Assign connector to inlet stream(s)
         for idx, (port_label, stream_name) in enumerate(inlet_streams):
             connections_data[stream_name]["target_connector"] = 0  # Assuming single inlet for splitter
-            logging.debug(f"Assigned connector 0 to inlet stream: {stream_name}")
+            logger.debug(f"Assigned connector 0 to inlet stream: {stream_name}")
 
         # Assign connectors to outlet streams
         for idx, (port_label, stream_name) in enumerate(outlet_streams):
             connections_data[stream_name]["source_connector"] = idx
-            logging.debug(f"Assigned connector {idx} to outlet stream: {stream_name}")
+            logger.debug(f"Assigned connector {idx} to outlet stream: {stream_name}")
 
     def assign_turbine_connectors(self, block_name, aspen, connections_data):
         """
@@ -617,6 +619,7 @@ class AspenModelParser:
         - P(OUT): outlet gas flow → outlet connector 0
         - WS(OUT): power output → outlet connector 1
         - WS(IN): direction depends on the sign of the Aspen power value:
+
             - positive → power leaves the turbine → outlet connector 2 (source/target swapped)
             - negative → power enters the turbine → inlet connector 1 (kept as-is)
 
@@ -626,7 +629,7 @@ class AspenModelParser:
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
-            logging.warning(f"No Ports node found for Turbine block: {block_name}")
+            logger.warning(f"No Ports node found for Turbine block: {block_name}")
             return
 
         for port in ports_node.Elements:
@@ -664,7 +667,7 @@ class AspenModelParser:
                         stream["source_connector"] = 2
                         stream["target_component"] = old_source
                         stream["target_connector"] = old_source_connector
-                        logging.info(
+                        logger.info(
                             f"Turbine {block_name}: WS(IN) power stream '{stream_name}' has positive "
                             f"value — swapped direction, turbine is now the source, "
                             f"'{old_source}' is the target."
@@ -674,7 +677,7 @@ class AspenModelParser:
                         # Keep direction as-is, assign inlet connector 1.
                         if stream.get("target_component") == block_name:
                             stream["target_connector"] = 1
-                        logging.info(
+                        logger.info(
                             f"Turbine {block_name}: WS(IN) power stream '{stream_name}' has negative "
                             f"value — kept as inlet (power enters turbine)."
                         )
@@ -685,7 +688,7 @@ class AspenModelParser:
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
-            logging.warning(f"No Ports node found for combustion chamber block: {block_name}")
+            logger.warning(f"No Ports node found for combustion chamber block: {block_name}")
             return
 
         # Iterate over all ports and assign connectors based on port labels
@@ -702,12 +705,12 @@ class AspenModelParser:
                             molar_composition = connections_data[stream_name].get("molar_composition", {})
                             if molar_composition.get("O2", 0) > 0.15:
                                 connections_data[stream_name]["target_connector"] = 0  # Air inlet
-                                logging.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
+                                logger.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
                             elif molar_composition.get("CH4", 0) > 0.15:
                                 connections_data[stream_name]["target_connector"] = 1  # Fuel inlet
-                                logging.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
+                                logger.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
                             else:
-                                logging.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
+                                logger.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
 
             # Handle outlet ports
             elif "(OUT)" in port_label:
@@ -717,7 +720,7 @@ class AspenModelParser:
                         stream_name = element.Name
                         if stream_name in connections_data:
                             connections_data[stream_name]["source_connector"] = 0  # Outlet stream
-                            logging.info(f"Assigned connector 0 to outlet stream: {stream_name}")
+                            logger.info(f"Assigned connector 0 to outlet stream: {stream_name}")
 
     def assign_generic_connectors(self, block_name, component_type, aspen, connections_data, connector_mappings):
         """
@@ -739,15 +742,15 @@ class AspenModelParser:
                                 and connections_data[stream_name]["source_component"] == block_name
                             ):
                                 connections_data[stream_name]["source_connector"] = connector_num
-                                logging.debug(f"Assigned connector {connector_num} to source stream: {stream_name}")
+                                logger.debug(f"Assigned connector {connector_num} to source stream: {stream_name}")
                             elif (
                                 "target_component" in connections_data[stream_name]
                                 and connections_data[stream_name]["target_component"] == block_name
                             ):
                                 connections_data[stream_name]["target_connector"] = connector_num
-                                logging.debug(f"Assigned connector {connector_num} to target stream: {stream_name}")
+                                logger.debug(f"Assigned connector {connector_num} to target stream: {stream_name}")
         else:
-            logging.warning(f"No connector mapping defined for component type {component_type}.")
+            logger.warning(f"No connector mapping defined for component type {component_type}.")
 
     def group_component(self, component_data, component_name):
         """
@@ -799,10 +802,10 @@ class AspenModelParser:
                     "Ambient pressure (pamb) not found in the Aspen model. Please set it in Setup > Calculation Options."
                 )
 
-            logging.info(f"Parsed ambient conditions: Tamb = {self.Tamb} K, pamb = {self.pamb} Pa")
+            logger.info(f"Parsed ambient conditions: Tamb = {self.Tamb} K, pamb = {self.pamb} Pa")
 
         except Exception as e:
-            logging.error(f"Error parsing ambient conditions: {e}")
+            logger.error(f"Error parsing ambient conditions: {e}")
             raise
 
     def get_sorted_data(self):
@@ -840,9 +843,9 @@ class AspenModelParser:
         try:
             with open(output_path, "w") as json_file:
                 json.dump(data, json_file, indent=4)
-            logging.info(f"Data successfully written to {output_path}")
+            logger.info(f"Data successfully written to {output_path}")
         except Exception as e:
-            logging.error(f"Failed to write data to JSON: {e}")
+            logger.error(f"Failed to write data to JSON: {e}")
             raise
 
 
@@ -861,7 +864,7 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
     """
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
     parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy)
@@ -870,7 +873,7 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
         parser.initialize_model()
         parser.parse_model()
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
         raise RuntimeError(f"An error occurred: {e}")
 
     parsed_data = parser.get_sorted_data()
@@ -879,7 +882,7 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
         try:
             parser.write_to_json(output_dir)
         except Exception as e:
-            logging.error(f"Failed to write output file: {e}")
+            logger.error(f"Failed to write output file: {e}")
             raise RuntimeError(f"Failed to write output file: {e}")
 
     return parsed_data

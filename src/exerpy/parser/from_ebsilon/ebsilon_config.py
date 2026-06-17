@@ -916,12 +916,15 @@ grouped_components = {
     "Deaerator": [9, 63],
     "SimpleHeatExchanger": [15, 16, 35],
     "SteamGenerator": [5],
-    "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
+    "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161, 115],
     "FlashTank": [34],
     "Storage": [118],
-    "Splitter": [4, 17, 18, 19, 52, 109, 140, 157],
+    "Splitter": [4, 17, 18, 19, 52, 109, 140, 157, 114],
     "CycleCloser": [80],
     "PowerBus": [31],
+    "ParabolicTrough": [113],
+    "Heliostatfield": [121],
+    "SolarTower": [120],
 }
 """
 This is the mapping of component groups to their respective component IDs:
@@ -1164,8 +1167,23 @@ connector_mapping = {
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
     },
+    113: {  # Parabolic Trough Collector
+        1: 0,  # Inlet fluid
+        2: 0,  # Outlet fluid
+        3: 1,  # Solar heat input connection
+    },
     118: {  # Storage
         1: 0,  # Inlet
         2: 0,  # Outlet
+    },
+    120: {  # Solar Tower Receiver
+        1: 0,  # Inlet fluid
+        2: 0,  # Outlet fluid
+        3: 1,  # Solar heat input connection to Heliostatfield
+    },
+    121: {  # Heliostat Field
+        1: 0,  # Outlet link to receiver
+        2: 0,  # Inlet link / limit input
+        3: 1,  # Heat flow input
     },
 }

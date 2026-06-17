@@ -1,4 +1,4 @@
-__version__ = "0.0.7"
+__version__ = "0.0.9"
 
 import importlib.resources
 import os
@@ -7,4 +7,6 @@ import sys
 __datapath__ = os.path.join(importlib.resources.files("exerpy"), "data")
 
 
-from .analyses import EconomicAnalysis, ExergoeconomicAnalysis, ExergyAnalysis
+from .analyses import EconomicAnalysis
+from .analyses import ExergoeconomicAnalysis
+from .analyses import ExergyAnalysis

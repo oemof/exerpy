@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -26,7 +26,7 @@ class PowerBus(Component):
         self.epsilon = np.nan
 
         # Log the results
-        logging.info(f"The exergy balance of a PowerBus {self.name} is skipped.")
+        logger.info(f"The exergy balance of a PowerBus {self.name} is skipped.")
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
@@ -71,11 +71,11 @@ class PowerBus(Component):
 
         # Splitter case
         if len(self.inl) >= 1 and len(self.outl) <= 1:
-            logging.info(f"PowerBus {self.name} has only one output, no auxiliary equations added.")
+            logger.info(f"PowerBus {self.name} has only one output, no auxiliary equations added.")
 
         # Mixer case
         elif len(self.inl) == 1 and len(self.outl) > 1:
-            logging.info(f"PowerBus {self.name} has multiple outputs, auxiliary equations will be added.")
+            logger.info(f"PowerBus {self.name} has multiple outputs, auxiliary equations will be added.")
             for out in list(self.outl.values())[:]:
                 A[counter, self.inl[0]["CostVar_index"]["exergy"]] = (
                     (1 / self.inl[0]["E"]) if self.inl[0]["E"] != 0 else 1
@@ -91,7 +91,7 @@ class PowerBus(Component):
 
         # General case with multiple inputs and outputs
         elif len(self.inl) > 1 and len(self.outl) > 1:
-            logging.info(
+            logger.info(
                 f"PowerBus {self.name} has multiple inputs and outputs, "
                 f"adding cost balance and outlet equality equations."
             )

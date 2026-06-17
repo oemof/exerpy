@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -329,7 +329,7 @@ class HeatExchanger(Component):
                         + (self.inl[0]["m"] * self.inl[0]["e_M"] - self.outl[0]["m"] * self.outl[0]["e_M"])
                     )
                 else:
-                    logging.warning(
+                    logger.warning(
                         "While dealing with heat exchnager below ambient temperautre, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
@@ -346,7 +346,7 @@ class HeatExchanger(Component):
                         - (self.outl[0]["m"] * self.outl[0]["e_M"] + self.outl[1]["m"] * self.outl[1]["e_M"])
                     )
                 else:
-                    logging.warning(
+                    logger.warning(
                         "While dealing with heat exchnager below ambient temperautre, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
@@ -363,7 +363,7 @@ class HeatExchanger(Component):
                         - (self.outl[1]["m"] * self.outl[1]["e_PH"] + self.outl[0]["m"] * self.outl[0]["e_M"])
                     )
                 else:
-                    logging.warning(
+                    logger.warning(
                         "While dealing with heat exchnager below ambient temperautre, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
@@ -382,7 +382,7 @@ class HeatExchanger(Component):
                         + (self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_M"])
                     )
                 else:
-                    logging.warning(
+                    logger.warning(
                         "While dealing with heat exchnager below ambient temperautre, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
@@ -402,14 +402,14 @@ class HeatExchanger(Component):
                     + (self.inl[1]["m"] * self.inl[1]["e_PH"] - self.outl[1]["m"] * self.outl[1]["e_PH"])
                 )
 
-                logging.info(
+                logger.info(
                     f"Component {self.name}: dissipative temperature configuration detected "
                     "(hot stream above T0, cold stream below T0). Treated as dissipative automatically."
                 )
 
             # Case 7: Not implemented case
             else:
-                logging.error(
+                logger.error(
                     f"The heat exchanger {self.name} has an unexpected temperature configuration. "
                     "Please check the inlet and outlet temperatures."
                 )
@@ -430,7 +430,7 @@ class HeatExchanger(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of HeatExchanger {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -635,14 +635,14 @@ class HeatExchanger(Component):
             }
         # Case 6: hot stream always above T0, cold stream always below T0 (dissipative case)
         elif case == 6:
-            logging.info(
+            logger.info(
                 f"Component {self.name}: dissipative temperature configuration detected in aux_eqs. "
                 "Skipping auxiliary equations (handled by dis_eqs)."
             )
             return A, b, counter, equations
         # Case 7: Not implemented case
         else:
-            logging.error(
+            logger.error(
                 f"The heat exchanger {self.name} has an unexpected temperature configuration. "
                 "Please check the inlet and outlet temperatures."
             )
@@ -808,14 +808,14 @@ class HeatExchanger(Component):
         total_E_D = sum(comp.E_D for comp in serving)
         diss_col = self.inl[0]["CostVar_index"].get("dissipative")
         if diss_col is None:
-            logging.error(f"No 'dissipative' column allocated for {self.name}.")
+            logger.error(f"No 'dissipative' column allocated for {self.name}.")
         else:
             if total_E_D == 0:
                 if len(serving) > 0:
                     for comp in serving:
                         A[comp.exergy_cost_line, diss_col] = 1 / len(serving)
                 else:
-                    logging.warning(f"No serving components found for dissipative component {self.name}")
+                    logger.warning(f"No serving components found for dissipative component {self.name}")
             else:
                 for comp in serving:
                     weight = getattr(comp, "E_D", 0) / total_E_D
@@ -975,7 +975,7 @@ class HeatExchanger(Component):
             self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_M"])
         # Case 7: Not implemented case
         else:
-            logging.error(
+            logger.error(
                 f"The heat exchanger {self.name} has an unexpected temperature configuration. "
                 "Please check the inlet and outlet temperatures."
             )

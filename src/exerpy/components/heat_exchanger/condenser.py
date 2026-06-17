@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -161,7 +161,7 @@ class Condenser(Component):
         self.epsilon = np.nan
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of Condenser {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -340,7 +340,7 @@ class Condenser(Component):
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
                 "property": "c_T",
             }
-            logging.warning(
+            logger.warning(
                 f"All temperatures in {self.name} are below ambient temperature. "
                 "This is not a typical case for a dissipative condenser."
             )
@@ -352,7 +352,7 @@ class Condenser(Component):
                 "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
                 "property": "c_T",
             }
-            logging.warning(
+            logger.warning(
                 f"Hot inlet and cold outlet in {self.name} are above ambient temperature, "
                 "while hot outlet and cold inlet are below. This is not a typical case for a dissipative condenser. "
                 "The exergoeconomic analysis is counting the outlets as products."
@@ -365,7 +365,7 @@ class Condenser(Component):
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
                 "property": "c_T",
             }
-            logging.warning(
+            logger.warning(
                 f"Cold inlet in {self.name} is below ambient temperature. "
                 "This is not a typical case for a dissipative condenser."
             )
@@ -377,13 +377,13 @@ class Condenser(Component):
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
                 "property": "c_T",
             }
-            logging.warning(
+            logger.warning(
                 f"Cold inlet in {self.name} is below ambient temperature. "
                 "This is not a typical case for a dissipative condenser."
             )
         # Case 6: hot stream always above T0, cold stream always below T0
         elif case == 6:
-            logging.info(
+            logger.info(
                 f"Condenser {self.name}: dissipative temperature configuration detected in aux_eqs. "
                 "Skipping auxiliary equations (handled by dis_eqs)."
             )
@@ -558,14 +558,14 @@ class Condenser(Component):
         total_E_D = sum(comp.E_D for comp in serving)
         diss_col = self.inl[0]["CostVar_index"].get("dissipative")
         if diss_col is None:
-            logging.error(f"No 'dissipative' column allocated for {self.name}.")
+            logger.error(f"No 'dissipative' column allocated for {self.name}.")
         else:
             if total_E_D == 0:
                 if len(serving) > 0:
                     for comp in serving:
                         A[comp.exergy_cost_line, diss_col] = 1 / len(serving)
                 else:
-                    logging.warning(f"No serving components found for dissipative component {self.name}")
+                    logger.warning(f"No serving components found for dissipative component {self.name}")
             else:
                 for comp in serving:
                     weight = getattr(comp, "E_D", 0) / total_E_D

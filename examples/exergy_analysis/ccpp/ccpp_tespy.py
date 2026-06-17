@@ -1,24 +1,24 @@
-from tespy.components import (
-    Compressor,
-    Condenser,
-    CycleCloser,
-    DiabaticCombustionChamber,
-    Drum,
-    Generator,
-    HeatExchanger,
-    Merge,
-    Motor,
-    PowerBus,
-    PowerSink,
-    Pump,
-    SimpleHeatExchanger,
-    Sink,
-    Source,
-    Splitter,
-    Turbine,
-    Valve,
-)
-from tespy.connections import Connection, PowerConnection, Ref
+from tespy.components import Compressor
+from tespy.components import Condenser
+from tespy.components import CycleCloser
+from tespy.components import DiabaticCombustionChamber
+from tespy.components import Drum
+from tespy.components import Generator
+from tespy.components import HeatExchanger
+from tespy.components import Merge
+from tespy.components import Motor
+from tespy.components import PowerBus
+from tespy.components import PowerSink
+from tespy.components import Pump
+from tespy.components import SimpleHeatExchanger
+from tespy.components import Sink
+from tespy.components import Source
+from tespy.components import Splitter
+from tespy.components import Turbine
+from tespy.components import Valve
+from tespy.connections import Connection
+from tespy.connections import PowerConnection
+from tespy.connections import Ref
 from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
@@ -26,7 +26,8 @@ from exerpy import ExergyAnalysis
 # ----------------------------------------------------------------------------------------------------------------------
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
-nw = Network(T_unit="C", p_unit="bar")
+nw = Network()
+nw.units.set_defaults(temperature="°C", pressure="bar", pressure_difference="bar")
 
 air_in = Source("air inlet")
 fuel_in = Source("fuel inlet")
@@ -158,25 +159,23 @@ lp_steam_turbine.set_attr(eta_s=0.89)
 feed_pump.set_attr(eta_s=0.8)
 condensate_pump.set_attr(eta_s=0.8)
 
-c9.set_attr(fluid={"water": 1}, p=50, T=505, m0=80)
-c10.set_attr(p=15, m0=10)
+c9.set_attr(fluid={"water": 1}, p=50, T=505)
+c10.set_attr(p=15)
 c10a.set_attr(p=10)
-c13.set_attr(p=0.05, m0=30)
+c13.set_attr(p=0.05)
 c14.set_attr(fluid={"water": 1}, p=1.013, T=15)
-c15.set_attr(p=1.013, T=25)
+c15.set_attr(p=1.013, T=301.0255 - 273.15)
 c16.set_attr(p=0.05)
-c17.set_attr(h0=100e3)
+c17.set_attr()
 
-c18.set_attr(Td_bp=-10)
+c18.set_attr(td_bubble=10)
 c20.set_attr(x=0)
 
 c21.set_attr()
-c22.set_attr(Td_bp=-6, p=Ref(c21, 1, -0.02))
+c22.set_attr(td_bubble=6, p=Ref(c21, 1, -0.02))
 c22b.set_attr(m=Ref(c9, 10, 0))
 c22c.set_attr(p=Ref(c22b, 1, -0.03), h=Ref(c22b, 1, 100))
 c23.set_attr(p=Ref(c9, 1, 0.05))
-
-nw.solve("design")
 
 evaporator.set_attr(ttd_l=10)
 c7.set_attr(T=None, p=None)
@@ -188,17 +187,15 @@ drum_pump.set_attr(eta_s=0.8)
 c3.set_attr(m=None)
 c4.set_attr(T=1150)
 
-c9.set_attr(T=None)
-superheater.set_attr(ttd_u=25)
-
-c15.set_attr(T=301.0255 - 273.15)
-
-c1.set_attr(m=637.8845562751899)
+c1.set_attr(m=None)
+e15.set_attr(E=300e6)
 
 heating_condenser.set_attr(Q=-100e6)
 
-c1.set_attr(m=None)
-e15.set_attr(E=300e6)
+nw.solve("design")
+
+c9.set_attr(T=None)
+superheater.set_attr(ttd_u=25)
 
 nw.solve("design")
 
@@ -207,6 +204,8 @@ nw.assert_convergence()
 
 nw.print_results()
 
+# [tespy_model_section_end]
+
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
@@ -214,9 +213,12 @@ p0 = 101300
 T0 = 288.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
+# [exergy_analysis_setup]
 fuel = {"inputs": ["1", "3"], "outputs": []}
 product = {"inputs": ["e15", "h1"], "outputs": []}
 loss = {"inputs": ["8", "15"], "outputs": ["14"]}
+
+# [exergy_analysis_flows]
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

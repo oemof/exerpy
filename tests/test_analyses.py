@@ -13,8 +13,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from exerpy.analyses import ExergyAnalysis, _construct_components, _load_json
-from exerpy.components.component import Component, component_registry
+from exerpy.analyses import ExergyAnalysis
+from exerpy.analyses import _construct_components
+from exerpy.analyses import _load_json
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
 from exerpy.parser.from_ebsilon import __ebsilon_path__
 
@@ -328,8 +331,8 @@ def test_zero_fuel_exergy(exergy_analysis, mock_connection_data, monkeypatch):
     """
     # Modify connection "1" (used for fuel) so that its E becomes 0.
     mock_connection_data["1"]["E"] = 0
-    # Patch logging.info in the analyses module to prevent formatting of None.
-    monkeypatch.setattr("exerpy.analyses.logging.info", lambda msg: None)
+    # Patch logger.info in the analyses module to prevent formatting of None.
+    monkeypatch.setattr("exerpy.analyses.logger.info", lambda msg: None)
     # Create a fresh analysis with the modified connection data.
     analysis = ExergyAnalysis(exergy_analysis._component_data, mock_connection_data, 298.15, 101325)
     fuel = {"inputs": ["1"]}

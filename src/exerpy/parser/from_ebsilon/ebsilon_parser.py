@@ -6,39 +6,61 @@ simulate them, extract data about components and connections, and write the data
 """
 
 import json
-import logging
 import os
 from typing import Any
 
-from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy.functions import convert_to_SI
+from exerpy.functions import fluid_property_data
+from exerpy.logger import logger
 
-from . import __ebsilon_available__, is_ebsilon_available
+from . import __ebsilon_available__
+from . import is_ebsilon_available
 from .ebsilon_functions import calc_eph_from_min
-from .utils import EpCalculationResultStatus2Stub, EpFluidTypeStub, EpGasTableStub, EpSteamTableStub, require_ebsilon
+from .utils import EpCalculationResultStatus2Stub
+from .utils import EpFluidTypeStub
+from .utils import EpGasTableStub
+from .utils import EpSteamTableStub
+from .utils import require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpCalculationResultStatus2, EpFluidType, EpGasTable, EpSteamTable
+    from EbsOpen import EpCalculationResultStatus2
+    from EbsOpen import EpFluidType
+    from EbsOpen import EpGasTable
+    from EbsOpen import EpSteamTable
+    from EbsOpen import EpThermoLiquidType
     from win32com.client import Dispatch
 else:
     EpFluidType = EpFluidTypeStub
     EpSteamTable = EpSteamTableStub
     EpGasTable = EpGasTableStub
     EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
+    EpThermoLiquidType = None
 
-from .ebsilon_config import (
-    composition_params,
-    connector_mapping,
-    ebs_objects,
-    fluid_type_index,
-    grouped_components,
-    non_thermodynamic_unit_operators,
-    two_phase_fluids_mapping,
-    unit_id_to_string,
-)
+from .ebsilon_config import composition_params
+from .ebsilon_config import connector_mapping
+from .ebsilon_config import ebs_objects
+from .ebsilon_config import fluid_type_index
+from .ebsilon_config import grouped_components
+from .ebsilon_config import non_thermodynamic_unit_operators
+from .ebsilon_config import two_phase_fluids_mapping
+from .ebsilon_config import unit_id_to_string
 
-# Configure logging to display info-level messages
-logging.basicConfig(level=logging.ERROR)
+
+def _thermoliquid_name(pipe_cast):
+    """
+    Return the specific thermal-liquid name of a pipe (e.g. "Therminol VP1").
+
+    Ebsilon stores a thermal liquid as a type index rather than a name; this reads that
+    index from the pipe's fluid data and maps it via the EpThermoLiquidType enum. Falls
+    back to "ThermoLiquid" when the name cannot be determined.
+    """
+    try:
+        type_index = pipe_cast.FluidData().ThermoliquidExtension.ThermoLiquidType
+        name = EpThermoLiquidType(type_index).name.replace("epThermoLiquidType", "")
+        return name.replace("_", " ").strip() or "ThermoLiquid"
+    except Exception:
+        return "ThermoLiquid"
 
 
 class EbsilonModelParser:
@@ -59,7 +81,7 @@ class EbsilonModelParser:
         """
         # Check if Ebsilon is available
         if not is_ebsilon_available():
-            logging.warning(
+            logger.warning(
                 "EbsilonModelParser initialized without Ebsilon support. "
                 "EBS environment variable is not set or EbsOpen could not be imported; "
                 "Ebsilon functionality will not be available."
@@ -81,6 +103,7 @@ class EbsilonModelParser:
         self.pamb: float | None = None  # Ambient pressure
 
         self._storages_to_postprocess: list[dict[str, Any]] = []
+        self.heatflow_to_postprocess: list[dict[str, Any]] = []
         self._power_bus_mul_data: dict[str, dict[int, float]] = {}  # {comp_name: {connector_idx: MUL_value}}
 
     @require_ebsilon
@@ -96,24 +119,24 @@ class EbsilonModelParser:
         try:
             self.app = Dispatch("EbsOpen.Application")
         except Exception as e:
-            logging.error(f"Failed to start Ebsilon COM server: {e}")
+            logger.error(f"Failed to start Ebsilon COM server: {e}")
             raise RuntimeError(f"Could not start Ebsilon COM server: {e}")
 
         # 2) try to open the .ebs model
         try:
             self.model = self.app.Open(self.model_path)
         except Exception as e:
-            logging.error(f"Failed to open model file: {e}")
+            logger.error(f"Failed to open model file: {e}")
             raise FileNotFoundError(f"File not found at: {self.model_path}") from e
 
         # 3) grab the ObjectCaster
         try:
             self.oc = self.app.ObjectCaster
         except Exception as e:
-            logging.error(f"Failed to obtain ObjectCaster: {e}")
+            logger.error(f"Failed to obtain ObjectCaster: {e}")
             raise RuntimeError(f"Could not get ObjectCaster: {e}")
 
-        logging.info(f"Model opened successfully: {self.model_path}")
+        logger.info(f"Model opened successfully: {self.model_path}")
 
     @require_ebsilon
     def simulate_model(self):
@@ -129,14 +152,22 @@ class EbsilonModelParser:
             # Run the simulation
             self.model.SimulateNew()
             error_count = calc_errors.Count
-            logging.warning(f"Simulation has {error_count} warning(s).")
-            # Log each error if any exist
+            logger.info(f"Simulation completed with {error_count} solver message(s).")
+            # Log only solver messages that carry an actual description; Ebsilon also
+            # returns rows whose description is empty or a bare number (no information).
             if error_count > 0:
                 for i in range(1, error_count + 1):
-                    error = calc_errors.Item(i)
-                    logging.warning(f"Warning {i}: {error.Description}")
+                    desc = str(calc_errors.Item(i).Description).strip()
+                    if not desc:
+                        continue
+                    try:
+                        float(desc)
+                        continue  # purely numeric row, nothing actionable
+                    except ValueError:
+                        pass
+                    logger.warning(f"Ebsilon solver warning {i}: {desc}")
         except Exception as e:
-            logging.error(f"Failed during simulation: {e}")
+            logger.error(f"Failed during simulation: {e}")
             raise
 
     @require_ebsilon
@@ -150,7 +181,7 @@ class EbsilonModelParser:
         """
         try:
             total_objects = self.model.Objects.Count
-            logging.info(f"Parsing {total_objects} objects from the model")
+            logger.info(f"Parsing {total_objects} objects from the model")
             # Iterate over all objects in the model and select the components
             for j in range(1, total_objects + 1):
                 obj = self.model.Objects.Item(j)
@@ -165,7 +196,7 @@ class EbsilonModelParser:
                     "Please ensure that your Ebsilon model includes component(s) of type 46 (Measuring Point) "
                     "with a setting for the Ambient Temperature and the Ambient Pressure in MEASM."
                 )
-                logging.error(error_msg)
+                logger.error(error_msg)
                 raise ValueError(error_msg)
 
             # Iterate over all objects in the model and select the connections
@@ -180,9 +211,14 @@ class EbsilonModelParser:
 
             # After parsing all components and connections, create storage connections
             self._create_storage_connections()
+            # Create synthetic heat connections for solar feat flow components (Heliostat / Parabolic Trough / Solar Tower)
+            try:
+                self._create_heatflow_connections()
+            except Exception:
+                logger.warning("_create_heatflow_connections failed; continuing without synthetic heat connections")
 
         except Exception as e:
-            logging.error(f"Error while parsing the model: {e}")
+            logger.error(f"Error while parsing the model: {e}")
             raise
 
     @require_ebsilon
@@ -193,7 +229,8 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_functions import calc_eM, calc_eT
+        from .ebsilon_functions import calc_eM
+        from .ebsilon_functions import calc_eT
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
@@ -202,8 +239,8 @@ class EbsilonModelParser:
         non_material_fluids = {5, 6, 9, 10, 13}  # Scheduled, Actual, Electric, Shaft, Logic
         non_energetic_fluids = {5, 6}  # Scheduled, Actual
         power_fluids = {9, 10}  # Electric, Shaft
-        logic_fluids = 13  # Logic "fluids" for heat and power flows
-        heat_components = {5, 15, 16, 35}  # Components that handle with heat flows as input or output
+        logic_fluids = {13}  # Logic "fluids" for heat and power flows
+        heat_components = {5, 15, 16, 35, 120, 121, 113}  # Components that handle with heat flows as input or output
         power_components = {31}  # Power-summerized with power flows ONLY as output
 
         # ALL EBSILON CONNECTIONS
@@ -278,12 +315,12 @@ class EbsilonModelParser:
                     try:
                         e_PH_value = calc_eph_from_min(pipe_cast, self.Tamb)
                         if e_PH_value is not None:
-                            logging.info(
+                            logger.info(
                                 f"Physical exergy calculated using min-based formula for {pipe_cast.Name}: "
                                 f"{e_PH_value:.2f} J/kg"
                             )
                     except ValueError as ve:
-                        logging.error(f"Failed to calculate e_PH from min for {pipe_cast.Name}: {ve}")
+                        logger.error(f"Failed to calculate e_PH from min for {pipe_cast.Name}: {ve}")
                         e_PH_value = None
 
                 connection_data.update(
@@ -362,12 +399,13 @@ class EbsilonModelParser:
                         connection_data["mass_composition"] = two_phase_fluids_mapping[fmed_value]
                     else:
                         connection_data["mass_composition"] = {}  # Default if no mapping found
-                        logging.warning(
+                        logger.warning(
                             f"FMED value {fmed_value} not found in fluid_composition_mapping. Please add it."
                         )
                 elif fluid_type_index.get(pipe_cast.FluidType, "Unknown") in ["ThermoLiquid"]:
-                    # For oil, we assume a default composition
-                    connection_data["mass_composition"] = {"ThermoLiquid": 1}
+                    # use the specific fluid name read from Ebsilon as the composition key.
+                    # It may be a mixutre, but it is handled as a pure substance in ExerPy.
+                    connection_data["mass_composition"] = {_thermoliquid_name(pipe_cast): 1}
                 else:
                     connection_data["mass_composition"] = {
                         param.lstrip("X"): getattr(pipe_cast, param).Value
@@ -376,7 +414,7 @@ class EbsilonModelParser:
                     }
 
             # HEAT AND POWER CONNECTIONS from Logic "fluids"
-            if (pipe_cast.Kind - 1000) == logic_fluids:
+            if (pipe_cast.Kind - 1000) in logic_fluids:
                 if (comp0 is not None and comp0.Kind is not None and comp0.Kind - 10000 in heat_components) or (
                     comp1 is not None and comp1.Kind is not None and comp1.Kind - 10000 in heat_components
                 ):
@@ -465,7 +503,7 @@ class EbsilonModelParser:
             self.connections_data[obj.Name] = connection_data
 
         else:
-            logging.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
+            logger.info(f"Skipping non-energetic connection: {pipe_cast.Name}")
 
     @require_ebsilon
     def parse_component(self, obj: Any):
@@ -485,9 +523,9 @@ class EbsilonModelParser:
         # Check if the method exists and call it, otherwise fallback to general casting
         if hasattr(self.oc, cast_method_name):
             comp_cast = getattr(self.oc, cast_method_name)(obj)
-            logging.info(f"Using method {cast_method_name} to cast the component.")
+            logger.info(f"Using method {cast_method_name} to cast the component.")
         else:
-            logging.warning(f"No specific cast method for type_index {type_index}, using generic CastToComp.")
+            logger.warning(f"No specific cast method for type_index {type_index}, using generic CastToComp.")
             comp_cast = self.oc.CastToComp(obj)
 
         # Get the human-readable type name of the component
@@ -553,6 +591,42 @@ class EbsilonModelParser:
                     else None
                 ),
                 "energy_flow_1_unit": fluid_property_data["heat"]["SI_unit"],
+                "Q_Solar": (
+                    convert_to_SI(
+                        "heat", comp_cast.QSOLAR.Value, unit_id_to_string.get(comp_cast.QSOLAR.Dimension, "Unknown")
+                    )
+                    if hasattr(comp_cast, "QSOLAR") and comp_cast.QSOLAR.Value is not None
+                    else None
+                ),
+                "QEFF": (
+                    convert_to_SI(
+                        "heat", comp_cast.QEFF.Value, unit_id_to_string.get(comp_cast.QEFF.Dimension, "Unknown")
+                    )
+                    if hasattr(comp_cast, "QEFF") and comp_cast.QEFF.Value is not None
+                    else None
+                ),
+                "RQINC": (
+                    convert_to_SI(
+                        "heat", comp_cast.RQINC.Value, unit_id_to_string.get(comp_cast.RQINC.Dimension, "Unknown")
+                    )
+                    if hasattr(comp_cast, "RQINC") and comp_cast.RQINC.Value is not None
+                    else None
+                ),
+                # Number of parallel branches a header/collector stands for (from Ebsilon
+                # NBRANCH, rounded RNBRANCH as fallback); stored under a parser-agnostic name.
+                "num_branches": (
+                    comp_cast.NBRANCH.Value
+                    if hasattr(comp_cast, "NBRANCH")
+                    and hasattr(comp_cast.NBRANCH, "Value")
+                    and comp_cast.NBRANCH.Value is not None
+                    else (
+                        comp_cast.RNBRANCH.Value
+                        if hasattr(comp_cast, "RNBRANCH")
+                        and hasattr(comp_cast.RNBRANCH, "Value")
+                        and comp_cast.RNBRANCH.Value is not None
+                        else None
+                    )
+                ),
             }
 
             # Determine the group for the component based on its type
@@ -580,12 +654,12 @@ class EbsilonModelParser:
                 self.Tamb = convert_to_SI(
                     "T", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
                 )
-                logging.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
+                logger.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
             elif comp46.FTYP.Value == 13:
                 self.pamb = convert_to_SI(
                     "p", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
                 )
-                logging.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
+                logger.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
 
         if type_index == 31:
             comp31 = self.oc.CastToComp31(obj)
@@ -618,6 +692,41 @@ class EbsilonModelParser:
                     "h_storage_unit": unit_id_to_string.get(storage.HNEW.Dimension, "Unknown"),
                 }
             )
+
+        # Handle heliostat field (121) and parabolic trough (113) for solar feat flow extraction
+        if type_index in (121, 113):
+            heatflow = None
+            try:
+                if type_index == 121:
+                    heatflow = self.oc.CastToComp121(obj)
+                elif type_index == 113:
+                    heatflow = self.oc.CastToComp113(obj)
+            except Exception as e:
+                logger.warning(f"Failed to cast component to type {type_index}: {e}")
+                heatflow = None
+
+            # Append only when cast succeeded and QSOLAR is available
+            if (
+                heatflow is not None
+                and hasattr(heatflow, "QSOLAR")
+                and heatflow.QSOLAR is not None
+                and getattr(heatflow.QSOLAR, "Value", None) is not None
+            ):
+                q_solar_val = convert_to_SI(
+                    "heat",
+                    heatflow.QSOLAR.Value,
+                    unit_id_to_string.get(heatflow.QSOLAR.Dimension, "Unknown"),
+                )
+                q_solar_unit = fluid_property_data["heat"]["SI_unit"]
+
+                self.heatflow_to_postprocess.append(
+                    {
+                        "name": heatflow.Name,
+                        "kind": heatflow.Kind,
+                        "Q_Solar": q_solar_val,
+                        "Q_Solar_unit": q_solar_unit,
+                    }
+                )
 
     def _create_storage_connections(self):
         """
@@ -682,6 +791,104 @@ class EbsilonModelParser:
                 ),
             }
             self.connections_data[prefix] = new_conn
+
+    def _create_heatflow_connections(self):
+        """
+        Create fictive heat flow connections for solar feat flow components
+        (Heliostat Field, Parabolic Trough, Solar Tower).
+
+        After all real connections are parsed, uses stored feat flow parameters
+        and existing connections_data to generate and insert heat connections.
+
+        For parabolic trough (type_index 113), retrieves num_branches from the connected
+        distributing/collecting node (type 114 or 115).
+
+        Returns
+        -------
+        None
+        """
+        for raw in self.heatflow_to_postprocess:
+            name = raw.get("name")
+            q_raw = raw.get("Q_Solar")
+            q_unit = raw.get("Q_Solar_unit")
+            kind = raw.get("kind")
+            type_index = kind - 10000 if kind is not None else None
+            # Name the synthetic solar heat connection after its component with a "_Q"
+            # suffix (e.g. component "Collector" -> connection "Collector_Q"), so the heat
+            # input is clearly distinguishable from the component itself.
+            prefix = f"{name}_Q"
+
+            # Retrieve num_branches from the connected node (114/115) for parabolic trough (113)
+            nbranch = None
+            if type_index == 113:
+                # Find connections that have this parabolic trough as source or target
+                for conn_name, conn_data in self.connections_data.items():
+                    if conn_data.get("source_component") == name or conn_data.get("target_component") == name:
+                        # Find the connected component (header)
+                        connected_comp = (
+                            conn_data.get("target_component")
+                            if conn_data.get("source_component") == name
+                            else conn_data.get("source_component")
+                        )
+                        connected_type = (
+                            conn_data.get("target_component_type")
+                            if conn_data.get("source_component") == name
+                            else conn_data.get("source_component_type")
+                        )
+
+                        # Check if the connected component is a header (114 or 115)
+                        if connected_type in (114, 115):
+                            for group in self.components_data.values():
+                                comp = group.get(connected_comp)
+                                if comp and comp.get("num_branches") is not None:
+                                    nbranch = comp["num_branches"]
+                                    break
+                            if nbranch is not None:
+                                break
+
+            # Try to convert provided Q_Solar to SI; fall back to the raw value on failure.
+            energy_flow = None
+            if q_raw is not None:
+                try:
+                    energy_flow = convert_to_SI("heat", q_raw, q_unit)
+                    # For parabolic trough (type_index 113), multiply by num_branches if available
+                    if type_index == 113 and nbranch is not None:
+                        energy_flow = energy_flow * nbranch
+                except Exception as e:
+                    logger.warning(f"Exception during energy_flow calculation for '{name}': {e}")
+                    energy_flow = q_raw
+
+            # Compute exergy for concentrated solar heat if ambient temperature is known
+            # alpha = 1 - (4/3 * Tamb / Tsun)  (Petela / Ahrendts)
+            computed_exergy = None
+            if energy_flow is not None and self.Tamb is not None:
+                T_SUN = 5778  # Sun's surface temperature in K
+                alpha = 1.0 - (4.0 / 3.0) * (self.Tamb / T_SUN)
+                computed_exergy = energy_flow * alpha
+
+            new_conn = {
+                "name": prefix,
+                "kind": "heat",
+                "source_component": name,
+                "target_component": None,
+                "source_component_type": type_index,
+                "target_component_type": None,
+                "source_connector": None,
+                "target_connector": None,
+                "energy_flow": energy_flow,
+                "energy_flow_unit": fluid_property_data["heat"]["SI_unit"],
+                "E": computed_exergy,
+                "E_unit": fluid_property_data["power"]["SI_unit"],
+                "num_branches": nbranch,
+            }
+            self.connections_data[prefix] = new_conn
+
+            # For parabolic trough (type_index 113), also update component data with num_branches
+            if type_index == 113 and nbranch is not None:
+                for group in self.components_data.values():
+                    if name in group:
+                        group[name]["num_branches"] = nbranch
+                        break
 
     def _reclassify_power_bus_connections(self):
         """
@@ -754,7 +961,7 @@ class EbsilonModelParser:
                     matched_power_data["target_component"] = comp_name
                     matched_power_data["target_component_type"] = 31
                     matched_power_data["target_connector"] = connector_idx
-                    logging.info(
+                    logger.info(
                         f"Linked power connection {matched_power_name} to PowerBus "
                         f"{comp_name} (inlet, connector {connector_idx})"
                     )
@@ -763,7 +970,7 @@ class EbsilonModelParser:
                     matched_power_data["source_component"] = comp_name
                     matched_power_data["source_component_type"] = 31
                     matched_power_data["source_connector"] = connector_idx
-                    logging.info(
+                    logger.info(
                         f"Linked power connection {matched_power_name} to PowerBus "
                         f"{comp_name} (outlet, connector {connector_idx})"
                     )
@@ -800,7 +1007,7 @@ class EbsilonModelParser:
                 matched_power_data["source_component"] = comp_name
                 matched_power_data["source_component_type"] = 31
                 matched_power_data["source_connector"] = connector_idx
-                logging.info(
+                logger.info(
                     f"Linked power connection {matched_power_name} to PowerBus "
                     f"{comp_name} (outlet, connector {connector_idx})"
                 )
@@ -809,7 +1016,7 @@ class EbsilonModelParser:
         # Remove the matched Logic connections
         for name in logic_conns_to_remove:
             del self.connections_data[name]
-            logging.info(f"Removed redundant Logic connection: {name}")
+            logger.info(f"Removed redundant Logic connection: {name}")
 
     def get_sorted_data(self) -> dict[str, Any]:
         """
@@ -852,9 +1059,9 @@ class EbsilonModelParser:
             # Write the data to a JSON file with indentation for readability
             with open(output_path, "w") as json_file:
                 json.dump(data, json_file, indent=4)
-            logging.info(f"Data successfully written to {output_path}")
+            logger.info(f"Data successfully written to {output_path}")
         except Exception as e:
-            logging.error(f"Failed to write data to JSON: {e}")
+            logger.error(f"Failed to write data to JSON: {e}")
             raise
 
 
@@ -885,7 +1092,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     # Check if the model file exists at the specified path
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
     # Initialize the Ebsilon model parser with the model file path
@@ -893,7 +1100,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
         parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
     except RuntimeError as e:
         # This will catch the RuntimeError raised in __init__ if Ebsilon is not available
-        logging.error(f"Failed to initialize EbsilonModelParser: {e}")
+        logger.error(f"Failed to initialize EbsilonModelParser: {e}")
         raise
 
     try:
@@ -905,7 +1112,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception:
         # other COM/server errors should still be RuntimeErrors
         error_msg = f"File not found: {model_path}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     try:
@@ -914,7 +1121,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception as e:
         # Log and raise an error if something goes wrong during simulation
         error_msg = f"An error occurred during model simulation: {e}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     try:
@@ -923,7 +1130,7 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
     except Exception as e:
         # Log and raise an error if something goes wrong during parsing
         error_msg = f"An error occurred during model parsing: {e}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise RuntimeError(error_msg)
 
     # Get the parsed and sorted data
@@ -933,11 +1140,11 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
         try:
             # Write the parsed data to the JSON file
             parser.write_to_json(output_dir)
-            logging.info(f"Data successfully written to {output_dir}")
+            logger.info(f"Data successfully written to {output_dir}")
         except Exception as e:
             # Log and raise an error if something goes wrong while writing the output file
             error_msg = f"An error occurred while writing the output file: {e}"
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise RuntimeError(error_msg)
 
     # Return the parsed data as a dictionary (not as a JSON string)

@@ -13,12 +13,14 @@ The test suite verifies:
 """
 
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
+from unittest.mock import patch
 
 import pytest
 
 from exerpy.parser.from_ebsilon import __ebsilon_path__
-from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser, run_ebsilon
+from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
+from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
 
 
 class MockEpFluidType:

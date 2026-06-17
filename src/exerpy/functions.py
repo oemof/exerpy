@@ -1,11 +1,11 @@
 import json
-import logging
 import math
 import os
 
 import CoolProp.CoolProp as CP
 
 from exerpy import __datapath__
+from exerpy.logger import logger
 
 
 def mass_to_molar_fractions(mass_fractions):
@@ -110,7 +110,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
     Returns:
     - eCH: Chemical exergy in kJ/kg.
     """
-    logging.info(
+    logger.info(
         f"Starting chemical exergy of stream of composition {stream_data} calculation with Tamb={Tamb}, pamb={pamb}"
     )
 
@@ -128,15 +128,16 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                 chem_ex_data = json.load(file)  # data in J/kmol
         except FileNotFoundError:
             error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
-            logging.error(error_msg)
+            logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
         R = 8.314  # Universal gas constant in J/(molK)
         aliases_water = CP.get_aliases("H2O")
 
         # Handle pure substance (Case A)
+        molar_fractions = {key: value for key, value in molar_fractions.items() if value > 1e-6}
         if len(molar_fractions) == 1:
-            logging.info("Handling pure substance case (Case A).")
+            logger.info("Handling pure substance case (Case A).")
             substance = next(iter(molar_fractions))  # Get the single key
 
             try:
@@ -144,24 +145,24 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
 
                 if set(aliases) & set(aliases_water):
                     eCH = chem_ex_data["WATER"][2] / CP.PropsSI("M", "H2O")  # liquid water, in J/kg
-                    logging.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
+                    logger.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
                 else:
                     for alias in aliases:
                         if alias.upper() in chem_ex_data:
                             eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI("M", substance)  # in J/kg
-                            logging.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
+                            logger.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
                             break
                     else:
-                        logging.error(f"No matching alias found for {substance}")
+                        logger.error(f"No matching alias found for {substance}")
                         raise KeyError(f"No matching alias found for {substance}")
 
             except Exception:
                 eCH = 0  # If no aliases found, set chemical exergy to 0
-                logging.warning(f"No CoolProp aliases found for {substance}. Setting chemical exergy to 0 J/kg.")
+                logger.warning(f"No CoolProp aliases found for {substance}. Setting chemical exergy to 0 J/kg.")
 
         # Handle mixtures (Case B or C)
         else:
-            logging.info("Handling mixture case (Case B or C).")
+            logger.info("Handling mixture case (Case B or C).")
             total_molar_mass = 0  # To compute the molar mass of the mixture
             eCH_gas_mol = 0  # Molar chemical exergy of the gas phase if condensation
             eCH_liquid_mol = 0  # Molar chemical exergy of the liquid phase if condensation
@@ -172,7 +173,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
             for substance, fraction in molar_fractions.items():
                 molar_mass = CP.PropsSI("M", substance)  # Molar mass in kg/mol
                 total_molar_mass += fraction * molar_mass  # Weighted sum for molar mass in kg/mol
-            logging.info(f"Total molar mass of the mixture: {total_molar_mass} kg/mol")
+            logger.info(f"Total molar mass of the mixture: {total_molar_mass} kg/mol")
 
             water_present = any(alias in molar_fractions for alias in aliases_water)
 
@@ -182,7 +183,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                 pH2O = molar_fractions[water_alias] * pamb  # Partial pressure of water
 
                 if pH2O > pH2O_sat:  # Case B: Water condenses
-                    logging.info("Condensation occurs in the mixture.")
+                    logger.info("Condensation occurs in the mixture.")
                     x_dry = sum(fraction for comp, fraction in molar_fractions.items() if comp != water_alias)
                     x_H2O_gas = x_dry / (pamb / pH2O_sat - 1)  # Vaporous water fraction in the total mixture
                     x_H2O_liquid = molar_fractions[water_alias] - x_H2O_gas  # Liquid water fraction
@@ -203,7 +204,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                                 eCH_gas_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy is in J/mol
                                 break
                         else:
-                            logging.error(f"No matching alias found for {substance}")
+                            logger.error(f"No matching alias found for {substance}")
                             raise KeyError(f"No matching alias found for {substance}")
 
                         if fraction > 0:  # Avoid log(0)
@@ -211,10 +212,10 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
 
                     eCH_gas_mol += R * Tamb * entropy_mixing
                     eCH_mol = eCH_gas_mol + eCH_liquid_mol
-                    logging.info(f"Condensed phase chemical exergy: {eCH_mol} J/kmol")
+                    logger.info(f"Condensed phase chemical exergy: {eCH_mol} J/kmol")
 
                 else:  # Case C: Water doesn't condense
-                    logging.info("Water does not condense.")
+                    logger.info("Water does not condense.")
                     eCH_mol = 0
                     for substance, fraction in molar_fractions.items():
                         aliases = CP.get_aliases(substance)
@@ -223,7 +224,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                                 eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
                                 break
                         else:
-                            logging.error(f"No matching alias found for {substance}")
+                            logger.error(f"No matching alias found for {substance}")
                             raise KeyError(f"No matching alias found for {substance}")
 
                         if fraction > 0:  # Avoid log(0)
@@ -232,7 +233,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                     eCH_mol += R * Tamb * entropy_mixing
 
             else:  # Case C: No water present
-                logging.info("No water present in the mixture.")
+                logger.info("No water present in the mixture.")
                 eCH_mol = 0
                 for substance, fraction in molar_fractions.items():
                     aliases = CP.get_aliases(substance)
@@ -241,7 +242,7 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                             eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
                             break
                     else:
-                        logging.error(f"No matching alias found for {substance}")
+                        logger.error(f"No matching alias found for {substance}")
                         raise KeyError(f"No matching alias found for {substance}")
 
                     if fraction > 0:  # Avoid log(0)
@@ -250,12 +251,12 @@ def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
                 eCH_mol += R * Tamb * entropy_mixing
 
             eCH = eCH_mol / total_molar_mass  # Divide molar exergy by molar mass of mixture
-            logging.info(f"Chemical exergy: {eCH} kJ/kg")
+            logger.info(f"Chemical exergy: {eCH} kJ/kg")
 
         return eCH
 
     except Exception as e:
-        logging.error(f"Error in calc_chemical_exergy: {e}")
+        logger.error(f"Error in calc_chemical_exergy: {e}")
         raise
 
 
@@ -288,17 +289,17 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
             # Prepare stream data for exergy calculation, prioritizing molar composition
             if molar_composition:
                 stream_data = {"molar_composition": molar_composition}
-                logging.info(f"Using molar composition for connection {conn_name}")
+                logger.info(f"Using molar composition for connection {conn_name}")
             else:
                 stream_data = {"mass_composition": mass_composition}
-                logging.info(f"Using mass composition for connection {conn_name}")
+                logger.info(f"Using mass composition for connection {conn_name}")
 
             # Add the chemical exergy value
             conn_data["e_CH"] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
             conn_data["e_CH_unit"] = fluid_property_data["e"]["SI_unit"]
-            logging.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
+            logger.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
         else:
-            logging.info(
+            logger.info(
                 f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['kind']})"
             )
 
@@ -313,7 +314,9 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
     - For 'power' connections, the energy flow value is used directly.
     - For 'heat' connections, if the associated component is of class
       SimpleHeatExchanger, the thermal exergy difference is computed as:
+
       .. math::
+
           E = (e^\mathrm{T}_\mathrm{in} \cdot \dot m_\mathrm{in})
           - (e^\mathrm{T}_\mathrm{out} \cdot \dot m_\mathrm{out})
 
@@ -342,27 +345,30 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                     conn_data["E"] = conn_data["E_PH"] + conn_data["E_CH"]
                 else:
                     conn_data["E"] = conn_data["E_PH"]
-                    logging.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
+                    logger.info(f"Missing chemical exergy for connection {conn_name}. Using only physical exergy.")
                 if split_physical_exergy:
                     if conn_data.get("e_T") is not None:
                         conn_data["E_T"] = conn_data["m"] * conn_data["e_T"]
                     else:
                         msg = f"Missing thermal exergy for connection {conn_name}."
-                        logging.error(msg)
+                        logger.error(msg)
                         raise KeyError(msg)
                     if conn_data.get("e_M") is not None:
                         conn_data["E_M"] = conn_data["m"] * conn_data["e_M"]
                     else:
                         msg = f"Missing mechanical exergy for connection {conn_name}."
-                        logging.error(msg)
+                        logger.error(msg)
                         raise KeyError(msg)
             elif conn_data["kind"] == "power":
                 # For power connections, use the energy flow value directly.
                 conn_data["E"] = conn_data["energy_flow"]
             elif conn_data["kind"] == "heat":
-                # For heat connections, attempt the new calculation.
-                # Identify the associated component (either source or target)
-                comp_name = conn_data["source_component"] or conn_data["target_component"]
+                # For heat connections, find the heat exchanger component on either end.
+                # The other end is typically a HeatSource/HeatSink which is not in our component dict.
+                source_component = conn_data["source_component"]
+                target_component = conn_data["target_component"]
+                she_comps = my_json["components"].get("SimpleHeatExchanger", {})
+                comp_name = source_component if source_component in she_comps else target_component
                 # Check if the component is either a SimpleHeatExchanger or a SteamGenerator.
                 if (
                     "SimpleHeatExchanger" in my_json["components"]
@@ -394,7 +400,7 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                         )
                     else:
                         conn_data["E"] = None
-                        logging.warning(
+                        logger.warning(
                             f"Not enough material connections for heat exchanger {comp_name} for heat exergy calculation."
                         )
                 elif "SteamGenerator" in my_json["components"] and comp_name in my_json["components"]["SteamGenerator"]:
@@ -436,19 +442,26 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                         conn_data["E"] = E_TOT
                     else:
                         conn_data["E"] = None
-                        logging.warning(
+                        logger.warning(
                             f"Not enough material connections for steam generator {comp_name} for heat exergy calculation."
                         )
                 else:
                     conn_data["E"] = None
-                    logging.warning(
-                        f"Heat connection {conn_name} is not associated with a recognized heat exchanger component."
-                    )
+                    # Solar-thermal components compute the exergy of their own heat
+                    # connections during the exergy balance, so they are not heat
+                    # exchangers and must not trigger this warning.
+                    solar_comps = set()
+                    for solar_type in ("Heliostatfield", "SolarTower", "ParabolicTrough"):
+                        solar_comps.update(my_json["components"].get(solar_type, {}))
+                    if source_component not in solar_comps and target_component not in solar_comps:
+                        logger.warning(
+                            f"Heat connection {conn_name} is not associated with a recognized heat exchanger component."
+                        )
             elif conn_data["kind"] == "other":
                 # No exergy flow calculation for 'other' kind.
                 pass
             else:
-                logging.warning(
+                logger.warning(
                     f"Unknown connection kind: {conn_data['kind']} for connection {conn_name}. Skipping exergy flow calculation."
                 )
                 conn_data["E"] = None
@@ -457,7 +470,7 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
             conn_data["E_unit"] = fluid_property_data["power"]["SI_unit"]
 
         except Exception as e:
-            logging.error(f"Error calculating total exergy flow for connection {conn_name}: {e}")
+            logger.error(f"Error calculating total exergy flow for connection {conn_name}: {e}")
             conn_data["E"] = None
 
     return my_json
@@ -489,17 +502,17 @@ def convert_to_SI(property, value, unit):
     """
     # Check if value is None
     if value is None:
-        logging.warning(f"Value is None for property '{property}', cannot convert.")
+        logger.warning(f"Value is None for property '{property}', cannot convert.")
         return None
 
     # Check if the property is valid and exists in fluid_property_data
     if property not in fluid_property_data:
-        logging.warning(f"Unrecognized property: '{property}'. Returning original value {value} {unit}.")
+        logger.warning(f"Unrecognized property: '{property}'. Returning original value {value} {unit}.")
         return value
 
     # Check if the unit is valid
     if unit == "Unknown":
-        logging.warning(f"Unrecognized unit {unit} for property '{property}'. Returning original value {value} {unit}.")
+        logger.warning(f"Unrecognized unit {unit} for property '{property}'. Returning original value {value} {unit}.")
         return value
 
     try:

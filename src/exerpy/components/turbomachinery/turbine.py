@@ -1,8 +1,8 @@
-import logging
-
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
+from exerpy.logger import logger
 
 
 @component_registry
@@ -102,13 +102,23 @@ class Turbine(Component):
         else:
             self.P = self._total_outlet("m", "h") - self.inl[0]["m"] * self.inl[0]["h"]
 
+        # Representative ("main") outlet used to select the temperature regime below.
+        # Do not assume it sits at index 0: a model may wire the single outlet to an
+        # extraction port (e.g. 3/4) instead of the main outlet port (2). Use the
+        # lowest-indexed material outlet that is actually present.
+        main_out = self._main_outlet()
+        if main_out is None:
+            msg = f"Turbine {self.name} has no material outlet connection to evaluate."
+            logger.error(msg)
+            raise ValueError(msg)
+
         # Case 1: Both temperatures above ambient
-        if self.inl[0]["T"] >= T0 and self.outl[0]["T"] >= T0 and self.inl[0]["T"] >= self.outl[0]["T"]:
+        if self.inl[0]["T"] >= T0 and main_out["T"] >= T0 and self.inl[0]["T"] >= main_out["T"]:
             self.E_P = abs(self.P)
             self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self._total_outlet("m", "e_PH")
 
         # Case 2: Inlet above, outlet at/below ambient
-        elif self.inl[0]["T"] > T0 and self.outl[0]["T"] <= T0:
+        elif self.inl[0]["T"] > T0 and main_out["T"] <= T0:
             if split_physical_exergy:
                 self.E_P = abs(self.P) + self._total_outlet("m", "e_T")
                 self.E_F = (
@@ -117,7 +127,7 @@ class Turbine(Component):
                     - self._total_outlet("m", "e_M")
                 )
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with expander below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -125,12 +135,12 @@ class Turbine(Component):
                 self.E_F = np.nan
 
         # Case 3: Both temperatures at/below ambient
-        elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] <= T0:
+        elif self.inl[0]["T"] <= T0 and main_out["T"] <= T0:
             if split_physical_exergy:
                 self.E_P = abs(self.P) + (self._total_outlet("m", "e_T") - self.inl[0]["m"] * self.inl[0]["e_T"])
                 self.E_F = self.inl[0]["m"] * self.inl[0]["e_M"] - self._total_outlet("m", "e_M")
             else:
-                logging.warning(
+                logger.warning(
                     "While dealing with expander below ambient, "
                     "physical exergy should be split into thermal and mechanical components!"
                 )
@@ -138,7 +148,7 @@ class Turbine(Component):
                 self.E_F = np.nan
         # Invalid case: outlet temperature larger than inlet
         else:
-            logging.warning(
+            logger.warning(
                 "Exergy balance of a turbine where outlet temperature is larger "
                 "than inlet temperature is not implemented."
             )
@@ -152,7 +162,7 @@ class Turbine(Component):
         self.epsilon = self.calc_epsilon()
 
         # Log the results
-        logging.info(
+        logger.info(
             f"Exergy balance of Turbine {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
@@ -180,6 +190,30 @@ class Turbine(Component):
             if outlet and outlet.get("kind", "material") != "power" and mass_flow in outlet and property_name in outlet:
                 total += outlet[mass_flow] * outlet[property_name]
         return total
+
+    def _main_outlet(self):
+        r"""
+        Return the representative material outlet of the turbine.
+
+        The "main" outlet is taken as the material (non-power) outlet with the
+        smallest connector index that is actually present. This avoids assuming
+        the main outlet is stored at index 0: a model may wire the single outlet
+        to an extraction port instead of the dedicated main outlet port.
+
+        Returns
+        -------
+        dict or None
+            The representative outlet stream, or ``None`` if no material outlet
+            is connected.
+        """
+        material_outlets = {
+            idx: outlet
+            for idx, outlet in self.outl.items()
+            if outlet is not None and outlet.get("kind", "material") != "power"
+        }
+        if not material_outlets:
+            return None
+        return material_outlets[min(material_outlets)]
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
         """
@@ -284,7 +318,7 @@ class Turbine(Component):
                 b[counter + j] = 0
             counter += num_material_rows
         else:
-            logging.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
+            logger.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
 
         # --- Auxiliary equation for shaft power equality ---
         power_outlets = [
@@ -445,7 +479,7 @@ class Turbine(Component):
             self.C_F = inlet.get("C_M", 0) - sum_C_M_out
 
         else:
-            logging.warning(
+            logger.warning(
                 "Exergoeconomic balance of a turbine with outlet temperature larger than inlet is not implemented."
             )
             self.C_P = np.nan

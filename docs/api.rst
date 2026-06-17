@@ -167,10 +167,24 @@ The exergy analysis in ExerPy requires three structured inputs, each defined by 
 
     - ``outputs``: flows entering the system that reduce the net product (e.g., the power flow to a motor)
 
-- **Exergy loss** (:code:`E_L`): 
+- **Exergy loss** (:code:`E_L`):
     - ``inputs``: flows leaving the system and released to the environment (e.g., exhaust gases, cold outlet flow of a condenser in a steam cycle)
 
     - ``outputs``: flows entering the system that will later exit as losses (e.g., cold inlet flow of a condenser in a steam cycle)
+
+.. note::
+
+    **Solar thermal components (Ebsilon only).** The heliostat field, parabolic
+    trough and solar tower are currently produced only by the Ebsilon parser
+    (:code:`from_ebsilon`); the Aspen and TESPy parsers do not provide solar
+    components. These componente receive their exergy from incoming solar radiation, 
+    which the parser represents as a synthetic ``<name>_Q`` heat connection (there 
+    is no ordinary inlet stream carrying it). To declare this solar input as fuel, 
+    put the **name of the component** — not a connection name — in ``E_F["inputs"]``,
+    e.g. ``{"inputs": ["SF"], "outputs": []}`` for a heliostat field named
+    ``SF``. ExerPy resolves the component name to its ``<name>_Q`` connection
+    automatically. The same applies if such a flow ever needs to appear in
+    ``E_P`` or ``E_L``.
 
 .. code-block:: python
 

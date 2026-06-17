@@ -12,7 +12,8 @@ from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
 from .components.nodes.splitter import Splitter
-from .functions import add_chemical_exergy, add_total_exergy_flow
+from .functions import add_chemical_exergy
+from .functions import add_total_exergy_flow
 
 
 class ExergyAnalysis:

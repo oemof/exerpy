@@ -9,16 +9,26 @@ import json
 import os
 from typing import Any
 
-from exerpy.functions import convert_to_SI, fluid_property_data
+from exerpy.functions import convert_to_SI
+from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
 
-from . import __ebsilon_available__, is_ebsilon_available
+from . import __ebsilon_available__
+from . import is_ebsilon_available
 from .ebsilon_functions import calc_eph_from_min
-from .utils import EpCalculationResultStatus2Stub, EpFluidTypeStub, EpGasTableStub, EpSteamTableStub, require_ebsilon
+from .utils import EpCalculationResultStatus2Stub
+from .utils import EpFluidTypeStub
+from .utils import EpGasTableStub
+from .utils import EpSteamTableStub
+from .utils import require_ebsilon
 
 # Import Ebsilon classes if available
 if __ebsilon_available__:
-    from EbsOpen import EpCalculationResultStatus2, EpFluidType, EpGasTable, EpSteamTable, EpThermoLiquidType
+    from EbsOpen import EpCalculationResultStatus2
+    from EbsOpen import EpFluidType
+    from EbsOpen import EpGasTable
+    from EbsOpen import EpSteamTable
+    from EbsOpen import EpThermoLiquidType
     from win32com.client import Dispatch
 else:
     EpFluidType = EpFluidTypeStub
@@ -27,16 +37,14 @@ else:
     EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
     EpThermoLiquidType = None
 
-from .ebsilon_config import (
-    composition_params,
-    connector_mapping,
-    ebs_objects,
-    fluid_type_index,
-    grouped_components,
-    non_thermodynamic_unit_operators,
-    two_phase_fluids_mapping,
-    unit_id_to_string,
-)
+from .ebsilon_config import composition_params
+from .ebsilon_config import connector_mapping
+from .ebsilon_config import ebs_objects
+from .ebsilon_config import fluid_type_index
+from .ebsilon_config import grouped_components
+from .ebsilon_config import non_thermodynamic_unit_operators
+from .ebsilon_config import two_phase_fluids_mapping
+from .ebsilon_config import unit_id_to_string
 
 
 def _thermoliquid_name(pipe_cast):
@@ -221,7 +229,8 @@ class EbsilonModelParser:
         Parameters:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
-        from .ebsilon_functions import calc_eM, calc_eT
+        from .ebsilon_functions import calc_eM
+        from .ebsilon_functions import calc_eT
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)

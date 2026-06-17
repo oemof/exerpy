@@ -1,6 +1,7 @@
 import numpy as np
 
-from exerpy.components.component import Component, component_registry
+from exerpy.components.component import Component
+from exerpy.components.component import component_registry
 from exerpy.logger import logger
 
 

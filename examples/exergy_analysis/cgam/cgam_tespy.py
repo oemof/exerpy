@@ -1,16 +1,15 @@
 from CoolProp.CoolProp import PropsSI as CPSI
-from tespy.components import (
-    Compressor,
-    DiabaticCombustionChamber,
-    Drum,
-    HeatExchanger,
-    PowerBus,
-    PowerSink,
-    Sink,
-    Source,
-    Turbine,
-)
-from tespy.connections import Connection, PowerConnection
+from tespy.components import Compressor
+from tespy.components import DiabaticCombustionChamber
+from tespy.components import Drum
+from tespy.components import HeatExchanger
+from tespy.components import PowerBus
+from tespy.components import PowerSink
+from tespy.components import Sink
+from tespy.components import Source
+from tespy.components import Turbine
+from tespy.connections import Connection
+from tespy.connections import PowerConnection
 from tespy.networks import Network
 
 from exerpy import ExergyAnalysis
@@ -102,6 +101,8 @@ nwk.assert_convergence()
 
 nwk.print_results()
 
+# [tespy_model_section_end]
+
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
@@ -109,9 +110,12 @@ p0 = 101300
 T0 = 298.15
 
 ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
+# [exergy_analysis_setup]
 fuel = {"inputs": ["1", "10"], "outputs": []}
 product = {"inputs": ["e3", "9"], "outputs": ["8"]}
 loss = {"inputs": ["7"], "outputs": []}
+
+# [exergy_analysis_flows]
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

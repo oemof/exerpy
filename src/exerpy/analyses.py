@@ -59,28 +59,6 @@ class ExergyAnalysis:
         Dictionary specifying loss connections.
     epsilon : float
         Overall exergy efficiency of the system.
-
-    Methods
-    -------
-    analyse(E_F, E_P, E_L={})
-        Performs exergy analysis based on specified fuel, product, and loss definitions.
-    from_tespy(model, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from a TESPy network model.
-    from_aspen(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from an Aspen model file.
-    from_ebsilon(path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from an Ebsilon model file.
-    from_json(json_path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True)
-        Creates an instance from a JSON file containing system data.
-    exergy_results(print_results=True)
-        Displays and returns tables of exergy analysis results.
-    plot_exergy_waterfall(title=None, figsize=(12, 10), exclude_components=None, show_plot=True)
-        Creates an exergy destruction waterfall diagram visualizing exergy flow through the system.
-    print_exergy_summary()
-        Prints a concise text summary of the exergy analysis results.
-    export_to_json(output_path)
-        Exports the model and analysis results to a JSON file.
-    _serialize()
     """
 
     def __init__(self, component_data, connection_data, Tamb, pamb, chemExLib=None, split_physical_exergy=True) -> None:
@@ -1294,21 +1272,6 @@ class ExergoeconomicAnalysis:
         Currency symbol used in cost reporting.
     system_costs : dict
         Dictionary of system-level costs after analysis.
-
-    Methods
-    -------
-    initialize_cost_variables()
-        Defines and indexes all cost variables in the system.
-    assign_user_costs(Exe_Eco_Costs)
-        Assigns user-defined costs to components and input streams.
-    construct_matrix(Tamb)
-        Constructs the linear equation system for exergoeconomic analysis.
-    solve_exergoeconomic_analysis(Tamb)
-        Solves the cost equations and assigns results to connections and components.
-    run(Exe_Eco_Costs, Tamb)
-        Executes the complete exergoeconomic analysis workflow.
-    exergoeconomic_results(print_results=True)
-        Displays and returns tables of exergoeconomic analysis results.
     """
 
     def __init__(self, exergy_analysis_instance, currency="EUR"):

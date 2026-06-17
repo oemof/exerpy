@@ -149,4 +149,5 @@ htmlhelp_basename = "exerpy_doc"
 linkcheck_ignore = [
     r"^https://doi\.org/.*$",
     r"^https://docutils\.sourceforge\.io/.*$",
+    r"^https://www\.ebsilon\.com/.*$",  # site has a misconfigured TLS certificate
 ]

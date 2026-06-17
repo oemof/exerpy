@@ -92,7 +92,7 @@ In the following example, we demonstrate how to use ExerPy to perform exergy ana
 
     **Custom JSON Example**
 
-    .. code-block:: json
+    .. code-block:: text
 
         {
             "components": {

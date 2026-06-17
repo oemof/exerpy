@@ -35,5 +35,5 @@ Examples
 - Added exergoeconomic analysis example with JSON-based manual cost definitions.
 
 Contributors
-##########
+############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

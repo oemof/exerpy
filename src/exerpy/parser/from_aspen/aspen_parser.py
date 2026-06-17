@@ -619,6 +619,7 @@ class AspenModelParser:
         - P(OUT): outlet gas flow → outlet connector 0
         - WS(OUT): power output → outlet connector 1
         - WS(IN): direction depends on the sign of the Aspen power value:
+
             - positive → power leaves the turbine → outlet connector 2 (source/target swapped)
             - negative → power enters the turbine → inlet connector 1 (kept as-is)
 

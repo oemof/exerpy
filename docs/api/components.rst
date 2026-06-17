@@ -170,3 +170,33 @@ Cycle Closer
     :members:
     :undoc-members:
     :show-inheritance:
+
+
+***************
+Heliostat Field
+***************
+
+.. automodule:: exerpy.components.solar_thermal.heliostatfield
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+****************
+Parabolic Trough
+****************
+
+.. automodule:: exerpy.components.solar_thermal.parabolictrough
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+***********
+Solar Tower
+***********
+
+.. automodule:: exerpy.components.solar_thermal.solartower
+    :members:
+    :undoc-members:
+    :show-inheritance:

@@ -8,28 +8,28 @@ user-friendly API for setting up and running optimizations using pymoo.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Literal
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Callable
+from typing import Literal
 
 import numpy as np
 
-from .constraints import (
-    BoundConstraint,
-    Constraint,
-    ConstraintType,
-    ExergoeconomicConstraint,
-    ExergyConstraint,
-    RelativeConstraint,
-)
-from .objectives import (
-    CustomObjective,
-    MaximizeExergyEfficiency,
-    MinimizeExergyDestruction,
-    MinimizeTotalCost,
-    ObjectiveFunction,
-    OptimizationSense,
-)
+from .constraints import BoundConstraint
+from .constraints import Constraint
+from .constraints import ConstraintType
+from .constraints import ExergoeconomicConstraint
+from .constraints import ExergyConstraint
+from .constraints import RelativeConstraint
+from .objectives import CustomObjective
+from .objectives import MaximizeExergyEfficiency
+from .objectives import MinimizeExergyDestruction
+from .objectives import MinimizeTotalCost
+from .objectives import ObjectiveFunction
+from .objectives import OptimizationSense
 from .problem import ExergoeconomicProblem
-from .results import OptimizationResult, Solution
+from .results import OptimizationResult
+from .results import Solution
 from .variables import DesignVariable
 
 if TYPE_CHECKING:
@@ -837,14 +837,18 @@ class ExergoeconomicOptimizer:
             if G is not None and G.ndim == 1:
                 G = G.reshape(1, -1)
 
-            # Re-evaluate Pareto solutions to capture exergoeconomic diagnostics
+            # Re-evaluate Pareto solutions to capture exergoeconomic diagnostics.
+            # Trust the re-evaluation's physical-feasibility flag (e.g. a negative mass
+            # flow makes the solve non-physical); a solution is only feasible if it both
+            # re-solves to a physical state and satisfies any explicit pymoo constraints.
             for i in range(X.shape[0]):
-                _, _, _, diagnostics = problem.evaluate_single(X[i])
+                _, _, reeval_feasible, diagnostics = problem.evaluate_single(X[i])
+                constraints_ok = np.all(G[i] <= 0) if G is not None else True
                 sol = Solution(
                     x=X[i],
                     f=F[i],
                     g=G[i] if G is not None else None,
-                    feasible=np.all(G[i] <= 0) if G is not None else True,
+                    feasible=bool(reeval_feasible) and bool(constraints_ok),
                     variable_names=variable_names,
                     objective_names=objective_names,
                     constraint_names=constraint_names,
@@ -870,25 +874,29 @@ class ExergoeconomicOptimizer:
         best_solution = None
         if solutions:
             feasible_solutions = [s for s in solutions if s.feasible]
-            candidates = feasible_solutions if feasible_solutions else solutions
-            # Sort by primary objective (minimization)
-            candidates = sorted(candidates, key=lambda s: s.f[0])
-            best_candidate = candidates[0]
+            if not feasible_solutions:
+                # Never fall back to an infeasible (non-physical) design: such a
+                # best_solution would crash the downstream exergy analysis on re-solve.
+                logger.warning("No optimized solution re-evaluated as feasible/physical; keeping baseline design.")
+            else:
+                # Sort by primary objective (minimization)
+                candidates = sorted(feasible_solutions, key=lambda s: s.f[0])
+                best_candidate = candidates[0]
 
-            # Compare against baseline: only accept if strictly better
-            if baseline is not None:
-                baseline_obj = baseline.get(objective_names[0])
-                if baseline_obj is not None and best_candidate.f[0] >= baseline_obj:
-                    logger.warning(
-                        f"Best optimized solution ({objective_names[0]}={best_candidate.f[0]:.4f}) "
-                        f"is not better than baseline ({baseline_obj:.4f}). "
-                        f"Keeping baseline design."
-                    )
-                    best_solution = None
+                # Compare against baseline: only accept if strictly better
+                if baseline is not None:
+                    baseline_obj = baseline.get(objective_names[0])
+                    if baseline_obj is not None and best_candidate.f[0] >= baseline_obj:
+                        logger.warning(
+                            f"Best optimized solution ({objective_names[0]}={best_candidate.f[0]:.4f}) "
+                            f"is not better than baseline ({baseline_obj:.4f}). "
+                            f"Keeping baseline design."
+                        )
+                        best_solution = None
+                    else:
+                        best_solution = best_candidate
                 else:
                     best_solution = best_candidate
-            else:
-                best_solution = best_candidate
 
         # Determine termination reason
         termination_reason = "max_gen"

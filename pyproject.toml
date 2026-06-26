@@ -52,6 +52,8 @@ requires-python = ">=3.11"
 dependencies = [
     "pandas",
     "numpy",
+    "plotly>=6.8",
+    "matplotlib>=3.10",
 ]
 license = {text = "MIT"}
 

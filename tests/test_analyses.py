@@ -430,6 +430,112 @@ def test_valve_dissipative():
     assert valve.is_dissipative is True
 
 
+def _hex_network(component_type="HeatExchanger", hx_kwargs=None):
+    """Build a two-stream heat exchanger network (all streams above ambient = case 1)."""
+    instance = {"name": "HX1", "type": component_type, "type_index": 10}
+    if hx_kwargs:
+        instance.update(hx_kwargs)
+    component_data = {component_type: {"HX1": instance}}
+    # Connections carry no "name" field; their label is the dict key, as in real exports.
+    connection_data = {
+        # hot inlet
+        "1": {
+            "kind": "material",
+            "source_component": None,
+            "source_connector": None,
+            "target_component": "HX1",
+            "target_connector": 0,
+            "T": 400,
+            "p": 101325,
+            "m": 10,
+            "E": 20000,
+            "e_PH": 2000,
+            "e_T": 1500,
+            "e_M": 500,
+        },
+        # hot outlet
+        "2": {
+            "kind": "material",
+            "source_component": "HX1",
+            "source_connector": 0,
+            "target_component": None,
+            "target_connector": None,
+            "T": 350,
+            "p": 101325,
+            "m": 10,
+            "E": 15000,
+            "e_PH": 1500,
+            "e_T": 1000,
+            "e_M": 500,
+        },
+        # cold inlet
+        "3": {
+            "kind": "material",
+            "source_component": None,
+            "source_connector": None,
+            "target_component": "HX1",
+            "target_connector": 1,
+            "T": 310,
+            "p": 101325,
+            "m": 10,
+            "E": 3000,
+            "e_PH": 300,
+            "e_T": 200,
+            "e_M": 100,
+        },
+        # cold outlet
+        "4": {
+            "kind": "material",
+            "source_component": "HX1",
+            "source_connector": 1,
+            "target_component": None,
+            "target_connector": None,
+            "T": 330,
+            "p": 101325,
+            "m": 10,
+            "E": 6000,
+            "e_PH": 600,
+            "e_T": 500,
+            "e_M": 100,
+        },
+    }
+    return component_data, connection_data
+
+
+def test_legacy_condenser_remapped_to_heatexchanger(caplog):
+    """A legacy 'Condenser' component type is mapped to HeatExchanger with a warning."""
+    component_data, connection_data = _hex_network(component_type="Condenser")
+    components = _construct_components(component_data, connection_data, 300)
+    hx = components["HX1"]
+    assert type(hx).__name__ == "HeatExchanger"
+    # All streams above ambient (case 1) -> productive, not dissipative.
+    assert hx.is_dissipative is False
+    assert any("deprecated" in r.message.lower() for r in caplog.records)
+
+
+def test_heatexchanger_dissipative_from_E_L():
+    """A heat exchanger whose outlet is listed in E_L is treated as dissipative."""
+    component_data, connection_data = _hex_network()
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    # Declare the cold outlet ('4') as a loss -> the heat exchanger becomes dissipative.
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"outputs": ["2"]}, E_L={"inputs": ["4"]})
+    hx = analysis.components["HX1"]
+    assert hx.dissipative is True
+    assert hx.is_dissipative is True
+    assert np.isnan(hx.E_P)
+
+
+def test_heatexchanger_explicit_productive_overrides_E_L():
+    """An explicit dissipative=False keeps the unit productive even if an outlet is in E_L."""
+    component_data, connection_data = _hex_network(hx_kwargs={"dissipative": False})
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"outputs": ["2"]}, E_L={"inputs": ["4"]})
+    hx = analysis.components["HX1"]
+    assert hx.dissipative is False
+    assert hx.is_dissipative is False
+    assert not np.isnan(hx.E_P)
+
+
 def test_multiple_inputs_outputs(mock_component_data):
     """
     Test analysis when multiple fuel and product streams (both inputs and outputs) are present.

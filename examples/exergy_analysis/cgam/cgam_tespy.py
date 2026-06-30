@@ -17,8 +17,16 @@ from exerpy import ExergyAnalysis
 # ----------------------------------------------------------------------------------------------------------------------
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
-nwk = Network()
-nwk.units.set_defaults(pressure="bar", pressure_difference="bar", temperature="degC")
+nw = Network()
+nw.units.set_defaults(
+    temperature="degC",
+    pressure="bar",
+    pressure_difference="bar",
+    enthalpy="kJ / kg",
+    mass_flow="kg / s",
+    heat="kW",
+    power="kW",
+)
 
 air_molar = {"O2": 0.2059, "N2": 0.7748, "CO2": 0.0003, "H2O": 0.019, "CH4": 0}
 molar_masses = {key: CPSI("M", key) * 1000 for key in air_molar}
@@ -49,7 +57,7 @@ c2 = Connection(cmp, "out1", aph, "in2", label="2")
 c3 = Connection(aph, "out2", cb, "in1", label="3")
 c10 = Connection(ch4, "out1", cb, "in2", label="10")
 
-nwk.add_conns(c1, c2, c3, c10)
+nw.add_conns(c1, c2, c3, c10)
 
 c4 = Connection(cb, "out1", tur, "in1", label="4")
 c5 = Connection(tur, "out1", aph, "in1", label="5")
@@ -57,7 +65,7 @@ c6 = Connection(aph, "out1", eva, "in1", label="6")
 c6p = Connection(eva, "out1", eco, "in1", label="6P")
 c7 = Connection(eco, "out1", ch, "in1", label="7")
 
-nwk.add_conns(c4, c5, c6, c6p, c7)
+nw.add_conns(c4, c5, c6, c6p, c7)
 
 c8 = Connection(fw, "out1", eco, "in2", label="8")
 c8p = Connection(eco, "out2", dr, "in1", label="8P")
@@ -65,7 +73,7 @@ c11 = Connection(dr, "out1", eva, "in2", label="11")
 c11p = Connection(eva, "out2", dr, "in2", label="11P")
 c9 = Connection(dr, "out2", ls, "in1", label="9")
 
-nwk.add_conns(c8, c8p, c11, c11p, c9)
+nw.add_conns(c8, c8p, c11, c11p, c9)
 
 c8.set_attr(p=20, T=25, m=14, fluid={"water": 1})
 c1.set_attr(p=1.013, T=25, fluid=air)
@@ -90,16 +98,16 @@ e1 = PowerConnection(tur, "power", shaft, "power_in1", label="e1")
 e2 = PowerConnection(shaft, "power_out1", cmp, "power", label="e2")
 e3 = PowerConnection(shaft, "power_out2", grid, "power", label="e3")
 
-nwk.add_conns(e1, e2, e3)
+nw.add_conns(e1, e2, e3)
 
 e3.set_attr(E=30e6)
 
-nwk.solve("design")
+nw.solve("design")
 
 # assert convergence of calculation
-nwk.assert_convergence()
+nw.assert_convergence()
 
-nwk.print_results()
+nw.print_results()
 
 # [tespy_model_section_end]
 
@@ -109,7 +117,7 @@ nwk.print_results()
 p0 = 101300
 T0 = 298.15
 
-ean = ExergyAnalysis.from_tespy(nwk, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
 # [exergy_analysis_setup]
 fuel = {"inputs": ["1", "10"], "outputs": []}
 product = {"inputs": ["e3", "9"], "outputs": ["8"]}

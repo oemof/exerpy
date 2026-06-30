@@ -907,12 +907,11 @@ composition_params = [
 # Define the component groups via unique labels
 grouped_components = {
     "Turbine": [6, 23, 56, 57, 58, 68, 122],
-    "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "HeatExchanger": [7, 10, 25, 26, 27, 43, 47, 51, 55, 61, 62, 70, 71, 78, 124, 126],
     "CombustionChamber": [22, 90],
     "Valve": [2, 13, 14, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
-    "Condenser": [7, 47, 78],
     "Deaerator": [9, 63],
     "SimpleHeatExchanger": [15, 16, 35],
     "SteamGenerator": [5],
@@ -930,12 +929,11 @@ grouped_components = {
 This is the mapping of component groups to their respective component IDs:
 
     - "Turbine": [6, 23, 56, 57, 58, 68, 122],
-    - "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    - "HeatExchanger": [7, 10, 25, 26, 27, 43, 47, 51, 55, 61, 62, 70, 71, 78, 124, 126],
     - "CombustionChamber": [22, 90],
     - "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
     - "Pump": [8, 44, 83, 159],
     - "Compressor": [24, 94],
-    - "Condenser": [7, 47, 78],
     - "Deaerator": [9, 63],
     - "SimpleHeatExchanger": [15, 16, 35],
     - "SteamGenerator": [5],

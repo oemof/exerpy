@@ -109,24 +109,18 @@ condenser.set_attr(ttd_l=5)
 c31.set_attr(T=None)
 nw.solve("design")
 
-# assert convergence of calculation
 nw.assert_convergence()
 
 nw.print_results()
-
-# [tespy_model_section_end]
 
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
 ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=False)
-# [exergy_analysis_setup]
 
 fuel = {"inputs": ["e1"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}
 loss = {"inputs": ["13"], "outputs": ["11"]}
-
-# [exergy_analysis_flows]
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()

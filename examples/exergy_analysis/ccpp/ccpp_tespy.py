@@ -5,6 +5,7 @@ from tespy.components import DiabaticCombustionChamber
 from tespy.components import Drum
 from tespy.components import Generator
 from tespy.components import HeatExchanger
+from tespy.components import HeatSink
 from tespy.components import Merge
 from tespy.components import Motor
 from tespy.components import PowerBus
@@ -17,6 +18,7 @@ from tespy.components import Splitter
 from tespy.components import Turbine
 from tespy.components import Valve
 from tespy.connections import Connection
+from tespy.connections import HeatConnection
 from tespy.connections import PowerConnection
 from tespy.connections import Ref
 from tespy.networks import Network
@@ -27,7 +29,15 @@ from exerpy import ExergyAnalysis
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
 nw = Network()
-nw.units.set_defaults(temperature="°C", pressure="bar", pressure_difference="bar")
+nw.units.set_defaults(
+    temperature="degC",
+    pressure="bar",
+    pressure_difference="bar",
+    enthalpy="kJ / kg",
+    mass_flow="kg / s",
+    heat="W",
+    power="W",
+)
 
 air_in = Source("air inlet")
 fuel_in = Source("fuel inlet")
@@ -127,9 +137,8 @@ e15 = PowerConnection(distribution, "power_out4", grid, "power", label="e15")
 
 nw.add_conns(e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15)
 
-heating = PowerSink("heating")
-heating_condenser.set_attr(power_connector_location="outlet")
-h1 = PowerConnection(heating_condenser, "heat", heating, "power", label="h1")
+heating = HeatSink("heating")
+h1 = HeatConnection(heating_condenser, "heat", heating, "heat", label="h1")
 nw.add_conns(h1)
 
 gt_generator.set_attr(eta=0.985)
@@ -199,12 +208,9 @@ superheater.set_attr(ttd_u=25)
 
 nw.solve("design")
 
-# assert convergence of calculation
 nw.assert_convergence()
 
 nw.print_results()
-
-# [tespy_model_section_end]
 
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
@@ -213,14 +219,13 @@ p0 = 101300
 T0 = 288.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
-# [exergy_analysis_setup]
+
 fuel = {"inputs": ["1", "3"], "outputs": []}
 product = {"inputs": ["e15", "h1"], "outputs": []}
 loss = {"inputs": ["8", "15"], "outputs": ["14"]}
 
-# [exergy_analysis_flows]
-
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/ccpp/ccpp_tespy.json")
 df_component_results.to_csv("examples/exergy_analysis/ccpp/ccpp_components_tespy.csv")

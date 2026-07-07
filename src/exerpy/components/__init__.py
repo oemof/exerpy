@@ -1,6 +1,5 @@
 from .combustion.base import CombustionChamber
 from .heat_exchanger.base import HeatExchanger
-from .heat_exchanger.condenser import Condenser
 from .heat_exchanger.simple import SimpleHeatExchanger
 from .heat_exchanger.steam_generator import SteamGenerator
 from .helpers.cycle_closer import CycleCloser

@@ -1,0 +1,28 @@
+v0.0.10 (30.06.2026)
+++++++++++++++++++++++
+
+API Changes
+###########
+- The dedicated ``Condenser`` component was removed. Heat-rejection units are now
+  modelled with ``HeatExchanger``, which decides whether a unit is dissipative or
+  productive instead of always treating condensers as dissipative. The TESPy and
+  Ebsilon parsers map their condensers to ``HeatExchanger`` automatically, and
+  legacy exports labelled ``"Condenser"`` are still loaded (mapped to
+  ``HeatExchanger`` with a deprecation warning).
+
+New Features
+############
+- A ``HeatExchanger`` is now treated as dissipative when its rejected heat is
+  declared a loss, i.e. when one of its outlets is listed in ``E_L``. This lets
+  several condensers in the same network be handled individually without a manual
+  mapping override (closes #37).
+- The ``dissipative`` flag of ``HeatExchanger`` is now tri-state: ``True`` forces
+  dissipative behavior, ``False`` forces productive behavior, and ``None``
+  (default) decides automatically from the temperature case or the ``E_L``
+  specification.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+</content>
+</invoke>

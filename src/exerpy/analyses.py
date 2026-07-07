@@ -132,6 +132,23 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
+        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
+        # is treated as dissipative, unless its dissipative behavior was set explicitly.
+        loss_conn_names = set()
+        for key in ("inputs", "outputs"):
+            loss_conn_names.update(E_L.get(key, []))
+        for label in loss_conn_names:
+            conn = self.connections.get(label)
+            if conn is None:
+                continue
+            source = self.components.get(conn.get("source_component"))
+            if source is None or source.__class__.__name__ != "HeatExchanger":
+                continue
+            if getattr(source, "dissipative", None) is not None:
+                continue
+            source.dissipative = True
+            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.
         for _component_name, component in self.components.items():
@@ -140,7 +157,7 @@ class ExergyAnalysis:
             component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
 
             # Re-flag components that only turn out dissipative once E_P is known (E_P = nan).
-            if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
+            if component.__class__.__name__ in ("Valve", "HeatExchanger") and np.isnan(component.E_P):
                 component.is_dissipative = True
 
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
@@ -1003,6 +1020,14 @@ def _construct_components(component_data, connection_data, Tamb):
 
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
     for component_type, component_instances in component_data.items():
+        # Legacy exports may still label heat-rejection units as "Condenser"; ExerPy now
+        # models them as HeatExchanger and infers dissipativeness from the case or E_L.
+        if component_type == "Condenser":
+            logger.warning(
+                "Component type 'Condenser' is deprecated and is mapped to 'HeatExchanger'. "
+                "Dissipative behavior is now inferred from the temperature case or the E_L specification."
+            )
+            component_type = "HeatExchanger"
         for component_name, component_information in component_instances.items():
             # Skip components of type 'Splitter'
             """if component_type == "Splitter" or component_information.get('type') == "Splitter":
@@ -1049,35 +1074,28 @@ def _construct_components(component_data, connection_data, Tamb):
                     logger.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
             elif component_type == "HeatExchanger":
-                # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
-                # above T0 and the cold stream stays below T0 (case 6).
-                if getattr(component, "dissipative", False):
+                # An explicit dissipative flag (True/False) wins; otherwise the unit is dissipative
+                # when the hot stream stays above T0 and the cold stream stays below T0 (case 6).
+                # E_L-based inference happens later in analyse(), once E_L is known.
+                diss = getattr(component, "dissipative", None)
+                if diss is True:
                     component.is_dissipative = True
+                elif diss is False:
+                    component.is_dissipative = False
+                    try:
+                        if component._temperature_case(Tamb) == 6:
+                            logger.warning(
+                                f"HeatExchanger '{component_name}' is set dissipative=False but its streams "
+                                "have no exergy product (case 6); it is treated as dissipative anyway."
+                            )
+                    except Exception:
+                        pass
                 else:
                     try:
-                        T_in0 = component.inl[0].get("T", None)
-                        T_in1 = component.inl[1].get("T", None)
-                        T_out0 = component.outl[0].get("T", None)
-                        T_out1 = component.outl[1].get("T", None)
-                        if (
-                            T_in0 is not None
-                            and T_in1 is not None
-                            and T_out0 is not None
-                            and T_out1 is not None
-                            and T_in0 > Tamb
-                            and T_in1 <= Tamb
-                            and T_out0 > Tamb
-                            and T_out1 <= Tamb
-                        ):
-                            component.is_dissipative = True
-                        else:
-                            component.is_dissipative = False
+                        component.is_dissipative = component._temperature_case(Tamb) == 6
                     except Exception as e:
                         logger.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
                         component.is_dissipative = False
-            elif component_type == "Condenser":
-                # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
-                component.is_dissipative = True
             else:
                 component.is_dissipative = False
 

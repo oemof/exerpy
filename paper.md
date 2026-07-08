@@ -22,9 +22,11 @@ authors:
 affiliations:
  - name: Chair of Energy Engineering and Climate Protection, Technische Universität Berlin, Germany
    index: 1
+   ror: 03v4gjf40
  - name: Institute of Networked Energy Systems, German Aerospace Center (DLR), Germany
    index: 2
-date: 22 July 2025
+   ror: 04bwf3e34
+date: 8 July 2026
 bibliography: paper.bib
 
 ---
@@ -41,9 +43,7 @@ Despite these advantages, the application of exergy analysis still relies heavil
 
 # State of the field
 
-Exergy analysis has not yet been widely integrated into most commercial software used for thermodynamic assessments, which primarily focuses on energy and mass balance calculations. Within the open-source landscape, the calculation of both physical and chemical exergy of material streams, as well as an automated evaluation of the overall process, was seamlessly integrated into the simulation framework TESPy [@Witte_2020; @Witte_2022; @Hofmann2022], building on earlier Python-based work on the simulation and exergy analysis of thermodynamic cycles [@Zoder_2018]. While this represented an important step toward facilitating the application of exergy analysis, the analysis functionality remains limited to models created within TESPy and lacks interoperability with other open-source or commercial tools.
-
-The integration of the analysis logic within a simulator-centric codebase strongly couples it to a specific data model and limits interoperability. Moreover, the extension of TESPy to effectively process simulation results from commercial tools would lead to an increase in complexity, dependencies, and maintenance requirements for users primarily interested in simulation. To the best of the authors' knowledge, no other open-source package performs automated exergy analysis based on the results of commercial process-simulation software. Therefore, a dedicated package was required to provide a single, maintainable, open-source framework that performs automated exergy analysis across both commercial and open-source tools, including user-supplied system data via JSON.
+Automated exergy analysis remains only sparsely supported by existing thermodynamic simulation software, which primarily focuses on energy and mass balance calculations. Within the open-source landscape, the calculation of physical and chemical exergy of material streams, as well as an automated evaluation of the overall process, was integrated into the simulation framework TESPy [@Witte_2020; @Witte_2022; @Hofmann2022], building on earlier Python-based work on the simulation and exergy analysis of thermodynamic cycles [@Zoder_2018]. However, this functionality is coupled to TESPy's data model and therefore limited to models created within TESPy, while extending it to process results from commercial tools would increase complexity, dependencies, and maintenance requirements for users primarily interested in simulation. To the best of the authors' knowledge, no other open-source package performs automated exergy analysis based on the results of commercial process-simulation software. A dedicated package was therefore required to provide a single, maintainable, open-source framework that performs automated exergy analysis across both commercial and open-source tools, including user-supplied system data via JSON.
 
 # Software design
 
@@ -83,10 +83,10 @@ ExerPy translates this demonstrated demand into community-ready software by offe
 
 # AI usage disclosure
 
-Generative AI tools (multiple ChatGPT models, Claude Code, and DeepL Write) were used to generate and modify portions of the codebase and to support language editing of this manuscript. All AI-assisted changes were reviewed and validated by the authors.
+Generative AI tools were used during development: ChatGPT (GPT-4, GPT-5, GPT-5.1, GPT-5.2, GPT-5.4) and Claude Code (Opus 4.6, Opus 4.7, Opus 4.8) for code generation, refactoring, and test scaffolding in the codebase and for drafting parts of the documentation; Claude (Opus 4.6, Opus 4.7, Opus 4.8) and DeepL Write for copy-editing of this manuscript. All AI-assisted output was reviewed, edited, and validated by the authors, who made all core design and architectural decisions, including the simulator-independent JSON schema and the component-based analysis structure.
 
 # Acknowledgements
 
-Parts of this work were funded by the German Federal Ministry for Economic Affairs and Climate Action through the research project SecöndLife, grant numbers 03EI1076A (DLR) and 03EI1076B (TUB).
+Parts of this work were funded by the German Federal Ministry for Economic Affairs and Climate Action (BMWK) through the research project SecöndLife, grant numbers 03EI1076A (DLR) and 03EI1076B (TUB). The funding agency had no involvement in the design, development, or preparation of this work.
 
 # References

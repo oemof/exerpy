@@ -235,10 +235,20 @@ class TESPyAdapter(SimulatorAdapter):
                 kwargs["init_path"] = init_path
 
             self.model.solve(**kwargs)
-            # Use the .converged attribute (TESPy >= 0.9)
-            self._last_solve_success = getattr(self.model, "converged", True)
+            # Accept only a clean solve: status == 0 means converged AND
+            # physically valid (status 1 is converged with invalid property
+            # values in postprocessing, e.g. a pinch violation). Fall back to
+            # .converged for TESPy versions without the status attribute.
+            status = getattr(self.model, "status", None)
+            self._last_solve_success = (
+                status == 0 if status is not None
+                else getattr(self.model, "converged", True)
+            )
             if not self._last_solve_success:
-                logger.warning("TESPy solve did not converge.")
+                logger.warning(f"TESPy solve not accepted (status={status}).")
+                # A failed solve corrupts internal solver state; re-initialize
+                # from the saved baseline so later solves start clean.
+                self.restore_baseline_state()
                 return False
 
             # Validate physical plausibility of the converged solution
@@ -250,6 +260,8 @@ class TESPyAdapter(SimulatorAdapter):
         except Exception as e:
             logger.error(f"TESPy solve failed with exception: {e}")
             self._last_solve_success = False
+            # Same story after a crash: heal the network before the next solve.
+            self.restore_baseline_state()
             return False
 
     def _validate_solution(self) -> bool:
@@ -353,29 +365,30 @@ class TESPyAdapter(SimulatorAdapter):
     def save_baseline_state(self) -> None:
         """Save the current converged state for restoration between optimization evaluations.
 
-        During optimization, failed TESPy solves corrupt the internal connection
-        values (m, p, h). Calling restore_baseline_state() before each evaluation
-        ensures the solver always starts from a known-good state.
+        During optimization, failed TESPy solves corrupt internal solver state
+        beyond the connection values (m, p, h) -- restoring only those is not
+        enough to get a clean start. Save the FULL network state instead
+        (``Network.save(as_dict=True)`` includes the starting values of every
+        variable); restore_baseline_state() then re-initializes the network
+        from it via an ``init_only`` solve.
         """
-        self._baseline_conn_state = {}
-        for conn in self.model.conns["object"]:
-            if hasattr(conn, "m") and hasattr(conn, "p") and hasattr(conn, "h"):
-                self._baseline_conn_state[conn.label] = {
-                    "m": conn.m.val_SI,
-                    "p": conn.p.val_SI,
-                    "h": conn.h.val_SI,
-                }
+        self._baseline_state = self.model.save(as_dict=True)
 
     def restore_baseline_state(self) -> None:
-        """Restore the baseline state so the solver starts from a clean point."""
-        if not hasattr(self, "_baseline_conn_state"):
+        """Re-initialize the network from the saved baseline state.
+
+        Uses ``solve(..., init_only=True, init_path=<saved state>)``, which
+        resets the full solver state -- unlike writing m/p/h back manually.
+        """
+        if not hasattr(self, "_baseline_state"):
             return
-        for conn in self.model.conns["object"]:
-            if conn.label in self._baseline_conn_state:
-                state = self._baseline_conn_state[conn.label]
-                conn.m.val_SI = state["m"]
-                conn.p.val_SI = state["p"]
-                conn.h.val_SI = state["h"]
+        try:
+            self.model.solve(
+                "design", init_only=True, init_path=self._baseline_state,
+                print_results=False,
+            )
+        except Exception as e:
+            logger.warning(f"Baseline re-initialization failed: {e}")
 
     def save_state(self) -> dict[str, Any]:
         """

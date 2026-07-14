@@ -377,8 +377,15 @@ class TESPyAdapter(SimulatorAdapter):
     def restore_baseline_state(self) -> None:
         """Re-initialize the network from the saved baseline state.
 
-        Uses ``solve(..., init_only=True, init_path=<saved state>)``, which
-        resets the full solver state -- unlike writing m/p/h back manually.
+        Writes the saved starting values back via
+        ``solve(..., init_only=True, init_path=<saved state>)``, then clears
+        every connection's ``good_starting_values`` flag. The init_path
+        restore sets that flag to True, which makes TESPy skip its
+        early-iteration safety corrections (property-range clamping,
+        two-phase adjustment); starting exactly on a previously converged
+        state without those corrections can yield a singular Jacobian
+        (status 3) in pinch/superheat equations. With the flag cleared the
+        corrections run and the re-solve is reliable.
         """
         if not hasattr(self, "_baseline_state"):
             return
@@ -389,6 +396,9 @@ class TESPyAdapter(SimulatorAdapter):
             )
         except Exception as e:
             logger.warning(f"Baseline re-initialization failed: {e}")
+        for conn in self.model.conns["object"]:
+            if hasattr(conn, "good_starting_values"):
+                conn.good_starting_values = False
 
     def save_state(self) -> dict[str, Any]:
         """

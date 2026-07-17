@@ -118,7 +118,7 @@ combustion chamber, compressor, and generator.
 
 JSON file:
 
-.. code-block:: json
+.. code-block:: text
 
     {
         "components": {

@@ -110,7 +110,10 @@ def plot_exergy_waterfall(
     print_exergy_summary : Print a text summary of exergy analysis.
     plot_exergy_waterfall_plotly : Plotly version of this diagram.
     """
-    import matplotlib.pyplot as plt
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise ImportError("matplotlib is required for waterfall diagrams: pip install exerpy[viz]") from exc
     import numpy as np
 
     if not hasattr(analysis, "epsilon") or analysis.epsilon is None:
@@ -225,7 +228,10 @@ def plot_exergy_waterfall_plotly(
     --------
     plot_exergy_waterfall : Matplotlib version of this diagram.
     """
-    import plotly.graph_objects as go
+    try:
+        import plotly.graph_objects as go
+    except ImportError as exc:
+        raise ImportError("plotly is required for waterfall diagrams: pip install exerpy[viz]") from exc
 
     if not hasattr(analysis, "epsilon") or analysis.epsilon is None:
         raise RuntimeError("Exergy analysis has not been performed yet. Please call analyse() first.")

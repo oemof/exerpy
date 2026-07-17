@@ -6,9 +6,15 @@ Visualization
 
 ExerPy can visualize the results of a completed exergy analysis as an
 interactive Sankey diagram of all exergy flows and as a waterfall diagram of
-the exergy destruction per component. The examples below build the diagrams
-from the exported analysis results of the three example systems, so no
-simulator is required to run them, e.g.:
+the exergy destruction per component. The plotting libraries are an optional
+dependency, install them with:
+
+.. code-block:: bash
+
+    pip install exerpy[viz]
+
+The examples below build the diagrams from the exported analysis results of
+the three example systems, so no simulator is required to run them, e.g.:
 
 .. code-block:: bash
 

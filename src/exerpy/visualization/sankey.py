@@ -110,7 +110,10 @@ class SankeyBuilder:
 
     def to_plotly(self, title: str | None = None):
         """Return a Plotly ``Figure`` containing the Sankey trace."""
-        import plotly.graph_objects as go
+        try:
+            import plotly.graph_objects as go
+        except ImportError as exc:
+            raise ImportError("plotly is required for Sankey diagrams: pip install exerpy[viz]") from exc
 
         nodes, links = self.build()
         fig = go.Figure(

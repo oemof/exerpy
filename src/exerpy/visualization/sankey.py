@@ -18,8 +18,9 @@ if TYPE_CHECKING:
 # Splitter (1→N) and Mixer (N→1) are NOT pass-throughs: they change topology.
 _DEFAULT_PASSTHROUGH_TYPES: frozenset[str] = frozenset({"CycleCloser"})
 
-# Skip destruction links for these types (E_D is None or structurally zero)
-_NO_DESTRUCTION_TYPES: frozenset[str] = frozenset({"CycleCloser", "PowerBus", "Splitter", "Mixer"})
+# Skip destruction links for these types (E_D is None or structurally zero).
+# Mixer is NOT in this set: mixing streams of different temperature destroys exergy.
+_NO_DESTRUCTION_TYPES: frozenset[str] = frozenset({"CycleCloser", "PowerBus", "Splitter"})
 
 # Special terminal node IDs
 _EF = "__E_F__"
@@ -115,22 +116,24 @@ class SankeyBuilder:
             raise ImportError("plotly is required for Sankey diagrams: pip install plotly") from exc
 
         nodes, links = self.build()
-        fig = go.Figure(go.Sankey(
-            arrangement="snap",
-            node=dict(
-                pad=15,
-                thickness=20,
-                label=[n["label"] for n in nodes],
-                color=[n["color"] for n in nodes],
-            ),
-            link=dict(
-                source=[lk["source"] for lk in links],
-                target=[lk["target"] for lk in links],
-                value=[max(lk["value"], 0.0) for lk in links],
-                color=[lk["color"] for lk in links],
-                label=[lk.get("label", "") for lk in links],
-            ),
-        ))
+        fig = go.Figure(
+            go.Sankey(
+                arrangement="snap",
+                node=dict(
+                    pad=15,
+                    thickness=20,
+                    label=[n["label"] for n in nodes],
+                    color=[n["color"] for n in nodes],
+                ),
+                link=dict(
+                    source=[lk["source"] for lk in links],
+                    target=[lk["target"] for lk in links],
+                    value=[max(lk["value"], 0.0) for lk in links],
+                    color=[lk["color"] for lk in links],
+                    label=[lk.get("label", "") for lk in links],
+                ),
+            )
+        )
         fig.update_layout(
             title_text=title or "Exergy Sankey Diagram",
             font_size=12,
@@ -184,9 +187,7 @@ class SankeyBuilder:
     # Routing (for 1:1 collapsed pass-through nodes)
     # ------------------------------------------------------------------
 
-    def _build_routes(
-        self, collapsed: set[str]
-    ) -> dict[str, tuple[str | None, str | None] | None]:
+    def _build_routes(self, collapsed: set[str]) -> dict[str, tuple[str | None, str | None] | None]:
         """
         Return ``{conn_id: (eff_source, eff_target)}`` after collapsing pass-through nodes.
 
@@ -230,9 +231,7 @@ class SankeyBuilder:
     # Link building
     # ------------------------------------------------------------------
 
-    def _add_link(
-        self, source_id: str, target_id: str, value: float, color: str, label: str = ""
-    ) -> None:
+    def _add_link(self, source_id: str, target_id: str, value: float, color: str, label: str = "") -> None:
         if not (value > 0):
             return
         src = self._node_idx.get(source_id)
@@ -277,9 +276,7 @@ class SankeyBuilder:
             result.append((E_CH, hex_to_rgba(shade(base, 0.60), 0.50), "E_CH"))
         return result or [(E, hex_to_rgba(base, 0.5), "E")]
 
-    def _add_connection_links(
-        self, routes: dict, terminal_ids: set[str]
-    ) -> None:
+    def _add_connection_links(self, routes: dict, terminal_ids: set[str]) -> None:
         for conn_id, conn_data in self.analysis.connections.items():
             if conn_id in terminal_ids:
                 continue
@@ -393,11 +390,7 @@ class SankeyBuilder:
         Internal connections (both endpoints in the same group) are dropped.
         Cross-boundary connections are remapped to the group node.
         """
-        comp_to_group: dict[str, str] = {
-            member: gname
-            for gname, members in self.groups.items()
-            for member in members
-        }
+        comp_to_group: dict[str, str] = {member: gname for gname, members in self.groups.items() for member in members}
 
         new_nodes: list[dict] = []
         new_idx: dict[str, int] = {}

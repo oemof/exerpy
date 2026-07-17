@@ -658,7 +658,14 @@ class ExergyAnalysis:
         """
         from .visualization.waterfall import plot_exergy_waterfall
 
-        return plot_exergy_waterfall(self, title=title, figsize=figsize, exclude_components=exclude_components, colors=colors, show_plot=show_plot)
+        return plot_exergy_waterfall(
+            self,
+            title=title,
+            figsize=figsize,
+            exclude_components=exclude_components,
+            colors=colors,
+            show_plot=show_plot,
+        )
 
     def plot_exergy_waterfall_plotly(self, title=None, exclude_components=None, colors=None, show_plot=True):
         """
@@ -687,7 +694,9 @@ class ExergyAnalysis:
         """
         from .visualization.waterfall import plot_exergy_waterfall_plotly
 
-        return plot_exergy_waterfall_plotly(self, title=title, exclude_components=exclude_components, colors=colors, show_plot=show_plot)
+        return plot_exergy_waterfall_plotly(
+            self, title=title, exclude_components=exclude_components, colors=colors, show_plot=show_plot
+        )
 
     def print_exergy_summary(self):
         """

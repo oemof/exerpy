@@ -22,12 +22,16 @@ def _prepare_data(analysis: ExergyAnalysis, exclude_components: list[str] | None
     E_F_total = total_row["E_F [kW]"]
     loss_percent = (total_row["E_L [kW]"] / E_F_total) * 100 if E_F_total != 0 else 0
 
-    comp_data = df[
-        (df["Component"] != "TOT")
-        & (df["E_F [kW]"].notna())
-        & (~df["Component"].isin(exclude_components))
-        & (df["y [%]"].notna())
-    ].copy().sort_values("y [%]", ascending=False)
+    comp_data = (
+        df[
+            (df["Component"] != "TOT")
+            & (df["E_F [kW]"].notna())
+            & (~df["Component"].isin(exclude_components))
+            & (df["y [%]"].notna())
+        ]
+        .copy()
+        .sort_values("y [%]", ascending=False)
+    )
 
     return comp_data, epsilon_total, loss_percent
 
@@ -122,20 +126,12 @@ def plot_exergy_waterfall(
         bar_values.append(current)
     bar_values.append(epsilon_total)
 
-    space_labels = (
-        ["Exergetic fuel"]
-        + list(comp_data["Component"])
-        + ["Exergetic loss", "Exergetic product"]
-    )
+    space_labels = ["Exergetic fuel"] + list(comp_data["Component"]) + ["Exergetic loss", "Exergetic product"]
 
     fig, ax = plt.subplots(figsize=figsize)
     n_bars = len(bar_values)
     bar_positions = np.arange(n_bars)
-    bar_colors = (
-        [palette["fuel"]]
-        + [palette["destruction"]] * (n_bars - 2)
-        + [palette["product"]]
-    )
+    bar_colors = [palette["fuel"]] + [palette["destruction"]] * (n_bars - 2) + [palette["product"]]
 
     for pos, value, color in zip(bar_positions, bar_values, bar_colors, strict=False):
         ax.barh(pos, value, color=color, alpha=0.8, height=0.6)
@@ -146,7 +142,16 @@ def plot_exergy_waterfall(
         if i == 0:
             ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
         elif i == len(space_labels) - 2:
-            ax.text(2, space_pos, f"{label} (-{loss_percent:.2f}%)", va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
+            ax.text(
+                2,
+                space_pos,
+                f"{label} (-{loss_percent:.2f}%)",
+                va="center",
+                ha="left",
+                fontsize=10,
+                fontweight="bold",
+                style="italic",
+            )
         elif i == len(space_labels) - 1:
             ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
         else:
@@ -233,39 +238,45 @@ def plot_exergy_waterfall_plotly(
         + [f"{name} (-{y:.2f}%)" for name, y in zip(comp_data["Component"], comp_data["y [%]"], strict=False)]
         + [f"E_L (-{loss_percent:.2f}%)", "E_P"]
     )
-    measures = ["absolute"] + ["relative"] * len(comp_data) + ["relative", "total"]
-    x_values = [100.0] + [-y for y in comp_data["y [%]"]] + [-loss_percent, 0]
-    text = (
-        ["100.00%"]
-        + [f"-{y:.2f}%" for y in comp_data["y [%]"]]
-        + [f"-{loss_percent:.2f}%", f"{epsilon_total:.2f}%"]
-    )
-    bar_colors = (
-        [palette["fuel"]]
-        + [palette["destruction"]] * len(comp_data)
-        + [palette["loss"], palette["product"]]
-    )
+    text = ["100.00%"] + [f"-{y:.2f}%" for y in comp_data["y [%]"]] + [f"-{loss_percent:.2f}%", f"{epsilon_total:.2f}%"]
+    bar_colors = [palette["fuel"]] + [palette["destruction"]] * len(comp_data) + [palette["loss"], palette["product"]]
 
-    fig = go.Figure(go.Waterfall(
-        orientation="h",
-        measure=measures,
-        y=names,
-        x=x_values,
-        text=text,
-        textposition="inside",
-        connector={"line": {"color": "#9E9E9E", "dash": "dot", "width": 1}},
-        decreasing={"marker": {"color": palette["destruction"]}},
-        increasing={"marker": {"color": palette["destruction"]}},
-        totals={"marker": {"color": palette["product"]}},
-        marker={"color": bar_colors},
-    ))
+    # go.Waterfall only supports three colors (increasing/decreasing/totals),
+    # so build the floating segments manually with go.Bar to color every bar
+    # according to the fuel/destruction/loss/product palette.
+    starts = [0.0]
+    widths = [100.0]
+    remaining = 100.0
+    for y in comp_data["y [%]"]:
+        remaining -= y
+        starts.append(remaining)
+        widths.append(y)
+    starts.append(remaining - loss_percent)
+    widths.append(loss_percent)
+    starts.append(0.0)
+    widths.append(epsilon_total)
+
+    fig = go.Figure(
+        go.Bar(
+            orientation="h",
+            y=names,
+            x=widths,
+            base=starts,
+            text=text,
+            textposition="inside",
+            marker={"color": bar_colors},
+            hovertemplate="%{y}<extra></extra>",
+        )
+    )
 
     fig.update_layout(
         title_text=title or "Exergy Waterfall Diagram",
         xaxis_title="Exergy [%]",
         xaxis={"range": [0, 105]},
+        yaxis={"autorange": "reversed"},
         font_size=12,
         showlegend=False,
+        bargap=0.3,
     )
 
     if show_plot:

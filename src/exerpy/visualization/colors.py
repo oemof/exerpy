@@ -79,5 +79,3 @@ def connection_base_color(conn_data: dict) -> str:
     if kind == "heat":
         return HEAT_COLOR
     return fluid_base_color(conn_data.get("mass_composition") or {})
-
-

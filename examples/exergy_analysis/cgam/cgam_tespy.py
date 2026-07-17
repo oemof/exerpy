@@ -108,6 +108,7 @@ nw.assert_convergence()
 
 nw.print_results()
 
+# [tespy_model_section_end]
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
@@ -115,11 +116,11 @@ p0 = 101300
 T0 = 298.15
 
 ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
-
+# [exergy_analysis_setup]
 fuel = {"inputs": ["1", "10"], "outputs": []}
 product = {"inputs": ["e3", "9"], "outputs": ["8"]}
 loss = {"inputs": ["7"], "outputs": []}
-
+# [exergy_analysis_flows]
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/cgam/cgam_tespy.json")

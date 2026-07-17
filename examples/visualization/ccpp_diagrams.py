@@ -1,8 +1,8 @@
 """
-Demonstrate the exerpy visualization module (Sankey and waterfall diagrams).
+Sankey and waterfall diagrams for the combined cycle power plant (ccpp) example.
 
-The script loads the exported exergy analysis results of the combined cycle
-power plant (ccpp) example, so no simulator is required to run it:
+The script loads the exported exergy analysis results, so no simulator is
+required to run it:
 
     python examples/visualization/ccpp_diagrams.py
 
@@ -18,9 +18,7 @@ from exerpy import ExergyAnalysis
 
 HERE = Path(__file__).parent
 
-# ----------------------------------------------------------------------------------------------------------------------
-# 1. Load the ccpp example results and run the exergy analysis
-# ----------------------------------------------------------------------------------------------------------------------
+# [analysis_section]
 ean = ExergyAnalysis.from_json(str(HERE / ".." / "exergy_analysis" / "ccpp" / "ccpp_tespy.json"))
 
 fuel = {"inputs": ["1", "3"], "outputs": []}
@@ -28,10 +26,7 @@ product = {"inputs": ["e15", "h1"], "outputs": []}
 loss = {"inputs": ["8", "15"], "outputs": ["14"]}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-
-# ----------------------------------------------------------------------------------------------------------------------
-# 2. Sankey diagrams
-# ----------------------------------------------------------------------------------------------------------------------
+# [sankey_section]
 # Mode 1: one link per connection carrying the total exergy flow E.
 ean.plot_sankey(
     mode=1,
@@ -50,15 +45,12 @@ ean.plot_sankey(
 # Components can be aggregated into groups and nodes can be colored
 # individually. Links inside a group are hidden.
 ean.plot_sankey(
-    groups={"Steam cycle": ["DEA", "COND", "FP", "CP", "DP"]},
+    groups={"HRSG": ["ECO", "EVA", "SH", "drum", "drum pump"]},
     node_colors={"CC": "#C62828", "GT": "#388E3C"},
-    title="CCPP – Sankey diagram (grouped steam cycle)",
+    title="CCPP – Sankey diagram (grouped heat recovery steam generator)",
     output_path=str(HERE / "ccpp_sankey_grouped.html"),
 )
-
-# ----------------------------------------------------------------------------------------------------------------------
-# 3. Waterfall diagrams
-# ----------------------------------------------------------------------------------------------------------------------
+# [waterfall_section]
 # Interactive plotly variant. Bar colors can be customized via the `colors`
 # dict with the keys "fuel", "destruction", "loss" and "product".
 fig = ean.plot_exergy_waterfall_plotly(title="CCPP – Exergy waterfall", show_plot=False)
@@ -67,10 +59,7 @@ fig.write_html(HERE / "ccpp_waterfall.html")
 # Static matplotlib variant of the same diagram, exported as PNG.
 fig, ax = ean.plot_exergy_waterfall(title="CCPP – Exergy waterfall", show_plot=False)
 fig.savefig(HERE / "ccpp_waterfall.png", dpi=150, bbox_inches="tight")
-
-# ----------------------------------------------------------------------------------------------------------------------
-# 4. Show the results
-# ----------------------------------------------------------------------------------------------------------------------
+# [show_section]
 html_files = [
     HERE / "ccpp_sankey_total.html",
     HERE / "ccpp_sankey_split.html",

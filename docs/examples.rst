@@ -125,3 +125,21 @@ In the following example, we demonstrate how to extend the exergy analysis with 
 
     Exergoeconomic analysis with manually defined component investment costs and
     input stream specific costs.
+
+In the following example, we demonstrate how to visualize the results of an exergy analysis with Sankey and waterfall diagrams.
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    examples/visualization.rst
+
+.. card::
+    :link: examples_visualization_label
+    :link-type: ref
+
+    **Visualization**
+    ^^^
+
+    Interactive Sankey diagrams of the exergy flows and waterfall diagrams of
+    the exergy destruction per component for the three example systems.

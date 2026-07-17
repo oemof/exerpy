@@ -18,6 +18,9 @@ exclude = [
     "examples/exergoeconomic_analysis/cgam/**",
     "examples/exergoeconomic_analysis/ccpp/**",
     "examples/exergoeconomic_analysis/heatpump/**",
+    "examples/visualization/*.html",
+    "examples/visualization/*.png",
+    "**/.DS_Store",
 ]
 
 [project]
@@ -62,11 +65,17 @@ Changelog = "https://exerpy.readthedocs.io/en/latest/whats_new.html"
 "Issue Tracker" = "https://github.com/oemof/exerpy/issues"
 
 [project.optional-dependencies]
+viz = [
+    "plotly>=6.8",
+    "matplotlib>=3.10",
+]
 dev = [
     "build",
     "flit",
     "furo",
     "isort",
+    "matplotlib>=3.10",
+    "plotly>=6.8",
     "pytest",
     "sphinx>=7.2.2",
     "sphinx-copybutton",

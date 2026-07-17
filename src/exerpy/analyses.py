@@ -1,7 +1,6 @@
 import json
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
@@ -594,158 +593,127 @@ class ExergyAnalysis:
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 
-    def plot_exergy_waterfall(self, title=None, figsize=(12, 10), exclude_components=None, show_plot=True):
+    def plot_sankey(
+        self,
+        mode: int = 1,
+        collapse_passthroughs: bool | list[str] = True,
+        groups: dict | None = None,
+        node_colors: dict | None = None,
+        title: str | None = None,
+        output_path: str | None = None,
+    ):
+        """
+        Create an interactive Sankey diagram of the exergy flows.
+
+        Parameters
+        ----------
+        mode : {1, 2, 3}
+            1 – total exergy E per link (default)
+            2 – split material links into E_PH + E_CH (requires chemical_exergy_enabled)
+            3 – split material links into E_T + E_M + E_CH (requires split_physical_exergy)
+        collapse_passthroughs : bool or list[str]
+            True  → collapse CycleCloser nodes into their neighbours (default)
+            False → show every component node
+            list  → collapse only the listed component type names
+        groups : dict[str, list[str]], optional
+            Visual grouping: ``{"Group": ["comp1", "comp2"]}`` hides internal connections
+            and aggregates boundary-crossing links.
+        node_colors : dict[str, str], optional
+            Per-component colour overrides keyed by component name, e.g.
+            ``{"CC": "#C62828", "GT": "#388E3C"}``.  Components not listed use
+            the default node colour.
+        title : str, optional
+            Diagram title.
+        output_path : str, optional
+            If given, export the diagram to this HTML file path.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+        """
+        from .visualization.sankey import SankeyBuilder
+
+        builder = SankeyBuilder(
+            self,
+            mode=mode,
+            collapse_passthroughs=collapse_passthroughs,
+            groups=groups,
+            node_colors=node_colors,
+        )
+        fig = builder.to_plotly(title=title)
+        if output_path is not None:
+            fig.write_html(output_path)
+        return fig
+
+    def plot_exergy_waterfall(self, title=None, figsize=(12, 10), exclude_components=None, colors=None, show_plot=True):
         """
         Create an exergy destruction waterfall diagram.
-
-        This method visualizes the exergy flow through the system as a waterfall chart,
-        showing how exergy is destroyed in each component from the exergetic fuel (100%)
-        down to the exergetic product and losses.
 
         Parameters
         ----------
         title : str, optional
-            Title for the plot. If None, no title is displayed.
+            Title for the plot.
         figsize : tuple, optional
             Figure size as (width, height) in inches. Default is (12, 10).
         exclude_components : list, optional
-            List of component names to exclude from the diagram.
-            By default, all components with NaN E_F (Exergetic Fuel) are excluded,
-            as well as CycleCloser and PowerBus components.
+            Component names to exclude. Components with NaN E_F are always excluded.
+        colors : dict, optional
+            Override bar colors. Keys: "fuel", "destruction", "loss", "product".
         show_plot : bool, optional
             Whether to display the plot immediately. Default is True.
 
         Returns
         -------
         fig : matplotlib.figure.Figure
-            The figure object containing the waterfall diagram.
         ax : matplotlib.axes.Axes
-            The axes object of the waterfall diagram.
-
-        Raises
-        ------
-        RuntimeError
-            If the exergy analysis has not been performed yet (analyse() not called).
-
-        Notes
-        -----
-        - The waterfall diagram displays exergy values as percentages of the total fuel exergy.
-        - Components are sorted by their exergy destruction rate (y [%]) in descending order.
-        - Each bar represents the remaining exergy after destruction in that component.
-        - Red bars indicate exergy destruction in components.
-        - Blue bar represents the initial exergetic fuel (100%).
-        - Green bar represents the final exergetic product.
 
         Examples
         --------
         >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
         >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
         >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
-        >>> fig.savefig('exergy_waterfall.pdf')  # doctest: +SKIP
-
-        See Also
-        --------
-        exergy_results : Display tabular exergy analysis results.
-        print_exergy_summary : Print a text summary of exergy analysis.
         """
-        # Check if analysis has been performed
-        if not hasattr(self, "epsilon") or self.epsilon is None:
-            raise RuntimeError("Exergy analysis has not been performed yet. Please call analyse() first.")
+        from .visualization.waterfall import plot_exergy_waterfall
 
-        # Get component results without printing
-        df_component_results, _, _ = self.exergy_results(print_results=False)
+        return plot_exergy_waterfall(
+            self,
+            title=title,
+            figsize=figsize,
+            exclude_components=exclude_components,
+            colors=colors,
+            show_plot=show_plot,
+        )
 
-        # Default exclusions: empty list, but filter for valid E_F
-        if exclude_components is None:
-            exclude_components = []
+    def plot_exergy_waterfall_plotly(self, title=None, exclude_components=None, colors=None, show_plot=True):
+        """
+        Create an interactive exergy destruction waterfall diagram using Plotly.
 
-        # Get total values from df_component_results
-        total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["epsilon [%]"]
-        E_L_total = total_row["E_L [kW]"]
-        E_F_total = total_row["E_F [kW]"]
-        exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
+        Parameters
+        ----------
+        title : str, optional
+            Title for the plot.
+        exclude_components : list, optional
+            Component names to exclude. Components with NaN E_F are always excluded.
+        colors : dict, optional
+            Override bar colors. Keys: "fuel", "destruction", "loss", "product".
+        show_plot : bool, optional
+            Whether to display the plot immediately. Default is True.
 
-        # Filter components (exclude TOT, components with NaN E_F, and specified components)
-        component_data = df_component_results[
-            (df_component_results["Component"] != "TOT")
-            & (df_component_results["E_F [kW]"].notna())
-            & (~df_component_results["Component"].isin(exclude_components))
-            & (df_component_results["y [%]"].notna())
-        ].copy()
+        Returns
+        -------
+        fig : plotly.graph_objects.Figure
 
-        # Sort by y [%] in descending order
-        component_data = component_data.sort_values("y [%]", ascending=False)
+        Examples
+        --------
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> fig = analysis.plot_exergy_waterfall_plotly(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
+        """
+        from .visualization.waterfall import plot_exergy_waterfall_plotly
 
-        # Create bar values: Start at 100%, decrease by each component's y [%]
-        bar_values = [100.0]
-        current_value = 100.0
-        for y in component_data["y [%]"]:
-            current_value -= y
-            bar_values.append(current_value)
-        bar_values.append(epsilon_total)  # Final bar is the exergetic product
-
-        # Create labels for spaces between bars
-        space_labels = ["Exergetic fuel"] + list(component_data["Component"]) + ["Exergetic loss", "Exergetic product"]
-
-        # Create the figure
-        fig, ax = plt.subplots(figsize=figsize)
-
-        # Number of bars and spaces
-        n_bars = len(bar_values)
-
-        # Create horizontal bars at positions 0, 1, 2, ..., n_bars-1
-        bar_positions = np.arange(n_bars)
-        bar_colors = ["#1565C0"] + ["#D32F2F"] * (n_bars - 2) + ["#2E7D32"]
-        # Blue for fuel, red for destruction, green for product
-
-        for i, (pos, value, color) in enumerate(zip(bar_positions, bar_values, bar_colors, strict=False)):
-            ax.barh(pos, value, color=color, alpha=0.8, height=0.6)
-            # Add value label inside the bar on the right
-            ax.text(
-                value - 2, pos, f"{value:.2f}%", va="center", ha="right", fontsize=9, fontweight="bold", color="white"
-            )
-
-        # Add space labels between bars
-        # Space positions: between bars, so at 0.5, 1.5, 2.5, ..., and above/below
-        space_positions = [-0.5] + [i + 0.5 for i in range(n_bars - 1)] + [n_bars - 0.5]
-
-        for i, (space_pos, label) in enumerate(zip(space_positions, space_labels, strict=False)):
-            if i == 0:  # Exergetic fuel - above first bar
-                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
-            elif i == len(space_labels) - 2:  # Exergetic loss
-                loss_label = f"{label} (-{exergetic_loss_percent:.2f}%)"
-                ax.text(
-                    2, space_pos, loss_label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic"
-                )
-            elif i == len(space_labels) - 1:  # Exergetic product - below last bar
-                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
-            else:  # Component labels
-                component_idx = i - 1
-                destruction_rate = component_data.iloc[component_idx]["y [%]"]
-                label_with_rate = f"{label} (-{destruction_rate:.2f}%)"
-                ax.text(2, space_pos, label_with_rate, va="center", ha="left", fontsize=10, fontweight="bold")
-
-        # Customize plot
-        ax.set_yticks(bar_positions)
-        ax.set_yticklabels([""] * n_bars)  # Empty labels since we have custom labels
-        ax.set_xlabel("Exergy [%]", fontsize=12, fontweight="bold")
-
-        if title is not None:
-            ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
-
-        ax.set_xlim(0, 100)
-        ax.set_ylim(-1, n_bars)
-        ax.grid(axis="x", alpha=0.3, linestyle="--")
-        ax.axvline(x=0, color="black", linewidth=0.8)
-        ax.invert_yaxis()  # Invert so highest bar is at top
-
-        plt.tight_layout()
-
-        if show_plot:
-            plt.show()
-
-        return fig, ax
+        return plot_exergy_waterfall_plotly(
+            self, title=title, exclude_components=exclude_components, colors=colors, show_plot=show_plot
+        )
 
     def print_exergy_summary(self):
         """

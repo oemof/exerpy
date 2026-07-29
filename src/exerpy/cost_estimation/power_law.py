@@ -421,17 +421,16 @@ class DefaultCostEstimator:
     def _get_compressor_vdot(self, component):
         """Suction volumetric flow rate [m^3/h] from the compressor inlet.
 
-        Uses ``m`` [kg/s] and ``v`` [m^3/kg] from the inlet connection:
-        ``V_dot = m * v * 3600``.
+        The parsers store the volumetric flow ``v`` [m^3/s] on the inlet
+        connection (tespy's ``v`` property is a volumetric flow, not the
+        specific volume): ``V_dot = v * 3600``.
         """
         if not hasattr(component, "inl"):
             return None
         for idx in component.inl:
-            inlet = component.inl[idx]
-            m = inlet.get("m")
-            v = inlet.get("v")
-            if m is not None and v is not None and m > 0 and v > 0:
-                return m * v * 3600  # kg/s * m^3/kg * 3600 s/h = m^3/h
+            v = component.inl[idx].get("v")
+            if v is not None and v > 0:
+                return v * 3600  # m^3/s * 3600 s/h = m^3/h
         return None
 
     def _get_power_kW(self, component):

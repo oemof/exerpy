@@ -327,7 +327,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -343,6 +343,10 @@ class ExergyAnalysis:
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        profile : str or int, optional
+            Name or id of the profile (operating point) to simulate, e.g. a part load case.
+            Defaults to the profile the model was saved with. Use
+            :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
 
         Returns
         -------
@@ -357,7 +361,9 @@ class ExergyAnalysis:
 
         if file_extension == ".ebs":
             logger.info("Running Ebsilon simulation and generating JSON data.")
-            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
+            data = ebs_parser.run_ebsilon(
+                path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb, profile=profile
+            )
             logger.info("Simulation completed successfully.")
 
         else:

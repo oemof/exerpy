@@ -15,6 +15,10 @@ New Features
   a ``KeyError``) when fewer than two inlets or outlets are connected. Its auxiliary cost
   equations follow the number of outlets as well, so a drum with a blow down no longer leaves
   the exergoeconomic cost matrix underdetermined.
+- Ebsilon profiles (operating points such as part load cases) can now be selected from
+  Python. ``get_ebsilon_profiles()`` lists the profiles of a model, and ``profile`` (name or
+  id) of ``ExergyAnalysis.from_ebsilon()`` and ``run_ebsilon()`` picks the one to simulate
+  and analyse.
 - ``ExergyAnalysis.from_ebsilon()`` now passes ``Tamb`` and ``pamb`` on to the parser.
   Values given in Python take precedence over the reference state of the model and are
   used for the specific exergies of the connections as well, so a model without a

@@ -815,3 +815,112 @@ def test_steam_drum_connector_mapping():
     assert 20 in grouped_components["Drum"]
     # feed water and heating steam are the inlets, circulating water and steam the outlets
     assert connector_mapping[20] == {1: 0, 2: 1, 3: 0, 4: 1, 5: 2}
+
+
+# ---------- Profile Tests ----------
+
+
+class DummyProfiles:
+    """Minimal stand-in for the IProfiles collection of Ebsilon."""
+
+    def __init__(self, items):
+        self._items = list(items)
+
+    @property
+    def Count(self):
+        return len(self._items)
+
+    def Item(self, index):
+        return self._items[index - 1]
+
+
+class DummyProfile:
+    """Minimal stand-in for the IProfile object of Ebsilon."""
+
+    def __init__(self, name, profile_id, active=False, children=()):
+        self.Name = name
+        self.ProfileId = profile_id
+        self.IsActive = active
+        self.Children = DummyProfiles(children)
+
+
+def _profile_parser(root, activate_result=True):
+    """Return a parser with a mocked model holding the given profile tree."""
+    parser = EbsilonModelParser.__new__(EbsilonModelParser)
+    parser.profile = None
+    parser.model = Mock()
+    parser.model.RootProfile = root
+    parser.model.ActivateProfile = Mock(return_value=activate_result)
+    parser.model.ActiveProfile = Mock(Name="Part load")
+    return parser
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_list_profiles():
+    """
+    Test that the profile tree of a model is flattened depth-first, with the parent names.
+    """
+    root = DummyProfile(
+        "Design",
+        0,
+        active=True,
+        children=[
+            DummyProfile("Part load", 1, children=[DummyProfile("Part load winter", 2)]),
+            DummyProfile("Full load", 3),
+        ],
+    )
+
+    profiles = _profile_parser(root).list_profiles()
+
+    assert [p["name"] for p in profiles] == ["Design", "Part load", "Part load winter", "Full load"]
+    assert [p["id"] for p in profiles] == [0, 1, 2, 3]
+    assert [p["parent"] for p in profiles] == [None, "Design", "Part load", "Design"]
+    assert [p["active"] for p in profiles] == [True, False, False, False]
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_activate_profile():
+    """
+    Test that a profile of the model is activated and remembered by the parser.
+    """
+    parser = _profile_parser(DummyProfile("Design", 0, active=True))
+
+    parser.activate_profile("Part load")
+
+    parser.model.ActivateProfile.assert_called_once_with("Part load")
+    assert parser.profile == "Part load"
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_activate_profile_unknown():
+    """
+    Test that an unknown profile is rejected instead of silently keeping the active one.
+
+    Ebsilon reports a missing profile by returning False rather than raising.
+    """
+    root = DummyProfile("Design", 0, active=True, children=[DummyProfile("Part load", 1)])
+    parser = _profile_parser(root, activate_result=False)
+
+    with pytest.raises(ValueError, match="no profile 'Winter'"):
+        parser.activate_profile("Winter")
+
+    # the error names the profiles the model does have
+    with pytest.raises(ValueError, match=r"'Design' \(id 0\), 'Part load' \(id 1\)"):
+        parser.activate_profile("Winter")
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_initialize_model_activates_profile():
+    """
+    Test that the profile given to the parser is activated right after the model is opened.
+    """
+    mock_app = Mock()
+    mock_model = Mock()
+    mock_model.ActivateProfile = Mock(return_value=True)
+    mock_app.Open.return_value = mock_model
+
+    with patch("exerpy.parser.from_ebsilon.ebsilon_parser.Dispatch", return_value=mock_app):
+        parser = EbsilonModelParser("dummy_path.ebs", profile="Part load")
+        parser.initialize_model()
+
+    mock_model.ActivateProfile.assert_called_once_with("Part load")

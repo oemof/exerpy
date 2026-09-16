@@ -102,6 +102,7 @@ class EbsilonModelParser:
         split_physical_exergy: bool = True,
         Tamb: float | None = None,
         pamb: float | None = None,
+        profile: str | int | None = None,
     ):
         """
         Initializes the parser with the given model path.
@@ -111,6 +112,8 @@ class EbsilonModelParser:
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
             Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
             pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+            profile (str or int): Name or id of the profile to activate. Defaults to the profile
+                the model was saved with.
 
         Raises:
             RuntimeError: If Ebsilon is not available but is required for parsing.
@@ -130,6 +133,7 @@ class EbsilonModelParser:
 
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
+        self.profile = profile  # Profile (operating point) to activate after opening the model
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model
         self.oc = None  # ObjectCaster for type casting
@@ -174,7 +178,67 @@ class EbsilonModelParser:
             logger.error(f"Failed to obtain ObjectCaster: {e}")
             raise RuntimeError(f"Could not get ObjectCaster: {e}")
 
-        logger.info(f"Model opened successfully: {self.model_path}")
+        # 4) select the operating point to work with
+        if self.profile is not None:
+            self.activate_profile(self.profile)
+
+        logger.info(f"Model opened successfully: {self.model_path} (profile '{self.active_profile()}')")
+
+    @require_ebsilon
+    def list_profiles(self) -> list[dict[str, Any]]:
+        """
+        List the profiles (operating points) of the opened model.
+
+        Ebsilon stores the profiles as a tree: the root profile holds the design case and its
+        children hold the deviations, e.g. part load or seasonal cases. The list is returned in
+        depth-first order.
+
+        Returns:
+            list: One dictionary per profile with its ``name``, ``id``, ``parent`` (name of the
+            parent profile, ``None`` for the root) and whether it is currently ``active``.
+        """
+        profiles: list[dict[str, Any]] = []
+
+        def collect(profile, parent_name):
+            profiles.append(
+                {
+                    "name": profile.Name,
+                    "id": profile.ProfileId,
+                    "parent": parent_name,
+                    "active": bool(profile.IsActive),
+                }
+            )
+            children = profile.Children
+            for i in range(1, children.Count + 1):
+                collect(children.Item(i), profile.Name)
+
+        collect(self.model.RootProfile, None)
+        return profiles
+
+    @require_ebsilon
+    def active_profile(self) -> str:
+        """Return the name of the profile the model is currently set to."""
+        return self.model.ActiveProfile.Name
+
+    @require_ebsilon
+    def activate_profile(self, profile: str | int):
+        """
+        Activate a profile of the model, so that it is the one being simulated and parsed.
+
+        Parameters:
+            profile (str or int): Name or id of the profile.
+
+        Raises:
+            ValueError: If the model has no profile with that name or id.
+        """
+        if not self.model.ActivateProfile(profile):
+            available = ", ".join(f"'{p['name']}' (id {p['id']})" for p in self.list_profiles())
+            error_msg = f"The model has no profile '{profile}'. Available profiles: {available}."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        self.profile = profile
+        logger.info(f"Activated profile '{self.active_profile()}'")
 
     @require_ebsilon
     def simulate_model(self):
@@ -1295,12 +1359,47 @@ class EbsilonModelParser:
             raise
 
 
+def get_ebsilon_profiles(model_path: str) -> list[dict[str, Any]]:
+    """
+    List the profiles (operating points) stored in an Ebsilon model.
+
+    A model can hold several profiles, e.g. a design case and part load or seasonal cases.
+    This opens the model without simulating it and reports which ones are available, so that
+    one of them can be passed as the `profile` of :func:`run_ebsilon`.
+
+    Parameters:
+        model_path (str): Path to the Ebsilon model file.
+
+    Returns:
+        list: One dictionary per profile with its `name`, `id`, `parent` and `active` flag.
+
+    Raises:
+        FileNotFoundError: If the model file is not found at the specified path.
+        RuntimeError: If Ebsilon is not available.
+    """
+    if not is_ebsilon_available():
+        raise RuntimeError(
+            "Ebsilon functionality is required for running this function. "
+            "Please set the EBS environment variable to your Ebsilon installation path."
+        )
+
+    if not os.path.exists(model_path):
+        error_msg = f"Model file not found at: {model_path}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    parser = EbsilonModelParser(model_path)
+    parser.initialize_model()
+    return parser.list_profiles()
+
+
 def run_ebsilon(
     model_path: str,
     output_dir: str | None = None,
     split_physical_exergy: bool = True,
     Tamb: float | None = None,
     pamb: float | None = None,
+    profile: str | int | None = None,
 ) -> dict[str, Any]:
     """
     Main function to process the Ebsilon model and return parsed data.
@@ -1312,6 +1411,8 @@ def run_ebsilon(
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
         Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
         pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+        profile (str or int): Name or id of the profile to simulate. Defaults to the profile
+            the model was saved with.
 
     Returns:
         dict: Parsed data in dictionary format.
@@ -1335,7 +1436,9 @@ def run_ebsilon(
 
     # Initialize the Ebsilon model parser with the model file path
     try:
-        parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
+        parser = EbsilonModelParser(
+            model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb, profile=profile
+        )
     except RuntimeError as e:
         # This will catch the RuntimeError raised in __init__ if Ebsilon is not available
         logger.error(f"Failed to initialize EbsilonModelParser: {e}")

@@ -100,7 +100,7 @@ e3 = PowerConnection(shaft, "power_out2", grid, "power", label="e3")
 
 nw.add_conns(e1, e2, e3)
 
-e3.set_attr(E=30e6)
+e3.set_attr(E=30e3)
 
 nw.solve("design")
 

@@ -70,7 +70,6 @@ c13.set_attr(T=8, p=1.013)
 c21.set_attr(fluid={"water": 1}, T=70, p=5, m=10)
 c23.set_attr(T=120, p=5)
 
-c31.set_attr(T=75)
 c32.set_attr(p=0.6, fluid={"R245FA": 1})
 c34.set_attr(p=23)
 
@@ -78,7 +77,7 @@ compressor.set_attr(eta_s=0.8)
 fan.set_attr(eta_s=0.85)
 pump.set_attr(eta_s=0.8)
 evaporator.set_attr(dp1=0.03, dp2=0.05)
-condenser.set_attr(dp1=0.05, dp2=0.05)
+condenser.set_attr(dp1=0.05, dp2=0.05, ttd_l=5)
 
 evaporator.set_attr(ttd_u=5)
 
@@ -102,11 +101,6 @@ motor1.set_attr(eta=0.985)
 motor2.set_attr(eta=0.985)
 motor3.set_attr(eta=0.985)
 
-nw.solve("design")
-
-# Run final simulation with ttd_l in condenser set
-condenser.set_attr(ttd_l=5)
-c31.set_attr(T=None)
 nw.solve("design")
 
 nw.assert_convergence()

@@ -336,9 +336,9 @@ class ExergyAnalysis:
         path : str
             Path to the Ebsilon file (.ebs format).
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. Overrides the reference state of the model.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. Overrides the reference state of the model.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -357,7 +357,7 @@ class ExergyAnalysis:
 
         if file_extension == ".ebs":
             logger.info("Running Ebsilon simulation and generating JSON data.")
-            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
+            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
             logger.info("Simulation completed successfully.")
 
         else:
@@ -568,7 +568,7 @@ class ExergyAnalysis:
             print("\nMaterial Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -579,7 +579,7 @@ class ExergyAnalysis:
             print("\nNon-Material Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_non_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_non_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -589,7 +589,12 @@ class ExergyAnalysis:
             # Print the component results DataFrame in the console in a table format
             print("\nComponent Exergy Analysis Results:")
             print(
-                tabulate(df_component_results.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f")
+                tabulate(
+                    _no_negative_zero(df_component_results).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
             )
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
@@ -1103,6 +1108,14 @@ def _construct_components(component_data, connection_data, Tamb):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _no_negative_zero(df, digits=3):
+    """Return a copy of the table where values that round to zero are printed as +0."""
+    df = df.copy()
+    for column in df.select_dtypes(include="number"):
+        df[column] = df[column].mask(df[column].round(digits) == 0, df[column].abs())
+    return df
 
 
 def _nan_to_none(value):
@@ -2360,13 +2373,41 @@ class ExergoeconomicAnalysis:
         # -------------------------
         if print_results:
             print("\nExergoeconomic Analysis - Component Results:")
-            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_comp).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (exergy data):")
-            print(tabulate(df_mat1.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat1).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (cost data):")
-            print(tabulate(df_mat2.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat2).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Non-Material Connection Results:")
-            print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_non_mat).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
 
         return df_comp, df_mat1, df_mat2, df_non_mat
 
@@ -2445,7 +2486,7 @@ class ExergoeconomicAnalysis:
         print(f"{'=' * 70}")
         print(
             tabulate(
-                df_sorted[display_cols].head(n_show).reset_index(drop=True),
+                _no_negative_zero(df_sorted[display_cols].head(n_show)).reset_index(drop=True),
                 headers="keys",
                 tablefmt="psql",
                 floatfmt=".3f",

@@ -1,0 +1,45 @@
+v0.0.11 (unreleased)
+++++++++++++++++++++++
+
+New Features
+############
+- The Ebsilon parser now supports the heating surfaces of steam generators. A flue gas
+  zone (component 88) and its main heating surface (component 89) model the two sides of
+  one and the same heat exchanger and are merged into a single ``HeatExchanger`` named
+  ``<main surface>_<flue gas zone>``, with the flue gas as hot and the water/steam side as
+  cold stream. Auxiliary heating surfaces (component 91) are analysed as
+  ``SimpleHeatExchanger``.
+- The Ebsilon steam drum (component 20) is mapped to the ``Drum`` component, including its
+  blow down outlet. ``Drum`` now sums all of its inlets and outlets, so a blow down is part
+  of the exergy balance instead of being ignored, and it raises a ``ValueError`` (instead of
+  a ``KeyError``) when fewer than two inlets or outlets are connected. Its auxiliary cost
+  equations follow the number of outlets as well, so a drum with a blow down no longer leaves
+  the exergoeconomic cost matrix underdetermined.
+- ``ExergyAnalysis.from_ebsilon()`` now passes ``Tamb`` and ``pamb`` on to the parser.
+  Values given in Python take precedence over the reference state of the model and are
+  used for the specific exergies of the connections as well, so a model without a
+  reference state can be analysed without editing it in Ebsilon.
+
+- A ``Turbine`` that expands below the ambient temperature is now analysed without split
+  physical exergy as well. Instead of returning ``NaN``, the balance falls back to
+  :math:`\dot{E}_\mathrm{P} = |P|` and
+  :math:`\dot{E}_\mathrm{F} = \dot{E}^\mathrm{PH}_\mathrm{in} - \sum \dot{E}^\mathrm{PH}_\mathrm{out}`,
+  which leaves the cold exergy of the outlet in the stream instead of crediting it to the
+  product. A warning points to the split physical exergy for the resolved definition.
+
+Bug Fixes
+#########
+- Values that round to zero are no longer printed as ``-0.000`` in the result tables.
+- The exergy destruction of a ``Turbine`` in a case without a defined product was never
+  computed from the overall balance, because the fallback tested ``np.nan == E_F``, which is
+  always ``False``.
+- The Ebsilon parser no longer takes the reference state from an arbitrary measuring
+  point (component 46). Measuring points without a value in MEASM are ignored instead of
+  overwriting a valid reference state, several measuring points of the same type are
+  accepted as long as they agree, and conflicting ones raise an error naming each of them.
+  If the reference temperature (FTYP = 26) or the reference pressure (FTYP = 13) is
+  missing, the error message says which one and where it is expected.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

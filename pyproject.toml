@@ -18,6 +18,8 @@ exclude = [
     "examples/exergoeconomic_analysis/cgam/**",
     "examples/exergoeconomic_analysis/ccpp/**",
     "examples/exergoeconomic_analysis/heatpump/**",
+    "examples/opt_examples/**",
+    "**/.DS_Store",
 ]
 
 [project]

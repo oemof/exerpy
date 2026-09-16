@@ -16,6 +16,7 @@ import pytest
 from exerpy.analyses import ExergyAnalysis
 from exerpy.analyses import _construct_components
 from exerpy.analyses import _load_json
+from exerpy.analyses import _no_negative_zero
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
@@ -968,3 +969,19 @@ def test_from_aspen_invalid_extension(tmp_path):
     txt_file.write_text("dummy")
     with pytest.raises(ValueError, match="Unsupported file format"):
         ExergyAnalysis.from_aspen(str(txt_file))
+
+
+def test_no_negative_zero():
+    """
+    Test that values rounding to zero are printed as +0 while real values stay untouched.
+    """
+    df = pd.DataFrame({"name": ["a", "b", "c", "d"], "value": [-0.0, -1e-9, -0.02, np.nan]})
+
+    result = _no_negative_zero(df)
+
+    assert not np.signbit(result["value"][0])
+    assert not np.signbit(result["value"][1])
+    assert result["value"][2] == -0.02
+    assert np.isnan(result["value"][3])
+    # the original frame keeps its values
+    assert np.signbit(df["value"][0])

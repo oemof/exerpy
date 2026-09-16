@@ -526,30 +526,88 @@ def test_drum_calc_exergy_balance_success():
 
 def test_drum_invalid_inlets():
     """
-    Test that if fewer than two inlets are provided, a KeyError is raised.
-    (Because the implementation expects self.inl[1] to exist.)
+    Test that if fewer than two inlets are provided, a ValueError is raised.
     """
     drum = Drum()
     # Only one inlet provided
     drum.inl = {0: {"m": 10, "e_PH": 900}}
     # Provide two outlets
     drum.outl = {0: {"m": 1, "e_PH": 1000}, 1: {"m": 2, "e_PH": 1100}}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
 
 
 def test_drum_invalid_outlets():
     """
-    Test that if fewer than two outlets are provided, a KeyError is raised.
-    (Because the implementation expects self.outl[1] to exist.)
+    Test that if fewer than two outlets are provided, a ValueError is raised.
     """
     drum = Drum()
     # Provide two inlets
     drum.inl = {0: {"m": 10, "e_PH": 900}, 1: {"m": 5, "e_PH": 800}}
     # Only one outlet provided
     drum.outl = {0: {"m": 1, "e_PH": 1000}}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+
+def test_drum_with_blow_down():
+    """
+    Test that a third outlet, such as the blow down of an Ebsilon drum, is part of the product.
+    """
+    drum = Drum(name="TestDrum")
+    drum.inl = {0: {"m": 10, "e_PH": 900}, 1: {"m": 5, "e_PH": 800}}
+    drum.outl = {0: {"m": 1, "e_PH": 1000}, 1: {"m": 2, "e_PH": 1100}, 2: {"m": 3, "e_PH": 500}}
+
+    drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+    # E_P = 1*1000 + 2*1100 + 3*500 = 4700 W, E_F = 10*900 + 5*800 = 13000 W
+    assert pytest.approx(4700, rel=1e-3) == drum.E_P
+    assert pytest.approx(13000, rel=1e-3) == drum.E_F
+    assert pytest.approx(8300, rel=1e-3) == drum.E_D
+
+
+def _drum_cost_stream(name, first_column, e_T, e_M, e_CH=2.0, m=3.0):
+    """Return a connection with the cost variables the exergoeconomic matrix expects."""
+    return {
+        "name": name,
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_CH": e_CH,
+        "E_T": e_T * m,
+        "E_M": e_M * m,
+        "E_CH": e_CH * m,
+        "CostVar_index": {"T": first_column, "M": first_column + 1, "CH": first_column + 2},
+    }
+
+
+@pytest.mark.parametrize(
+    ("num_outlets", "chemical_exergy_enabled", "expected_rows"),
+    [(2, False, 3), (2, True, 5), (3, False, 5), (3, True, 8)],
+)
+def test_drum_aux_eqs_row_count(num_outlets, chemical_exergy_enabled, expected_rows):
+    """
+    Test that the drum provides one equation per cost variable of its outlets.
+
+    The cost balance of the component covers one of them, so the auxiliary equations have to
+    cover the rest. Without them the cost matrix of a drum with a blow down is singular.
+    """
+    drum = Drum(name="TestDrum")
+    drum.inl = {0: _drum_cost_stream("in0", 0, 10.0, 5.0), 1: _drum_cost_stream("in1", 3, 11.0, 5.0)}
+    drum.outl = {i: _drum_cost_stream(f"out{i}", 6 + 3 * i, 12.0 + i, 6.0 + i) for i in range(num_outlets)}
+    size = 40
+    A = np.zeros((size, size))
+    b = np.zeros(size)
+
+    A, b, counter, equations = drum.aux_eqs(A, b, 0, 298.15, {}, chemical_exergy_enabled)
+
+    assert counter == expected_rows
+    assert len(equations) == expected_rows
+    # every cost variable of every outlet is part of at least one equation
+    for outlet in drum.outl.values():
+        labels = ["T", "M", "CH"] if chemical_exergy_enabled else ["T", "M"]
+        for label in labels:
+            assert A[:counter, outlet["CostVar_index"][label]].any()
 
 
 def test_mixer_calc_exergy_balance_success():
@@ -1166,6 +1224,55 @@ def test_turbine_case3(turbine):
     assert np.isclose(turbine.epsilon, expected_epsilon, atol=1e-3)
 
 
+def test_turbine_case2_without_split(turbine):
+    """
+    Case 2 without split physical exergy: only the power output is counted as product.
+
+    Setup:
+      - Inlet: T = 310 K, m = 5, h = 400, e_PH = 1000.
+      - Outlet: T = 290 K, m = 5, h = 380, e_PH = 950.
+
+    Calculations:
+      P = (5*380 - 5*400) = -100  -> |P| = 100.
+      E_P = |P| = 100.
+      E_F = 5*1000 - 5*950 = 250.
+      E_D = 250 - 100 = 150.
+    """
+    T0 = 300
+    p0 = 101325
+    m = 5
+    turbine.inl = {0: {"T": 310, "m": m, "h": 400, "e_PH": 1000}}
+    turbine.outl = {0: {"T": 290, "m": m, "h": 380, "e_PH": 950}}
+
+    turbine.calc_exergy_balance(T0, p0, split_physical_exergy=False)
+
+    assert np.isclose(turbine.E_P, 100, atol=1e-3)
+    assert np.isclose(turbine.E_F, 250, atol=1e-3)
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
+    assert np.isclose(turbine.epsilon, 0.4, atol=1e-3)
+
+
+def test_turbine_case3_without_split(turbine):
+    """
+    Case 3 without split physical exergy: only the power output is counted as product.
+
+    Setup:
+      - Inlet: T = 290 K, m = 5, h = 400, e_PH = 1000.
+      - Outlet: T = 280 K, m = 5, h = 380, e_PH = 950.
+    """
+    T0 = 300
+    p0 = 101325
+    m = 5
+    turbine.inl = {0: {"T": 290, "m": m, "h": 400, "e_PH": 1000}}
+    turbine.outl = {0: {"T": 280, "m": m, "h": 380, "e_PH": 950}}
+
+    turbine.calc_exergy_balance(T0, p0, split_physical_exergy=False)
+
+    assert np.isclose(turbine.E_P, 100, atol=1e-3)
+    assert np.isclose(turbine.E_F, 250, atol=1e-3)
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
+
+
 def test_turbine_invalid_case(turbine):
     """
     Test an invalid case for the turbine:
@@ -1181,6 +1288,8 @@ def test_turbine_invalid_case(turbine):
 
     assert np.isnan(turbine.E_P), "E_P should be NaN for invalid case (outlet T > inlet T)."
     assert np.isnan(turbine.E_F), "E_F should be NaN for invalid case (outlet T > inlet T)."
+    # E_D still follows from the overall balance: 5*1000 - 5*950 - |P| = 250 - 100 = 150
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
 
 
 @pytest.fixture

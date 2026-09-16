@@ -82,6 +82,16 @@ Pump
     :show-inheritance:
 
 
+****
+Drum
+****
+
+.. automodule:: exerpy.components.nodes.drum
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 *********
 Deaerator
 *********

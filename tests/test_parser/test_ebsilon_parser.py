@@ -19,6 +19,8 @@ from unittest.mock import patch
 import pytest
 
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+from exerpy.parser.from_ebsilon.ebsilon_config import connector_mapping
+from exerpy.parser.from_ebsilon.ebsilon_config import grouped_components
 from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
 from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
 
@@ -254,6 +256,7 @@ def test_parse_component(parser, mock_component):
     Verifies
     --------
     - Component type casting
+    - Collection of the measuring points defining the reference state
     - Ambient temperature extraction
     - Data type validation
     """
@@ -262,6 +265,14 @@ def test_parse_component(parser, mock_component):
     parser.oc.CastToComp46 = Mock(return_value=mock_component)
 
     parser.parse_component(mock_component)
+
+    # The measuring point is collected first, the reference state is resolved after all
+    # components have been parsed.
+    assert len(parser._ambient_measurements["T"]) == 1
+    assert parser.Tamb is None
+
+    parser.pamb = 101325
+    parser._resolve_ambient_conditions()
 
     assert parser.Tamb is not None
     assert isinstance(parser.Tamb, int | float)
@@ -565,3 +576,242 @@ def test_run_ebsilon_missing_file(tmp_path):
     non_existent_file = tmp_path / "nonexistent.ebs"
     with pytest.raises(FileNotFoundError, match="Model file not found"):
         run_ebsilon(str(non_existent_file))
+
+
+# ---------- Steam Generator Heating Surface Tests ----------
+
+
+def _sg_parser(components_data, connections_data):
+    """Return a parser holding the given data without touching the COM interface."""
+    parser = EbsilonModelParser.__new__(EbsilonModelParser)
+    parser.components_data = components_data
+    parser.connections_data = connections_data
+    return parser
+
+
+def _sg_conn(source, source_type, source_connector, target, target_type, target_connector, fluid_type_id=13):
+    return {
+        "source_component": source,
+        "source_component_type": source_type,
+        "source_connector": source_connector,
+        "target_component": target,
+        "target_component_type": target_type,
+        "target_connector": target_connector,
+        "fluid_type_id": fluid_type_id,
+    }
+
+
+def test_merge_steam_generator_surfaces():
+    """
+    Test that a flue gas zone and its main heating surface become one heat exchanger.
+    """
+    parser = _sg_parser(
+        {
+            "Flue Gas Zone of Steam Generator": {"Zone": {"name": "Zone", "type_index": 88}},
+            "Main Heating Surface of Steam Generator": {"ECO": {"name": "ECO", "type_index": 89, "A": 120.0}},
+        },
+        {
+            "fluegas_in": _sg_conn("Duct", 13, 0, "Zone", 88, 0, fluid_type_id=2),
+            "fluegas_out": _sg_conn("Zone", 88, 0, "Stack", 135, 0, fluid_type_id=2),
+            "water_in": _sg_conn("Pump", 8, 0, "ECO", 89, 1, fluid_type_id=4),
+            "water_out": _sg_conn("ECO", 89, 1, "Drum", 20, 0, fluid_type_id=3),
+            "heat_flow": _sg_conn("Zone", 88, 3, "ECO", 89, 3),
+        },
+    )
+
+    parser._merge_steam_generator_surfaces()
+
+    assert "ECO_Zone" in parser.components_data["HeatExchanger"]
+    merged = parser.components_data["HeatExchanger"]["ECO_Zone"]
+    assert merged["flue_gas_zone"] == "Zone"
+    assert merged["main_heating_surface"] == "ECO"
+    assert merged["A"] == 120.0
+    # The two original components are gone, together with their now empty groups
+    assert "Flue Gas Zone of Steam Generator" not in parser.components_data
+    assert "Main Heating Surface of Steam Generator" not in parser.components_data
+    # The logic line between both sides is internal to the merged component
+    assert "heat_flow" not in parser.connections_data
+    # Hot streams on connector 0, cold streams on connector 1
+    assert parser.connections_data["fluegas_in"]["target_component"] == "ECO_Zone"
+    assert parser.connections_data["fluegas_in"]["target_connector"] == 0
+    assert parser.connections_data["water_out"]["source_component"] == "ECO_Zone"
+    assert parser.connections_data["water_out"]["source_connector"] == 1
+
+
+def test_merge_steam_generator_surfaces_pairs_by_heat_connector():
+    """
+    Test that zones and surfaces are paired by the heat flow line and not by radiation lines.
+    """
+    parser = _sg_parser(
+        {
+            "Flue Gas Zone of Steam Generator": {
+                "Zone1": {"name": "Zone1", "type_index": 88},
+                "Zone2": {"name": "Zone2", "type_index": 88},
+            },
+            "Main Heating Surface of Steam Generator": {
+                "ECO": {"name": "ECO", "type_index": 89},
+                "SH": {"name": "SH", "type_index": 89},
+            },
+        },
+        {
+            "heat_1": _sg_conn("Zone1", 88, 3, "ECO", 89, 3),
+            "heat_2": _sg_conn("SH", 89, 3, "Zone2", 88, 3),  # logic line drawn the other way round
+            "radiation": _sg_conn("Zone1", 88, 6, "SH", 89, 4),
+        },
+    )
+
+    parser._merge_steam_generator_surfaces()
+
+    assert sorted(parser.components_data["HeatExchanger"]) == ["ECO_Zone1", "SH_Zone2"]
+    assert parser.connections_data == {}
+
+
+def test_merge_steam_generator_surfaces_keeps_auxiliary_streams():
+    """
+    Test that an auxiliary heating surface keeps its material streams and loses its logic lines.
+    """
+    parser = _sg_parser(
+        {
+            "Flue Gas Zone of Steam Generator": {"Zone": {"name": "Zone", "type_index": 88}},
+            "Main Heating Surface of Steam Generator": {"SH": {"name": "SH", "type_index": 89}},
+            "SimpleHeatExchanger": {"Aux": {"name": "Aux", "type_index": 91}},
+        },
+        {
+            "heat_flow": _sg_conn("Zone", 88, 3, "SH", 89, 3),
+            "heat_flow_aux": _sg_conn("Zone", 88, 4, "Aux", 91, 3),
+            "info_aux": _sg_conn("SH", 89, 6, "Aux", 91, 4),
+            "water_to_aux": _sg_conn("SH", 89, 1, "Aux", 91, 0, fluid_type_id=4),
+        },
+    )
+
+    parser._merge_steam_generator_surfaces()
+
+    assert parser.components_data["SimpleHeatExchanger"]["Aux"]["type_index"] == 91
+    assert list(parser.connections_data) == ["water_to_aux"]
+    assert parser.connections_data["water_to_aux"]["source_component"] == "SH_Zone"
+
+
+def test_merge_steam_generator_surfaces_skips_unpaired_surface():
+    """
+    Test that a heating surface without a flue gas zone is left untouched.
+    """
+    parser = _sg_parser(
+        {
+            "Main Heating Surface of Steam Generator": {"SH": {"name": "SH", "type_index": 89}},
+            "CombustionChamber": {"Reaction": {"name": "Reaction", "type_index": 90}},
+        },
+        {"heat_flow": _sg_conn("Reaction", 90, 3, "SH", 89, 3)},
+    )
+
+    parser._merge_steam_generator_surfaces()
+
+    assert "HeatExchanger" not in parser.components_data
+    assert parser.components_data["Main Heating Surface of Steam Generator"] == {"SH": {"name": "SH", "type_index": 89}}
+    assert "heat_flow" in parser.connections_data
+
+
+# ---------- Reference State Tests ----------
+
+
+def _ambient_parser(temperatures, pressures, Tamb=None, pamb=None):
+    """Return a parser holding the given measuring points without touching the COM interface."""
+    parser = EbsilonModelParser.__new__(EbsilonModelParser)
+    parser._ambient_measurements = {"T": temperatures, "p": pressures}
+    parser.Tamb = Tamb
+    parser.pamb = pamb
+    return parser
+
+
+def test_resolve_ambient_conditions():
+    """
+    Test that the reference state is read from the measuring points of both types.
+    """
+    parser = _ambient_parser([("MP_T", 288.15)], [("MP_p", 101325.0)])
+
+    parser._resolve_ambient_conditions()
+
+    assert parser.Tamb == 288.15
+    assert parser.pamb == 101325.0
+
+
+def test_resolve_ambient_conditions_with_repeated_measuring_points():
+    """
+    Test that several measuring points of the same type are accepted when they agree.
+    """
+    parser = _ambient_parser(
+        [("MP_T", 288.15), ("MP_T_copy", 288.15)],
+        [("MP_p", 101325.0), ("MP_p_copy", 101325.0)],
+    )
+
+    parser._resolve_ambient_conditions()
+
+    assert parser.Tamb == 288.15
+    assert parser.pamb == 101325.0
+
+
+def test_resolve_ambient_conditions_conflicting_values():
+    """
+    Test that measuring points of the same type with different values are rejected.
+    """
+    parser = _ambient_parser([("MP_T", 288.15), ("MP_T_other", 298.15)], [("MP_p", 101325.0)])
+
+    with pytest.raises(ValueError, match="ambient temperature"):
+        parser._resolve_ambient_conditions()
+
+
+def test_resolve_ambient_conditions_without_value():
+    """
+    Test that a measuring point of the right type but without a value in MEASM is reported.
+    """
+    parser = _ambient_parser([("MP_T", None)], [("MP_p", 101325.0)])
+
+    with pytest.raises(ValueError, match="MP_T"):
+        parser._resolve_ambient_conditions()
+
+
+def test_resolve_ambient_conditions_without_measuring_points():
+    """
+    Test that a model without reference measuring points asks for both of them.
+    """
+    parser = _ambient_parser([], [])
+
+    with pytest.raises(ValueError, match="FTYP = 26"):
+        parser._resolve_ambient_conditions()
+
+
+def test_resolve_ambient_conditions_override():
+    """
+    Test that values passed to the parser take precedence over the model.
+    """
+    parser = _ambient_parser([("MP_T", 288.15)], [], Tamb=300.0, pamb=101325.0)
+
+    parser._resolve_ambient_conditions()
+
+    assert parser.Tamb == 300.0
+    assert parser.pamb == 101325.0
+
+
+# ---------- Component Mapping Tests ----------
+
+
+def test_steam_generator_connector_mapping():
+    """
+    Test that the flue gas zone feeds the hot side and the heating surfaces the cold side.
+    """
+    assert connector_mapping[88][1] == 0 and connector_mapping[88][2] == 0
+    assert connector_mapping[89][1] == 1 and connector_mapping[89][2] == 1
+    # the logic lines of both components stay unmapped, so the merge can pair them by raw pin
+    assert set(connector_mapping[88]) == {1, 2}
+    assert set(connector_mapping[89]) == {1, 2}
+    # the auxiliary heating surface is a simple heat exchanger with a single stream
+    assert connector_mapping[91] == {1: 0, 2: 0}
+    assert 91 in grouped_components["SimpleHeatExchanger"]
+
+
+def test_steam_drum_connector_mapping():
+    """
+    Test that the steam drum maps to the two inlets and outlets of the Drum component.
+    """
+    assert 20 in grouped_components["Drum"]
+    # feed water and heating steam are the inlets, circulating water and steam the outlets
+    assert connector_mapping[20] == {1: 0, 2: 1, 3: 0, 4: 1, 5: 2}

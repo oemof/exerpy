@@ -1,3 +1,4 @@
+import logging
 import os
 
 import matplotlib
@@ -124,7 +125,7 @@ class TestSankeyCcpp:
 
 class TestSankeyEdgeCases:
     @staticmethod
-    def _fake_analysis(E_ab):
+    def _fake_analysis(E_ab, E_fuel=1000.0):
         """Minimal duck-typed analysis with a single A -> B connection."""
 
         class _Analysis:
@@ -141,7 +142,7 @@ class TestSankeyEdgeCases:
             "B": type("Generator", (), {"E_D": None})(),
         }
         analysis.connections = {
-            "fuel": {"kind": "power", "source_component": None, "target_component": "A", "E": 1000.0},
+            "fuel": {"kind": "power", "source_component": None, "target_component": "A", "E": E_fuel},
             "ab": {"kind": "power", "source_component": "A", "target_component": "B", "E": E_ab},
             "prod": {"kind": "power", "source_component": "B", "target_component": None, "E": 800.0},
         }
@@ -150,13 +151,35 @@ class TestSankeyEdgeCases:
         analysis.E_L_dict = {"inputs": [], "outputs": []}
         return analysis
 
-    def test_negative_exergy_flow_is_dropped(self):
-        # Negative flows cannot be rendered by a Sankey; they must be
-        # dropped instead of producing a corrupt diagram.
+    def test_negative_flow_between_components_is_reversed(self):
+        # A Sankey link can only be positive, and below the ambient temperature the exergy of a
+        # stream travels against its declared direction, so the link is drawn the other way round.
         nodes, links = SankeyBuilder(self._fake_analysis(E_ab=-100.0)).build()
-        ab_links = [lk for lk in links if nodes[lk["source"]]["id"] == "A" and nodes[lk["target"]]["id"] == "B"]
-        assert ab_links == []
+        forward = [lk for lk in links if nodes[lk["source"]]["id"] == "A" and nodes[lk["target"]]["id"] == "B"]
+        reverse = [lk for lk in links if nodes[lk["source"]]["id"] == "B" and nodes[lk["target"]]["id"] == "A"]
+        assert forward == []
+        assert len(reverse) == 1
+        assert reverse[0]["value"] == pytest.approx(100.0)
+        assert "(reversed)" in reverse[0]["label"]
+        # marked by a pale version of the color of the stream
+        assert reverse[0]["color"].startswith("rgba") and reverse[0]["color"].endswith("0.25)")
         assert all(lk["value"] > 0 for lk in links)
+
+    def test_negative_flow_at_the_system_boundary_is_dropped(self, caplog):
+        # Reversing a boundary flow would claim that the plant feeds its own fuel. Such a value
+        # means the exergy of the stream does not fit the reference environment, so it is dropped.
+        with caplog.at_level(logging.WARNING):
+            nodes, links = SankeyBuilder(self._fake_analysis(E_ab=900.0, E_fuel=-100.0)).build()
+        fuel_links = [lk for lk in links if nodes[lk["target"]]["id"] == "A" and nodes[lk["source"]]["id"] != "B"]
+        assert fuel_links == []
+        assert "system boundary" in caplog.text
+        assert "reference environment" in caplog.text
+
+    def test_zero_flow_is_dropped(self):
+        # A link of zero width carries no information.
+        nodes, links = SankeyBuilder(self._fake_analysis(E_ab=0.0)).build()
+        ab_links = [lk for lk in links if {nodes[lk["source"]]["id"], nodes[lk["target"]]["id"]} == {"A", "B"}]
+        assert ab_links == []
 
     def test_positive_exergy_flow_is_kept(self):
         nodes, links = SankeyBuilder(self._fake_analysis(E_ab=900.0)).build()

@@ -37,6 +37,9 @@ WATERFALL_COLORS: dict[str, str] = {
     "product": "#2E7D32",
 }
 
+# Opacity of a link that is drawn against its declared direction, see SankeyBuilder._add_link.
+REVERSED_LINK_ALPHA = 0.25
+
 DEFAULT_NODE_COLOR = "#78909C"
 
 
@@ -79,3 +82,13 @@ def connection_base_color(conn_data: dict) -> str:
     if kind == "heat":
         return HEAT_COLOR
     return fluid_base_color(conn_data.get("mass_composition") or {})
+
+
+def pale(color: str, alpha: float = REVERSED_LINK_ALPHA) -> str:
+    """Return the color at a lower opacity, keeping the identity of the stream."""
+    if color.startswith("rgba"):
+        red, green, blue = (part.strip() for part in color[color.index("(") + 1 : color.rindex(")")].split(",")[:3])
+        return f"rgba({red},{green},{blue},{alpha})"
+    if color.startswith("#") and len(color) == 7:
+        return hex_to_rgba(color, alpha)
+    return color

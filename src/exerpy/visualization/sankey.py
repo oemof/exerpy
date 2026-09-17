@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from exerpy.logger import logger
+
 from .colors import DEFAULT_NODE_COLOR
 from .colors import ED_COLOR
 from .colors import TERMINAL_COLORS
 from .colors import connection_base_color
 from .colors import hex_to_rgba
+from .colors import pale
 from .colors import shade
 
 if TYPE_CHECKING:
@@ -29,6 +32,7 @@ _ED = "__E_D__"
 _EL = "__E_L__"
 _EP_NET = "__E_P_net__"
 _EL_NET = "__E_L_net__"
+_TERMINAL_IDS = frozenset({_EF, _EP, _ED, _EL, _EP_NET, _EL_NET})
 
 
 class SankeyBuilder:
@@ -92,6 +96,8 @@ class SankeyBuilder:
         self._nodes = []
         self._links = []
         self._node_idx = {}
+        self._reversed_links: list[str] = []
+        self._dropped_links: list[str] = []
 
         collapsed = self._find_collapsed()
         routes = self._build_routes(collapsed)
@@ -105,6 +111,8 @@ class SankeyBuilder:
 
         if self.groups:
             self._apply_grouping()
+
+        self._report_negative_links()
 
         return self._nodes, self._links
 
@@ -128,7 +136,7 @@ class SankeyBuilder:
                 link=dict(
                     source=[lk["source"] for lk in links],
                     target=[lk["target"] for lk in links],
-                    value=[max(lk["value"], 0.0) for lk in links],
+                    value=[lk["value"] for lk in links],
                     color=[lk["color"] for lk in links],
                     label=[lk.get("label", "") for lk in links],
                 ),
@@ -232,13 +240,49 @@ class SankeyBuilder:
     # ------------------------------------------------------------------
 
     def _add_link(self, source_id: str, target_id: str, value: float, color: str, label: str = "") -> None:
-        if not (value > 0):
+        """
+        Add one link to the diagram.
+
+        A Sankey link can only have a positive width, while an exergy flow can be negative:
+        below the ambient temperature a stream carries its exergy in the opposite direction.
+        Such a link between two components is therefore drawn the other way round, in a pale
+        version of its color and marked in its label. A negative link that crosses the system
+        boundary is dropped instead: it means the exergy of the stream does not fit the
+        reference environment, and reversing it would suggest that the plant feeds its own
+        fuel. Links of value zero carry no information and are dropped as well.
+        """
+        if value < 0:
+            if source_id in _TERMINAL_IDS or target_id in _TERMINAL_IDS:
+                self._dropped_links.append(label or f"{source_id} -> {target_id}")
+                return
+            source_id, target_id = target_id, source_id
+            value = -value
+            color = pale(color)
+            label = f"{label} (reversed)" if label else "(reversed)"
+            self._reversed_links.append(label)
+        elif value == 0:
             return
         src = self._node_idx.get(source_id)
         tgt = self._node_idx.get(target_id)
         if src is None or tgt is None:
             return
         self._links.append({"source": src, "target": tgt, "value": value, "color": color, "label": label})
+
+    def _report_negative_links(self) -> None:
+        """Tell the user about the links that were reversed or dropped."""
+        if self._reversed_links:
+            listed = ", ".join(self._reversed_links)
+            logger.info(
+                f"{len(self._reversed_links)} link(s) carry a negative exergy and are drawn against "
+                f"their declared direction: {listed}"
+            )
+        if self._dropped_links:
+            listed = ", ".join(self._dropped_links)
+            logger.warning(
+                f"{len(self._dropped_links)} link(s) at the system boundary carry a negative exergy "
+                f"and are not drawn: {listed}. Check the exergy of these streams against the "
+                "reference environment."
+            )
 
     def _sub_links(self, conn_data: dict) -> list[tuple[float, str, str]]:
         """Return ``[(value_W, rgba_color, sub_label), ...]`` based on self.mode."""

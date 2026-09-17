@@ -357,3 +357,4 @@ API References
     api/components.rst
     api/functions.rst
     api/parser.rst
+    api/visualization.rst

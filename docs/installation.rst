@@ -111,6 +111,12 @@ Installation of ExerPy
 
             pip install exerpy[aspen]
 
+         - if you want to create Sankey and waterfall diagrams
+
+         .. code-block:: console
+
+            pip install exerpy[viz]
+
    .. tab-item:: Developer Version
 
       If you would like to get access to not yet released features or features

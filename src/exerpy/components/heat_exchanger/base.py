@@ -56,11 +56,12 @@ class HeatExchanger(Component):
         ----------
         **kwargs : dict
             Arbitrary keyword arguments. Recognized keys:
-            - dissipative (bool): whether component has dissipative behavior, default False
+            - dissipative (bool or None): True forces dissipative, False forces productive,
+              None (default) decides automatically from the temperature case or E_L specification
             - Ex_C_col (dict): custom cost coefficients, default {}
             - Z_costs (float): investment cost rate in currency/h, default 0.0
         """
-        self.dissipative = False
+        self.dissipative = None
         super().__init__(**kwargs)
 
     def _temperature_case(self, T0):
@@ -304,7 +305,7 @@ class HeatExchanger(Component):
         if len(self.inl) < 2 or len(self.outl) < 2:
             raise ValueError("Heat exchanger requires two inlets and two outlets.")
 
-        if not self.dissipative:
+        if self.dissipative is not True:
             case = self._temperature_case(T0)
             # Case 1: All streams are above the ambient temperature
             if case == 1:

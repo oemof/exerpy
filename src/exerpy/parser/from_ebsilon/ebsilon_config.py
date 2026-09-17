@@ -907,14 +907,14 @@ composition_params = [
 # Define the component groups via unique labels
 grouped_components = {
     "Turbine": [6, 23, 56, 57, 58, 68, 122],
-    "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    "HeatExchanger": [7, 10, 25, 26, 27, 43, 47, 51, 55, 61, 62, 70, 71, 78, 124, 126],
     "CombustionChamber": [22, 90],
     "Valve": [2, 13, 14, 42, 59, 68, 133],
     "Pump": [8, 44, 83, 159],
     "Compressor": [24, 94],
-    "Condenser": [7, 47, 78],
     "Deaerator": [9, 63],
-    "SimpleHeatExchanger": [15, 16, 35],
+    "Drum": [20],
+    "SimpleHeatExchanger": [15, 16, 35, 91],
     "SteamGenerator": [5],
     "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161, 115],
     "FlashTank": [34],
@@ -930,14 +930,14 @@ grouped_components = {
 This is the mapping of component groups to their respective component IDs:
 
     - "Turbine": [6, 23, 56, 57, 58, 68, 122],
-    - "HeatExchanger": [10, 25, 26, 27, 43, 51, 55, 61, 62, 70, 71, 124, 126],
+    - "HeatExchanger": [7, 10, 25, 26, 27, 43, 47, 51, 55, 61, 62, 70, 71, 78, 124, 126],
     - "CombustionChamber": [22, 90],
     - "Valve": [2, 13, 14, 39, 42, 59, 68, 133],
     - "Pump": [8, 44, 83, 159],
     - "Compressor": [24, 94],
-    - "Condenser": [7, 47, 78],
     - "Deaerator": [9, 63],
-    - "SimpleHeatExchanger": [15, 16, 35],
+    - "Drum": [20],
+    - "SimpleHeatExchanger": [15, 16, 35, 91],
     - "SteamGenerator": [5],
     - "Mixer": [3, 28, 37, 38, 49, 60, 102, 141, 161],
     - "FlashTank" : [34],
@@ -946,6 +946,9 @@ This is the mapping of component groups to their respective component IDs:
     - "CycleCloser": [80],
     - "PowerBus": [31]
 
+Components 88 (flue gas zone) and 89 (main heating surface) are not listed here: each
+88/89 pair models the two sides of a single heat exchanger and is merged by the parser
+into one "HeatExchanger" whose name is ``<name of 89>_<name of 88>``.
 """
 
 # Connector mapping rules for different component types
@@ -1039,6 +1042,14 @@ connector_mapping = {
         1: 0,  # Input
         2: 0,  # Output 1
         3: 1,  # Output 2
+    },
+    20: {  # Steam Drum
+        1: 0,  # Inlet feed water
+        2: 1,  # Outlet saturated steam
+        3: 0,  # Outlet circulating water to the evaporator
+        4: 1,  # Inlet heating steam from the evaporator
+        5: 2,  # Outlet blow down
+        # Pin 6 carries the liquid level and is not a material stream
     },
     22: {  # Combustion Chamber of Gas Turbine
         1: 0,  # Inlet air
@@ -1156,6 +1167,16 @@ connector_mapping = {
         1: 0,  # Inlet
         2: 0,  # Outlet 1
     },
+    88: {  # Flue Gas Zone of Steam Generator (hot side of the merged heat exchanger)
+        1: 0,  # Inlet flue gas
+        2: 0,  # Outlet flue gas
+        # Pins 3-7 are logic lines to the heating surfaces and are resolved during the merge
+    },
+    89: {  # Main Heating Surface of Steam Generator (cold side of the merged heat exchanger)
+        1: 1,  # Inlet cold stream
+        2: 1,  # Outlet cold stream
+        # Pins 3-7 are logic lines to the flue gas zone and are resolved during the merge
+    },
     90: {  # Reaction Zone of Steam Generator
         1: 2,  # Inlet secondary flue gas
         2: 0,  # Outlet combustion gas
@@ -1166,6 +1187,11 @@ connector_mapping = {
         7: 4,  # Irradation losses below
         8: 0,  # Inlet air
         9: 1,  # Inlet fuel gas
+    },
+    91: {  # Auxiliary Heating Surface of Steam Generator
+        1: 0,  # Inlet cold stream
+        2: 0,  # Outlet cold stream
+        # Pins 3 and 4 are logic lines to the flue gas zone and main heating surface
     },
     113: {  # Parabolic Trough Collector
         1: 0,  # Inlet fluid

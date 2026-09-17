@@ -131,6 +131,23 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
+        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
+        # is treated as dissipative, unless its dissipative behavior was set explicitly.
+        loss_conn_names = set()
+        for key in ("inputs", "outputs"):
+            loss_conn_names.update(E_L.get(key, []))
+        for label in loss_conn_names:
+            conn = self.connections.get(label)
+            if conn is None:
+                continue
+            source = self.components.get(conn.get("source_component"))
+            if source is None or source.__class__.__name__ != "HeatExchanger":
+                continue
+            if getattr(source, "dissipative", None) is not None:
+                continue
+            source.dissipative = True
+            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.
         for _component_name, component in self.components.items():
@@ -139,7 +156,7 @@ class ExergyAnalysis:
             component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
 
             # Re-flag components that only turn out dissipative once E_P is known (E_P = nan).
-            if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
+            if component.__class__.__name__ in ("Valve", "HeatExchanger") and np.isnan(component.E_P):
                 component.is_dissipative = True
 
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
@@ -184,7 +201,7 @@ class ExergyAnalysis:
         self._check_exergy_balance_sanity(E_F, E_P, E_L)
 
         # Check for unaccounted connections in the system
-        self._check_unaccounted_system_conns()
+        unaccounted_conns = self._check_unaccounted_system_conns()
 
         eff_str = f"{self.epsilon:.2%}" if self.epsilon is not None else "N/A"
         logger.info(
@@ -213,10 +230,19 @@ class ExergyAnalysis:
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logger.warning(
+            msg = (
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
             )
+            if unaccounted_conns:
+                # The usual cause: a stream crossing the system boundary is missing from the
+                # definitions, so its exergy is absent from the totals but not from the components.
+                listed = ", ".join(f"'{conn}'" for conn in unaccounted_conns)
+                msg += (
+                    f" The system boundary connections {listed} are not part of E_F, E_P or E_L; "
+                    "assigning them usually closes the balance."
+                )
+            logger.warning(msg)
         else:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
@@ -309,7 +335,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -318,13 +344,17 @@ class ExergyAnalysis:
         path : str
             Path to the Ebsilon file (.ebs format).
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. Overrides the reference state of the model.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. Overrides the reference state of the model.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        profile : str or int, optional
+            Name or id of the profile (operating point) to simulate, e.g. a part load case.
+            Defaults to the profile the model was saved with. Use
+            :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
 
         Returns
         -------
@@ -339,7 +369,9 @@ class ExergyAnalysis:
 
         if file_extension == ".ebs":
             logger.info("Running Ebsilon simulation and generating JSON data.")
-            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
+            data = ebs_parser.run_ebsilon(
+                path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb, profile=profile
+            )
             logger.info("Simulation completed successfully.")
 
         else:
@@ -550,7 +582,7 @@ class ExergyAnalysis:
             print("\nMaterial Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -561,7 +593,7 @@ class ExergyAnalysis:
             print("\nNon-Material Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_non_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_non_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -571,7 +603,12 @@ class ExergyAnalysis:
             # Print the component results DataFrame in the console in a table format
             print("\nComponent Exergy Analysis Results:")
             print(
-                tabulate(df_component_results.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f")
+                tabulate(
+                    _no_negative_zero(df_component_results).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
             )
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
@@ -908,6 +945,16 @@ class ExergyAnalysis:
     def _check_unaccounted_system_conns(self):
         """
         Check if system boundary connections are not included in E_F, E_P, or E_L dictionaries.
+
+        A connection crosses the system boundary when one of its ends is not a component of the
+        analysis. That end may be missing entirely, as in the Ebsilon exports, or it may name a
+        source or sink of the simulation that is no component of the plant, e.g. "ambient air" or
+        "chimney" in the TESPy and Aspen exports.
+
+        Returns
+        -------
+        list
+            Names of the boundary connections that are part of no exergy flow definition.
         """
         # Collect all accounted streams
         accounted_streams = set()
@@ -915,8 +962,9 @@ class ExergyAnalysis:
             accounted_streams.update(dictionary.get("inputs", []))
             accounted_streams.update(dictionary.get("outputs", []))
 
+        analysed_components = set(self.components)
+
         # Identify actual system boundary connections
-        # A connection is at the boundary if source OR target is None/missing
         system_boundary_conns = []
         for conn_name, conn_data in self.connections.items():
             source = conn_data.get("source_component", None)
@@ -924,8 +972,8 @@ class ExergyAnalysis:
             if conn_data.get("source_component_type", None) == 1:
                 source = None
 
-            # Connection is at system boundary if one side is not connected
-            if source is None or target is None:
+            # Connection is at system boundary if one side is no component of the analysis
+            if source not in analysed_components or target not in analysed_components:
                 kind = conn_data.get("kind", "")
                 # Treat an explicit None exergy as zero to avoid a TypeError in abs().
                 exergy = conn_data.get("E")
@@ -936,13 +984,15 @@ class ExergyAnalysis:
                     system_boundary_conns.append(conn_name)
 
         # Find unaccounted boundary connections
-        unaccounted = [conn for conn in system_boundary_conns if conn not in accounted_streams]
+        unaccounted = sorted(conn for conn in system_boundary_conns if conn not in accounted_streams)
 
         if unaccounted:
-            conn_list = ", ".join(f"'{conn}'" for conn in sorted(unaccounted))
+            conn_list = ", ".join(f"'{conn}'" for conn in unaccounted)
             logger.warning(
                 f"The following system boundary connections are not included in E_F, E_P, or E_L: {conn_list}"
             )
+
+        return unaccounted
 
 
 def _construct_components(component_data, connection_data, Tamb):
@@ -971,6 +1021,14 @@ def _construct_components(component_data, connection_data, Tamb):
 
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
     for component_type, component_instances in component_data.items():
+        # Legacy exports may still label heat-rejection units as "Condenser"; ExerPy now
+        # models them as HeatExchanger and infers dissipativeness from the case or E_L.
+        if component_type == "Condenser":
+            logger.warning(
+                "Component type 'Condenser' is deprecated and is mapped to 'HeatExchanger'. "
+                "Dissipative behavior is now inferred from the temperature case or the E_L specification."
+            )
+            component_type = "HeatExchanger"
         for component_name, component_information in component_instances.items():
             # Skip components of type 'Splitter'
             """if component_type == "Splitter" or component_information.get('type') == "Splitter":
@@ -1017,35 +1075,28 @@ def _construct_components(component_data, connection_data, Tamb):
                     logger.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
             elif component_type == "HeatExchanger":
-                # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
-                # above T0 and the cold stream stays below T0 (case 6).
-                if getattr(component, "dissipative", False):
+                # An explicit dissipative flag (True/False) wins; otherwise the unit is dissipative
+                # when the hot stream stays above T0 and the cold stream stays below T0 (case 6).
+                # E_L-based inference happens later in analyse(), once E_L is known.
+                diss = getattr(component, "dissipative", None)
+                if diss is True:
                     component.is_dissipative = True
+                elif diss is False:
+                    component.is_dissipative = False
+                    try:
+                        if component._temperature_case(Tamb) == 6:
+                            logger.warning(
+                                f"HeatExchanger '{component_name}' is set dissipative=False but its streams "
+                                "have no exergy product (case 6); it is treated as dissipative anyway."
+                            )
+                    except Exception:
+                        pass
                 else:
                     try:
-                        T_in0 = component.inl[0].get("T", None)
-                        T_in1 = component.inl[1].get("T", None)
-                        T_out0 = component.outl[0].get("T", None)
-                        T_out1 = component.outl[1].get("T", None)
-                        if (
-                            T_in0 is not None
-                            and T_in1 is not None
-                            and T_out0 is not None
-                            and T_out1 is not None
-                            and T_in0 > Tamb
-                            and T_in1 <= Tamb
-                            and T_out0 > Tamb
-                            and T_out1 <= Tamb
-                        ):
-                            component.is_dissipative = True
-                        else:
-                            component.is_dissipative = False
+                        component.is_dissipative = component._temperature_case(Tamb) == 6
                     except Exception as e:
                         logger.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
                         component.is_dissipative = False
-            elif component_type == "Condenser":
-                # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
-                component.is_dissipative = True
             else:
                 component.is_dissipative = False
 
@@ -1053,6 +1104,14 @@ def _construct_components(component_data, connection_data, Tamb):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _no_negative_zero(df, digits=3):
+    """Return a copy of the table where values that round to zero are printed as +0."""
+    df = df.copy()
+    for column in df.select_dtypes(include="number"):
+        df[column] = df[column].mask(df[column].round(digits) == 0, df[column].abs())
+    return df
 
 
 def _nan_to_none(value):
@@ -2310,13 +2369,41 @@ class ExergoeconomicAnalysis:
         # -------------------------
         if print_results:
             print("\nExergoeconomic Analysis - Component Results:")
-            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_comp).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (exergy data):")
-            print(tabulate(df_mat1.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat1).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (cost data):")
-            print(tabulate(df_mat2.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat2).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Non-Material Connection Results:")
-            print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_non_mat).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
 
         return df_comp, df_mat1, df_mat2, df_non_mat
 
@@ -2395,7 +2482,7 @@ class ExergoeconomicAnalysis:
         print(f"{'=' * 70}")
         print(
             tabulate(
-                df_sorted[display_cols].head(n_show).reset_index(drop=True),
+                _no_negative_zero(df_sorted[display_cols].head(n_show)).reset_index(drop=True),
                 headers="keys",
                 tablefmt="psql",
                 floatfmt=".3f",

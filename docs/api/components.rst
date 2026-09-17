@@ -42,16 +42,6 @@ SimpleHeatExchanger
     :show-inheritance:
 
 
-*********
-Condenser
-*********
-
-.. automodule:: exerpy.components.heat_exchanger.condenser
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
 **************
 SteamGenerator
 **************
@@ -87,6 +77,16 @@ Pump
 ****
 
 .. automodule:: exerpy.components.turbomachinery.pump
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+****
+Drum
+****
+
+.. automodule:: exerpy.components.nodes.drum
     :members:
     :undoc-members:
     :show-inheritance:

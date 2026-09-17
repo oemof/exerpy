@@ -147,9 +147,14 @@ fp_motor.set_attr(eta=0.985)
 cp_motor.set_attr(eta=0.985)
 dp_motor.set_attr(eta=0.985)
 
-c1.set_attr(fluid={"AR": 0.01282, "CO2": 0.00040, "H2O": 0.00634, "N2": 0.75051, "O2": 0.22993}, p=1.013, T=15)
+c1.set_attr(
+    fluid={"AR": 0.01282, "CO2": 0.00040, "H2O": 0.00634, "N2": 0.75051, "O2": 0.22993},
+    p=1.013,
+    T=15,
+    m0=600,
+)
 c2.set_attr(p=15.51)
-c3.set_attr(fluid={"CH4": 1}, p=Ref(c2, 1, 0), T=15)
+c3.set_attr(fluid={"CH4": 1}, p=Ref(c2, 1, 0), T=15, m0=12)
 c4.set_attr(p=15)
 
 c8.set_attr(p=1.013)
@@ -165,7 +170,7 @@ lp_steam_turbine.set_attr(eta_s=0.89)
 feed_pump.set_attr(eta_s=0.8)
 condensate_pump.set_attr(eta_s=0.8)
 
-c9.set_attr(fluid={"water": 1}, p=50)
+c9.set_attr(fluid={"water": 1}, p=50, h0=3450)
 c10.set_attr(p=15)
 c10a.set_attr(p=10)
 c13.set_attr(p=0.05)
@@ -186,8 +191,6 @@ drum_pump.set_attr(eta_s=0.8)
 c4.set_attr(T=1150)
 e15.set_attr(E=300e6)
 heating_condenser.set_attr(Q=-100e6)
-
-nw.solve("design")
 
 nw.solve("design")
 

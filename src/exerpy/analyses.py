@@ -202,7 +202,7 @@ class ExergyAnalysis:
         self._check_exergy_balance_sanity(E_F, E_P, E_L)
 
         # Check for unaccounted connections in the system
-        self._check_unaccounted_system_conns()
+        unaccounted_conns = self._check_unaccounted_system_conns()
 
         eff_str = f"{self.epsilon:.2%}" if self.epsilon is not None else "N/A"
         logger.info(
@@ -231,10 +231,19 @@ class ExergyAnalysis:
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logger.warning(
+            msg = (
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
             )
+            if unaccounted_conns:
+                # The usual cause: a stream crossing the system boundary is missing from the
+                # definitions, so its exergy is absent from the totals but not from the components.
+                listed = ", ".join(f"'{conn}'" for conn in unaccounted_conns)
+                msg += (
+                    f" The system boundary connections {listed} are not part of E_F, E_P or E_L; "
+                    "assigning them usually closes the balance."
+                )
+            logger.warning(msg)
         else:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
@@ -968,6 +977,16 @@ class ExergyAnalysis:
     def _check_unaccounted_system_conns(self):
         """
         Check if system boundary connections are not included in E_F, E_P, or E_L dictionaries.
+
+        A connection crosses the system boundary when one of its ends is not a component of the
+        analysis. That end may be missing entirely, as in the Ebsilon exports, or it may name a
+        source or sink of the simulation that is no component of the plant, e.g. "ambient air" or
+        "chimney" in the TESPy and Aspen exports.
+
+        Returns
+        -------
+        list
+            Names of the boundary connections that are part of no exergy flow definition.
         """
         # Collect all accounted streams
         accounted_streams = set()
@@ -975,8 +994,9 @@ class ExergyAnalysis:
             accounted_streams.update(dictionary.get("inputs", []))
             accounted_streams.update(dictionary.get("outputs", []))
 
+        analysed_components = set(self.components)
+
         # Identify actual system boundary connections
-        # A connection is at the boundary if source OR target is None/missing
         system_boundary_conns = []
         for conn_name, conn_data in self.connections.items():
             source = conn_data.get("source_component", None)
@@ -984,8 +1004,8 @@ class ExergyAnalysis:
             if conn_data.get("source_component_type", None) == 1:
                 source = None
 
-            # Connection is at system boundary if one side is not connected
-            if source is None or target is None:
+            # Connection is at system boundary if one side is no component of the analysis
+            if source not in analysed_components or target not in analysed_components:
                 kind = conn_data.get("kind", "")
                 # Treat an explicit None exergy as zero to avoid a TypeError in abs().
                 exergy = conn_data.get("E")
@@ -996,13 +1016,15 @@ class ExergyAnalysis:
                     system_boundary_conns.append(conn_name)
 
         # Find unaccounted boundary connections
-        unaccounted = [conn for conn in system_boundary_conns if conn not in accounted_streams]
+        unaccounted = sorted(conn for conn in system_boundary_conns if conn not in accounted_streams)
 
         if unaccounted:
-            conn_list = ", ".join(f"'{conn}'" for conn in sorted(unaccounted))
+            conn_list = ", ".join(f"'{conn}'" for conn in unaccounted)
             logger.warning(
                 f"The following system boundary connections are not included in E_F, E_P, or E_L: {conn_list}"
             )
+
+        return unaccounted
 
 
 def _construct_components(component_data, connection_data, Tamb):

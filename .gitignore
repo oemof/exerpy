@@ -157,3 +157,6 @@ examples/opt_examples/
 
 # macOS
 .DS_Store
+# Generated visualization example outputs
+examples/visualization/*.html
+examples/visualization/*.png

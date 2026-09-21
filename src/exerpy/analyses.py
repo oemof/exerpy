@@ -1,7 +1,6 @@
 import json
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from tabulate import tabulate
@@ -133,6 +132,23 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
+        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
+        # is treated as dissipative, unless its dissipative behavior was set explicitly.
+        loss_conn_names = set()
+        for key in ("inputs", "outputs"):
+            loss_conn_names.update(E_L.get(key, []))
+        for label in loss_conn_names:
+            conn = self.connections.get(label)
+            if conn is None:
+                continue
+            source = self.components.get(conn.get("source_component"))
+            if source is None or source.__class__.__name__ != "HeatExchanger":
+                continue
+            if getattr(source, "dissipative", None) is not None:
+                continue
+            source.dissipative = True
+            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.
         for _component_name, component in self.components.items():
@@ -141,7 +157,7 @@ class ExergyAnalysis:
             component.calc_exergy_balance(self.Tamb, self.pamb, self.split_physical_exergy)
 
             # Re-flag components that only turn out dissipative once E_P is known (E_P = nan).
-            if component.__class__.__name__ in ("Valve", "HeatExchanger", "Condenser") and np.isnan(component.E_P):
+            if component.__class__.__name__ in ("Valve", "HeatExchanger") and np.isnan(component.E_P):
                 component.is_dissipative = True
 
         # Calculate total fuel exergy (E_F) by summing up all specified input connections
@@ -186,7 +202,7 @@ class ExergyAnalysis:
         self._check_exergy_balance_sanity(E_F, E_P, E_L)
 
         # Check for unaccounted connections in the system
-        self._check_unaccounted_system_conns()
+        unaccounted_conns = self._check_unaccounted_system_conns()
 
         eff_str = f"{self.epsilon:.2%}" if self.epsilon is not None else "N/A"
         logger.info(
@@ -215,10 +231,19 @@ class ExergyAnalysis:
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
         if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
-            logger.warning(
+            msg = (
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
             )
+            if unaccounted_conns:
+                # The usual cause: a stream crossing the system boundary is missing from the
+                # definitions, so its exergy is absent from the totals but not from the components.
+                listed = ", ".join(f"'{conn}'" for conn in unaccounted_conns)
+                msg += (
+                    f" The system boundary connections {listed} are not part of E_F, E_P or E_L; "
+                    "assigning them usually closes the balance."
+                )
+            logger.warning(msg)
         else:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
@@ -324,7 +349,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -333,13 +358,17 @@ class ExergyAnalysis:
         path : str
             Path to the Ebsilon file (.ebs format).
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. Overrides the reference state of the model.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. Overrides the reference state of the model.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        profile : str or int, optional
+            Name or id of the profile (operating point) to simulate, e.g. a part load case.
+            Defaults to the profile the model was saved with. Use
+            :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
 
         Returns
         -------
@@ -354,7 +383,9 @@ class ExergyAnalysis:
 
         if file_extension == ".ebs":
             logger.info("Running Ebsilon simulation and generating JSON data.")
-            data = ebs_parser.run_ebsilon(path, split_physical_exergy=split_physical_exergy)
+            data = ebs_parser.run_ebsilon(
+                path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb, profile=profile
+            )
             logger.info("Simulation completed successfully.")
 
         else:
@@ -565,7 +596,7 @@ class ExergyAnalysis:
             print("\nMaterial Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -576,7 +607,7 @@ class ExergyAnalysis:
             print("\nNon-Material Connection Exergy Analysis Results:")
             print(
                 tabulate(
-                    df_non_material_connection_results.reset_index(drop=True),
+                    _no_negative_zero(df_non_material_connection_results).reset_index(drop=True),
                     headers="keys",
                     tablefmt="psql",
                     floatfmt=".3f",
@@ -586,163 +617,137 @@ class ExergyAnalysis:
             # Print the component results DataFrame in the console in a table format
             print("\nComponent Exergy Analysis Results:")
             print(
-                tabulate(df_component_results.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f")
+                tabulate(
+                    _no_negative_zero(df_component_results).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
             )
 
         return df_component_results, df_material_connection_results, df_non_material_connection_results
 
-    def plot_exergy_waterfall(self, title=None, figsize=(12, 10), exclude_components=None, show_plot=True):
+    def plot_sankey(
+        self,
+        mode: int = 1,
+        collapse_passthroughs: bool | list[str] = True,
+        groups: dict | None = None,
+        node_colors: dict | None = None,
+        title: str | None = None,
+        output_path: str | None = None,
+    ):
+        """
+        Create an interactive Sankey diagram of the exergy flows.
+
+        Parameters
+        ----------
+        mode : {1, 2, 3}
+            1 – total exergy E per link (default)
+            2 – split material links into E_PH + E_CH (requires chemical_exergy_enabled)
+            3 – split material links into E_T + E_M + E_CH (requires split_physical_exergy)
+        collapse_passthroughs : bool or list[str]
+            True  → collapse CycleCloser nodes into their neighbours (default)
+            False → show every component node
+            list  → collapse only the listed component type names
+        groups : dict[str, list[str]], optional
+            Visual grouping: ``{"Group": ["comp1", "comp2"]}`` hides internal connections
+            and aggregates boundary-crossing links.
+        node_colors : dict[str, str], optional
+            Per-component colour overrides keyed by component name, e.g.
+            ``{"CC": "#C62828", "GT": "#388E3C"}``.  Components not listed use
+            the default node colour.
+        title : str, optional
+            Diagram title.
+        output_path : str, optional
+            If given, export the diagram to this HTML file path.
+
+        Returns
+        -------
+        plotly.graph_objects.Figure
+        """
+        from .visualization.sankey import SankeyBuilder
+
+        builder = SankeyBuilder(
+            self,
+            mode=mode,
+            collapse_passthroughs=collapse_passthroughs,
+            groups=groups,
+            node_colors=node_colors,
+        )
+        fig = builder.to_plotly(title=title)
+        if output_path is not None:
+            fig.write_html(output_path)
+        return fig
+
+    def plot_exergy_waterfall(self, title=None, figsize=(12, 10), exclude_components=None, colors=None, show_plot=True):
         """
         Create an exergy destruction waterfall diagram.
-
-        This method visualizes the exergy flow through the system as a waterfall chart,
-        showing how exergy is destroyed in each component from the exergetic fuel (100%)
-        down to the exergetic product and losses.
 
         Parameters
         ----------
         title : str, optional
-            Title for the plot. If None, no title is displayed.
+            Title for the plot.
         figsize : tuple, optional
             Figure size as (width, height) in inches. Default is (12, 10).
         exclude_components : list, optional
-            List of component names to exclude from the diagram.
-            By default, all components with NaN E_F (Exergetic Fuel) are excluded,
-            as well as CycleCloser and PowerBus components.
+            Component names to exclude. Components with NaN E_F are always excluded.
+        colors : dict, optional
+            Override bar colors. Keys: "fuel", "destruction", "loss", "product".
         show_plot : bool, optional
             Whether to display the plot immediately. Default is True.
 
         Returns
         -------
         fig : matplotlib.figure.Figure
-            The figure object containing the waterfall diagram.
         ax : matplotlib.axes.Axes
-            The axes object of the waterfall diagram.
-
-        Raises
-        ------
-        RuntimeError
-            If the exergy analysis has not been performed yet (analyse() not called).
-
-        Notes
-        -----
-        - The waterfall diagram displays exergy values as percentages of the total fuel exergy.
-        - Components are sorted by their exergy destruction rate (y [%]) in descending order.
-        - Each bar represents the remaining exergy after destruction in that component.
-        - Red bars indicate exergy destruction in components.
-        - Blue bar represents the initial exergetic fuel (100%).
-        - Green bar represents the final exergetic product.
 
         Examples
         --------
         >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
         >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
         >>> fig, ax = analysis.plot_exergy_waterfall(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
-        >>> fig.savefig('exergy_waterfall.pdf')  # doctest: +SKIP
-
-        See Also
-        --------
-        exergy_results : Display tabular exergy analysis results.
-        print_exergy_summary : Print a text summary of exergy analysis.
         """
-        # Check if analysis has been performed
-        if not hasattr(self, "epsilon") or self.epsilon is None:
-            raise RuntimeError("Exergy analysis has not been performed yet. Please call analyse() first.")
+        from .visualization.waterfall import plot_exergy_waterfall
 
-        # Get component results without printing
-        df_component_results, _, _ = self.exergy_results(print_results=False)
+        return plot_exergy_waterfall(
+            self,
+            title=title,
+            figsize=figsize,
+            exclude_components=exclude_components,
+            colors=colors,
+            show_plot=show_plot,
+        )
 
-        # Default exclusions: empty list, but filter for valid E_F
-        if exclude_components is None:
-            exclude_components = []
+    def plot_exergy_waterfall_plotly(self, title=None, exclude_components=None, colors=None, show_plot=True):
+        """
+        Create an interactive exergy destruction waterfall diagram using Plotly.
 
-        # Get total values from df_component_results
-        total_row = df_component_results[df_component_results["Component"] == "TOT"].iloc[0]
-        epsilon_total = total_row["epsilon [%]"]
-        E_L_total = total_row["E_L [kW]"]
-        E_F_total = total_row["E_F [kW]"]
-        exergetic_loss_percent = (E_L_total / E_F_total) * 100 if E_F_total != 0 else 0
+        Parameters
+        ----------
+        title : str, optional
+            Title for the plot.
+        exclude_components : list, optional
+            Component names to exclude. Components with NaN E_F are always excluded.
+        colors : dict, optional
+            Override bar colors. Keys: "fuel", "destruction", "loss", "product".
+        show_plot : bool, optional
+            Whether to display the plot immediately. Default is True.
 
-        # Filter components (exclude TOT, components with NaN E_F, and specified components)
-        component_data = df_component_results[
-            (df_component_results["Component"] != "TOT")
-            & (df_component_results["E_F [kW]"].notna())
-            & (~df_component_results["Component"].isin(exclude_components))
-            & (df_component_results["y [%]"].notna())
-        ].copy()
+        Returns
+        -------
+        fig : plotly.graph_objects.Figure
 
-        # Sort by y [%] in descending order
-        component_data = component_data.sort_values("y [%]", ascending=False)
+        Examples
+        --------
+        >>> analysis = ExergyAnalysis.from_tespy(network, Tamb=288.15, pamb=101325)  # doctest: +SKIP
+        >>> analysis.analyse(E_F={'inputs': ['fuel']}, E_P={'outputs': ['power']})  # doctest: +SKIP
+        >>> fig = analysis.plot_exergy_waterfall_plotly(title='Power Plant Exergy Waterfall')  # doctest: +SKIP
+        """
+        from .visualization.waterfall import plot_exergy_waterfall_plotly
 
-        # Create bar values: Start at 100%, decrease by each component's y [%]
-        bar_values = [100.0]
-        current_value = 100.0
-        for y in component_data["y [%]"]:
-            current_value -= y
-            bar_values.append(current_value)
-        bar_values.append(epsilon_total)  # Final bar is the exergetic product
-
-        # Create labels for spaces between bars
-        space_labels = ["Exergetic fuel"] + list(component_data["Component"]) + ["Exergetic loss", "Exergetic product"]
-
-        # Create the figure
-        fig, ax = plt.subplots(figsize=figsize)
-
-        # Number of bars and spaces
-        n_bars = len(bar_values)
-
-        # Create horizontal bars at positions 0, 1, 2, ..., n_bars-1
-        bar_positions = np.arange(n_bars)
-        bar_colors = ["#1565C0"] + ["#D32F2F"] * (n_bars - 2) + ["#2E7D32"]
-        # Blue for fuel, red for destruction, green for product
-
-        for i, (pos, value, color) in enumerate(zip(bar_positions, bar_values, bar_colors, strict=False)):
-            ax.barh(pos, value, color=color, alpha=0.8, height=0.6)
-            # Add value label inside the bar on the right
-            ax.text(
-                value - 2, pos, f"{value:.2f}%", va="center", ha="right", fontsize=9, fontweight="bold", color="white"
-            )
-
-        # Add space labels between bars
-        # Space positions: between bars, so at 0.5, 1.5, 2.5, ..., and above/below
-        space_positions = [-0.5] + [i + 0.5 for i in range(n_bars - 1)] + [n_bars - 0.5]
-
-        for i, (space_pos, label) in enumerate(zip(space_positions, space_labels, strict=False)):
-            if i == 0:  # Exergetic fuel - above first bar
-                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
-            elif i == len(space_labels) - 2:  # Exergetic loss
-                loss_label = f"{label} (-{exergetic_loss_percent:.2f}%)"
-                ax.text(
-                    2, space_pos, loss_label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic"
-                )
-            elif i == len(space_labels) - 1:  # Exergetic product - below last bar
-                ax.text(2, space_pos, label, va="center", ha="left", fontsize=10, fontweight="bold", style="italic")
-            else:  # Component labels
-                component_idx = i - 1
-                destruction_rate = component_data.iloc[component_idx]["y [%]"]
-                label_with_rate = f"{label} (-{destruction_rate:.2f}%)"
-                ax.text(2, space_pos, label_with_rate, va="center", ha="left", fontsize=10, fontweight="bold")
-
-        # Customize plot
-        ax.set_yticks(bar_positions)
-        ax.set_yticklabels([""] * n_bars)  # Empty labels since we have custom labels
-        ax.set_xlabel("Exergy [%]", fontsize=12, fontweight="bold")
-
-        if title is not None:
-            ax.set_title(title, fontsize=14, fontweight="bold", pad=20)
-
-        ax.set_xlim(0, 100)
-        ax.set_ylim(-1, n_bars)
-        ax.grid(axis="x", alpha=0.3, linestyle="--")
-        ax.axvline(x=0, color="black", linewidth=0.8)
-        ax.invert_yaxis()  # Invert so highest bar is at top
-
-        plt.tight_layout()
-
-        if show_plot:
-            plt.show()
-
-        return fig, ax
+        return plot_exergy_waterfall_plotly(
+            self, title=title, exclude_components=exclude_components, colors=colors, show_plot=show_plot
+        )
 
     def plot_logph(
         self,
@@ -1110,6 +1115,16 @@ class ExergyAnalysis:
     def _check_unaccounted_system_conns(self):
         """
         Check if system boundary connections are not included in E_F, E_P, or E_L dictionaries.
+
+        A connection crosses the system boundary when one of its ends is not a component of the
+        analysis. That end may be missing entirely, as in the Ebsilon exports, or it may name a
+        source or sink of the simulation that is no component of the plant, e.g. "ambient air" or
+        "chimney" in the TESPy and Aspen exports.
+
+        Returns
+        -------
+        list
+            Names of the boundary connections that are part of no exergy flow definition.
         """
         # Collect all accounted streams
         accounted_streams = set()
@@ -1117,8 +1132,9 @@ class ExergyAnalysis:
             accounted_streams.update(dictionary.get("inputs", []))
             accounted_streams.update(dictionary.get("outputs", []))
 
+        analysed_components = set(self.components)
+
         # Identify actual system boundary connections
-        # A connection is at the boundary if source OR target is None/missing
         system_boundary_conns = []
         for conn_name, conn_data in self.connections.items():
             source = conn_data.get("source_component", None)
@@ -1126,8 +1142,8 @@ class ExergyAnalysis:
             if conn_data.get("source_component_type", None) == 1:
                 source = None
 
-            # Connection is at system boundary if one side is not connected
-            if source is None or target is None:
+            # Connection is at system boundary if one side is no component of the analysis
+            if source not in analysed_components or target not in analysed_components:
                 kind = conn_data.get("kind", "")
                 # Treat an explicit None exergy as zero to avoid a TypeError in abs().
                 exergy = conn_data.get("E")
@@ -1138,13 +1154,15 @@ class ExergyAnalysis:
                     system_boundary_conns.append(conn_name)
 
         # Find unaccounted boundary connections
-        unaccounted = [conn for conn in system_boundary_conns if conn not in accounted_streams]
+        unaccounted = sorted(conn for conn in system_boundary_conns if conn not in accounted_streams)
 
         if unaccounted:
-            conn_list = ", ".join(f"'{conn}'" for conn in sorted(unaccounted))
+            conn_list = ", ".join(f"'{conn}'" for conn in unaccounted)
             logger.warning(
                 f"The following system boundary connections are not included in E_F, E_P, or E_L: {conn_list}"
             )
+
+        return unaccounted
 
 
 def _construct_components(component_data, connection_data, Tamb):
@@ -1173,6 +1191,14 @@ def _construct_components(component_data, connection_data, Tamb):
 
     # Loop over component types (e.g., 'Combustion Chamber', 'Compressor')
     for component_type, component_instances in component_data.items():
+        # Legacy exports may still label heat-rejection units as "Condenser"; ExerPy now
+        # models them as HeatExchanger and infers dissipativeness from the case or E_L.
+        if component_type == "Condenser":
+            logger.warning(
+                "Component type 'Condenser' is deprecated and is mapped to 'HeatExchanger'. "
+                "Dissipative behavior is now inferred from the temperature case or the E_L specification."
+            )
+            component_type = "HeatExchanger"
         for component_name, component_information in component_instances.items():
             # Skip components of type 'Splitter'
             """if component_type == "Splitter" or component_information.get('type') == "Splitter":
@@ -1219,35 +1245,28 @@ def _construct_components(component_data, connection_data, Tamb):
                     logger.warning(f"Could not evaluate if Valve '{component_name}' is dissipative or not: {e}")
                     component.is_dissipative = False
             elif component_type == "HeatExchanger":
-                # A HeatExchanger is dissipative if explicitly flagged or if the hot stream stays
-                # above T0 and the cold stream stays below T0 (case 6).
-                if getattr(component, "dissipative", False):
+                # An explicit dissipative flag (True/False) wins; otherwise the unit is dissipative
+                # when the hot stream stays above T0 and the cold stream stays below T0 (case 6).
+                # E_L-based inference happens later in analyse(), once E_L is known.
+                diss = getattr(component, "dissipative", None)
+                if diss is True:
                     component.is_dissipative = True
+                elif diss is False:
+                    component.is_dissipative = False
+                    try:
+                        if component._temperature_case(Tamb) == 6:
+                            logger.warning(
+                                f"HeatExchanger '{component_name}' is set dissipative=False but its streams "
+                                "have no exergy product (case 6); it is treated as dissipative anyway."
+                            )
+                    except Exception:
+                        pass
                 else:
                     try:
-                        T_in0 = component.inl[0].get("T", None)
-                        T_in1 = component.inl[1].get("T", None)
-                        T_out0 = component.outl[0].get("T", None)
-                        T_out1 = component.outl[1].get("T", None)
-                        if (
-                            T_in0 is not None
-                            and T_in1 is not None
-                            and T_out0 is not None
-                            and T_out1 is not None
-                            and T_in0 > Tamb
-                            and T_in1 <= Tamb
-                            and T_out0 > Tamb
-                            and T_out1 <= Tamb
-                        ):
-                            component.is_dissipative = True
-                        else:
-                            component.is_dissipative = False
+                        component.is_dissipative = component._temperature_case(Tamb) == 6
                     except Exception as e:
                         logger.warning(f"Could not evaluate if HeatExchanger '{component_name}' is dissipative: {e}")
                         component.is_dissipative = False
-            elif component_type == "Condenser":
-                # A Condenser is always dissipative (E_F = NaN, E_P = NaN).
-                component.is_dissipative = True
             else:
                 component.is_dissipative = False
 
@@ -1255,6 +1274,14 @@ def _construct_components(component_data, connection_data, Tamb):
             components[component_name] = component
 
     return components  # Return the dictionary of created components
+
+
+def _no_negative_zero(df, digits=3):
+    """Return a copy of the table where values that round to zero are printed as +0."""
+    df = df.copy()
+    for column in df.select_dtypes(include="number"):
+        df[column] = df[column].mask(df[column].round(digits) == 0, df[column].abs())
+    return df
 
 
 def _nan_to_none(value):
@@ -2512,13 +2539,41 @@ class ExergoeconomicAnalysis:
         # -------------------------
         if print_results:
             print("\nExergoeconomic Analysis - Component Results:")
-            print(tabulate(df_comp.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_comp).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (exergy data):")
-            print(tabulate(df_mat1.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat1).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Material Connection Results (cost data):")
-            print(tabulate(df_mat2.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_mat2).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
             print("\nExergoeconomic Analysis - Non-Material Connection Results:")
-            print(tabulate(df_non_mat.reset_index(drop=True), headers="keys", tablefmt="psql", floatfmt=".3f"))
+            print(
+                tabulate(
+                    _no_negative_zero(df_non_mat).reset_index(drop=True),
+                    headers="keys",
+                    tablefmt="psql",
+                    floatfmt=".3f",
+                )
+            )
 
         return df_comp, df_mat1, df_mat2, df_non_mat
 
@@ -2597,7 +2652,7 @@ class ExergoeconomicAnalysis:
         print(f"{'=' * 70}")
         print(
             tabulate(
-                df_sorted[display_cols].head(n_show).reset_index(drop=True),
+                _no_negative_zero(df_sorted[display_cols].head(n_show)).reset_index(drop=True),
                 headers="keys",
                 tablefmt="psql",
                 floatfmt=".3f",

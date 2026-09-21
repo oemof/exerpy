@@ -6,6 +6,7 @@ simulate them, extract data about components and connections, and write the data
 """
 
 import json
+import math
 import os
 from typing import Any
 
@@ -46,6 +47,20 @@ from .ebsilon_config import non_thermodynamic_unit_operators
 from .ebsilon_config import two_phase_fluids_mapping
 from .ebsilon_config import unit_id_to_string
 
+# Steam generator heating surfaces: the flue gas zone holds the hot side, the main heating
+# surface the cold side of one and the same heat exchanger, and the auxiliary heating surface
+# is a separate cold stream in the same flue gas zone. They are linked by logic lines.
+SG_FLUE_GAS_ZONE = 88
+SG_MAIN_SURFACE = 89
+SG_AUX_SURFACE = 91
+LOGIC_FLUID_TYPE = 13
+SG_HEAT_CONNECTOR = 3  # connector carrying the heat flow between zone and main surface
+
+# Types of measuring point (component 46) that define the reference state of the model
+MEASURING_POINT = 46
+REFERENCE_PRESSURE = 13
+REFERENCE_TEMPERATURE = 26
+
 
 def _thermoliquid_name(pipe_cast):
     """
@@ -66,15 +81,39 @@ def _thermoliquid_name(pipe_cast):
 class EbsilonModelParser:
     """
     A class to parse Ebsilon models, simulate them, extract data, and write to JSON.
+
+    Reference state
+        The model has to define it with two measuring points (component 46): one with
+        FTYP = 26 for the ambient temperature and one with FTYP = 13 for the ambient
+        pressure, each holding its value in MEASM. Measuring points of these types without a
+        value are ignored, several of the same type are accepted as long as they agree, and
+        conflicting ones raise an error. Values passed as ``Tamb`` and ``pamb`` take
+        precedence over the model and are used for the exergies of the connections as well.
+
+    Steam generator heating surfaces
+        A flue gas zone (component 88) and its main heating surface (component 89) model the
+        two sides of one heat exchanger and are merged into a single component; see
+        :meth:`_merge_steam_generator_surfaces`.
     """
 
-    def __init__(self, model_path: str, split_physical_exergy: bool = True):
+    def __init__(
+        self,
+        model_path: str,
+        split_physical_exergy: bool = True,
+        Tamb: float | None = None,
+        pamb: float | None = None,
+        profile: str | int | None = None,
+    ):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Ebsilon model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+            Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
+            pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+            profile (str or int): Name or id of the profile to activate. Defaults to the profile
+                the model was saved with.
 
         Raises:
             RuntimeError: If Ebsilon is not available but is required for parsing.
@@ -94,14 +133,17 @@ class EbsilonModelParser:
 
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
+        self.profile = profile  # Profile (operating point) to activate after opening the model
         self.app = None  # Ebsilon application instance
         self.model = None  # Opened Ebsilon model
         self.oc = None  # ObjectCaster for type casting
         self.components_data: dict[str, dict[str, dict[str, Any]]] = {}  # Dictionary to store component data
         self.connections_data: dict[str, dict[str, Any]] = {}  # Dictionary to store connection data
-        self.Tamb: float | None = None  # Ambient temperature
-        self.pamb: float | None = None  # Ambient pressure
+        self.Tamb: float | None = Tamb  # Ambient temperature
+        self.pamb: float | None = pamb  # Ambient pressure
 
+        # Measuring points defining the reference state: {"T"/"p": [(component name, value)]}
+        self._ambient_measurements: dict[str, list[tuple[str, float | None]]] = {"T": [], "p": []}
         self._storages_to_postprocess: list[dict[str, Any]] = []
         self.heatflow_to_postprocess: list[dict[str, Any]] = []
         self._power_bus_mul_data: dict[str, dict[int, float]] = {}  # {comp_name: {connector_idx: MUL_value}}
@@ -136,7 +178,67 @@ class EbsilonModelParser:
             logger.error(f"Failed to obtain ObjectCaster: {e}")
             raise RuntimeError(f"Could not get ObjectCaster: {e}")
 
-        logger.info(f"Model opened successfully: {self.model_path}")
+        # 4) select the operating point to work with
+        if self.profile is not None:
+            self.activate_profile(self.profile)
+
+        logger.info(f"Model opened successfully: {self.model_path} (profile '{self.active_profile()}')")
+
+    @require_ebsilon
+    def list_profiles(self) -> list[dict[str, Any]]:
+        """
+        List the profiles (operating points) of the opened model.
+
+        Ebsilon stores the profiles as a tree: the root profile holds the design case and its
+        children hold the deviations, e.g. part load or seasonal cases. The list is returned in
+        depth-first order.
+
+        Returns:
+            list: One dictionary per profile with its ``name``, ``id``, ``parent`` (name of the
+            parent profile, ``None`` for the root) and whether it is currently ``active``.
+        """
+        profiles: list[dict[str, Any]] = []
+
+        def collect(profile, parent_name):
+            profiles.append(
+                {
+                    "name": profile.Name,
+                    "id": profile.ProfileId,
+                    "parent": parent_name,
+                    "active": bool(profile.IsActive),
+                }
+            )
+            children = profile.Children
+            for i in range(1, children.Count + 1):
+                collect(children.Item(i), profile.Name)
+
+        collect(self.model.RootProfile, None)
+        return profiles
+
+    @require_ebsilon
+    def active_profile(self) -> str:
+        """Return the name of the profile the model is currently set to."""
+        return self.model.ActiveProfile.Name
+
+    @require_ebsilon
+    def activate_profile(self, profile: str | int):
+        """
+        Activate a profile of the model, so that it is the one being simulated and parsed.
+
+        Parameters:
+            profile (str or int): Name or id of the profile.
+
+        Raises:
+            ValueError: If the model has no profile with that name or id.
+        """
+        if not self.model.ActivateProfile(profile):
+            available = ", ".join(f"'{p['name']}' (id {p['id']})" for p in self.list_profiles())
+            error_msg = f"The model has no profile '{profile}'. Available profiles: {available}."
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        self.profile = profile
+        logger.info(f"Activated profile '{self.active_profile()}'")
 
     @require_ebsilon
     def simulate_model(self):
@@ -189,15 +291,8 @@ class EbsilonModelParser:
                 if obj.IsKindOf(10):
                     self.parse_component(obj)
 
-            # After parsing all components, check if Tamb and pamb have been set
-            if self.Tamb is None or self.pamb is None:
-                error_msg = (
-                    "Ambient temperature (Tamb) and/or ambient pressure (pamb) have not been set.\n"
-                    "Please ensure that your Ebsilon model includes component(s) of type 46 (Measuring Point) "
-                    "with a setting for the Ambient Temperature and the Ambient Pressure in MEASM."
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+            # After parsing all components, resolve the reference state from the measuring points
+            self._resolve_ambient_conditions()
 
             # Iterate over all objects in the model and select the connections
             for j in range(1, total_objects + 1):
@@ -205,6 +300,9 @@ class EbsilonModelParser:
                 # Check if the object is a pipe (epObjectKindPipe = 16)
                 if obj.IsKindOf(16):
                     self.parse_connection(obj)
+
+            # Merge the flue gas zones and main heating surfaces of steam generators
+            self._merge_steam_generator_surfaces()
 
             # Reclassify Power Summarizer connections based on MUL signs
             self._reclassify_power_bus_connections()
@@ -647,19 +745,18 @@ class EbsilonModelParser:
             # Store the component data using the component's name as the key
             self.components_data[group][comp_cast.Name] = component_data
 
-        # For components of type 46, set ambient temperature and pressure
-        elif type_index == 46:
+        # Collect the measuring points that define the reference state of the model
+        elif type_index == MEASURING_POINT:
             comp46 = self.oc.CastToComp46(obj)
-            if comp46.FTYP.Value == 26:
-                self.Tamb = convert_to_SI(
-                    "T", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
+            ftyp = comp46.FTYP.Value
+            if ftyp in (REFERENCE_TEMPERATURE, REFERENCE_PRESSURE):
+                prop = "T" if ftyp == REFERENCE_TEMPERATURE else "p"
+                value = (
+                    convert_to_SI(prop, comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown"))
+                    if comp46.MEASM.Value is not None
+                    else None
                 )
-                logger.info(f"Set ambient temperature (Tamb) to {self.Tamb} K from component {comp_cast.Name}")
-            elif comp46.FTYP.Value == 13:
-                self.pamb = convert_to_SI(
-                    "p", comp46.MEASM.Value, unit_id_to_string.get(comp46.MEASM.Dimension, "Unknown")
-                )
-                logger.info(f"Set ambient pressure (pamb) to {self.pamb} Pa from component {comp_cast.Name}")
+                self._ambient_measurements[prop].append((comp46.Name, value))
 
         if type_index == 31:
             comp31 = self.oc.CastToComp31(obj)
@@ -727,6 +824,203 @@ class EbsilonModelParser:
                         "Q_Solar_unit": q_solar_unit,
                     }
                 )
+
+    def _select_ambient_value(self, prop: str, label: str, ftyp: int, unit: str) -> float | None:
+        """
+        Pick one reference value out of the measuring points of a given reference type.
+
+        Measuring points without a value in MEASM are ignored, and a value passed to the
+        parser takes precedence over the model. Several measuring points of the same type
+        are accepted as long as they agree.
+
+        Raises:
+            ValueError: If the measuring points of this type define different values.
+        """
+        given = self.Tamb if prop == "T" else self.pamb
+        measurements = self._ambient_measurements[prop]
+
+        for name, value in measurements:
+            if value is None:
+                logger.warning(
+                    f"Measuring point '{name}' is set to define the {label} (FTYP = {ftyp}) but has no value "
+                    "in MEASM; it is ignored."
+                )
+        values = [(name, value) for name, value in measurements if value is not None]
+
+        if given is not None:
+            if values:
+                logger.info(f"The {label} of the model is overridden by the value passed to the parser: {given} {unit}")
+            return given
+
+        if not values:
+            return None
+
+        first = values[0][1]
+        if any(not math.isclose(value, first, rel_tol=1e-6) for _, value in values):
+            listed = ", ".join(f"'{name}' ({value} {unit})" for name, value in values)
+            error_msg = (
+                f"The model defines the {label} more than once with different values: {listed}. Keep a single "
+                f"measuring point (component 46) with FTYP = {ftyp} or pass the value to the parser."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if len(values) > 1:
+            logger.info(
+                f"The {label} is defined by {len(values)} measuring points with the same value; using {first} {unit}"
+            )
+        else:
+            logger.info(f"Set the {label} to {first} {unit} from measuring point '{values[0][0]}'")
+        return first
+
+    def _resolve_ambient_conditions(self):
+        """
+        Determine the ambient temperature and pressure from the measuring points of the model.
+
+        Raises:
+            ValueError: If the reference state is defined ambiguously or not at all.
+        """
+        self.Tamb = self._select_ambient_value("T", "ambient temperature (Tamb)", REFERENCE_TEMPERATURE, "K")
+        self.pamb = self._select_ambient_value("p", "ambient pressure (pamb)", REFERENCE_PRESSURE, "Pa")
+
+        missing = []
+        if self.Tamb is None:
+            missing.append(self._missing_ambient_hint("T", "ambient temperature (Tamb)", REFERENCE_TEMPERATURE))
+        if self.pamb is None:
+            missing.append(self._missing_ambient_hint("p", "ambient pressure (pamb)", REFERENCE_PRESSURE))
+
+        if missing:
+            error_msg = (
+                "The reference state of the model is incomplete:\n"
+                + "\n".join(f"- {hint}" for hint in missing)
+                + "\nThe reference state is defined by two separate measuring points (component 46): one with "
+                f"FTYP = {REFERENCE_TEMPERATURE} (reference temperature) and one with FTYP = {REFERENCE_PRESSURE} "
+                "(reference pressure), each holding its value in MEASM. Set both in the model or pass Tamb and "
+                "pamb to the parser."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+    def _missing_ambient_hint(self, prop: str, label: str, ftyp: int) -> str:
+        """Describe why a reference value could not be read from the model."""
+        names = [name for name, _ in self._ambient_measurements[prop]]
+        if names:
+            listed = ", ".join(f"'{name}'" for name in names)
+            return f"the {label} is missing: measuring point(s) {listed} use FTYP = {ftyp} but have no value in MEASM"
+        return f"the {label} is missing: no measuring point with FTYP = {ftyp} was found"
+
+    def _names_of_type(self, type_index: int) -> set:
+        """Return the names of all parsed components of the given Ebsilon type."""
+        return {
+            name
+            for group in self.components_data.values()
+            for name, data in group.items()
+            if data.get("type_index") == type_index
+        }
+
+    def _pop_component(self, name: str) -> dict[str, Any] | None:
+        """Remove a component from the parsed data and return it."""
+        for group_name, group in self.components_data.items():
+            if name in group:
+                data = group.pop(name)
+                if not group:
+                    del self.components_data[group_name]
+                return data
+        return None
+
+    def _merge_steam_generator_surfaces(self):
+        """
+        Merge each flue gas zone and main heating surface into a single heat exchanger.
+
+        Ebsilon models one heating surface of a steam generator with two components: the
+        flue gas zone (88) carries the hot side, the main heating surface (89) the cold
+        side. Both are paired by a logic line between their third connectors. Each pair
+        becomes one HeatExchanger named ``<main surface>_<flue gas zone>``, taking the hot
+        streams from the flue gas zone and the cold streams from the main heating surface.
+
+        All logic lines inside the steam generator block are internal to the merged unit
+        and are dropped: the heat flow to the main surface, the radiation exchange with the
+        neighbouring zones and the links to the auxiliary heating surfaces (91). The heat
+        that leaves the flue gas without reaching the cold side of the merged unit (wall
+        losses, radiation to other zones, heat to auxiliary surfaces) therefore shows up as
+        exergy destruction of the merged heat exchanger.
+        """
+        sg_types = {SG_FLUE_GAS_ZONE, SG_MAIN_SURFACE, SG_AUX_SURFACE}
+
+        pairs = {}  # flue gas zone name -> main heating surface name
+        internal_pipes = []
+
+        for conn_name, conn in self.connections_data.items():
+            if conn.get("fluid_type_id") != LOGIC_FLUID_TYPE:
+                continue
+            types = {conn["source_component_type"], conn["target_component_type"]}
+            if len(types) < 2 or not types <= sg_types:
+                continue
+
+            internal_pipes.append(conn_name)
+
+            if types == {SG_FLUE_GAS_ZONE, SG_MAIN_SURFACE} and (
+                conn["source_connector"] == SG_HEAT_CONNECTOR and conn["target_connector"] == SG_HEAT_CONNECTOR
+            ):
+                if conn["source_component_type"] == SG_FLUE_GAS_ZONE:
+                    zone, surface = conn["source_component"], conn["target_component"]
+                else:
+                    zone, surface = conn["target_component"], conn["source_component"]
+                pairs[zone] = surface
+
+        if not pairs and not internal_pipes:
+            return
+
+        # Report heating surfaces that cannot be merged instead of silently dropping them
+        for name in self._names_of_type(SG_FLUE_GAS_ZONE) - set(pairs):
+            logger.warning(
+                f"Flue gas zone '{name}' has no main heating surface on connector 3 and is skipped. "
+                "Connect it to a component 89 to have it analysed as a heat exchanger."
+            )
+        for name in self._names_of_type(SG_MAIN_SURFACE) - set(pairs.values()):
+            logger.warning(
+                f"Main heating surface '{name}' is not attached to a flue gas zone (component 88) and is "
+                "skipped. Heating surfaces of a reaction zone (component 90) are not supported."
+            )
+        if self._names_of_type(SG_AUX_SURFACE):
+            logger.warning(
+                "Auxiliary heating surfaces (component 91) are analysed as simple heat exchangers. The heat "
+                "they receive is charged to the exergy destruction of the merged heat exchanger of their "
+                "flue gas zone."
+            )
+
+        for conn_name in internal_pipes:
+            del self.connections_data[conn_name]
+            logger.info(f"Removed logic connection '{conn_name}' internal to the steam generator block")
+
+        for zone, surface in pairs.items():
+            zone_data = self._pop_component(zone)
+            surface_data = self._pop_component(surface)
+            if zone_data is None or surface_data is None:
+                logger.warning(f"Could not merge '{surface}' and '{zone}': component data is missing")
+                continue
+
+            merged_name = f"{surface}_{zone}"
+            merged_data = dict(surface_data)
+            merged_data.update(
+                {
+                    "name": merged_name,
+                    "type": "Heating Surface of Steam Generator",
+                    "flue_gas_zone": zone,
+                    "main_heating_surface": surface,
+                }
+            )
+            self.components_data.setdefault("HeatExchanger", {})[merged_name] = merged_data
+
+            for conn in self.connections_data.values():
+                if conn["source_component"] in (zone, surface):
+                    conn["source_component"] = merged_name
+                    conn["source_component_type"] = SG_MAIN_SURFACE
+                if conn["target_component"] in (zone, surface):
+                    conn["target_component"] = merged_name
+                    conn["target_component_type"] = SG_MAIN_SURFACE
+
+            logger.info(f"Merged flue gas zone '{zone}' and main heating surface '{surface}' into '{merged_name}'")
 
     def _create_storage_connections(self):
         """
@@ -1065,7 +1359,48 @@ class EbsilonModelParser:
             raise
 
 
-def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_exergy: bool = True) -> dict[str, Any]:
+def get_ebsilon_profiles(model_path: str) -> list[dict[str, Any]]:
+    """
+    List the profiles (operating points) stored in an Ebsilon model.
+
+    A model can hold several profiles, e.g. a design case and part load or seasonal cases.
+    This opens the model without simulating it and reports which ones are available, so that
+    one of them can be passed as the `profile` of :func:`run_ebsilon`.
+
+    Parameters:
+        model_path (str): Path to the Ebsilon model file.
+
+    Returns:
+        list: One dictionary per profile with its `name`, `id`, `parent` and `active` flag.
+
+    Raises:
+        FileNotFoundError: If the model file is not found at the specified path.
+        RuntimeError: If Ebsilon is not available.
+    """
+    if not is_ebsilon_available():
+        raise RuntimeError(
+            "Ebsilon functionality is required for running this function. "
+            "Please set the EBS environment variable to your Ebsilon installation path."
+        )
+
+    if not os.path.exists(model_path):
+        error_msg = f"Model file not found at: {model_path}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    parser = EbsilonModelParser(model_path)
+    parser.initialize_model()
+    return parser.list_profiles()
+
+
+def run_ebsilon(
+    model_path: str,
+    output_dir: str | None = None,
+    split_physical_exergy: bool = True,
+    Tamb: float | None = None,
+    pamb: float | None = None,
+    profile: str | int | None = None,
+) -> dict[str, Any]:
     """
     Main function to process the Ebsilon model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -1074,6 +1409,10 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
         model_path (str): Path to the Ebsilon model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+        Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
+        pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+        profile (str or int): Name or id of the profile to simulate. Defaults to the profile
+            the model was saved with.
 
     Returns:
         dict: Parsed data in dictionary format.
@@ -1097,7 +1436,9 @@ def run_ebsilon(model_path: str, output_dir: str | None = None, split_physical_e
 
     # Initialize the Ebsilon model parser with the model file path
     try:
-        parser = EbsilonModelParser(model_path, split_physical_exergy=split_physical_exergy)
+        parser = EbsilonModelParser(
+            model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb, profile=profile
+        )
     except RuntimeError as e:
         # This will catch the RuntimeError raised in __init__ if Ebsilon is not available
         logger.error(f"Failed to initialize EbsilonModelParser: {e}")

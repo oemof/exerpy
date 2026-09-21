@@ -17,26 +17,30 @@ import pytest
 from exerpy import ExergyAnalysis
 from exerpy.analyses import _load_json
 
-_basepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../examples/")
-directories = [
-    os.path.join(_basepath, dirname)
-    for dirname in os.listdir(_basepath)
-    if os.path.isdir(os.path.join(_basepath, dirname))
-]
+# The exergy analysis examples: every sub directory holds the exports of the same plant from
+# the different simulators. The exports live one level deeper than the examples directory, so
+# the tree is walked instead of listing a single level.
+_basepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../examples/exergy_analysis/")
 examples_json = []
-for directory in directories:
-    examples_json.append({})
-    for file in os.listdir(directory):
-        if file.endswith(".json"):
-            path = os.path.join(directory, file)
-            # Skip JSON files that are not analysis exports (e.g. optimizer result
-            # dumps in opt_examples); only exports carry a "components" section.
-            try:
-                if "components" not in _load_json(path):
-                    continue
-            except (ValueError, OSError):
+for directory, _subdirs, files in sorted(os.walk(_basepath)):
+    exports = {}
+    for file in sorted(files):
+        if not file.endswith(".json"):
+            continue
+        path = os.path.join(directory, file)
+        # Skip JSON files that are not analysis exports; only exports carry a "components" section.
+        try:
+            if "components" not in _load_json(path):
                 continue
-            examples_json[-1][file.removesuffix(".json")] = path
+        except (ValueError, OSError):
+            continue
+        exports[file.removesuffix(".json")] = path
+    # An export is named <model>_<simulator>.json, so group by model: only exports of the
+    # same plant may be compared with each other, not e.g. a parabolic trough with a solar tower.
+    models = {}
+    for stem, path in exports.items():
+        models.setdefault(stem.rsplit("_", 1)[0], {})[stem] = path
+    examples_json.extend(models.values())
 
 TESTCASES = [{c: example[c] for c in case} for example in examples_json for case in combinations(example, 2)]
 
@@ -135,3 +139,101 @@ def test_solar_tower_example_results(solar_tower_analysis):
     assert pytest.approx(solar_tower_analysis.E_P, rel=1e-4) == 29406492.324328158
     assert pytest.approx(solar_tower_analysis.E_D, rel=1e-4) == 103316169.97763622
     assert pytest.approx(solar_tower_analysis.E_L, rel=1e-4) == 1536112.3605486117
+
+
+# The fuel, product and loss definitions of every example, taken from the example script next to
+# the export. With them the exergy balance of the example has to close: the exergy destruction of
+# the system must be the sum of the exergy destruction of its components. A deviation means that
+# either a component balance or the accounting of the system boundary is wrong, so this is checked
+# for every example and every simulator.
+EXERGY_FLOWS = {
+    "ccpp/ccpp_tespy": (
+        {"inputs": ["1", "3"], "outputs": []},
+        {"inputs": ["e15", "h1"], "outputs": []},
+        {"inputs": ["8", "15"], "outputs": ["14"]},
+    ),
+    "ccpp/ccpp_ebs": (
+        {"inputs": ["1", "3"], "outputs": []},
+        {"inputs": ["ETOT", "H1"], "outputs": []},
+        {"inputs": ["8", "15"], "outputs": ["14"]},
+    ),
+    "ccpp/ccpp_aspen": (
+        {"inputs": ["1", "3"], "outputs": []},
+        {"inputs": ["ETOT", "HC_HEAT"], "outputs": []},
+        {"inputs": ["8", "15"], "outputs": ["14"]},
+    ),
+    "cgam/cgam_tespy": (
+        {"inputs": ["1", "10"], "outputs": []},
+        {"inputs": ["e3", "9"], "outputs": ["8"]},
+        {"inputs": ["7"], "outputs": []},
+    ),
+    "cgam/cgam_ebs": (
+        {"inputs": ["1", "10"], "outputs": []},
+        {"inputs": ["E1", "9"], "outputs": ["8"]},
+        {"inputs": ["7"], "outputs": []},
+    ),
+    "cgam/cgam_aspen": (
+        {"inputs": ["1", "10"], "outputs": []},
+        {"inputs": ["E1", "9"], "outputs": ["8"]},
+        {"inputs": ["7"], "outputs": []},
+    ),
+    "heatpump/hp_tespy": (
+        {"inputs": ["e1"], "outputs": []},
+        {"inputs": ["23"], "outputs": ["21"]},
+        {"inputs": ["13"], "outputs": ["11"]},
+    ),
+    "heatpump/hp_ebs": (
+        {"inputs": ["E1", "E2", "E3"], "outputs": []},
+        {"inputs": ["23"], "outputs": ["21"]},
+        {"inputs": ["13"], "outputs": ["11"]},
+    ),
+    "heatpump/hp_aspen": (
+        {"inputs": ["E1", "E2", "E3"], "outputs": []},
+        {"inputs": ["23"], "outputs": ["21"]},
+        {"inputs": ["13"], "outputs": ["11"]},
+    ),
+    "solar_thermal/parabolic_ebs": (
+        {"inputs": ["PARAB"], "outputs": []},
+        {"inputs": ["ETOT"], "outputs": []},
+        {"inputs": ["C2"], "outputs": ["C1"]},
+    ),
+    "solar_thermal/solar_tower_ebs": (
+        {"inputs": ["SF"], "outputs": []},
+        {"inputs": ["ETOT"], "outputs": []},
+        {"inputs": ["C2"], "outputs": ["C1"]},
+    ),
+    "json_example/example": (
+        {"inputs": ["1", "3"], "outputs": []},
+        {"inputs": ["E1"], "outputs": []},
+        {"inputs": ["5"], "outputs": []},
+    ),
+}
+
+
+@pytest.mark.parametrize("example", sorted(EXERGY_FLOWS), ids=lambda example: example.replace("/", "-"))
+def test_exergy_balance_of_examples_closes(example, caplog):
+    """
+    Test that the system exergy destruction equals the sum of the component destructions.
+
+    This is the exergy balance of the whole plant: nothing may be destroyed that no component
+    destroys, and nothing a component destroys may be missing from the system. The check runs
+    over every example and every simulator, so a component balance or an accounting of the system
+    boundary that stops adding up is caught before a release.
+    """
+    E_F, E_P, E_L = EXERGY_FLOWS[example]
+    path = os.path.join(_basepath, f"{example}.json")
+    contents = _load_json(path)
+
+    ean = ExergyAnalysis.from_json(path, **contents.get("settings", {}))
+    with caplog.at_level(logging.WARNING):
+        ean.analyse(E_F=E_F, E_P=E_P, E_L=E_L)
+
+    destruction_of_components = sum(
+        component.E_D
+        for component in ean.components.values()
+        if component.__class__.__name__ != "CycleCloser" and component.E_D is not None and np.isfinite(component.E_D)
+    )
+
+    assert pytest.approx(destruction_of_components, rel=1e-5) == ean.E_D
+    # The analysis must not report the balance as broken either
+    assert "does not match overall system exergy destruction" not in caplog.text

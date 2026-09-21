@@ -22,7 +22,15 @@ Tamb = 283.15
 # 1. Create TESPy network and components
 # ----------------------------------------------------------------------------------------------------------------------
 nw = Network()
-nw.units.set_defaults(temperature="degC", pressure="bar", enthalpy="kJ / kg", mass_flow="kg / s", heat="kW", power="kW")
+nw.units.set_defaults(
+    temperature="degC",
+    pressure="bar",
+    pressure_difference="bar",
+    enthalpy="kJ / kg",
+    mass_flow="kg / s",
+    heat="kW",
+    power="kW",
+)
 
 air_in = Source("air inlet")
 air_out = Sink("air outlet")
@@ -62,7 +70,6 @@ c13.set_attr(T=8, p=1.013)
 c21.set_attr(fluid={"water": 1}, T=70, p=5, m=10)
 c23.set_attr(T=120, p=5)
 
-c31.set_attr(T=75)
 c32.set_attr(p=0.6, fluid={"R245FA": 1})
 c34.set_attr(p=23)
 
@@ -70,7 +77,7 @@ compressor.set_attr(eta_s=0.8)
 fan.set_attr(eta_s=0.85)
 pump.set_attr(eta_s=0.8)
 evaporator.set_attr(dp1=0.03, dp2=0.05)
-condenser.set_attr(dp1=0.05, dp2=0.05)
+condenser.set_attr(dp1=0.05, dp2=0.05, ttd_l=5)
 
 evaporator.set_attr(ttd_u=5)
 
@@ -96,30 +103,20 @@ motor3.set_attr(eta=0.985)
 
 nw.solve("design")
 
-# Run final simulation with ttd_l in condenser set
-condenser.set_attr(ttd_l=5)
-c31.set_attr(T=None)
-nw.solve("design")
-
-# assert convergence of calculation
 nw.assert_convergence()
 
 nw.print_results()
 
 # [tespy_model_section_end]
-
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
 ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=False)
 # [exergy_analysis_setup]
-
 fuel = {"inputs": ["e1"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}
 loss = {"inputs": ["13"], "outputs": ["11"]}
-
 # [exergy_analysis_flows]
-
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/heatpump/hp_tespy.json")

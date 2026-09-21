@@ -10,7 +10,6 @@ import pytest
 
 from exerpy.components.combustion.base import CombustionChamber
 from exerpy.components.heat_exchanger.base import HeatExchanger
-from exerpy.components.heat_exchanger.condenser import Condenser
 from exerpy.components.heat_exchanger.simple import SimpleHeatExchanger
 from exerpy.components.helpers.cycle_closer import CycleCloser
 from exerpy.components.nodes.deaerator import Deaerator
@@ -183,35 +182,32 @@ def test_heat_exchanger_missing_streams(heat_exchanger):
 
 
 @pytest.fixture
-def condenser():
+def dissipative_hex():
     """
-    Create a Condenser instance.
+    Create a HeatExchanger explicitly forced dissipative (formerly the Condenser case).
     """
-    return Condenser(name="TestCondenser")
+    return HeatExchanger(name="TestCondenser", dissipative=True)
 
 
 @pytest.fixture
 def valid_condenser_streams():
     """
-    Create dummy inlet and outlet stream data for a condenser.
+    Create dummy inlet and outlet stream data for a dissipative heat exchanger.
 
     We assume:
       - Two inlets:
-         * Inlet 0: m = 10, e_PH = 1500.
-         * Inlet 1: m = 8, e_PH = 1000.
+         * Inlet 0 (hot): m = 10, e_PH = 1500.
+         * Inlet 1 (cold): m = 8, e_PH = 1000.
       - Two outlets:
-         * Outlet 0: m = 10, e_PH = 1400.
-         * Outlet 1: m = 8, e_PH = 900.
+         * Outlet 0 (hot): m = 10, e_PH = 1400.
+         * Outlet 1 (cold): m = 8, e_PH = 900.
 
-    Expected calculations:
-      E_L = m_outlet[1] * (e_PH_outlet[1] - e_PH_inlet[1])
-          = 8 * (900 - 1000) = 8 * (-100) = -800.
+    Expected calculation for the dissipative branch:
+      E_F = m_in0*e_PH_in0 - m_out0*e_PH_out0 - m_out1*e_PH_out1 + m_in1*e_PH_in1
+          = 10*1500 - 10*1400 - 8*900 + 8*1000
+          = 15000 - 14000 - 7200 + 8000 = 1800.
 
-      E_D = m_outlet[0] * (e_PH_inlet[0] - e_PH_outlet[0]) - E_L
-          = 10 * (1500 - 1400) - (-800)
-          = 10 * 100 + 800 = 1000 + 800 = 1800.
-
-    The condenser does not define E_F, E_P, or epsilon.
+      E_P = NaN, E_D = E_F = 1800.
     """
     inlet0 = {"m": 10, "e_PH": 1500, "T": 320}
     inlet1 = {"m": 8, "e_PH": 1000, "T": 330}
@@ -220,46 +216,43 @@ def valid_condenser_streams():
     return {"inlets": {0: inlet0, 1: inlet1}, "outlets": {0: outlet0, 1: outlet1}}
 
 
-def test_condenser_calc_exergy_balance_success(condenser, valid_condenser_streams):
+def test_dissipative_hex_calc_exergy_balance_success(dissipative_hex, valid_condenser_streams):
     """
-    Test that Condenser.calc_exergy_balance computes correct exergy loss and destruction.
+    Test that a dissipative HeatExchanger computes E_F/E_D correctly with no defined product.
     """
     T0 = 300  # Ambient temperature
     p0 = 101325  # Ambient pressure
-    condenser.inl = valid_condenser_streams["inlets"]
-    condenser.outl = valid_condenser_streams["outlets"]
+    dissipative_hex.inl = valid_condenser_streams["inlets"]
+    dissipative_hex.outl = valid_condenser_streams["outlets"]
 
-    condenser.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    dissipative_hex.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
-    # Expected calculations:
-    expected_E_L = 8 * (900 - 1000)  # -800
-    expected_E_D = 10 * (1500 - 1400) - expected_E_L  # 10*100 + 800 = 1000 + 800 = 1800
+    expected_E_F = 10 * 1500 - 10 * 1400 - 8 * 900 + 8 * 1000  # 1800
 
-    assert pytest.approx(expected_E_L, rel=1e-3) == condenser.E_L
-    assert pytest.approx(expected_E_D, rel=1e-3) == condenser.E_D
-    # For a condenser, E_F, E_P, and epsilon are undefined.
-    assert condenser.E_F is np.nan
-    assert condenser.E_P is np.nan
-    assert condenser.epsilon is np.nan
+    assert pytest.approx(expected_E_F, rel=1e-3) == dissipative_hex.E_F
+    assert pytest.approx(expected_E_F, rel=1e-3) == dissipative_hex.E_D
+    # A dissipative unit has no identifiable product.
+    assert np.isnan(dissipative_hex.E_P)
+    assert np.isnan(dissipative_hex.epsilon)
 
 
-def test_condenser_missing_streams(condenser):
+def test_dissipative_hex_missing_streams(dissipative_hex):
     """
     Test that calc_exergy_balance raises a ValueError when fewer than two inlets or outlets are provided.
     """
     T0 = 300
     p0 = 101325
     # Case 1: Only one inlet provided.
-    condenser.inl = {0: {"m": 10, "e_PH": 1500, "T": 320}}
-    condenser.outl = {0: {"m": 10, "e_PH": 1400, "T": 310}, 1: {"m": 8, "e_PH": 900, "T": 310}}
-    with pytest.raises(ValueError, match="Condenser requires two inlets and two outlets."):
-        condenser.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    dissipative_hex.inl = {0: {"m": 10, "e_PH": 1500, "T": 320}}
+    dissipative_hex.outl = {0: {"m": 10, "e_PH": 1400, "T": 310}, 1: {"m": 8, "e_PH": 900, "T": 310}}
+    with pytest.raises(ValueError, match="Heat exchanger requires two inlets and two outlets."):
+        dissipative_hex.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
     # Case 2: Only one outlet provided.
-    condenser.inl = {0: {"m": 10, "e_PH": 1500, "T": 320}, 1: {"m": 8, "e_PH": 1000, "T": 330}}
-    condenser.outl = {0: {"m": 10, "e_PH": 1400, "T": 310}}
-    with pytest.raises(ValueError, match="Condenser requires two inlets and two outlets."):
-        condenser.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    dissipative_hex.inl = {0: {"m": 10, "e_PH": 1500, "T": 320}, 1: {"m": 8, "e_PH": 1000, "T": 330}}
+    dissipative_hex.outl = {0: {"m": 10, "e_PH": 1400, "T": 310}}
+    with pytest.raises(ValueError, match="Heat exchanger requires two inlets and two outlets."):
+        dissipative_hex.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
 
 @pytest.fixture
@@ -533,30 +526,88 @@ def test_drum_calc_exergy_balance_success():
 
 def test_drum_invalid_inlets():
     """
-    Test that if fewer than two inlets are provided, a KeyError is raised.
-    (Because the implementation expects self.inl[1] to exist.)
+    Test that if fewer than two inlets are provided, a ValueError is raised.
     """
     drum = Drum()
     # Only one inlet provided
     drum.inl = {0: {"m": 10, "e_PH": 900}}
     # Provide two outlets
     drum.outl = {0: {"m": 1, "e_PH": 1000}, 1: {"m": 2, "e_PH": 1100}}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
 
 
 def test_drum_invalid_outlets():
     """
-    Test that if fewer than two outlets are provided, a KeyError is raised.
-    (Because the implementation expects self.outl[1] to exist.)
+    Test that if fewer than two outlets are provided, a ValueError is raised.
     """
     drum = Drum()
     # Provide two inlets
     drum.inl = {0: {"m": 10, "e_PH": 900}, 1: {"m": 5, "e_PH": 800}}
     # Only one outlet provided
     drum.outl = {0: {"m": 1, "e_PH": 1000}}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+
+def test_drum_with_blow_down():
+    """
+    Test that a third outlet, such as the blow down of an Ebsilon drum, is part of the product.
+    """
+    drum = Drum(name="TestDrum")
+    drum.inl = {0: {"m": 10, "e_PH": 900}, 1: {"m": 5, "e_PH": 800}}
+    drum.outl = {0: {"m": 1, "e_PH": 1000}, 1: {"m": 2, "e_PH": 1100}, 2: {"m": 3, "e_PH": 500}}
+
+    drum.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+    # E_P = 1*1000 + 2*1100 + 3*500 = 4700 W, E_F = 10*900 + 5*800 = 13000 W
+    assert pytest.approx(4700, rel=1e-3) == drum.E_P
+    assert pytest.approx(13000, rel=1e-3) == drum.E_F
+    assert pytest.approx(8300, rel=1e-3) == drum.E_D
+
+
+def _drum_cost_stream(name, first_column, e_T, e_M, e_CH=2.0, m=3.0):
+    """Return a connection with the cost variables the exergoeconomic matrix expects."""
+    return {
+        "name": name,
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_CH": e_CH,
+        "E_T": e_T * m,
+        "E_M": e_M * m,
+        "E_CH": e_CH * m,
+        "CostVar_index": {"T": first_column, "M": first_column + 1, "CH": first_column + 2},
+    }
+
+
+@pytest.mark.parametrize(
+    ("num_outlets", "chemical_exergy_enabled", "expected_rows"),
+    [(2, False, 3), (2, True, 5), (3, False, 5), (3, True, 8)],
+)
+def test_drum_aux_eqs_row_count(num_outlets, chemical_exergy_enabled, expected_rows):
+    """
+    Test that the drum provides one equation per cost variable of its outlets.
+
+    The cost balance of the component covers one of them, so the auxiliary equations have to
+    cover the rest. Without them the cost matrix of a drum with a blow down is singular.
+    """
+    drum = Drum(name="TestDrum")
+    drum.inl = {0: _drum_cost_stream("in0", 0, 10.0, 5.0), 1: _drum_cost_stream("in1", 3, 11.0, 5.0)}
+    drum.outl = {i: _drum_cost_stream(f"out{i}", 6 + 3 * i, 12.0 + i, 6.0 + i) for i in range(num_outlets)}
+    size = 40
+    A = np.zeros((size, size))
+    b = np.zeros(size)
+
+    A, b, counter, equations = drum.aux_eqs(A, b, 0, 298.15, {}, chemical_exergy_enabled)
+
+    assert counter == expected_rows
+    assert len(equations) == expected_rows
+    # every cost variable of every outlet is part of at least one equation
+    for outlet in drum.outl.values():
+        labels = ["T", "M", "CH"] if chemical_exergy_enabled else ["T", "M"]
+        for label in labels:
+            assert A[:counter, outlet["CostVar_index"][label]].any()
 
 
 def test_mixer_calc_exergy_balance_success():
@@ -1173,6 +1224,55 @@ def test_turbine_case3(turbine):
     assert np.isclose(turbine.epsilon, expected_epsilon, atol=1e-3)
 
 
+def test_turbine_case2_without_split(turbine):
+    """
+    Case 2 without split physical exergy: only the power output is counted as product.
+
+    Setup:
+      - Inlet: T = 310 K, m = 5, h = 400, e_PH = 1000.
+      - Outlet: T = 290 K, m = 5, h = 380, e_PH = 950.
+
+    Calculations:
+      P = (5*380 - 5*400) = -100  -> |P| = 100.
+      E_P = |P| = 100.
+      E_F = 5*1000 - 5*950 = 250.
+      E_D = 250 - 100 = 150.
+    """
+    T0 = 300
+    p0 = 101325
+    m = 5
+    turbine.inl = {0: {"T": 310, "m": m, "h": 400, "e_PH": 1000}}
+    turbine.outl = {0: {"T": 290, "m": m, "h": 380, "e_PH": 950}}
+
+    turbine.calc_exergy_balance(T0, p0, split_physical_exergy=False)
+
+    assert np.isclose(turbine.E_P, 100, atol=1e-3)
+    assert np.isclose(turbine.E_F, 250, atol=1e-3)
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
+    assert np.isclose(turbine.epsilon, 0.4, atol=1e-3)
+
+
+def test_turbine_case3_without_split(turbine):
+    """
+    Case 3 without split physical exergy: only the power output is counted as product.
+
+    Setup:
+      - Inlet: T = 290 K, m = 5, h = 400, e_PH = 1000.
+      - Outlet: T = 280 K, m = 5, h = 380, e_PH = 950.
+    """
+    T0 = 300
+    p0 = 101325
+    m = 5
+    turbine.inl = {0: {"T": 290, "m": m, "h": 400, "e_PH": 1000}}
+    turbine.outl = {0: {"T": 280, "m": m, "h": 380, "e_PH": 950}}
+
+    turbine.calc_exergy_balance(T0, p0, split_physical_exergy=False)
+
+    assert np.isclose(turbine.E_P, 100, atol=1e-3)
+    assert np.isclose(turbine.E_F, 250, atol=1e-3)
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
+
+
 def test_turbine_invalid_case(turbine):
     """
     Test an invalid case for the turbine:
@@ -1188,6 +1288,8 @@ def test_turbine_invalid_case(turbine):
 
     assert np.isnan(turbine.E_P), "E_P should be NaN for invalid case (outlet T > inlet T)."
     assert np.isnan(turbine.E_F), "E_F should be NaN for invalid case (outlet T > inlet T)."
+    # E_D still follows from the overall balance: 5*1000 - 5*950 - |P| = 250 - 100 = 150
+    assert np.isclose(turbine.E_D, 150, atol=1e-3)
 
 
 @pytest.fixture

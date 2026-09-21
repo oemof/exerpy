@@ -1,0 +1,90 @@
+v0.0.11 (17.09.2026)
+++++++++++++++++++++++
+
+New Features
+############
+- ExerPy draws its own diagrams now. ``ExergyAnalysis.plot_sankey()`` builds a Sankey diagram of
+  the exergy flows, either one link per connection or split into physical and chemical, or into
+  thermal, mechanical and chemical exergy. Components can be grouped, pass-through components
+  collapsed and nodes colored individually, and the diagram is exported as an HTML file.
+  ``plot_exergy_waterfall()`` and ``plot_exergy_waterfall_plotly()`` draw the exergy balance of
+  the system as a waterfall chart. The plotting libraries are optional: install them with
+  ``pip install exerpy[viz]``. See the examples in ``examples/visualization`` (closes #25).
+  Thanks to Jonas Freißmann (`@jfreissmann <https://github.com/jfreissmann>`__) for testing the
+  diagrams on his heat pump models.
+- A flow with a negative exergy is drawn against its declared direction in the Sankey diagram,
+  in a pale version of its color and marked as reversed: below the ambient temperature the
+  exergy of a stream travels the other way. Such a flow at the system boundary is dropped
+  instead and reported in a warning, because a negative exergy there means the stream does not
+  fit the reference environment.
+- The Ebsilon parser now supports the heating surfaces of steam generators. A flue gas
+  zone (component 88) and its main heating surface (component 89) model the two sides of
+  one and the same heat exchanger and are merged into a single ``HeatExchanger`` named
+  ``<main surface>_<flue gas zone>``, with the flue gas as hot and the water/steam side as
+  cold stream. Auxiliary heating surfaces (component 91) are analysed as
+  ``SimpleHeatExchanger``.
+- The Ebsilon steam drum (component 20) is mapped to the ``Drum`` component, including its
+  blow down outlet. ``Drum`` now sums all of its inlets and outlets, so a blow down is part
+  of the exergy balance instead of being ignored, and it raises a ``ValueError`` (instead of
+  a ``KeyError``) when fewer than two inlets or outlets are connected. Its auxiliary cost
+  equations follow the number of outlets as well, so a drum with a blow down no longer leaves
+  the exergoeconomic cost matrix underdetermined.
+- Ebsilon profiles (operating points such as part load cases) can now be selected from
+  Python. ``get_ebsilon_profiles()`` lists the profiles of a model, and ``profile`` (name or
+  id) of ``ExergyAnalysis.from_ebsilon()`` and ``run_ebsilon()`` picks the one to simulate
+  and analyse.
+- ``ExergyAnalysis.from_ebsilon()`` now passes ``Tamb`` and ``pamb`` on to the parser.
+  Values given in Python take precedence over the reference state of the model and are
+  used for the specific exergies of the connections as well, so a model without a
+  reference state can be analysed without editing it in Ebsilon.
+
+- A ``Turbine`` that expands below the ambient temperature is now analysed without split
+  physical exergy as well. Instead of returning ``NaN``, the balance falls back to
+  :math:`\dot{E}_\mathrm{P} = |P|` and
+  :math:`\dot{E}_\mathrm{F} = \dot{E}^\mathrm{PH}_\mathrm{in} - \sum \dot{E}^\mathrm{PH}_\mathrm{out}`,
+  which leaves the cold exergy of the outlet in the stream instead of crediting it to the
+  product. A warning points to the split physical exergy for the resolved definition.
+
+Bug Fixes
+#########
+- Values that round to zero are no longer printed as ``-0.000`` in the result tables.
+- The exergy destruction of a ``Turbine`` in a case without a defined product was never
+  computed from the overall balance, because the fallback tested ``np.nan == E_F``, which is
+  always ``False``.
+- The Ebsilon parser no longer takes the reference state from an arbitrary measuring
+  point (component 46). Measuring points without a value in MEASM are ignored instead of
+  overwriting a valid reference state, several measuring points of the same type are
+  accepted as long as they agree, and conflicting ones raise an error naming each of them.
+  If the reference temperature (FTYP = 26) or the reference pressure (FTYP = 13) is
+  missing, the error message says which one and where it is expected.
+- The check for system boundary streams that are part of neither ``E_F``, ``E_P`` nor ``E_L``
+  now also recognises a boundary that is named, e.g. the "ambient air" source or the "chimney"
+  sink of a TESPy or Aspen model. It used to look for a missing connection end only, so the
+  hint was given for Ebsilon models and stayed silent for the other two. When the exergy
+  destruction of the components does not add up to the exergy destruction of the system, the
+  warning now names the boundary streams that are missing from the definitions, which is the
+  usual cause. The balances themselves were correct; only the hint that explains a mismatch
+  was missing (closes #36).
+- The example scripts of the TESPy models provide starting values again, so the combined cycle
+  power plant converges independently of the platform and the versions of the libraries.
+- ``CoolProp`` is declared as a dependency. It is imported by ``exerpy.functions`` and was
+  installed only as a dependency of TESPy so far, so ``pip install exerpy`` alone produced an
+  ``ImportError``. The TESPy extra requires version 0.11 now, which the examples rely on.
+
+Testing
+#######
+- The exergy balance of every example is verified: the exergy destruction of the system has to
+  equal the sum of the exergy destruction of its components, for each example and each
+  simulator. A deviation fails the test suite, so a release cannot go out with a balance that
+  does not close.
+- The cross-simulator validation of the examples runs again. It silently collected no test
+  cases since the examples moved into sub directories, and it compared models of different
+  plants with each other.
+- The test suite selects the non-interactive matplotlib backend, so the plotting tests no
+  longer depend on a working Tk installation of the machine they run on.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)
+- Akash Goel (`@goelakash <https://github.com/goelakash>`__)

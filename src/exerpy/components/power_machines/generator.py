@@ -92,7 +92,7 @@ class Generator(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """
         Auxiliary equations for the generator.
 
@@ -117,6 +117,10 @@ class Generator(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -132,7 +136,7 @@ class Generator(Component):
 
         return [A, b, counter, equations]
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the generator (power-producing component).
 
@@ -187,6 +191,10 @@ class Generator(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------

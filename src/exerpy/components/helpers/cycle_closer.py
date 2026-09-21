@@ -28,7 +28,7 @@ class CycleCloser(Component):
         # Log the results
         logger.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """
         Auxiliary equations for the cycle closer.
 
@@ -56,6 +56,10 @@ class CycleCloser(Component):
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
             This flag is ignored for CycleCloser.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -68,29 +72,21 @@ class CycleCloser(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        # Mechanical cost equality equation:
-        A[counter, self.inl[0]["CostVar_index"]["M"]] = (1 / self.inl[0]["e_M"]) if self.inl[0]["e_M"] != 0 else 1
-        A[counter, self.outl[0]["CostVar_index"]["M"]] = (-1 / self.outl[0]["e_M"]) if self.outl[0]["e_M"] != 0 else -1
-        equations[counter] = {
-            "kind": "aux_equality",
-            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-            "property": "c_M",
-        }
-        b[counter] = 0
-
-        # Thermal cost equality equation:
-        A[counter + 1, self.inl[0]["CostVar_index"]["T"]] = (1 / self.inl[0]["e_T"]) if self.inl[0]["e_T"] != 0 else 1
-        A[counter + 1, self.outl[0]["CostVar_index"]["T"]] = (
-            (-1 / self.outl[0]["e_T"]) if self.outl[0]["e_T"] != 0 else -1
-        )
-        equations[counter + 1] = {
-            "kind": "aux_equality",
-            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-            "property": "c_T",
-        }
-        b[counter + 1] = 0
-
-        counter += 2
+        # Cost equality equations of the physical exergy:
+        for label in ["M", "T"] if split_physical_exergy else ["PH"]:
+            A[counter, self.inl[0]["CostVar_index"][label]] = (
+                (1 / self.inl[0][f"e_{label}"]) if self.inl[0][f"e_{label}"] != 0 else 1
+            )
+            A[counter, self.outl[0]["CostVar_index"][label]] = (
+                (-1 / self.outl[0][f"e_{label}"]) if self.outl[0][f"e_{label}"] != 0 else -1
+            )
+            equations[counter] = {
+                "kind": "aux_equality",
+                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                "property": f"c_{label}",
+            }
+            b[counter] = 0
+            counter += 1
 
         if chemical_exergy_enabled:
             # Chemical cost equality equation:
@@ -111,7 +107,7 @@ class CycleCloser(Component):
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False) -> None:
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True) -> None:
         """
         Exergoeconomic balance for the CycleCloser is not defined.
 
@@ -123,6 +119,10 @@ class CycleCloser(Component):
             Ambient temperature (unused).
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         """
         self.C_F = np.nan
         self.C_P = np.nan

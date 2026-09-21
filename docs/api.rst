@@ -281,9 +281,14 @@ to determine cost rates and specific costs for every connection and component.
 
 .. note::
 
-    Exergoeconomic analysis requires the exergy analysis to be performed with
-    :code:`split_physical_exergy=True`, which separates thermal and mechanical exergy components.
-    This is currently not available for Aspen Plus models.
+    With :code:`split_physical_exergy=True` a material stream carries a cost rate for its thermal
+    (:code:`C^T`) and one for its mechanical exergy (:code:`C^M`). With :code:`False` it carries a
+    single cost rate for its physical exergy (:code:`C^PH`) instead, which is what Aspen Plus models
+    have to use. The split resolves the fuel and the product of a component more finely, so the two
+    do not give the same specific costs. Below the ambient temperature the split is needed to charge
+    the cold exergy of a stream to the product of the component producing it; without it such a
+    component either keeps the cold exergy in its outlet stream or turns dissipative, and a warning
+    says so.
 
 ======
 Inputs
@@ -291,8 +296,8 @@ Inputs
 
 The exergoeconomic analysis requires the following inputs:
 
-- **Completed ExergyAnalysis**: An :code:`ExergyAnalysis` instance with :code:`split_physical_exergy=True`
-  on which :code:`analyse()` has already been called.
+- **Completed ExergyAnalysis**: An :code:`ExergyAnalysis` instance on which :code:`analyse()` has
+  already been called.
 
 - **Cost dictionary**: A dictionary containing:
 

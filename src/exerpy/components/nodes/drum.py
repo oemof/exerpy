@@ -100,7 +100,7 @@ class Drum(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""
         Auxiliary equations for the drum.
 
@@ -142,6 +142,15 @@ class Drum(Component):
         rows are added here. A drum with a blow down therefore needs one thermal and one
         mechanical equation (and one chemical equation) more than a drum without.
 
+        Without split physical exergy an outlet holds a single physical cost variable, so the
+        thermal and mechanical rules are replaced by one rule on the physical exergy and the
+        coupling equation is dropped:
+
+        .. math::
+
+            n_\mathrm{aux} = N - 1 \quad\text{and, with chemical exergy,}\quad
+            n_\mathrm{aux} = 2\,N - 1
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -156,6 +165,10 @@ class Drum(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         Returns
         -------
         A : numpy.ndarray
@@ -189,60 +202,46 @@ class Drum(Component):
                 }
                 row += 1
 
-        # --- Thermal cost auxiliary equations: all outlets share the specific thermal cost ---
-        for outlet in outlets[1:]:
-            if (outlets[0]["e_T"] != 0) and (outlet["e_T"] != 0):
-                A[row, outlets[0]["CostVar_index"]["T"]] = 1 / outlets[0]["E_T"]
-                A[row, outlet["CostVar_index"]["T"]] = -1 / outlet["E_T"]
-            elif outlets[0]["e_T"] == 0 and outlet["e_T"] != 0:
-                A[row, outlets[0]["CostVar_index"]["T"]] = 1
-            elif outlets[0]["e_T"] != 0 and outlet["e_T"] == 0:
-                A[row, outlet["CostVar_index"]["T"]] = -1
-            else:
-                A[row, outlets[0]["CostVar_index"]["T"]] = 1
-                A[row, outlet["CostVar_index"]["T"]] = -1
-            equations[row] = {
-                "kind": "aux_p_rule",
-                "objects": [self.name, outlets[0]["name"], outlet["name"]],
-                "property": "c_T",
-            }
-            row += 1
-
-        # --- Mechanical cost auxiliary equations: all outlets share the specific mechanical cost ---
-        for outlet in outlets[1:]:
-            if outlets[0]["e_M"] != 0:
-                A[row, outlets[0]["CostVar_index"]["M"]] = 1 / outlets[0]["E_M"]
-            else:
-                A[row, outlets[0]["CostVar_index"]["M"]] = 1
-            if outlet["e_M"] != 0:
-                A[row, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"]
-            else:
-                A[row, outlet["CostVar_index"]["M"]] = -1
-            equations[row] = {
-                "kind": "aux_p_rule",
-                "objects": [self.name, outlets[0]["name"], outlet["name"]],
-                "property": "c_M",
-            }
-            row += 1
+        # --- Physical cost auxiliary equations: all outlets share the same specific costs ---
+        for label in ["T", "M"] if split_physical_exergy else ["PH"]:
+            for outlet in outlets[1:]:
+                if (outlets[0][f"e_{label}"] != 0) and (outlet[f"e_{label}"] != 0):
+                    A[row, outlets[0]["CostVar_index"][label]] = 1 / outlets[0][f"E_{label}"]
+                    A[row, outlet["CostVar_index"][label]] = -1 / outlet[f"E_{label}"]
+                elif outlets[0][f"e_{label}"] == 0 and outlet[f"e_{label}"] != 0:
+                    A[row, outlets[0]["CostVar_index"][label]] = 1
+                elif outlets[0][f"e_{label}"] != 0 and outlet[f"e_{label}"] == 0:
+                    A[row, outlet["CostVar_index"][label]] = -1
+                else:
+                    A[row, outlets[0]["CostVar_index"][label]] = 1
+                    A[row, outlet["CostVar_index"][label]] = -1
+                equations[row] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, outlets[0]["name"], outlet["name"]],
+                    "property": f"c_{label}",
+                }
+                row += 1
 
         # --- Thermal-Mechanical coupling equation for outlet 0 ---
         # This enforces that the thermal and mechanical cost components at outlet 0 are consistent.
-        if (outlets[0]["e_T"] != 0) and (outlets[0]["e_M"] != 0):
-            A[row, outlets[0]["CostVar_index"]["T"]] = 1 / outlets[0]["E_T"]
-            A[row, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
-        elif (outlets[0]["e_T"] == 0) and (outlets[0]["e_M"] == 0):
-            A[row, outlets[0]["CostVar_index"]["T"]] = 1
-            A[row, outlets[0]["CostVar_index"]["M"]] = -1
-        elif outlets[0]["e_T"] == 0:
-            A[row, outlets[0]["CostVar_index"]["T"]] = 1
-        else:
-            A[row, outlets[0]["CostVar_index"]["M"]] = -1
-        equations[row] = {
-            "kind": "aux_equality",
-            "objects": [self.name, outlets[0]["name"]],
-            "property": "c_T, c_M",
-        }
-        row += 1
+        # Without the split there is a single physical cost variable, so no coupling is needed.
+        if split_physical_exergy:
+            if (outlets[0]["e_T"] != 0) and (outlets[0]["e_M"] != 0):
+                A[row, outlets[0]["CostVar_index"]["T"]] = 1 / outlets[0]["E_T"]
+                A[row, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
+            elif (outlets[0]["e_T"] == 0) and (outlets[0]["e_M"] == 0):
+                A[row, outlets[0]["CostVar_index"]["T"]] = 1
+                A[row, outlets[0]["CostVar_index"]["M"]] = -1
+            elif outlets[0]["e_T"] == 0:
+                A[row, outlets[0]["CostVar_index"]["T"]] = 1
+            else:
+                A[row, outlets[0]["CostVar_index"]["M"]] = -1
+            equations[row] = {
+                "kind": "aux_equality",
+                "objects": [self.name, outlets[0]["name"]],
+                "property": "c_T, c_M",
+            }
+            row += 1
 
         # Set the right-hand side entries to zero for all added rows.
         for i in range(counter, row):

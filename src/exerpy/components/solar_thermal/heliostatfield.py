@@ -179,10 +179,10 @@ class Heliostatfield(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""Exergoeconomic auxiliary equations are not yet implemented for this component."""
         raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the Heliostatfield component.")
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""Exergoeconomic balance is not yet implemented for this component."""
         raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the Heliostatfield component.")

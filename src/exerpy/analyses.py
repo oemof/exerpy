@@ -1317,17 +1317,16 @@ class ExergoeconomicAnalysis:
         This class inherits all exergy analysis results from the provided instance
         and prepares data structures for economic equations and cost variables.
         """
-        if not exergy_analysis_instance.split_physical_exergy:
-            raise ValueError(
-                "ExergoeconomicAnalysis requires split_physical_exergy=True. "
-                "The exergoeconomic cost allocation uses separate thermal (C_T) and mechanical (C_M) "
-                "cost variables for material streams. Please re-run the exergy analysis with "
-                "split_physical_exergy=True."
-            )
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
         self.chemical_exergy_enabled = exergy_analysis_instance.chemical_exergy_enabled
+        self.split_physical_exergy = exergy_analysis_instance.split_physical_exergy
+        if not self.split_physical_exergy:
+            logger.info(
+                "The physical exergy is not split, so the cost of a material stream is allocated to its "
+                "physical exergy (C_PH) instead of a thermal (C_T) and a mechanical (C_M) share."
+            )
         self.E_F_dict = exergy_analysis_instance.E_F_dict
         self.E_P_dict = exergy_analysis_instance.E_P_dict
         self.E_L_dict = exergy_analysis_instance.E_L_dict
@@ -1337,6 +1336,24 @@ class ExergoeconomicAnalysis:
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
         self.currency = currency  # EUR is default currency for cost calculations
+
+    @property
+    def cost_labels(self) -> tuple[str, ...]:
+        """
+        Cost variables of a material stream.
+
+        With split physical exergy a stream carries a thermal and a mechanical cost, without it a
+        single cost of its physical exergy. The chemical cost is added when chemical exergy is
+        enabled. Every part of the analysis derives the number of cost variables of a stream from
+        this, so that the matrix stays square: the components have to provide one auxiliary
+        equation per cost variable of their outlets, except for the one covered by their cost
+        balance.
+        """
+        labels = ("T", "M") if self.split_physical_exergy else ("PH",)
+        return (*labels, "CH") if self.chemical_exergy_enabled else labels
+
+    # Specific exergy of a stream belonging to each cost variable
+    _EXERGY_OF_LABEL = {"T": "e_T", "M": "e_M", "PH": "e_PH", "CH": "e_CH"}
 
     def initialize_cost_variables(self):
         """
@@ -1371,17 +1388,11 @@ class ExergoeconomicAnalysis:
                 kind = conn.get("kind", "material")
                 # For material streams, assign indices based on the flag.
                 if kind == "material":
-                    if self.exergy_analysis.chemical_exergy_enabled:
-                        conn["CostVar_index"] = {"T": col_number, "M": col_number + 1, "CH": col_number + 2}
-                        self.variables[str(col_number)] = f"C_{name}_T"
-                        self.variables[str(col_number + 1)] = f"C_{name}_M"
-                        self.variables[str(col_number + 2)] = f"C_{name}_CH"
-                        col_number += 3
-                    else:
-                        conn["CostVar_index"] = {"T": col_number, "M": col_number + 1}
-                        self.variables[str(col_number)] = f"C_{name}_T"
-                        self.variables[str(col_number + 1)] = f"C_{name}_M"
-                        col_number += 2
+                    conn["CostVar_index"] = {}
+                    for label in self.cost_labels:
+                        conn["CostVar_index"][label] = col_number
+                        self.variables[str(col_number)] = f"C_{name}_{label}"
+                        col_number += 1
                     # Check if this connection's target is a dissipative component.
                     target = conn.get("target_component")
                     if target in valid_components:
@@ -1476,13 +1487,9 @@ class ExergoeconomicAnalysis:
                     conn["C_TOT"] = c_TOT * conn.get("E", 0)
 
                     # Assign cost breakdown for material streams.
-                    if self.chemical_exergy_enabled:
-                        exergy_terms = {"T": "e_T", "M": "e_M", "CH": "e_CH"}
-                    else:
-                        exergy_terms = {"T": "e_T", "M": "e_M"}
-                    for label, exergy_key in exergy_terms.items():
+                    for label in self.cost_labels:
                         conn[f"c_{label}"] = c_TOT
-                        conn[f"C_{label}"] = c_TOT * conn.get(exergy_key, 0) * conn.get("m", 0)
+                        conn[f"C_{label}"] = c_TOT * conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
 
                 elif kind in {"heat", "power"}:
                     # Ensure energy flow "E" is present before computing cost.
@@ -1562,8 +1569,7 @@ class ExergoeconomicAnalysis:
             ):
                 kind = conn.get("kind", "material")
                 if kind == "material":
-                    exergy_terms = ["T", "M", "CH"] if self.chemical_exergy_enabled else ["T", "M"]
-                    for label in exergy_terms:
+                    for label in self.cost_labels:
                         idx = conn["CostVar_index"][label]
                         self._A[counter, idx] = 1  # Fix the cost variable.
                         self._b[counter] = conn.get(f"C_{label}", conn.get("C_TOT", 0))
@@ -1634,7 +1640,13 @@ class ExergoeconomicAnalysis:
                     # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                     # and return the updated (A, b, counter).
                     self._A, self._b, counter, self.equations = comp.aux_eqs(
-                        self._A, self._b, counter, self.Tamb, self.equations, self.chemical_exergy_enabled
+                        self._A,
+                        self._b,
+                        counter,
+                        self.Tamb,
+                        self.equations,
+                        self.chemical_exergy_enabled,
+                        self.split_physical_exergy,
                     )
                 else:
                     # If no auxiliary equations are provided.
@@ -1655,6 +1667,7 @@ class ExergoeconomicAnalysis:
                     self.equations,
                     self.chemical_exergy_enabled,
                     list(self.components.values()),
+                    self.split_physical_exergy,
                 )
 
     def solve_exergoeconomic_analysis(self, allow_singular=False):
@@ -1734,34 +1747,26 @@ class ExergoeconomicAnalysis:
             else:
                 kind = conn.get("kind")
                 if kind == "material":
-                    # Retrieve mass flow and specific exergy values
                     m_val = conn.get("m", 1)  # mass flow [kg/s]
-                    e_T = conn.get("e_T", 0)  # thermal specific exergy [kJ/kg]
-                    e_M = conn.get("e_M", 0)  # mechanical specific exergy [kJ/kg]
-                    E_T = m_val * e_T  # thermal exergy flow [kW]
-                    E_M = m_val * e_M  # mechanical exergy flow [kW]
 
-                    conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
-                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else 0.0
+                    # One cost variable per label, each divided by the exergy flow it belongs to
+                    for label in self.cost_labels:
+                        E_label = m_val * conn.get(self._EXERGY_OF_LABEL[label], 0)
+                        conn[f"C_{label}"] = C_solution[conn["CostVar_index"][label]]
+                        conn[f"c_{label}"] = conn[f"C_{label}"] / E_label if E_label != 0 else 0.0
 
-                    conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
-                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else 0.0
+                    # The cost of the physical exergy is the sum of its shares when they are split
+                    if self.split_physical_exergy:
+                        E_PH = m_val * (conn.get("e_T", 0) + conn.get("e_M", 0))
+                        conn["C_PH"] = conn["C_T"] + conn["C_M"]
+                        conn["c_PH"] = conn["C_PH"] / E_PH if E_PH != 0 else 0.0
 
-                    conn["C_PH"] = conn["C_T"] + conn["C_M"]
-                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else 0.0
-
-                    if self.chemical_exergy_enabled:
-                        e_CH = conn.get("e_CH", 0)  # chemical specific exergy [kJ/kg]
-                        E_CH = m_val * e_CH  # chemical exergy flow [kW]
-                        conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
-                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else 0.0
-                        conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
-                        total_E = E_T + E_M + E_CH
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
-                    else:
-                        conn["C_TOT"] = conn["C_T"] + conn["C_M"]
-                        total_E = E_T + E_M
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
+                    conn["C_TOT"] = conn["C_PH"] + (conn["C_CH"] if self.chemical_exergy_enabled else 0.0)
+                    total_E = m_val * (
+                        conn.get("e_PH", conn.get("e_T", 0) + conn.get("e_M", 0))
+                        + (conn.get("e_CH", 0) if self.chemical_exergy_enabled else 0.0)
+                    )
+                    conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
@@ -1769,7 +1774,9 @@ class ExergoeconomicAnalysis:
         # Step 5: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
-                comp.exergoeconomic_balance(self.exergy_analysis.Tamb, self.chemical_exergy_enabled)
+                comp.exergoeconomic_balance(
+                    self.exergy_analysis.Tamb, self.chemical_exergy_enabled, self.split_physical_exergy
+                )
 
         # Check cost balances before loss attribution (Step 6) modifies C_TOT values
         self.check_cost_balance()
@@ -1915,7 +1922,8 @@ class ExergoeconomicAnalysis:
                 # modified by loss attribution (Step 6) which is not part of the matrix equation.
                 kind = conn.get("kind", "material")
                 if kind == "material":
-                    cost = (conn.get("C_T", 0) or 0) + (conn.get("C_M", 0) or 0)
+                    # C_PH is the cost of the physical exergy, whether or not it is split
+                    cost = conn.get("C_PH", 0) or 0
                     if self.chemical_exergy_enabled:
                         cost += conn.get("C_CH", 0) or 0
                 else:
@@ -2227,16 +2235,9 @@ class ExergoeconomicAnalysis:
         # -------------------------
         # Add cost columns to material connections.
         # -------------------------
-        # Uppercase cost columns (in currency/h)
-        C_T_list = []
-        C_M_list = []
-        C_CH_list = []
-        C_TOT_list = []
-        # Lowercase cost columns (in {currency}/GJ_ex)
-        c_T_list = []
-        c_M_list = []
-        c_CH_list = []
-        c_TOT_list = []
+        # One column pair per cost variable of a material stream, plus the total.
+        labels = (*self.cost_labels, "TOT")
+        columns = {label: [] for label in labels}
 
         # Create set of valid component names
         valid_components = {comp.name for comp in self.components.values()}
@@ -2250,61 +2251,30 @@ class ExergoeconomicAnalysis:
                 conn_data.get("source_component") in valid_components
                 or conn_data.get("target_component") in valid_components
             )
-            if not is_part_of_the_system:
-                # Skip this connection
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                # ... append nan for all other lists
-                continue
-
             kind = conn_data.get("kind", None)
-            if kind == "material":
-                C_T = conn_data.get("C_T", None)
-                C_M = conn_data.get("C_M", None)
-                C_CH = conn_data.get("C_CH", None)
-                C_TOT = conn_data.get("C_TOT", None)
-                c_T = conn_data.get("c_T", None)
-                c_M = conn_data.get("c_M", None)
-                c_CH = conn_data.get("c_CH", None)
-                c_TOT = conn_data.get("c_TOT", None)
-                C_T_list.append(C_T * 3600 if C_T is not None else None)
-                C_M_list.append(C_M * 3600 if C_M is not None else None)
-                C_CH_list.append(C_CH * 3600 if C_CH is not None else None)
-                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
-                c_T_list.append(c_T * 1e9 if c_T is not None else None)
-                c_M_list.append(c_M * 1e9 if c_M is not None else None)
-                c_CH_list.append(c_CH * 1e9 if c_CH is not None else None)
-                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
-            elif kind in {"heat", "power"}:
-                # For non-material streams in the material table, only C^TOT is defined.
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                C_CH_list.append(np.nan)
-                c_T_list.append(np.nan)
-                c_M_list.append(np.nan)
-                c_CH_list.append(np.nan)
-                C_TOT = conn_data.get("C_TOT", None)
-                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
-                c_TOT = conn_data.get("C_TOT", None)
-                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
-            else:
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                C_CH_list.append(np.nan)
-                C_TOT_list.append(np.nan)
-                c_T_list.append(np.nan)
-                c_M_list.append(np.nan)
-                c_CH_list.append(np.nan)
-                c_TOT_list.append(np.nan)
+            for label in labels:
+                # Of a heat or power stream only the total cost is defined.
+                if (
+                    not is_part_of_the_system
+                    or kind not in {"material", "heat", "power"}
+                    or (kind != "material" and label != "TOT")
+                ):
+                    value = None
+                else:
+                    value = conn_data.get(f"C_{label}", None), conn_data.get(f"c_{label}", None)
+                columns[label].append(
+                    (np.nan, np.nan)
+                    if value is None
+                    else (
+                        value[0] * 3600 if value[0] is not None else None,
+                        value[1] * 1e9 if value[1] is not None else None,
+                    )
+                )
 
-        df_mat[f"C^T [{self.currency}/h]"] = C_T_list
-        df_mat[f"C^M [{self.currency}/h]"] = C_M_list
-        df_mat[f"C^CH [{self.currency}/h]"] = C_CH_list
-        df_mat[f"C^TOT [{self.currency}/h]"] = C_TOT_list
-        df_mat[f"c^T [{self.currency}/GJ_ex]"] = c_T_list
-        df_mat[f"c^M [{self.currency}/GJ_ex]"] = c_M_list
-        df_mat[f"c^CH [{self.currency}/GJ_ex]"] = c_CH_list
-        df_mat[f"c^TOT [{self.currency}/GJ_ex]"] = c_TOT_list
+        for label in labels:
+            df_mat[f"C^{label} [{self.currency}/h]"] = [value[0] for value in columns[label]]
+        for label in labels:
+            df_mat[f"c^{label} [{self.currency}/GJ_ex]"] = [value[1] for value in columns[label]]
 
         # -------------------------
         # Add cost columns to non-material connections.
@@ -2348,14 +2318,8 @@ class ExergoeconomicAnalysis:
             "e^T [kJ/kg]",
             "e^M [kJ/kg]",
             "e^CH [kJ/kg]",
-            f"C^T [{self.currency}/h]",
-            f"C^M [{self.currency}/h]",
-            f"C^CH [{self.currency}/h]",
-            f"C^TOT [{self.currency}/h]",
-            f"c^T [{self.currency}/GJ_ex]",
-            f"c^M [{self.currency}/GJ_ex]",
-            f"c^CH [{self.currency}/GJ_ex]",
-            f"c^TOT [{self.currency}/GJ_ex]",
+            *[f"C^{label} [{self.currency}/h]" for label in labels],
+            *[f"c^{label} [{self.currency}/GJ_ex]" for label in labels],
         ]
         df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 

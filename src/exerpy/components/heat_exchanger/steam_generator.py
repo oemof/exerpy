@@ -182,7 +182,7 @@ class SteamGenerator(Component):
             f"E_D = {self.E_D:.2f} W, Efficiency = {self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""
         This function must be implemented in the future.
 
@@ -224,6 +224,10 @@ class SteamGenerator(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -237,7 +241,7 @@ class SteamGenerator(Component):
             Updated dictionary with equation labels.
         """
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         This function must be implemented in the future.
 
@@ -264,6 +268,10 @@ class SteamGenerator(Component):
             Ambient temperature
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Notes
         -----

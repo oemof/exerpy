@@ -132,7 +132,7 @@ class CombustionChamber(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""
         Add auxiliary cost equations for the combustion chamber.
 
@@ -172,6 +172,10 @@ class CombustionChamber(Component):
             Structure for equation labels.
         chemical_exergy_enabled : bool
             Must be True to include chemical exergy mixing.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -201,37 +205,42 @@ class CombustionChamber(Component):
         outlets = list(self.outl.values())
 
         # --- Mechanical cost auxiliary equation ---
-        if outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0:
-            A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
-            A[counter, inlets[0]["CostVar_index"]["M"]] = (
-                (1 / inlets[0]["E_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            )
-            A[counter, inlets[1]["CostVar_index"]["M"]] = (
-                (1 / inlets[1]["E_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
-            )
-        else:  # pressure can only decrease in the combustion chamber (case with p_inlet = p0 and p_outlet < p0 NOT considered)
-            A[counter, outlets[0]["CostVar_index"]["M"]] = 1
-        equations[counter] = f"aux_mixing_mech_{self.outl[0]['name']}"
-        equations[counter] = {
-            "kind": "aux_mixing",
-            "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
-            "property": "c_M",
-        }
+        # Without the split the cost balance alone determines the cost of the physical exergy of the
+        # outlet, so only the chemical mixing rule is needed.
+        mech_row = 1 if split_physical_exergy else 0
+        if split_physical_exergy:
+            if outlets[0]["e_M"] != 0 and inlets[0]["e_M"] != 0 and inlets[1]["e_M"] != 0:
+                A[counter, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
+                A[counter, inlets[0]["CostVar_index"]["M"]] = (
+                    (1 / inlets[0]["E_M"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+                )
+                A[counter, inlets[1]["CostVar_index"]["M"]] = (
+                    (1 / inlets[1]["E_M"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
+                )
+            else:
+                # pressure can only decrease in the combustion chamber
+                # (case with p_inlet = p0 and p_outlet < p0 NOT considered)
+                A[counter, outlets[0]["CostVar_index"]["M"]] = 1
+            equations[counter] = {
+                "kind": "aux_mixing",
+                "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
+                "property": "c_M",
+            }
 
         # --- Chemical cost auxiliary equation ---
         if outlets[0]["e_CH"] != 0 and inlets[0]["e_CH"] != 0 and inlets[1]["e_CH"] != 0:
-            A[counter + 1, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["E_CH"]
-            A[counter + 1, inlets[0]["CostVar_index"]["CH"]] = (
+            A[counter + mech_row, outlets[0]["CostVar_index"]["CH"]] = -1 / outlets[0]["E_CH"]
+            A[counter + mech_row, inlets[0]["CostVar_index"]["CH"]] = (
                 (1 / inlets[0]["E_CH"]) * inlets[0]["m"] / (inlets[0]["m"] + inlets[1]["m"])
             )
-            A[counter + 1, inlets[1]["CostVar_index"]["CH"]] = (
+            A[counter + mech_row, inlets[1]["CostVar_index"]["CH"]] = (
                 (1 / inlets[1]["E_CH"]) * inlets[1]["m"] / (inlets[0]["m"] + inlets[1]["m"])
             )
         elif inlets[0]["e_CH"] == 0:
-            A[counter + 1, inlets[0]["CostVar_index"]["CH"]] = 1
+            A[counter + mech_row, inlets[0]["CostVar_index"]["CH"]] = 1
         elif inlets[1]["e_CH"] == 0:
-            A[counter + 1, inlets[1]["CostVar_index"]["CH"]] = 1
-        equations[counter + 1] = {
+            A[counter + mech_row, inlets[1]["CostVar_index"]["CH"]] = 1
+        equations[counter + mech_row] = {
             "kind": "aux_mixing",
             "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
             "property": "c_CH",
@@ -239,11 +248,11 @@ class CombustionChamber(Component):
 
         # Set the right-hand side entries to zero.
         b[counter] = 0
-        b[counter + 1] = 0
+        b[counter + mech_row] = 0
 
-        return [A, b, counter + 2, equations]
+        return [A, b, counter + mech_row + 1, equations]
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the combustion chamber.
 
@@ -274,16 +283,25 @@ class CombustionChamber(Component):
             Ambient temperature (K).
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         """
-        self.C_P = self.outl[0]["C_T"] - (self.inl[0]["C_T"] + self.inl[1]["C_T"])
-        self.C_F = (
-            self.inl[0]["C_CH"]
-            + self.inl[1]["C_CH"]
-            - self.outl[0]["C_CH"]
-            + self.inl[0]["C_M"]
-            + self.inl[1]["C_M"]
-            - self.outl[0]["C_M"]
-        )
+        if split_physical_exergy:
+            self.C_P = self.outl[0]["C_T"] - (self.inl[0]["C_T"] + self.inl[1]["C_T"])
+            self.C_F = (
+                self.inl[0]["C_CH"]
+                + self.inl[1]["C_CH"]
+                - self.outl[0]["C_CH"]
+                + self.inl[0]["C_M"]
+                + self.inl[1]["C_M"]
+                - self.outl[0]["C_M"]
+            )
+        else:
+            # Without the split the product is the rise of the physical exergy, as in the exergy balance.
+            self.C_P = sum(out["C_PH"] for out in self.outl.values()) - sum(i["C_PH"] for i in self.inl.values())
+            self.C_F = sum(i["C_CH"] for i in self.inl.values()) - sum(out["C_CH"] for out in self.outl.values())
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P
         self.C_D = self.c_F * self.E_D

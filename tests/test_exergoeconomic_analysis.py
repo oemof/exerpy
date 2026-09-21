@@ -38,7 +38,7 @@ class MockExergoTurbine(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """F-principle: c_T_in = c_T_out, c_M_in = c_M_out."""
         inlet = self.inl[0]
         outlet = self.outl[0]
@@ -59,7 +59,7 @@ class MockExergoTurbine(Component):
             counter += 2
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         """Case 1: T_in, T_out >= T0. Product = power, Fuel = PH_in - PH_out."""
         C_power_out = sum(s.get("C_TOT", 0) for s in self.outl.values() if s.get("kind") == "power")
         material_outlets = [o for o in self.outl.values() if o.get("kind") == "material"]
@@ -95,7 +95,7 @@ class MockExergoCompressor(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """P-principle for Case 1: (c_T_out - c_T_in)/dET = (c_M_out - c_M_in)/dEM."""
         inlet = self.inl[0]
         outlet = self.outl[0]
@@ -111,7 +111,7 @@ class MockExergoCompressor(Component):
         counter += 1
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         """Case 1: T_in, T_out >= T0. Product = PH_out - PH_in, Fuel = power."""
         power_cost = 0
         for stream in self.inl.values():
@@ -270,8 +270,8 @@ def valid_costs():
 
 
 class TestInit:
-    def test_init_requires_split_physical_exergy(self, mock_exergoecon_component_data, mock_exergoecon_connection_data):
-        """ValueError when split_physical_exergy=False."""
+    def test_init_without_split_physical_exergy(self, mock_exergoecon_component_data, mock_exergoecon_connection_data):
+        """A material stream carries a single physical cost variable when the split is off."""
         ea = ExergyAnalysis(
             mock_exergoecon_component_data,
             mock_exergoecon_connection_data,
@@ -280,8 +280,9 @@ class TestInit:
             split_physical_exergy=False,
         )
         ea.analyse({"inputs": ["1", "P_in"]}, {"inputs": ["P_out", "3"]})
-        with pytest.raises(ValueError, match="split_physical_exergy=True"):
-            ExergoeconomicAnalysis(ea)
+        eco = ExergoeconomicAnalysis(ea)
+        assert eco.split_physical_exergy is False
+        assert eco.cost_labels == ("PH",)
 
     def test_init_succeeds_with_split_true(self, exergoecon, analyzed_exergy):
         """Attributes correctly set from ExergyAnalysis."""

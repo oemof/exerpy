@@ -1,0 +1,36 @@
+v0.0.12 (Unreleased)
+++++++++++++++++++++++
+
+New Features
+############
+- The exergoeconomic analysis runs without split physical exergy as well. A material stream then
+  carries a single cost rate for its physical exergy, ``C^PH``, instead of one for its thermal and
+  one for its mechanical exergy, and the auxiliary equations of every component follow. Models that
+  cannot provide the split, such as the ones exported from Aspen Plus, can be costed now. The split
+  resolves the fuel and the product of a component more finely, so the specific costs of the two
+  cases differ, and below the ambient temperature a component either keeps the cold exergy in its
+  outlet stream or turns dissipative, with a warning that names it.
+- The cost columns of the connection results follow the cost variables of the analysis: ``C^T`` and
+  ``C^M`` with split physical exergy, ``C^PH`` without.
+
+Bug Fixes
+#########
+- The ``c^TOT`` column of a heat or power stream in the table of the material connections was filled
+  with the value of ``C^TOT``.
+
+API Changes
+###########
+- ``aux_eqs()``, ``dis_eqs()`` and ``exergoeconomic_balance()`` of a component take an additional
+  ``split_physical_exergy`` argument. Custom components have to accept it; it defaults to ``True``,
+  so an implementation that ignores it keeps working as long as the split is used.
+
+Testing
+#######
+- Every component is checked against the counting invariant of the cost matrix: it has to provide one
+  auxiliary equation less than it has cost variables on its outlet streams (one more than that, and
+  no cost balance, when it is dissipative). The check runs over three models, with and without split
+  physical exergy and with and without chemical exergy.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

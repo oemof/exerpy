@@ -107,7 +107,7 @@ class Component:
         else:
             return self.E_P / self.E_F
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Placeholder method for exergoeconomic balance.
 
@@ -122,5 +122,9 @@ class Component:
             Ambient temperature in :math:`\mathrm{K}`.
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         """
         return

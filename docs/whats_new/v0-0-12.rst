@@ -12,6 +12,13 @@ New Features
   outlet stream or turns dissipative, with a warning that names it.
 - The cost columns of the connection results follow the cost variables of the analysis: ``C^T`` and
   ``C^M`` with split physical exergy, ``C^PH`` without.
+- A new example costs the CGAM process with and without split physical exergy and compares the two,
+  component by component and stream by stream. See
+  :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
+- The exergoeconomic examples are part of the repository now. They cover the CGAM process, whose
+  investment cost rates and fuel cost are the ones of the CGAM problem itself (Valero et al., 1994)
+  instead of round numbers, and they run without any cost correlation module. The cost model is
+  verified against the purchase costs the paper reports for its optimal design.
 
 Bug Fixes
 #########

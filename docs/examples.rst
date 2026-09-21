@@ -114,17 +114,35 @@ In the following example, we demonstrate how to extend the exergy analysis with 
     :maxdepth: 1
     :hidden:
 
-    examples/json_exergoeconomic.rst
+    examples/cgam_exergoeconomic.rst
 
 .. card::
-    :link: examples_json_exergoeconomic_label
+    :link: examples_cgam_exergoeconomic_label
     :link-type: ref
 
-    **JSON Exergoeconomic Example**
+    **CGAM Exergoeconomic Example**
     ^^^
 
     Exergoeconomic analysis with manually defined component investment costs and
     input stream specific costs.
+
+In the following example, we demonstrate how the split of the physical exergy into a thermal and a mechanical share changes the result of an exergoeconomic analysis.
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    examples/split_physical_exergy.rst
+
+.. card::
+    :link: examples_split_physical_exergy_label
+    :link-type: ref
+
+    **Split Physical Exergy in Exergoeconomics**
+    ^^^
+
+    The CGAM process costed twice, with and without split physical exergy, with a
+    comparison of the component and stream costs of the two.
 
 In the following example, we demonstrate how to visualize the results of an exergy analysis with Sankey and waterfall diagrams.
 

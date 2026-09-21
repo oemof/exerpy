@@ -288,7 +288,8 @@ to determine cost rates and specific costs for every connection and component.
     do not give the same specific costs. Below the ambient temperature the split is needed to charge
     the cold exergy of a stream to the product of the component producing it; without it such a
     component either keeps the cold exergy in its outlet stream or turns dissipative, and a warning
-    says so.
+    says so. The two settings are compared on the CGAM process in
+    :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
 
 ======
 Inputs

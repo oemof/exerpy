@@ -815,23 +815,23 @@ class TestIntegration:
     def json_example_path(self):
         """Path to the JSON example with pre-defined Z costs."""
         return os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/json_example/example.json")
+            os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/cgam/cgam.json")
         )
 
     @pytest.fixture
     def json_example_costs(self):
-        """Pre-defined costs from example_json.py."""
+        """Pre-defined costs from cgam_exergoeconomic.py."""
         return {
-            "AC_Z": 80,
-            "CC_Z": 30,
-            "EXP_Z": 100,
-            "GEN_Z": 40,
-            "APH_Z": 50,
-            "EV_Z": 60,
-            "PH_Z": 35,
+            "AC_Z": 49.874,
+            "CC_Z": 4.508,
+            "EXP_Z": 49.911,
+            "APH_Z": 11.899,
+            "EV_Z": 11.843,
+            "PH_Z": 5.629,
+            "GEN_Z": 0.0,
             "1_c": 0.0,
-            "10_c": 10.0,
-            "8_c": 0.5,
+            "10_c": 3.8635,
+            "8_c": 0.0,
         }
 
     def test_json_example_exergoeconomic_full_workflow(self, json_example_path, json_example_costs):

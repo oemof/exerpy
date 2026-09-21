@@ -21,7 +21,7 @@ EXAMPLES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 
 # Gas turbine with a heat recovery steam generator: every stream above the ambient temperature.
 CGAM = {
-    "path": os.path.join(EXAMPLES, "exergoeconomic_analysis", "json_example", "example.json"),
+    "path": os.path.join(EXAMPLES, "exergoeconomic_analysis", "cgam", "cgam.json"),
     "chemExLib": None,
     "E_F": {"inputs": ["10", "1", "8"], "outputs": []},
     "E_P": {"inputs": ["E1", "9"], "outputs": []},

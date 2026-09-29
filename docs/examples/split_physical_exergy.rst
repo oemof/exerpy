@@ -13,7 +13,7 @@ Both give a closed cost balance, but not the same cost of the product of a compo
 This example analyses the :ref:`CGAM process <examples_cgam_exergoeconomic_label>` twice, with the
 same component investment costs and the same boundary stream costs, and compares the two. The costs
 are the ones of the CGAM problem itself :cite:`Valero1994`; see :ref:`the cost basis
-<cgam_cost_basis>` for how they are obtained and how they compare with the paper.
+<cgam_cost_basis>` for how they are obtained.
 
 .. note::
 
@@ -48,22 +48,39 @@ built on, so nothing else has to be changed:
 .. literalinclude:: /../examples/exergoeconomic_analysis/cgam/cgam_split_comparison.py
     :language: python
     :start-after: [compare_components]
-    :end-before: [compare_connections]
+    :end-before: [system]
 
-.. csv-table:: Component results of the CGAM process, specific costs in USD/GJ, cost rates in USD/h
-    :header: "Component", ":math:`\\dot{E}_\\mathrm{D}` [kW]", ":math:`c_\\mathrm{F}` split", ":math:`c_\\mathrm{F}` no split", ":math:`c_\\mathrm{P}` split", ":math:`c_\\mathrm{P}` no split", ":math:`\\dot{C}_\\mathrm{D}` split", ":math:`\\dot{C}_\\mathrm{D}` no split", "dev. :math:`c_\\mathrm{P}` [%]"
-    :widths: 12 10 10 10 10 10 10 10 10
+.. csv-table:: Cost rates of the components in USD/h
+    :header: "Component", ":math:`\dot{C}_\mathrm{F}` split", ":math:`\dot{C}_\mathrm{F}` no split", ":math:`\dot{C}_\mathrm{P}` split", ":math:`\dot{C}_\mathrm{P}` no split", ":math:`\dot{C}_\mathrm{D}` split", ":math:`\dot{C}_\mathrm{D}` no split", ":math:`\dot{Z}`", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` split", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` no split"
+    :widths: 12 10 10 10 10 10 10 8 10 10
 
-    "CC", "25314.3", "4.033", "3.883", "6.133", "5.931", "367.52", "353.85", "-3.29"
-    "AC", "2100.5", "7.985", "7.770", "9.156", "8.927", "60.38", "58.75", "-2.50"
-    "GEN", "0.0", "7.985", "7.770", "7.985", "7.770", "0.00", "0.00", "-2.69"
-    "APH", "2559.6", "6.844", "7.138", "8.465", "8.866", "63.07", "65.77", "4.74"
-    "EV", "4586.8", "6.784", "7.138", "10.383", "10.904", "112.02", "117.87", "5.01"
-    "PH", "1911.4", "14.719", "15.301", "n/a", "n/a", "101.28", "105.29", "n/a"
-    "EXP", "2994.1", "7.344", "7.138", "7.985", "7.770", "79.16", "76.94", "-2.69"
+    "CC", "1220.96", "1175.07", "1297.55", "1254.47", "367.67", "353.85", "4.40", "372.07", "358.25"
+    "AC", "856.59", "832.74", "919.57", "895.95", "60.66", "58.97", "56.99", "117.65", "115.96"
+    "GEN", "866.41", "842.29", "866.41", "842.29", "0.00", "0.00", "0.00", "0.00", "0.00"
+    "APH", "411.94", "419.97", "431.50", "439.82", "63.29", "66.10", "12.26", "75.55", "78.36"
+    "EV", "371.29", "391.36", "395.84", "416.42", "112.38", "118.45", "11.48", "123.85", "129.93"
+    "PH", "101.65", "105.81", "n/a", "n/a", "101.65", "105.81", "5.45", "107.10", "111.26"
+    "EXP", "1666.30", "1617.99", "1723.00", "1675.02", "79.63", "77.32", "48.16", "127.79", "125.48"
+    "TOT", "1183.91", "1183.91", "1322.65", "1322.65", "785.27", "780.51", "138.74", "924.01", "919.25"
 
-The exergy destruction of every component is the same in both runs, so the exergy analysis itself
-does not change. What changes is the cost charged to it, and it changes for two different reasons.
+.. csv-table:: Specific costs in USD/GJ and exergoeconomic indicators in %
+    :header: "Component", ":math:`c_\mathrm{F}` split", ":math:`c_\mathrm{F}` no split", ":math:`c_\mathrm{P}` split", ":math:`c_\mathrm{P}` no split", ":math:`f` split", ":math:`f` no split", ":math:`r` split", ":math:`r` no split"
+    :widths: 12 11 11 11 11 11 11 11 11
+
+    "CC", "4.034", "3.883", "6.135", "5.931", "1.183", "1.228", "52.065", "52.757"
+    "AC", "8.022", "7.799", "9.269", "9.031", "48.439", "49.145", "15.535", "15.791"
+    "GEN", "8.022", "7.799", "8.022", "7.799", "0.000", "0.000", "0.000", "0.000"
+    "APH", "6.868", "7.173", "8.500", "8.916", "16.228", "15.646", "23.762", "24.286"
+    "EV", "6.806", "7.173", "10.405", "10.946", "9.266", "8.833", "52.889", "52.589"
+    "PH", "14.773", "15.377", "n/a", "n/a", "5.092", "4.902", "n/a", "n/a"
+    "EXP", "7.388", "7.173", "8.022", "7.799", "37.687", "38.380", "8.592", "8.720"
+    "TOT", "3.862", "3.862", "8.581", "8.581", "15.014", "15.092", "122.165", "122.165"
+
+The investment cost :math:`\dot{Z}` is an input and identical in both runs, and so is the exergy
+destruction of every component: the exergy analysis itself does not change. The ``TOT`` row is the
+sum over the components, and the cost of the fuel and of the product of the plant is the same in
+both runs. What changes is the cost
+charged to that destruction, and it changes for two different reasons.
 
 **The definition of fuel and product changes.** In the air preheater the split separates the
 pressure loss of the cold stream from its temperature rise:
@@ -92,38 +109,16 @@ the same cost is carried by less product.
 the same product in both runs, and their specific costs still differ. With the split, the auxiliary
 equations price the thermal and the mechanical exergy of a stream separately, and the exhaust gas
 leaving a component has a different mix of the two than the stream entering it. The cost that leaves
-with the exhaust gas is therefore not the same, and neither is the cost charged to the shaft power
-or to the steam.
+with the exhaust gas is therefore not the same, which is why the deviation grows along the flue gas
+path and reaches the components at its end, the evaporator and the economizer, at about 5 %.
 
-4. **Cost of the material streams**
+Together the two effects change the order in which the components would be taken on for an
+improvement. Ranked by :math:`\dot{C}_\mathrm{D} + \dot{Z}`, the combustion chamber leads in both
+runs by a wide margin, but the second and third place change hands: with the split the gas turbine
+comes before the evaporator (127.79 against 123.85 USD/h), without it the evaporator comes before
+the gas turbine (129.93 against 125.48 USD/h).
 
-.. literalinclude:: /../examples/exergoeconomic_analysis/cgam/cgam_split_comparison.py
-    :language: python
-    :start-after: [compare_connections]
-    :end-before: [system]
-
-.. csv-table:: Specific cost of the material streams, :math:`c^\mathrm{TOT}` in USD/GJ
-    :header: "Connection", ":math:`\\dot{E}` [kW]", "split", "no split", "deviation [%]"
-    :widths: 14 14 14 14 14
-
-    "1", "-39.3", "0.000", "0.000", "n/a"
-    "10", "85120.4", "3.864", "3.864", "0.00"
-    "2", "27519.9", "9.169", "8.940", "-2.50"
-    "3", "41223.0", "8.928", "8.915", "-0.15"
-    "4", "101029.0", "7.109", "7.111", "0.03"
-    "5", "38375.2", "6.724", "7.066", "5.09"
-    "6", "22112.5", "6.678", "7.014", "5.03"
-    "6P", "6958.0", "6.447", "6.743", "4.59"
-    "7", "2860.6", "5.846", "6.178", "5.67"
-    "8", "61.6", "0.000", "0.000", "n/a"
-    "8P", "2247.6", "0.000", "0.000", "n/a"
-    "9", "12815.3", "8.953", "9.404", "5.04"
-
-The boundary streams keep the cost they were given, and the deviation grows along the flue gas path:
-streams 5, 6, 6P and 7 are between 4.6 % and 5.7 % more expensive without the split, and the steam
-produced from them, stream 9, follows at 5.0 %.
-
-5. **The system itself is not affected**
+4. **The system itself is not affected**
 
 .. literalinclude:: /../examples/exergoeconomic_analysis/cgam/cgam_split_comparison.py
     :language: python
@@ -134,19 +129,37 @@ produced from them, stream 9, follows at 5.0 %.
     :header: "", "split", "no split"
     :widths: 20 20 20
 
-    ":math:`\\dot{C}_\\mathrm{F}`", "1183.91", "1183.91"
-    ":math:`\\dot{C}_\\mathrm{P}`", "1317.57", "1317.57"
-    ":math:`\\dot{Z}`", "133.66", "133.66"
+    ":math:`\dot{C}_\mathrm{F}`", "1183.91", "1183.91"
+    ":math:`\dot{C}_\mathrm{P}`", "1322.65", "1322.65"
+    ":math:`\dot{Z}`", "138.74", "138.74"
 
-The cost entering the plant and the cost leaving it with the product are the same either way, and
-both match the cost rate of the paper for this operating point. The split does not create or destroy
-cost, it distributes the cost inside the plant differently, which is exactly what matters when
-components are ranked against each other for an improvement.
+The cost entering the plant and the cost leaving it with the product are the same either way. The
+split does not create or destroy cost, it distributes the cost inside the plant differently, which is
+exactly what matters when components are ranked against each other for an improvement.
+
+5. **Which convention the published results use**
+
+Kelly :cite:`Kelly2008` analyses this plant with one specific cost per stream on its total exergy,
+that is, without splitting the physical exergy. The investment costs of this example are the ones
+of that work, so both runs above can be held against its results:
+
+.. csv-table:: Specific costs against Kelly (2008), in USD/GJ
+    :header: "Component", ":math:`c_\mathrm{F}` split", ":math:`c_\mathrm{F}` no split", ":math:`c_\mathrm{F}` Kelly", ":math:`c_\mathrm{P}` split", ":math:`c_\mathrm{P}` no split", ":math:`c_\mathrm{P}` Kelly"
+    :widths: 14 14 14 14 14 14 14
+
+    "AC", "8.02", "7.80", "7.6", "9.27", "9.03", "8.8"
+    "APH", "6.87", "7.17", "7.0", "8.50", "8.92", "8.6"
+    "CC", "4.03", "3.88", "3.8", "6.14", "5.93", "5.8"
+    "EXP", "7.39", "7.17", "7.0", "8.02", "7.80", "7.5"
+
+For three of the four components the run without the split is the closer one, and averaged over them
+its deviation on the cost of the fuel is 2.4 % against 4.8 % for the split. That is the expected
+direction, since the reference costs the streams the same way. It is not a strong test, though: the
+two runs differ by about as much as the thermodynamic model does, so the comparison supports the
+convention rather than proving it.
 
 .. note::
 
-    Because the two definitions give different specific costs, results of the two modes should not
-    be mixed within one study, and a comparison with literature values has to use the same setting
-    the reference did. The CGAM paper reports no specific costs per component, only the purchase
-    costs and the total cost rate of its optimal design, so it does not settle which of the two
-    conventions a later comparison should use.
+    Because the two definitions give different specific costs, results of the two modes should not be
+    mixed within one study, and a comparison with literature values has to use the same setting the
+    reference did.

@@ -15,6 +15,11 @@ New Features
 - A new example costs the CGAM process with and without split physical exergy and compares the two,
   component by component and stream by stream. See
   :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
+- The CGAM example takes its investment cost rates from Kelly (2008), who evaluated the cost model
+  of the CGAM problem for this base case, so the results can be held against the ones published
+  there. The specific costs agree within about 6 % and the exergoeconomic factor within about 1.5
+  points; the remaining difference comes from the thermodynamic model, real fluid properties here
+  against the ideal gas with constant heat capacity of the reference.
 - The exergoeconomic examples are part of the repository now. They cover the CGAM process, whose
   investment cost rates and fuel cost are the ones of the CGAM problem itself (Valero et al., 1994)
   instead of round numbers, and they run without any cost correlation module. The cost model is
@@ -22,6 +27,12 @@ New Features
 
 Bug Fixes
 #########
+- The relative cost difference ``r`` of the turbine, the compressor, the pump, the generator and the
+  motor was computed from the cost rates, ``(C_P - C_F) / C_F``, instead of from the specific costs,
+  ``(c_P - c_F) / c_F``. The two agree only where the exergy of fuel and product are equal, so the
+  value was wrong wherever a component destroys exergy: for the compressor of the CGAM example it
+  read 6.6 % instead of 14.7 %. The heat exchangers and the other components already used the
+  correct definition.
 - The ``c^TOT`` column of a heat or power stream in the table of the material connections was filled
   with the value of ``C^TOT``.
 

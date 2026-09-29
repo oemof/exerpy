@@ -168,3 +168,16 @@ def test_results_table_columns_follow_the_cost_variables():
     assert "C^PH [EUR/h]" in df_unsplit.columns
     assert "c^PH [EUR/GJ_ex]" in df_unsplit.columns
     assert "C^T [EUR/h]" not in df_unsplit.columns
+
+
+@pytest.mark.parametrize("model", MODELS.values(), ids=MODELS.keys())
+def test_relative_cost_difference_uses_specific_costs(model):
+    """r is defined on the specific costs, not on the cost rates."""
+    eco, _ = _run(model, True)
+    for comp in eco.components.values():
+        r = getattr(comp, "r", None)
+        if r is None or not np.isfinite(r) or not np.isfinite(getattr(comp, "c_F", np.nan)):
+            continue
+        assert r == pytest.approx(
+            (comp.c_P - comp.c_F) / comp.c_F, rel=1e-9
+        ), f"{comp.name} ({type(comp).__name__}) computes r from the cost rates"

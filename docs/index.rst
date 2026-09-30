@@ -17,6 +17,7 @@
     examples
     exergy_analysis
     exergoeconomic_analysis
+    economic_analysis
     contribute
     zliterature
 

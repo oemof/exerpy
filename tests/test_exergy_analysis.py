@@ -197,6 +197,11 @@ EXERGY_FLOWS = {
         {"inputs": ["ETOT"], "outputs": []},
         {"inputs": ["C2"], "outputs": ["C1"]},
     ),
+    "solar_thermal/parabolic_tespy": (
+        {"inputs": ["PARAB"], "outputs": []},
+        {"inputs": ["ETOT"], "outputs": []},
+        {"inputs": ["C2"], "outputs": ["C1"]},
+    ),
     "solar_thermal/solar_tower_ebs": (
         {"inputs": ["SF"], "outputs": []},
         {"inputs": ["ETOT"], "outputs": []},

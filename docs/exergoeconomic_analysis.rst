@@ -1,20 +1,19 @@
 #######################
 Exergoeconomic Analysis
 #######################
-.. warning::
-    **Development Status: Beta**
+.. note::
 
-    The exergoeconomic analysis functionality is currently in development and undergoing testing. 
-    Methods, interfaces, and results may change in future versions. While we strive for accuracy, 
-    users should validate results independently for critical applications. We welcome feedback and 
-    bug reports to help improve this feature.
+    Every component of ExerPy takes part in the exergoeconomic analysis. Two of them need an input
+    that the thermodynamic model does not carry: a combustion chamber needs the chemical exergy, so
+    the analysis has to run with a ``chemExLib``, and a steam generator needs the temperature of its
+    heat source in its ``T_hot`` attribute, since that source is usually outside of the model.
 
-    In the actual implementation of the exergoeconomic analysis, the exergy of the material streams is split 
-    into thermal, mechanical and chemical parts. Therefore, `split_physical_exergy` should be set to 
-    `True`. This makes the exergoeconomic analysis not applicable to models simulated with Aspen. 
-    For some components, such as combustion chambers, the chemical exergy is necessary as well. 
+    Results depend on the auxiliary equations, and those are a modelling choice. Check the cost
+    balance of every component with
+    :meth:`~exerpy.analyses.ExergoeconomicAnalysis.check_cost_balance` and validate the results
+    independently before they carry a decision.
 
-    
+
 Exergoeconomic analysis provides a systematic methodology to quantify both the thermodynamic performance and
 the associated economic costs of energy‐conversion systems. Building upon exergy analysis, which accounts for
 irreversibilities and the quality of energy, exergoeconomics introduces cost formulation rules to allocate
@@ -168,23 +167,25 @@ Prerequisites
 
 Before performing an exergoeconomic analysis, you need:
 
-1. A completed exergy analysis with the split of the physical exergy into thermal and mechanical 
-parts (:code:`split_physical_exergy=True`)
-2. Chemical exergy enabled (recommended for systems with combustion)
+1. A completed exergy analysis
+2. Chemical exergy enabled (required for systems with combustion)
 3. Component investment cost rates and input stream specific costs
 
 .. note::
 
-    The exergoeconomic analysis is not applicable to models parsed from Aspen Plus, as
-    Aspen does not provide the thermal and mechanical exergy splitting. In future version, 
-    we plan to implement an alternative costing approach that does not require this splitting.
+    With :code:`split_physical_exergy=True` the cost of a material stream is allocated to its
+    thermal and its mechanical exergy separately, with :code:`False` to its physical exergy as a
+    whole. Both are supported, so models that cannot provide the split, such as the ones parsed
+    from Aspen Plus, can be costed as well. The two conventions do not give the same specific
+    costs; see
+    :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
 
 Workflow overview
 =================
 
 The exergoeconomic analysis in ExerPy follows four steps:
 
-1. **Perform the exergy analysis** with physical exergy splitting enabled:
+1. **Perform the exergy analysis**, here with the physical exergy split:
 
 .. code-block:: python
 
@@ -254,7 +255,9 @@ The cost dictionary passed to :code:`run()` requires two types of entries:
 
 **Mandatory costs:**
 
-- All components must have a :code:`_Z` cost (except :code:`CycleCloser` and :code:`PowerBus`, which are helper components)
+- All components must have a :code:`_Z` cost, except the :code:`CycleCloser`, the :code:`PowerBus`
+  and the :code:`Splitter`. Those pass their streams on without a cost balance of their own, so a
+  cost given for one of them could not be charged to any stream and is rejected.
 - All material and power/heat streams entering the system boundary must have a :code:`_c` cost
 
 **Examples:**
@@ -330,11 +333,6 @@ As a workaround, you can use a least-squares solver:
 
 If you see :code:`ValueError: ... mandatory but not provided`, ensure that:
 
-- Every component (except CycleCloser and PowerBus) has a :code:`"<name>_Z"` entry
+- Every component, except the CycleCloser, the PowerBus and the Splitter, has a
+  :code:`"<name>_Z"` entry
 - Every input stream crossing the system boundary has a :code:`"<name>_c"` entry
-
-**split_physical_exergy requirement**
-
-The exergoeconomic analysis requires :code:`split_physical_exergy=True` in the preceding exergy
-analysis. If you see :code:`ValueError: split_physical_exergy must be True`, recreate the
-:code:`ExergyAnalysis` instance with this parameter enabled.

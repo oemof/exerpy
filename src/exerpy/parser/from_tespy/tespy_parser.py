@@ -2,6 +2,7 @@ from tespy.connections import Connection
 from tespy.connections import PowerConnection
 from tespy.networks import Network
 
+from exerpy.logger import logger
 from exerpy.parser.from_tespy.tespy_config import EXERPY_TESPY_MAPPINGS
 
 
@@ -38,7 +39,11 @@ def to_exerpy(nw: Network, Tamb: float, pamb: float) -> dict:
             parameters = {}
             if c.label in result.index and not result.loc[c.label].dropna().empty:
                 parameters = result.loc[c.label].dropna().to_dict()
-            component_json[key][c.label] = {"name": c.label, "type": comp_type, "parameters": parameters}
+            component = {"name": c.label, "type": comp_type, "parameters": parameters}
+            if key == "ParabolicTrough":
+                component["Q_Solar"] = _incident_radiation(c)
+                component["num_branches"] = 1
+            component_json[key][c.label] = component
 
     connection_json = {}
     for c in nw.conns["object"]:
@@ -46,6 +51,8 @@ def to_exerpy(nw: Network, Tamb: float, pamb: float) -> dict:
             connection_json.update(_connection_to_exerpy(c, pamb, Tamb))
         else:
             connection_json.update(_powerconnection_to_exerpy(c, pamb, Tamb))
+
+    connection_json.update(_solar_heat_to_exerpy(component_json.get("ParabolicTrough", {})))
 
     return {
         "components": component_json,
@@ -149,4 +156,49 @@ def _powerconnection_to_exerpy(c: PowerConnection, pamb: float, Tamb: float) -> 
 
     connection_json[c.label].update({"kind": kind, "energy_flow": c.E.val_SI})
 
+    return connection_json
+
+
+def _incident_radiation(c) -> float:
+    """Return the solar radiation incident on the aperture of a collector in W.
+
+    The exergy fuel of a concentrating collector is the incoming radiation, not the heat it
+    transfers to the fluid, so the optical and thermal losses show up as exergy destruction.
+    """
+    if c.E.is_set and c.A.is_set:
+        return c.E.val_SI * c.A.val_SI
+
+    msg = (
+        f"Collector '{c.label}' specifies neither its irradiance E nor its aperture area A, so "
+        f"the incoming solar radiation is unknown and its heat transfer Q is used instead. The "
+        f"optical and thermal losses are then missing from the exergy destruction."
+    )
+    logger.warning(msg)
+    return c.Q.val_SI
+
+
+def _solar_heat_to_exerpy(collectors: dict) -> dict:
+    """Serialize the incoming solar radiation of every collector as a heat connection.
+
+    The radiation crosses the system boundary without a connection of its own in TESPy. Naming
+    it after the collector with a "_Q" suffix matches the other parsers, so the same fuel
+    definition works whichever simulator the model comes from.
+    """
+    connection_json = {}
+    for label, component in collectors.items():
+        connection_json[f"{label}_Q"] = {
+            "name": f"{label}_Q",
+            "kind": "heat",
+            "source_component": None,
+            "target_component": label,
+            "source_component_type": None,
+            "target_component_type": component["type"],
+            "source_connector": None,
+            "target_connector": None,
+            "energy_flow": component["Q_Solar"] * component["num_branches"],
+            "energy_flow_unit": "W",
+            "E": None,
+            "E_unit": "W",
+            "num_branches": component["num_branches"],
+        }
     return connection_json

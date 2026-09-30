@@ -107,14 +107,41 @@ class Component:
         else:
             return self.E_P / self.E_F
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
-        Placeholder method for exergoeconomic balance.
+        Cost balance of a component.
 
-        This method is intentionally empty in the base class.
-        In each child class (e.g. Pump, Turbine, HeatExchanger), you should
-        override it with the logic that calculates the component's
-        exergoeconomic variables, e.g. ``C_F``, ``C_P``, ``C_D``, ``r``, and ``f``.
+        This method is intentionally empty in the base class. Every component overrides it and
+        defines its own cost of fuel :math:`\dot{C}_\mathrm{F}` and cost of product
+        :math:`\dot{C}_\mathrm{P}`, following the fuel and the product of its exergy balance. What
+        is derived from the two is the same for every component:
+
+        .. math::
+
+            c_\mathrm{F} = \frac{\dot{C}_\mathrm{F}}{\dot{E}_\mathrm{F}}
+            \qquad
+            c_\mathrm{P} = \frac{\dot{C}_\mathrm{P}}{\dot{E}_\mathrm{P}}
+
+        The cost of the exergy destroyed is what the destroyed exergy would have cost as fuel. It is
+        not part of the cost balance, which is why it shows up nowhere in the cost matrix:
+
+        .. math::
+
+            \dot{C}_\mathrm{D} = c_\mathrm{F} \cdot \dot{E}_\mathrm{D}
+
+        The relative cost difference says by how much a unit of exergy becomes more expensive
+        passing through the component, and the exergoeconomic factor says how much of the cost the
+        component causes is investment rather than inefficiency:
+
+        .. math::
+
+            r = \frac{c_\mathrm{P} - c_\mathrm{F}}{c_\mathrm{F}}
+            \qquad
+            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_\mathrm{D}}
+
+        The docstring of each component states only its own
+        :math:`\dot{C}_\mathrm{F}` and :math:`\dot{C}_\mathrm{P}`; the five definitions above are
+        not repeated there.
 
         Parameters
         ----------
@@ -122,5 +149,9 @@ class Component:
             Ambient temperature in :math:`\mathrm{K}`.
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         """
         return

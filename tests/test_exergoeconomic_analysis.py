@@ -6,7 +6,9 @@ including cost variable initialization, cost assignment, matrix construction,
 solving, results generation, and evaluation.
 """
 
+import logging
 import os
+import re
 
 import numpy as np
 import pandas as pd
@@ -38,7 +40,7 @@ class MockExergoTurbine(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """F-principle: c_T_in = c_T_out, c_M_in = c_M_out."""
         inlet = self.inl[0]
         outlet = self.outl[0]
@@ -59,7 +61,7 @@ class MockExergoTurbine(Component):
             counter += 2
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         """Case 1: T_in, T_out >= T0. Product = power, Fuel = PH_in - PH_out."""
         C_power_out = sum(s.get("C_TOT", 0) for s in self.outl.values() if s.get("kind") == "power")
         material_outlets = [o for o in self.outl.values() if o.get("kind") == "material"]
@@ -95,7 +97,7 @@ class MockExergoCompressor(Component):
         self.E_D = self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         """P-principle for Case 1: (c_T_out - c_T_in)/dET = (c_M_out - c_M_in)/dEM."""
         inlet = self.inl[0]
         outlet = self.outl[0]
@@ -111,7 +113,7 @@ class MockExergoCompressor(Component):
         counter += 1
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         """Case 1: T_in, T_out >= T0. Product = PH_out - PH_in, Fuel = power."""
         power_cost = 0
         for stream in self.inl.values():
@@ -270,8 +272,8 @@ def valid_costs():
 
 
 class TestInit:
-    def test_init_requires_split_physical_exergy(self, mock_exergoecon_component_data, mock_exergoecon_connection_data):
-        """ValueError when split_physical_exergy=False."""
+    def test_init_without_split_physical_exergy(self, mock_exergoecon_component_data, mock_exergoecon_connection_data):
+        """A material stream carries a single physical cost variable when the split is off."""
         ea = ExergyAnalysis(
             mock_exergoecon_component_data,
             mock_exergoecon_connection_data,
@@ -280,8 +282,9 @@ class TestInit:
             split_physical_exergy=False,
         )
         ea.analyse({"inputs": ["1", "P_in"]}, {"inputs": ["P_out", "3"]})
-        with pytest.raises(ValueError, match="split_physical_exergy=True"):
-            ExergoeconomicAnalysis(ea)
+        eco = ExergoeconomicAnalysis(ea)
+        assert eco.split_physical_exergy is False
+        assert eco.cost_labels == ("PH",)
 
     def test_init_succeeds_with_split_true(self, exergoecon, analyzed_exergy):
         """Attributes correctly set from ExergyAnalysis."""
@@ -814,23 +817,23 @@ class TestIntegration:
     def json_example_path(self):
         """Path to the JSON example with pre-defined Z costs."""
         return os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/json_example/example.json")
+            os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/cgam/cgam.json")
         )
 
     @pytest.fixture
     def json_example_costs(self):
-        """Pre-defined costs from example_json.py."""
+        """Pre-defined costs from cgam_exergoeconomic.py."""
         return {
-            "AC_Z": 80,
-            "CC_Z": 30,
-            "EXP_Z": 100,
-            "GEN_Z": 40,
-            "APH_Z": 50,
-            "EV_Z": 60,
-            "PH_Z": 35,
+            "AC_Z": 49.874,
+            "CC_Z": 4.508,
+            "EXP_Z": 49.911,
+            "APH_Z": 11.899,
+            "EV_Z": 11.843,
+            "PH_Z": 5.629,
+            "GEN_Z": 0.0,
             "1_c": 0.0,
-            "10_c": 10.0,
-            "8_c": 0.5,
+            "10_c": 3.8635,
+            "8_c": 0.0,
         }
 
     def test_json_example_exergoeconomic_full_workflow(self, json_example_path, json_example_costs):
@@ -899,3 +902,548 @@ class TestIntegration:
         # Values should be finite
         for val in df["C_D+Z [EUR/h]"].values:
             assert np.isfinite(val)
+
+
+# =============================================================================
+# Solar thermal plants
+# =============================================================================
+
+SOLAR_TOWER_COSTS = {
+    "SF_Z": 1500.0,
+    "ST_Z": 400.0,
+    "SH_Z": 40.0,
+    "EV_Z": 60.0,
+    "ECO_Z": 30.0,
+    "HPST_Z": 120.0,
+    "IPST_Z": 90.0,
+    "LPST_Z": 80.0,
+    "COND_Z": 25.0,
+    "AFTCOOL_Z": 4.0,
+    "FWPH_Z": 10.0,
+    "DEA_Z": 5.0,
+    "THR_Z": 0.0,
+    "PUMP_COND_Z": 2.0,
+    "PUMP_FW_Z": 15.0,
+    "PUMP_SF_Z": 5.0,
+    "MOT_PUMP_COND_Z": 1.0,
+    "MOT_PUMP_FW_Z": 3.0,
+    "MOT_PUMP_SF_Z": 2.0,
+    "GEN_Z": 50.0,
+    "SF_Q_c": 0.0,
+    "C1_c": 0.0,
+}
+
+PARABOLIC_COSTS = {
+    "PARAB_Z": 2000.0,
+    "PUMP_SF_Z": 5.0,
+    "SH_Z": 40.0,
+    "EV_Z": 60.0,
+    "ECO_Z": 30.0,
+    "HPST_Z": 120.0,
+    "IPST_Z": 90.0,
+    "LPST_Z": 80.0,
+    "COND_Z": 25.0,
+    "PUMP_COND_Z": 2.0,
+    "DEA_Z": 5.0,
+    "PUMP_FW_Z": 15.0,
+    "AFTCOOL_Z": 4.0,
+    "FWPH_Z": 10.0,
+    "THR_Z": 0.0,
+    "GEN_Z": 50.0,
+    "MOT_PUMP_COND_Z": 1.0,
+    "MOT_PUMP_FW_Z": 3.0,
+    "MOT_PUMP_SF_Z": 2.0,
+    "PARAB_Q_c": 0.0,
+    "C1_c": 0.0,
+}
+
+SOLAR_PLANTS = {
+    "solar_tower_ebs": ("SF", SOLAR_TOWER_COSTS, ("SF", "ST")),
+    "parabolic_tespy": ("PARAB", PARABOLIC_COSTS, ("PARAB",)),
+}
+
+
+def _run_solar_with(name, costs):
+    """Exergoeconomic analysis of one of the solar thermal example plants with the given costs."""
+    fuel_stream = SOLAR_PLANTS.get(name, ("PARAB",))[0]
+    path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), f"../examples/exergy_analysis/solar_thermal/{name}.json")
+    )
+    ean = ExergyAnalysis.from_json(path, split_physical_exergy=False)
+    ean.analyse(
+        E_F={"inputs": [fuel_stream], "outputs": []},
+        E_P={"inputs": ["ETOT"], "outputs": []},
+        E_L={"inputs": ["C2"], "outputs": ["C1"]},
+    )
+    eco = ExergoeconomicAnalysis(ean, currency="EUR")
+    eco.run(costs)
+    return eco
+
+
+def _run_solar(name):
+    """Exergoeconomic analysis of one of the solar thermal example plants."""
+    return _run_solar_with(name, SOLAR_PLANTS[name][1])
+
+
+class TestSolarThermalExergoeconomics:
+    """The solar components close the cost matrix of a whole plant."""
+
+    @pytest.mark.parametrize("name", SOLAR_PLANTS)
+    def test_system_cost_balance_closes(self, name):
+        eco = _run_solar(name)
+        sc = eco.system_costs
+        assert sc["C_P"] == pytest.approx(sc["C_F"] + sc["Z"], rel=1e-6)
+
+    @pytest.mark.parametrize("name", SOLAR_PLANTS)
+    def test_component_cost_balances_close(self, name):
+        eco = _run_solar(name)
+        for comp, (residual, balanced) in eco.check_cost_balance(tol=0.05).items():
+            assert balanced, f"{comp} not balanced: residual={residual}"
+
+    @pytest.mark.parametrize("name", SOLAR_PLANTS)
+    def test_free_radiation_is_priced_into_the_product(self, name):
+        """The radiation is free, so the whole product cost comes from the investment."""
+        eco = _run_solar(name)
+        _, costs, solar_components = SOLAR_PLANTS[name]
+        assert eco.system_costs["C_F"] == pytest.approx(0.0, abs=1e-9)
+        assert eco.system_costs["C_P"] == pytest.approx(sum(v for k, v in costs.items() if k.endswith("_Z")), rel=1e-9)
+        for name_ in solar_components:
+            comp = eco.components[name_]
+            assert comp.C_P > 0 and np.isfinite(comp.C_P)
+            assert np.isfinite(comp.f)
+
+    @pytest.mark.parametrize("name", SOLAR_PLANTS)
+    def test_results_are_produced(self, name):
+        eco = _run_solar(name)
+        assert len(eco.exergoeconomic_results(print_results=False)) == 4
+
+
+# =============================================================================
+# Storage
+# =============================================================================
+
+
+def _storage_streams(m_in, m_out):
+    """Connection data of a storage with the given mass flows, in and out."""
+
+    def stream(source, target, m, e_T, e_M):
+        return {
+            "kind": "material",
+            "source_component": source,
+            "source_connector": None if source is None else 0,
+            "target_component": target,
+            "target_connector": None if target is None else 0,
+            "T": 500.0,
+            "p": 1013250,
+            "m": m,
+            "e_T": e_T,
+            "e_M": e_M,
+            "e_PH": e_T + e_M,
+            "E_T": m * e_T,
+            "E_M": m * e_M,
+            "E_PH": m * (e_T + e_M),
+            "E": m * (e_T + e_M),
+        }
+
+    return {
+        "1": stream(None, "ST", m_in, 150.0, 50.0),
+        "2": stream("ST", None, m_out, 140.0, 40.0),
+    }
+
+
+def _run_storage(m_in, m_out, split_physical_exergy=True, Z=90.0):
+    """Exergoeconomic analysis of a single storage between two boundaries."""
+    components = {"Storage": {"ST": {"name": "ST", "type": "Storage"}}}
+    ean = ExergyAnalysis(
+        components,
+        _storage_streams(m_in, m_out),
+        298.15,
+        101325,
+        split_physical_exergy=split_physical_exergy,
+    )
+    ean.analyse(E_F={"inputs": ["1"], "outputs": []}, E_P={"inputs": ["2"], "outputs": []})
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run({"ST_Z": Z, "1_c": 4.0})
+    return eco, eco.components["ST"]
+
+
+class TestStorage:
+    """The stored exergy carries a cost variable of its own, so the balance closes."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    @pytest.mark.parametrize(("m_in", "m_out"), [(10.0, 8.0), (8.0, 10.0), (10.0, 10.0)])
+    def test_cost_balance_closes(self, m_in, m_out, split):
+        eco, storage = _run_storage(m_in, m_out, split)
+        residual, balanced = eco.check_cost_balance()["ST"]
+        assert balanced, f"residual={residual}"
+
+    def test_charging_produces_the_stored_exergy(self):
+        eco, storage = _run_storage(10.0, 8.0)
+        assert pytest.approx(storage.E_stored) == storage.E_P
+        assert pytest.approx(storage.C_stored) == storage.C_P
+        # The store is filled at the state of the outlet, so it is priced like it.
+        outlet = eco.connections["2"]
+        assert storage.C_stored / storage.E_stored == pytest.approx(outlet["C_T"] / outlet["E_T"])
+
+    def test_discharging_is_fuelled_by_the_stored_exergy(self):
+        eco, storage = _run_storage(8.0, 10.0)
+        assert pytest.approx(storage.E_stored) == storage.E_F
+        assert pytest.approx(storage.C_stored) == storage.C_F
+
+    def test_holding_the_level_stores_nothing(self):
+        eco, storage = _run_storage(10.0, 10.0)
+        assert storage.E_stored == 0.0
+        assert storage.C_stored == pytest.approx(0.0)
+        assert pytest.approx(eco.connections["1"]["C_PH"]) == storage.C_F
+        assert pytest.approx(eco.connections["2"]["C_PH"]) == storage.C_P
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_the_stored_exergy_gets_its_own_variable(self, split):
+        eco, _ = _run_storage(10.0, 8.0, split)
+        assert "stored_ST" in eco.variables.values()
+
+    def test_indicators_are_finite(self):
+        _, storage = _run_storage(10.0, 8.0)
+        for name in ("c_F", "c_P", "C_D", "r", "f"):
+            assert np.isfinite(getattr(storage, name)), name
+
+    def test_aux_eqs_without_a_stored_variable_raises(self):
+        _, storage = _run_storage(10.0, 8.0)
+        del storage.stored_cost_index
+        with pytest.raises(ValueError, match="no cost variable for its stored exergy"):
+            storage.aux_eqs(np.zeros((1, 1)), np.zeros(1), 0, 298.15, {}, False, True)
+
+
+# =============================================================================
+# SteamGenerator
+# =============================================================================
+
+SG_Q = 1.0e8
+SG_T_HOT = 1200.0
+
+
+def _sg_stream(source, target, connector, m, e_T, e_M):
+    return {
+        "kind": "material",
+        "source_component": source,
+        "source_connector": connector if source else None,
+        "target_component": target,
+        "target_connector": connector if target else None,
+        "T": 700.0,
+        "p": 12000000,
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "E_T": m * e_T,
+        "E_M": m * e_M,
+        "E_PH": m * (e_T + e_M),
+        "E": m * (e_T + e_M),
+    }
+
+
+def _sg_connections(with_ip):
+    conns = {
+        "Q": {
+            "kind": "heat",
+            "source_component": None,
+            "source_connector": None,
+            "target_component": "SG",
+            "target_connector": 3,
+            "energy_flow": SG_Q,
+            "E": None,
+        },
+        "fw": _sg_stream(None, "SG", 0, 60.0, 200000.0, 12000.0),
+        "hp": _sg_stream("SG", None, 0, 58.0, 1400000.0, 10000.0),
+        "drain": _sg_stream("SG", None, 2, 2.0, 900000.0, 9000.0),
+    }
+    if with_ip:
+        conns["ip_in"] = _sg_stream(None, "SG", 1, 50.0, 700000.0, 3000.0)
+        conns["ip"] = _sg_stream("SG", None, 1, 50.0, 1250000.0, 2800.0)
+    return conns
+
+
+def _run_steam_generator(with_ip=False, split_physical_exergy=True, T_hot=SG_T_HOT, Z=400.0):
+    """Exergoeconomic analysis of a single steam generator between two boundaries."""
+    components = {"SteamGenerator": {"SG": {"name": "SG", "type": "SteamGenerator", "T_hot": T_hot}}}
+    ean = ExergyAnalysis(
+        components,
+        _sg_connections(with_ip),
+        298.15,
+        101325,
+        split_physical_exergy=split_physical_exergy,
+    )
+    product = {"inputs": ["hp"] + (["ip"] if with_ip else []), "outputs": ["fw"] + (["ip_in"] if with_ip else [])}
+    ean.analyse(E_F={"inputs": ["Q"], "outputs": []}, E_P=product, E_L={"inputs": ["drain"], "outputs": []})
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run({"SG_Z": Z, "Q_c": 6.0, "fw_c": 3.0, **({"ip_in_c": 3.0} if with_ip else {})})
+    return eco, eco.components["SG"]
+
+
+class TestSteamGenerator:
+    """The heat entering the component is its fuel, and the cost matrix closes."""
+
+    def test_fuel_comes_from_the_heat_source_temperature(self):
+        _, sg = _run_steam_generator()
+        assert pytest.approx(SG_Q * (1 - 298.15 / SG_T_HOT)) == sg.E_F
+        assert sg.E_D > 0
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_destruction_does_not_depend_on_the_split(self, split):
+        _, with_split = _run_steam_generator(split_physical_exergy=True)
+        _, without_split = _run_steam_generator(split_physical_exergy=False)
+        assert pytest.approx(without_split.E_D) == with_split.E_D
+
+    def test_without_a_heat_source_temperature_it_approximates_and_warns(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            _, sg = _run_steam_generator(T_hot=None)
+        assert "no heat source temperature T_hot" in caplog.text
+        assert np.isfinite(sg.E_F)
+
+    @pytest.mark.parametrize("split", [True, False])
+    @pytest.mark.parametrize("with_ip", [False, True])
+    def test_cost_balance_closes(self, with_ip, split):
+        eco, _ = _run_steam_generator(with_ip, split)
+        residual, balanced = eco.check_cost_balance(tol=1e-6)["SG"]
+        assert balanced, f"residual={residual}"
+
+    @pytest.mark.parametrize("with_ip", [False, True])
+    def test_the_drain_is_priced_like_the_high_pressure_steam(self, with_ip):
+        eco, _ = _run_steam_generator(with_ip)
+        steam, drain = eco.connections["hp"], eco.connections["drain"]
+        for label in ("T", "M"):
+            assert drain[f"c_{label}"] == pytest.approx(steam[f"c_{label}"])
+
+    def test_both_steam_outlets_cost_the_same(self):
+        eco, _ = _run_steam_generator(with_ip=True)
+        assert eco.connections["ip"]["c_T"] == pytest.approx(eco.connections["hp"]["c_T"])
+
+    def test_the_heat_pays_for_the_product(self):
+        eco, sg = _run_steam_generator()
+        assert pytest.approx(eco.connections["Q"]["C_TOT"]) == sg.C_F
+        assert np.isfinite(sg.c_P) and np.isfinite(sg.r) and np.isfinite(sg.f)
+
+    def test_a_missing_drain_is_reported(self):
+        conns = _sg_connections(False)
+        del conns["drain"]
+        ean = ExergyAnalysis(
+            {"SteamGenerator": {"SG": {"name": "SG", "type": "SteamGenerator"}}}, conns, 298.15, 101325
+        )
+        with pytest.raises(ValueError, match="Missing outlet stream with index 2"):
+            ean.analyse(E_F={"inputs": ["Q"], "outputs": []}, E_P={"inputs": ["hp"], "outputs": ["fw"]})
+
+
+def test_a_component_without_a_cost_balance_rejects_an_investment_cost():
+    """A power bus or a splitter carries no cost, so a cost given for it would disappear."""
+    costs = dict(PARABOLIC_COSTS, SHAFT_Z=250.0)
+    with pytest.raises(ValueError, match="'SHAFT' has no cost balance"):
+        _run_solar_with("parabolic_tespy", costs)
+
+
+# =============================================================================
+# The same plant, modelled in two simulators
+# =============================================================================
+
+# The throttle sits in front of the deaerator. EBSILON lets its deaerator drop the pressure of the
+# drain internally and reports 20 bar behind the throttle, while the TESPy merge equalises the
+# pressures of its inlets, so the two throttles do not expand over the same pressure difference.
+CROSS_SIMULATOR_EXCEPTIONS = {"THR"}
+
+
+def _exergoeconomic_indicators(model):
+    """The exergoeconomic results of every component of one of the parabolic trough models."""
+    example = os.path.join(os.path.dirname(__file__), "../examples/exergy_analysis/solar_thermal", model)
+    namespace = {}
+    with open(example + ".py", encoding="utf-8") as script:
+        exec(re.search(r"all_costs = \{.*?\n\}", script.read(), re.S).group(), namespace)  # noqa: S102
+    eco = _run_solar_with(model, namespace["all_costs"])
+    return {
+        name: {key: getattr(comp, key, None) for key in ("C_F", "C_P", "C_D", "c_F", "c_P", "f", "r")}
+        for name, comp in eco.components.items()
+    }
+
+
+def test_both_simulators_give_the_same_exergoeconomic_results():
+    """The parabolic trough plant is modelled in EBSILON and in TESPy; costing it gives the same.
+
+    This holds every part of the analysis together: the exergy of the streams, the auxiliary
+    equations of every component and the scaling of the solar field, whose branches EBSILON models
+    behind a header and TESPy as one collector carrying the whole flow.
+    """
+    ebsilon = _exergoeconomic_indicators("parabolic_ebs")
+    tespy = _exergoeconomic_indicators("parabolic_tespy")
+
+    shared = (set(ebsilon) & set(tespy)) - CROSS_SIMULATOR_EXCEPTIONS
+    assert len(shared) >= 18, "the two models no longer share their components"
+
+    for name in sorted(shared):
+        for key, reference in ebsilon[name].items():
+            value = tespy[name][key]
+            if reference is None or not np.isfinite(reference) or reference == 0:
+                continue
+            assert value == pytest.approx(reference, rel=0.02), f"{name}.{key}: {value} against {reference}"
+
+
+# =============================================================================
+# Components that no costed example contains
+# =============================================================================
+
+
+def _material(source, target, connector, m, e_T, e_M, T=450.0, h=2.0e6):
+    """One material stream between a component and the system boundary."""
+    return {
+        "kind": "material",
+        "source_component": source,
+        "source_connector": connector if source else None,
+        "target_component": target,
+        "target_connector": connector if target else None,
+        "T": T,
+        "p": 1000000,
+        "m": m,
+        "h": h,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "E_T": m * e_T,
+        "E_M": m * e_M,
+        "E_PH": m * (e_T + e_M),
+        "E": m * (e_T + e_M),
+    }
+
+
+def _run_single_component(component_type, connections, costs, split_physical_exergy=True, **flows):
+    """Cost a plant made of one component between boundary streams."""
+    name = next(iter(costs)).removesuffix("_Z")
+    components = {component_type: {name: {"name": name, "type": component_type}}}
+    ean = ExergyAnalysis(components, connections, 298.15, 101325, split_physical_exergy=split_physical_exergy)
+    ean.analyse(**flows)
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(costs)
+    return eco, eco.components[name]
+
+
+def _flash_tank_connections():
+    """A flash tank splitting a stream into a vapour and a liquid outlet."""
+    return {
+        "in": _material(None, "FT", 0, 10.0, 300000.0, 9000.0),
+        "vap": _material("FT", None, 0, 3.0, 640000.0, 8800.0),
+        "liq": _material("FT", None, 1, 7.0, 150000.0, 8800.0),
+    }
+
+
+class TestFlashTankExergoeconomics:
+    """No costed example contains a flash tank, so it is covered here."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_cost_balance_closes(self, split):
+        eco, _ = _run_single_component(
+            "FlashTank",
+            _flash_tank_connections(),
+            {"FT_Z": 12.0, "in_c": 5.0},
+            split,
+            E_F={"inputs": ["in"], "outputs": []},
+            E_P={"inputs": ["vap", "liq"], "outputs": []},
+        )
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["FT"]
+        assert balanced, f"residual={residual}"
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_fuel_and_product_are_cost_rates(self, split):
+        """C_F and C_P sum the cost variables of the streams, not their specific costs."""
+        eco, tank = _run_single_component(
+            "FlashTank",
+            _flash_tank_connections(),
+            {"FT_Z": 12.0, "in_c": 5.0},
+            split,
+            E_F={"inputs": ["in"], "outputs": []},
+            E_P={"inputs": ["vap", "liq"], "outputs": []},
+        )
+        labels = ["C_T", "C_M"] if split else ["C_PH"]
+        assert pytest.approx(sum(eco.connections["in"][label] for label in labels)) == tank.C_F
+        assert (
+            pytest.approx(sum(eco.connections[name][label] for name in ("vap", "liq") for label in labels)) == tank.C_P
+        )
+        assert pytest.approx(tank.C_F + tank.Z_costs) == tank.C_P
+
+    def test_both_outlets_leave_at_the_same_specific_cost(self):
+        eco, _ = _run_single_component(
+            "FlashTank",
+            _flash_tank_connections(),
+            {"FT_Z": 12.0, "in_c": 5.0},
+            True,
+            E_F={"inputs": ["in"], "outputs": []},
+            E_P={"inputs": ["vap", "liq"], "outputs": []},
+        )
+        assert eco.connections["vap"]["c_T"] == pytest.approx(eco.connections["liq"]["c_T"])
+        assert eco.connections["vap"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
+
+
+def _simple_heat_exchanger_connections(releasing):
+    """A simple heat exchanger that either releases its heat or takes it in.
+
+    Releasing, the heat is the product of the component and leaves it; taking it in, the heat is the
+    fuel and the physical exergy the stream gains is the product.
+    """
+    if releasing:
+        streams = {
+            "in": _material(None, "SHE", 0, 10.0, 400000.0, 9000.0, T=600.0, h=3.4e6),
+            "out": _material("SHE", None, 0, 10.0, 150000.0, 8500.0, T=400.0, h=3.0e6),
+        }
+        heat = {"source_component": "SHE", "source_connector": 999, "target_component": None, "target_connector": None}
+        # The heat leaves at a lower temperature than the stream carries it, so the unit destroys exergy.
+        heat["E"] = 0.8 * (streams["in"]["E_PH"] - streams["out"]["E_PH"])
+    else:
+        streams = {
+            "in": _material(None, "SHE", 0, 10.0, 150000.0, 9000.0, T=400.0, h=3.0e6),
+            "out": _material("SHE", None, 0, 10.0, 400000.0, 8500.0, T=600.0, h=3.4e6),
+        }
+        heat = {"source_component": None, "source_connector": None, "target_component": "SHE", "target_connector": 999}
+        heat["E"] = (streams["out"]["E_PH"] - streams["in"]["E_PH"]) / 0.8
+    heat.update(kind="heat", energy_flow=abs(streams["out"]["h"] - streams["in"]["h"]) * 10.0)
+    streams["Q"] = heat
+    return streams
+
+
+class TestSimpleHeatExchangerExergoeconomics:
+    """The simple heat exchanger appears in the CCPP example, which is not costed."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_releasing_heat_the_cost_balance_closes(self, split):
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            _simple_heat_exchanger_connections(releasing=True),
+            {"SHE_Z": 20.0, "in_c": 6.0},
+            split,
+            E_F={"inputs": ["in"], "outputs": ["out"]},
+            E_P={"inputs": ["Q"], "outputs": []},
+        )
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
+        assert balanced, f"residual={residual}"
+        # The heat is the product, so it carries the cost the stream gives up plus the investment.
+        assert eco.connections["Q"]["C_TOT"] == pytest.approx(unit.C_F + unit.Z_costs)
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_absorbing_heat_the_cost_balance_closes(self, split):
+        eco, _ = _run_single_component(
+            "SimpleHeatExchanger",
+            _simple_heat_exchanger_connections(releasing=False),
+            {"SHE_Z": 20.0, "in_c": 6.0, "Q_c": 4.0},
+            split,
+            E_F={"inputs": ["Q"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": ["in"]},
+        )
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
+        assert balanced, f"residual={residual}"
+
+    def test_the_mechanical_exergy_passes_through_at_its_own_cost(self):
+        eco, _ = _run_single_component(
+            "SimpleHeatExchanger",
+            _simple_heat_exchanger_connections(releasing=True),
+            {"SHE_Z": 20.0, "in_c": 6.0},
+            True,
+            E_F={"inputs": ["in"], "outputs": ["out"]},
+            E_P={"inputs": ["Q"], "outputs": []},
+        )
+        assert eco.connections["out"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
+        # Releasing heat above the ambient temperature, the thermal exergy follows the F-principle.
+        assert eco.connections["out"]["c_T"] == pytest.approx(eco.connections["in"]["c_T"])

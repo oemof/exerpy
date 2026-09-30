@@ -17,7 +17,21 @@ class CycleCloser(Component):
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        The CycleCloser component does not have an exergy balance calculation.
+        Skip the exergy balance of the cycle closer.
+
+        The cycle closer is part of how the plant is wired, not a piece of equipment: it closes a loop so that
+        the model has a defined starting point. It neither converts nor destroys exergy, so its fuel, product,
+        destruction and efficiency are all undefined and are set to NaN.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}` (unused).
+        p0 : float
+            Ambient pressure in :math:`\mathrm{Pa}` (unused).
+        split_physical_exergy : bool
+            Kept for a uniform component interface; the cycle closer carries no material stream
+            to split.
         """
         self.E_D = np.nan
         self.E_F = np.nan
@@ -29,17 +43,33 @@ class CycleCloser(Component):
         logger.info(f"The exergy balance of a CycleCloser {self.name} is skipped.")
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the cycle closer.
 
-        This function adds two rows to the cost matrix A and the right-hand side vector b to enforce
-        the following auxiliary cost relations:
+        The cycle closer is an artefact of the model, not a piece of equipment: it passes the stream
+        on untouched. Every cost variable therefore leaves it at the specific cost at which it
+        entered, and the component gets no cost balance of its own.
 
-        (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
-        (2) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
+        With split physical exergy:
 
-        These equations ensure that the specific mechanical and thermal costs are equalized between
-        the inlet and outlet of the cycle closer. Chemical exergy is not considered for the cycle closer.
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
+
+        Without the split the stream carries one cost variable for its physical exergy, and the two
+        rules collapse into one:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{PH}_\mathrm{out}}{\dot{E}^\mathrm{PH}_\mathrm{out}}
+
+        Chemical exergy is not considered here: the composition cannot change across a cycle closer,
+        so the cost balance of the components around it already carries it.
 
         Parameters
         ----------
@@ -72,13 +102,14 @@ class CycleCloser(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        # Cost equality equations of the physical exergy:
+        # Cost equality equations of the physical exergy. The coefficients are written on the exergy
+        # flow of the stream, not on its specific exergy, as the F-principle requires.
         for label in ["M", "T"] if split_physical_exergy else ["PH"]:
             A[counter, self.inl[0]["CostVar_index"][label]] = (
-                (1 / self.inl[0][f"e_{label}"]) if self.inl[0][f"e_{label}"] != 0 else 1
+                (1 / self.inl[0][f"E_{label}"]) if self.inl[0][f"e_{label}"] != 0 else 1
             )
             A[counter, self.outl[0]["CostVar_index"][label]] = (
-                (-1 / self.outl[0][f"e_{label}"]) if self.outl[0][f"e_{label}"] != 0 else -1
+                (-1 / self.outl[0][f"E_{label}"]) if self.outl[0][f"e_{label}"] != 0 else -1
             )
             equations[counter] = {
                 "kind": "aux_equality",
@@ -91,10 +122,10 @@ class CycleCloser(Component):
         if chemical_exergy_enabled:
             # Chemical cost equality equation:
             A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
-                (1 / self.inl[0]["e_CH"]) if self.inl[0]["e_CH"] != 0 else 1
+                (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
             )
             A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                (-1 / self.outl[0]["e_CH"]) if self.outl[0]["e_CH"] != 0 else -1
+                (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else -1
             )
             equations[counter] = {
                 "kind": "aux_equality",

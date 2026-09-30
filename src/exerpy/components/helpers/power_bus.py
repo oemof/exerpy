@@ -17,7 +17,21 @@ class PowerBus(Component):
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
-        The PowerBus component does not have an exergy balance calculation.
+        Skip the exergy balance of the power bus.
+
+        The power bus is part of how the plant is wired, not a piece of equipment: it gathers power and hands
+        it on. It neither converts nor destroys exergy, so its fuel, product, destruction and efficiency are
+        all undefined and are set to NaN.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}` (unused).
+        p0 : float
+            Ambient pressure in :math:`\mathrm{Pa}` (unused).
+        split_physical_exergy : bool
+            Kept for a uniform component interface; the power bus carries no material stream
+            to split.
         """
         self.E_D = np.nan
         self.E_F = np.nan
@@ -29,17 +43,41 @@ class PowerBus(Component):
         logger.info(f"The exergy balance of a PowerBus {self.name} is skipped.")
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
-        Auxiliary equations for the cycle closer.
+        r"""
+        Auxiliary equations for the power bus.
 
-        This function adds two rows to the cost matrix A and the right-hand side vector b to enforce
-        the following auxiliary cost relations:
+        A power bus gathers power and hands it on. It carries power streams only, one cost variable
+        each, so the split of the physical exergy and the chemical exergy do not apply to it. It
+        gets no cost balance row from the analysis, so it writes whatever it needs here, and what it
+        needs depends on how it is wired.
 
-        (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
-        (2) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
+        **One outlet.** The bus writes its own cost balance, which determines that outlet:
 
-        These equations ensure that the specific mechanical and thermal costs are equalized between
-        the inlet and outlet of the cycle closer. Chemical exergy is not considered for the cycle closer.
+        .. math::
+
+            \sum_{i} \dot{C}^\mathrm{TOT}_{\mathrm{out},i}
+            = \sum_{i} \dot{C}^\mathrm{TOT}_{\mathrm{in},i}
+
+        **One inlet, several outlets.** The power leaving is the same power that entered, so every
+        outlet is priced like the inlet:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{TOT}_\mathrm{in}}{\dot{E}^\mathrm{TOT}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{TOT}_{\mathrm{out},j}}{\dot{E}^\mathrm{TOT}_{\mathrm{out},j}}
+
+        **Several inlets and several outlets.** The bus writes its cost balance and, on top of it,
+        prices every outlet alike, against the first of them as a reference:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{TOT}_\mathrm{ref}}{\dot{E}^\mathrm{TOT}_\mathrm{ref}}
+            = \frac{\dot{C}^\mathrm{TOT}_{\mathrm{out},j}}{\dot{E}^\mathrm{TOT}_{\mathrm{out},j}}
+
+        **No outlet.** Nothing is written.
+
+        A bus has no investment cost of its own: it is a way of wiring the model, not a piece of
+        equipment, so :math:`\dot{Z}` does not appear above and a cost given for one is rejected.
 
         Parameters
         ----------
@@ -73,21 +111,37 @@ class PowerBus(Component):
             Updated structure with equation labels.
         """
 
-        # Splitter case
-        if len(self.inl) >= 1 and len(self.outl) <= 1:
-            logger.info(f"PowerBus {self.name} has only one output, no auxiliary equations added.")
+        # One outlet: the cost balance of the bus determines it. The PowerBus gets no cost
+        # balance row of its own in the matrix, so it is written here.
+        if len(self.outl) == 1:
+            logger.info(f"PowerBus {self.name} has one output, adding its cost balance.")
+            for inl in self.inl.values():
+                A[counter, inl["CostVar_index"]["exergy"]] = 1
+            for out in self.outl.values():
+                A[counter, out["CostVar_index"]["exergy"]] = -1
+            equations[counter] = {
+                "kind": "cost_balance",
+                "objects": [self.name],
+                "property": "c_TOT",
+            }
+            b[counter] = 0
+            counter += 1
+
+        elif len(self.outl) == 0:
+            logger.info(f"PowerBus {self.name} has no output, no auxiliary equations added.")
 
         # Mixer case
         elif len(self.inl) == 1 and len(self.outl) > 1:
             logger.info(f"PowerBus {self.name} has multiple outputs, auxiliary equations will be added.")
+            # The single inlet is not necessarily on connector 0: the parsers number the
+            # connectors as the model does, so take the connection itself.
+            inlet = next(iter(self.inl.values()))
             for out in list(self.outl.values())[:]:
-                A[counter, self.inl[0]["CostVar_index"]["exergy"]] = (
-                    (1 / self.inl[0]["E"]) if self.inl[0]["E"] != 0 else 1
-                )
+                A[counter, inlet["CostVar_index"]["exergy"]] = (1 / inlet["E"]) if inlet["E"] != 0 else 1
                 A[counter, out["CostVar_index"]["exergy"]] = (-1 / out["E"]) if out["E"] != 0 else -1
                 equations[counter] = {
                     "kind": "aux_power_eq",
-                    "objects": [self.name, self.inl[0]["name"], out["name"]],
+                    "objects": [self.name, inlet["name"], out["name"]],
                     "property": "c_TOT",
                 }
                 b[counter] = 0

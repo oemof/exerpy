@@ -114,12 +114,41 @@ class FlashTank(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the flash tank.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        equality of specific exergy costs between the single inlet stream and each outlet stream.
-        Thermal and mechanical costs are always equated; chemical costs are equated only if enabled.
+        The tank separates one stream into a vapour and a liquid outlet. Both come out of the same
+        vessel, so both are product and both are priced alike (P-principle), while the pressure and
+        the composition merely pass through (F-principle).
+
+        With split physical exergy, the two outlets carry the same specific cost of their thermal
+        exergy, and each keeps the specific cost of the mechanical exergy of the inlet:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_{\mathrm{out},1}}{\dot{E}^\mathrm{T}_{\mathrm{out},1}}
+            = \frac{\dot{C}^\mathrm{T}_{\mathrm{out},2}}{\dot{E}^\mathrm{T}_{\mathrm{out},2}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_{\mathrm{out},j}}{\dot{E}^\mathrm{M}_{\mathrm{out},j}}
+
+        Without the split the mechanical rules fall away and the P-rule acts on the physical exergy
+        of the two outlets instead:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{PH}_{\mathrm{out},1}}{\dot{E}^\mathrm{PH}_{\mathrm{out},1}}
+            = \frac{\dot{C}^\mathrm{PH}_{\mathrm{out},2}}{\dot{E}^\mathrm{PH}_{\mathrm{out},2}}
+
+        With chemical exergy enabled, either way:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out},j}}{\dot{E}^\mathrm{CH}_{\mathrm{out},j}}
+
+        Note that these are equalities of specific cost, cost divided by the exergy *flow* of the
+        stream, so two outlets carrying different mass flows are priced the same per unit of exergy.
 
         Parameters
         ----------
@@ -162,8 +191,8 @@ class FlashTank(Component):
         # --- Physical product-rule: c_x,out0 = c_x,out1 ---
         #  1/e_x,out0 · C_x,out0  - 1/e_x,out1 · C_x,out1 = 0
         if out0[f"e_{phys}"] != 0 and out1[f"e_{phys}"] != 0:
-            A[counter, out0["CostVar_index"][phys]] = 1.0 / out0[f"e_{phys}"]
-            A[counter, out1["CostVar_index"][phys]] = -1.0 / out1[f"e_{phys}"]
+            A[counter, out0["CostVar_index"][phys]] = 1.0 / out0[f"E_{phys}"]
+            A[counter, out1["CostVar_index"][phys]] = -1.0 / out1[f"E_{phys}"]
         elif out0[f"e_{phys}"] == 0 and out1[f"e_{phys}"] != 0:
             A[counter, out0["CostVar_index"][phys]] = 1.0
         elif out0[f"e_{phys}"] != 0 and out1[f"e_{phys}"] == 0:
@@ -185,8 +214,8 @@ class FlashTank(Component):
         if split_physical_exergy:
             for out in (out0, out1):
                 if inlet["e_M"] != 0 and out["e_M"] != 0:
-                    A[counter, inlet["CostVar_index"]["M"]] = 1.0 / inlet["e_M"]
-                    A[counter, out["CostVar_index"]["M"]] = -1.0 / out["e_M"]
+                    A[counter, inlet["CostVar_index"]["M"]] = 1.0 / inlet["E_M"]
+                    A[counter, out["CostVar_index"]["M"]] = -1.0 / out["E_M"]
                 elif inlet["e_M"] == 0 and out["e_M"] != 0:
                     A[counter, inlet["CostVar_index"]["M"]] = 1.0
                 elif inlet["e_M"] != 0 and out["e_M"] == 0:
@@ -207,8 +236,8 @@ class FlashTank(Component):
         if chemical_exergy_enabled:
             for out in (out0, out1):
                 if inlet["e_CH"] != 0 and out["e_CH"] != 0:
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1.0 / inlet["e_CH"]
-                    A[counter, out["CostVar_index"]["CH"]] = -1.0 / out["e_CH"]
+                    A[counter, inlet["CostVar_index"]["CH"]] = 1.0 / inlet["E_CH"]
+                    A[counter, out["CostVar_index"]["CH"]] = -1.0 / out["E_CH"]
                 elif inlet["e_CH"] == 0 and out["e_CH"] != 0:
                     A[counter, inlet["CostVar_index"]["CH"]] = 1.0
                 elif inlet["e_CH"] != 0 and out["e_CH"] == 0:
@@ -253,15 +282,15 @@ class FlashTank(Component):
             single cost variable for its physical exergy. Default is True.
         """
 
-        labels = ["c_T", "c_M"] if split_physical_exergy else ["c_PH"]
+        labels = ["C_T", "C_M"] if split_physical_exergy else ["C_PH"]
         if chemical_exergy_enabled:
-            labels.append("c_CH")
+            labels.append("C_CH")
 
         # Calculate total cost of inlet streams (physical [+ chemical if enabled])
-        self.C_F = sum(inlet["m"] * sum(inlet[label] for label in labels) for inlet in self.inl.values())
+        self.C_F = sum(sum(inlet[label] for label in labels) for inlet in self.inl.values())
 
         # Calculate total cost of outlet streams (physical [+ chemical if enabled])
-        self.C_P = sum(outlet["m"] * sum(outlet[label] for label in labels) for outlet in self.outl.values())
+        self.C_P = sum(sum(outlet[label] for label in labels) for outlet in self.outl.values())
 
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P

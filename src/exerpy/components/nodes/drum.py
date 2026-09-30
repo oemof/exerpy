@@ -1,3 +1,5 @@
+import numpy as np
+
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
@@ -104,20 +106,11 @@ class Drum(Component):
         r"""
         Auxiliary equations for the drum.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        Everything leaving a drum leaves at the same saturation state, so all outlets are
+        co-products carrying the same specific costs (P-principle), while the composition passes
+        through at its own specific cost (F-principle).
 
-        (1) Chemical exergy cost equations, one per outlet (if enabled)
-            - F-principle: the specific chemical cost of the inlet is passed on to every outlet
-        (2) Thermal exergy cost equations, one per further outlet
-            - P-principle: the specific thermal costs of all outlets are equalized
-        (3) Mechanical exergy cost equations, one per further outlet
-            - P-principle: the specific mechanical costs of all outlets are equalized
-        (4) Thermal-mechanical coupling for outlet 0
-            - P-principle: thermal and mechanical specific costs must be equal at outlet 0
-
-        Costing convention: everything leaving a drum leaves at the same saturation state, so
-        all outlets are co-products that carry the same specific costs,
+        With split physical exergy, for every further outlet :math:`j`:
 
         .. math::
 
@@ -127,29 +120,32 @@ class Drum(Component):
             \frac{\dot{C}^\mathrm{M}_{\mathrm{out,}1}}{\dot{E}^\mathrm{M}_{\mathrm{out,}1}}
             = \frac{\dot{C}^\mathrm{M}_{\mathrm{out,}j}}{\dot{E}^\mathrm{M}_{\mathrm{out,}j}}
 
-        A blow down is costed at the same rate as the saturated steam and carries its share of
-        the costs out of the plant; it is not charged back to the other outlets.
-
-        The number of equations follows the number of outlets: the cost matrix holds two cost
-        variables per outlet (three with chemical exergy) and the cost balance of the component
-        covers one of them, so with :math:`N` outlets
+        and, since the thermal and the mechanical exergy of a saturated stream are produced
+        together, one further rule couples the two at the first outlet:
 
         .. math::
 
-            n_\mathrm{aux} = 2\,N - 1 \quad\text{and, with chemical exergy,}\quad
-            n_\mathrm{aux} = 3\,N - 1
+            \frac{\dot{C}^\mathrm{T}_{\mathrm{out,}1}}{\dot{E}^\mathrm{T}_{\mathrm{out,}1}}
+            = \frac{\dot{C}^\mathrm{M}_{\mathrm{out,}1}}{\dot{E}^\mathrm{M}_{\mathrm{out,}1}}
 
-        rows are added here. A drum with a blow down therefore needs one thermal and one
-        mechanical equation (and one chemical equation) more than a drum without.
-
-        Without split physical exergy an outlet holds a single physical cost variable, so the
-        thermal and mechanical rules are replaced by one rule on the physical exergy and the
-        coupling equation is dropped:
+        Without the split each stream carries a single cost variable for its physical exergy. The
+        two rules per outlet collapse into one, and the coupling rule disappears with the variable
+        it coupled:
 
         .. math::
 
-            n_\mathrm{aux} = N - 1 \quad\text{and, with chemical exergy,}\quad
-            n_\mathrm{aux} = 2\,N - 1
+            \frac{\dot{C}^\mathrm{PH}_{\mathrm{out,}1}}{\dot{E}^\mathrm{PH}_{\mathrm{out,}1}}
+            = \frac{\dot{C}^\mathrm{PH}_{\mathrm{out,}j}}{\dot{E}^\mathrm{PH}_{\mathrm{out,}j}}
+
+        With chemical exergy enabled, either way, for every outlet :math:`j`:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out,}j}}{\dot{E}^\mathrm{CH}_{\mathrm{out,}j}}
+
+        A blow down is costed at the same rate as the saturated steam and carries its share of the
+        costs out of the plant; it is not charged back to the other outlets.
 
         Parameters
         ----------
@@ -248,3 +244,39 @@ class Drum(Component):
             b[i] = 0
 
         return A, b, row, equations
+
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
+        r"""
+        Perform exergoeconomic cost balance for the drum.
+
+        Fuel and product are summed over all connected streams, in line with
+        :meth:`calc_exergy_balance`:
+
+        .. math::
+            \dot{C}_\mathrm{F} = \sum_i \dot{C}^\mathrm{PH}_{\mathrm{in},i}
+            \qquad
+            \dot{C}_\mathrm{P} = \sum_i \dot{C}^\mathrm{PH}_{\mathrm{out},i}
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature.
+        chemical_exergy_enabled : bool, optional
+            If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
+        """
+        # The exergy balance of the drum is formulated on the physical exergy only, so the
+        # cost balance uses the matching cost variables.
+        labels = ["C_T", "C_M"] if split_physical_exergy else ["C_PH"]
+
+        self.C_F = sum(sum(inlet[label] for label in labels) for inlet in self.inl.values())
+        self.C_P = sum(sum(outlet[label] for label in labels) for outlet in self.outl.values())
+
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

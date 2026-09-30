@@ -218,12 +218,8 @@ class ExergyAnalysis:
             if component.__class__.__name__ == "CycleCloser":
                 continue
             # Safely calculate y and y* avoiding division by zero
-            if self.E_F != 0:
-                component.y = component.E_D / self.E_F
-                component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
-            else:
-                component.y = np.nan
-                component.y_star = np.nan
+            component.y = component.E_D / self.E_F if self.E_F else np.nan
+            component.y_star = component.E_D / self.E_D if self.E_D and component.E_D is not None else np.nan
             # Sum component destruction if available
             if component.E_D is not np.nan:
                 total_component_E_D += component.E_D
@@ -1441,16 +1437,21 @@ class ExergoeconomicAnalysis:
         """
         # --- Component Costs ---
         for comp_name, comp in self.components.items():
-            if isinstance(comp, CycleCloser | PowerBus):
-                continue
-            else:
-                cost_key = f"{comp_name}_Z"
-                if cost_key in Exe_Eco_Costs:
-                    comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
-                else:
+            cost_key = f"{comp_name}_Z"
+            # These components have no cost balance of their own, so an investment cost given for
+            # them would disappear from the system instead of being charged to a stream.
+            if isinstance(comp, CycleCloser | PowerBus | Splitter):
+                if Exe_Eco_Costs.get(cost_key):
                     raise ValueError(
-                        f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs."
+                        f"Component '{comp_name}' has no cost balance, so the investment cost "
+                        f"'{cost_key}' cannot be charged to any stream. Assign it to the component "
+                        f"it belongs to."
                     )
+                continue
+            if cost_key in Exe_Eco_Costs:
+                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
+            else:
+                raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
@@ -1857,7 +1858,7 @@ class ExergoeconomicAnalysis:
             raise ValueError(
                 f"Exergoeconomic cost balance of the entire system is not satisfied: \n"
                 f"C_P = {self.system_costs['C_P']:.3f} and is not equal to \n"
-                f"C_F ({self.system_costs['C_F']:.3f}) + ∑Z ({self.system_costs['Z']:.3f}) = {self.system_costs['C_F'] + self.system_costs['Z']:.3f}. \n"
+                f"C_F ({self.system_costs['C_F']:.3f}) + sum(Z) ({self.system_costs['Z']:.3f}) = {self.system_costs['C_F'] + self.system_costs['Z']:.3f}. \n"
                 f"The problem may be caused by incorrect specifications of E_F, E_P, and E_L."
             )
 
@@ -2092,50 +2093,50 @@ class ExergoeconomicAnalysis:
 
         # empty equations
         if deps["zero_rows"]:
-            print("\n⚠ Equations with no variables:")
+            print("\n[!] Equations with no variables:")
             for eq in deps["zero_rows"]:
-                print(f"  • Eq[{eq}]: {self.equations.get(eq)}")
+                print(f"  - Eq[{eq}]: {self.equations.get(eq)}")
         else:
-            print("✓ No empty equations.")
+            print("[ok] No empty equations.")
 
         # unused variables
         if deps["zero_columns"]:
-            print("\n⚠ Variables never used in any equation:")
+            print("\n[!] Variables never used in any equation:")
             for var in deps["zero_columns"]:
                 name = self.variables.get(str(var))
-                print(f"  • Var[{var}]: {name}")
+                print(f"  - Var[{var}]: {name}")
         else:
-            print("✓ All variables appear in at least one equation.")
+            print("[ok] All variables appear in at least one equation.")
 
         # exactly colinear
         if deps["colinear_equations_strict"]:
-            print("\n⚠ Exactly colinear (redundant) equation pairs:")
+            print("\n[!] Exactly colinear (redundant) equation pairs:")
             for i, j in deps["colinear_equations_strict"]:
-                print(f"  • Eq[{i}] {self.equations[i]!r}  ≈  Eq[{j}] {self.equations[j]!r}")
+                print(f"  - Eq[{i}] {self.equations[i]!r}  ~  Eq[{j}] {self.equations[j]!r}")
         else:
-            print("✓ No exactly colinear equation pairs detected.")
+            print("[ok] No exactly colinear equation pairs detected.")
 
         # near-colinear
         if deps["colinear_equations_near_only"]:
-            print("\n⚠ Nearly colinear equation pairs (|cosine| ≈ 1):")
+            print("\n[!] Nearly colinear equation pairs (|cosine| ~ 1):")
             for i, j in deps["colinear_equations_near_only"]:
-                print(f"  • Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
+                print(f"  - Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
         else:
-            print("✓ No near-colinear equation pairs detected.")
+            print("[ok] No near-colinear equation pairs detected.")
 
         # SVD null-space analysis
         svd_deps = deps.get("svd_dependencies", [])
         if svd_deps:
-            print(f"\n⚠ SVD null-space analysis found {len(svd_deps)} dependency(ies):")
+            print(f"\n[!] SVD null-space analysis found {len(svd_deps)} dependency(ies):")
             for dep in svd_deps:
                 print(f"\n  Dependency #{dep['null_vector_index'] + 1} (singular value: {dep['singular_value']:.2e}):")
                 print("  Equations involved (with coefficients in null vector):")
                 sorted_eqs = sorted(dep["involved_equations"], key=lambda x: abs(x[1]), reverse=True)
                 for eq_idx, coeff in sorted_eqs:
                     eq_info = self.equations.get(eq_idx, "unknown")
-                    print(f"    • Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
+                    print(f"    - Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
         else:
-            print("\n✓ SVD analysis: no linear dependencies detected (matrix is full rank).")
+            print("\n[ok] SVD analysis: no linear dependencies detected (matrix is full rank).")
 
     def exergoeconomic_results(self, print_results=True):
         """
@@ -2224,10 +2225,12 @@ class ExergoeconomicAnalysis:
         df_comp.loc["TOT", "f [%]"] = (
             df_comp.loc["TOT", f"Z [{self.currency}/h]"] / df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] * 100
         )
+        # A plant running on a free resource, such as solar radiation, has c_F = 0 and therefore
+        # no finite relative cost difference.
+        c_F_tot = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
         df_comp.loc["TOT", "r [%]"] = (
-            (df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"])
-            / df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
-        ) * 100
+            ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - c_F_tot) / c_F_tot) * 100 if c_F_tot else np.nan
+        )
 
         # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf
         df_comp["r [%]"] = df_comp["r [%]"].where(df_comp["r [%]"].abs() <= 1e8, np.inf)
@@ -2530,13 +2533,13 @@ class EconomicAnalysis:
         Compute the Capital Recovery Factor (CRF) using the effective rate of return.
 
         Returns
-        -------
-        float
-            The capital recovery factor.
 
         Notes
         -----
         CRF = i_eff * (1 + i_eff)**n / ((1 + i_eff)**n - 1)
+        -------
+        float
+            The capital recovery factor.
         """
         return self.i_eff * (1 + self.i_eff) ** self.n / ((1 + self.i_eff) ** self.n - 1)
 

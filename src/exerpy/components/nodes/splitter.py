@@ -79,12 +79,43 @@ class Splitter(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the splitter.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        equality of specific exergy costs between the single inlet stream and each outlet stream.
-        Thermal and mechanical costs are always equated; chemical costs are equated only if enabled.
+        A splitter divides one stream into several of the same state, so every branch leaves at the
+        specific cost of the inlet. It converts nothing and gets no cost balance of its own.
+
+        With split physical exergy, for every outlet :math:`j`:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_{\mathrm{out},j}}{\dot{E}^\mathrm{T}_{\mathrm{out},j}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_{\mathrm{out},j}}{\dot{E}^\mathrm{M}_{\mathrm{out},j}}
+
+        Without the split, one rule per outlet instead of two:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{PH}_{\mathrm{out},j}}{\dot{E}^\mathrm{PH}_{\mathrm{out},j}}
+
+        With chemical exergy enabled, either way:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out},j}}{\dot{E}^\mathrm{CH}_{\mathrm{out},j}}
+
+        A branch that carries no exergy carries no cost either, so its cost variable is set to zero
+        rather than equated:
+
+        .. math::
+
+            \dot{C}^{x}_{\mathrm{out},j} = 0
+            \qquad \text{for} \qquad \dot{E}^{x}_{\mathrm{out},j} = 0
 
         Parameters
         ----------
@@ -116,35 +147,31 @@ class Splitter(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        inlet = self.inl[0]
+        # The single inlet is not necessarily on connector 0: the parsers number the
+        # connectors as the model does, so take the connection itself.
+        inlet = next(iter(self.inl.values()))
 
         # Cost equality of the physical exergy for each outlet: c_x_inlet = c_x_outlet,
         # where c_x = C_x / (m * e_x), so we divide by (m * e_x) to equate specific costs.
-        for label in ["T", "M"] if split_physical_exergy else ["PH"]:
+        labels = ["T", "M"] if split_physical_exergy else ["PH"]
+        if chemical_exergy_enabled:
+            labels.append("CH")
+
+        for label in labels:
             for outlet in self.outl.values():
                 E_in = inlet["m"] * inlet[f"e_{label}"]
                 E_out = outlet["m"] * outlet[f"e_{label}"]
-                A[counter, inlet["CostVar_index"][label]] = (1 / E_in) if E_in != 0 else 1
-                A[counter, outlet["CostVar_index"][label]] = (-1 / E_out) if E_out != 0 else -1
+                if E_out == 0:
+                    # A branch that carries no exergy carries no cost either. Equating specific
+                    # costs would leave a cost on it that then leaves the system unaccounted.
+                    A[counter, outlet["CostVar_index"][label]] = 1
+                else:
+                    A[counter, inlet["CostVar_index"][label]] = (1 / E_in) if E_in != 0 else 1
+                    A[counter, outlet["CostVar_index"][label]] = -1 / E_out
                 equations[counter] = {
                     "kind": "aux_equality",
                     "objects": [self.name, inlet["name"], outlet["name"]],
                     "property": f"c_{label}",
-                }
-                b[counter] = 0
-                counter += 1
-
-        # Chemical cost equality for each outlet (if enabled)
-        if chemical_exergy_enabled:
-            for outlet in self.outl.values():
-                E_CH_in = inlet["m"] * inlet["e_CH"]
-                E_CH_out = outlet["m"] * outlet["e_CH"]
-                A[counter, inlet["CostVar_index"]["CH"]] = (1 / E_CH_in) if E_CH_in != 0 else 1
-                A[counter, outlet["CostVar_index"]["CH"]] = (-1 / E_CH_out) if E_CH_out != 0 else -1
-                equations[counter] = {
-                    "kind": "aux_equality",
-                    "objects": [self.name, inlet["name"], outlet["name"]],
-                    "property": "c_CH",
                 }
                 b[counter] = 0
                 counter += 1

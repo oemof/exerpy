@@ -1163,10 +1163,12 @@ class EbsilonModelParser:
             new_conn = {
                 "name": prefix,
                 "kind": "heat",
-                "source_component": name,
-                "target_component": None,
-                "source_component_type": type_index,
-                "target_component_type": None,
+                # The solar radiation enters the component: it is the fuel of the solar field
+                # and has to be an inlet for the cost balance of the exergoeconomic analysis.
+                "source_component": None,
+                "target_component": name,
+                "source_component_type": None,
+                "target_component_type": type_index,
                 "source_connector": None,
                 "target_connector": None,
                 "energy_flow": energy_flow,

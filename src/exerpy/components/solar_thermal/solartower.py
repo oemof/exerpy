@@ -147,10 +147,145 @@ class SolarTower(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
+    def _fluid_streams(self):
+        """Return the working-fluid inlet and outlet, skipping the solar heat connections."""
+        material_inlets = [
+            c for c in self.inl.values() if c is not None and c.get("kind", "material") not in ("heat", "power")
+        ]
+        material_outlets = [
+            c for c in self.outl.values() if c is not None and c.get("kind", "material") not in ("heat", "power")
+        ]
+        if not material_inlets or not material_outlets:
+            msg = f"{self.__class__.__name__} {self.name} has no working-fluid inlet and outlet."
+            logger.error(msg)
+            raise ValueError(msg)
+        return material_inlets[0], material_outlets[0]
+
+    def _solar_cost(self):
+        """Return the cost rate of the solar heat entering the component."""
+        heat_inlets = [c for c in self.inl.values() if c is not None and c.get("kind") == "heat"]
+        if not heat_inlets:
+            msg = (
+                f"{self.__class__.__name__} {self.name} has no solar heat inlet connection, so its "
+                f"cost cannot be determined."
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+        return heat_inlets[0].get("C_TOT", 0.0)
+
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        r"""Exergoeconomic auxiliary equations are not yet implemented for this component."""
-        raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the SolarTower component.")
+        r"""
+        Auxiliary equations for the solar tower.
+
+        The component absorbs solar heat, so the thermal exergy the working fluid gains is its
+        product and the cost balance alone determines it. What the fluid does not gain passes
+        through at its own specific cost (F-principle).
+
+        With split physical exergy the fluid loses pressure, so its mechanical exergy is part of the
+        fuel and needs the rule:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
+
+        Without the split the fluid carries a single cost variable for its physical exergy, that
+        variable is the product, and **no auxiliary equation is written**; the cost balance fixes it:
+
+        .. math::
+
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \dot{C}^\mathrm{PH}_\mathrm{in} + \dot{C}^\mathrm{TOT}_\mathrm{solar} + \dot{Z}
+
+        With chemical exergy enabled, either way, the composition does not change:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Coefficient matrix of the cost equation system.
+        b : numpy.ndarray
+            Right-hand side vector of the cost equation system.
+        counter : int
+            Index of the next free row.
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}`.
+        equations : dict
+            Dictionary documenting the equations.
+        chemical_exergy_enabled : bool
+            Whether chemical exergy is part of the analysis.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
+
+        Returns
+        -------
+        tuple
+            The updated matrix, vector, row index and equation dictionary.
+        """
+        inlet, outlet = self._fluid_streams()
+
+        if split_physical_exergy:
+            A[counter, inlet["CostVar_index"]["M"]] = 1 / inlet["E_M"] if inlet["e_M"] != 0 else 1
+            A[counter, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
+            equations[counter] = {
+                "kind": "aux_f_rule",
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_M",
+            }
+            b[counter] = 0
+            counter += 1
+
+        if chemical_exergy_enabled:
+            A[counter, inlet["CostVar_index"]["CH"]] = 1 / inlet["E_CH"] if inlet["e_CH"] != 0 else 1
+            A[counter, outlet["CostVar_index"]["CH"]] = -1 / outlet["E_CH"] if outlet["e_CH"] != 0 else -1
+            equations[counter] = {
+                "kind": "aux_f_rule",
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_CH",
+            }
+            b[counter] = 0
+            counter += 1
+
+        return A, b, counter, equations
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
-        r"""Exergoeconomic balance is not yet implemented for this component."""
-        raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the SolarTower component.")
+        r"""
+        Perform the exergoeconomic cost balance of the solar tower.
+
+        Fuel and product follow :meth:`calc_exergy_balance`: the product is the thermal (with
+        split physical exergy) or physical exergy gain of the working fluid, the fuel is the
+        solar heat plus, with the split, the mechanical exergy the fluid loses over the
+        pressure drop.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}`.
+        chemical_exergy_enabled : bool, optional
+            If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
+        """
+        inlet, outlet = self._fluid_streams()
+        C_solar = self._solar_cost()
+
+        if split_physical_exergy:
+            self.C_P = outlet["C_T"] - inlet["C_T"]
+            self.C_F = C_solar + (inlet["C_M"] - outlet["C_M"])
+        else:
+            self.C_P = outlet["C_PH"] - inlet["C_PH"]
+            self.C_F = C_solar
+
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

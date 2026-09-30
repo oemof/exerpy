@@ -11,6 +11,7 @@ from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
 from .components.nodes.splitter import Splitter
+from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
 
@@ -1409,6 +1410,15 @@ class ExergoeconomicAnalysis:
                     self.variables[str(col_number)] = f"C_{name}_TOT"
                     col_number += 1
 
+        # A storage does not balance over its streams alone: while it charges or discharges, part
+        # of the exergy stays behind in the store or comes out of it. That share is not carried by
+        # any connection, so it gets a cost variable of its own.
+        for comp in self.exergy_analysis.components.values():
+            if isinstance(comp, Storage):
+                comp.stored_cost_index = col_number
+                self.variables[str(col_number)] = f"stored_{comp.name}"
+                col_number += 1
+
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
 
@@ -1538,6 +1548,7 @@ class ExergoeconomicAnalysis:
                 not getattr(comp, "is_dissipative", False)
                 and not isinstance(comp, Splitter)
                 and not isinstance(comp, PowerBus)
+                and not isinstance(comp, Storage)
             ):
                 # Assign the row index for the cost balance equation to this component.
                 comp.exergy_cost_line = counter
@@ -1738,6 +1749,11 @@ class ExergoeconomicAnalysis:
         # Step 3: Distribute the cost differences of dissipative components to the serving components
         self.distribute_all_Z_diff(C_solution)
 
+        for comp in self.exergy_analysis.components.values():
+            stored_index = getattr(comp, "stored_cost_index", None)
+            if stored_index is not None:
+                comp.C_stored = C_solution[stored_index]
+
         # Step 4: Assign solutions to connections
         for conn_name, conn in self.connections.items():
             is_part_of_the_system = (
@@ -1837,6 +1853,17 @@ class ExergoeconomicAnalysis:
             C_P_total -= conn.get("C_TOT", 0)
 
         # The total loss cost is assigned to the product already, so we don't need to consider it here.
+
+        # A store that fills up keeps part of what the plant produced, and one that empties feeds
+        # the plant. Neither crosses the system boundary on a connection, so it is added here.
+        for comp in self.exergy_analysis.components.values():
+            C_stored = getattr(comp, "C_stored", None)
+            if C_stored is None:
+                continue
+            if getattr(comp, "charging", True):
+                C_P_total += C_stored
+            else:
+                C_F_total += C_stored
 
         # Compute the sum of all Z costs (Z_total) from all components except CycleCloser.
         Z_total = 0.0
@@ -1939,7 +1966,10 @@ class ExergoeconomicAnalysis:
             z_cost = getattr(comp, "Z_costs", 0)
             z_diss = getattr(comp, "Z_diss", 0)
             c_diff = getattr(comp, "C_diff", 0)
-            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff
+            # The exergy a storage takes out of its store enters its balance, the exergy it puts
+            # in leaves it.
+            c_stored = getattr(comp, "C_stored_flow", 0)
+            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff + c_stored
             balances[name] = (balance, abs(balance) <= tol)
 
         all_ok = all(flag for _, flag in balances.values())

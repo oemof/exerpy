@@ -180,9 +180,78 @@ class Heliostatfield(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        r"""Exergoeconomic auxiliary equations are not yet implemented for this component."""
-        raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the Heliostatfield component.")
+        r"""
+        Auxiliary equations for the heliostat field.
+
+        The field takes in the solar radiation and delivers heat to the receiver. Both are heat
+        streams carrying one cost variable each, and the outlet is the only one the field produces,
+        so the cost balance alone determines it and no auxiliary equation is written:
+
+        .. math::
+
+            \dot{C}^\mathrm{TOT}_\mathrm{out}
+            = \dot{C}^\mathrm{TOT}_\mathrm{in} + \dot{Z}
+
+        The split of the physical exergy does not apply here: it concerns material streams, and the
+        field has none.
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Coefficient matrix of the cost equation system.
+        b : numpy.ndarray
+            Right-hand side vector of the cost equation system.
+        counter : int
+            Index of the next free row.
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}`.
+        equations : dict
+            Dictionary documenting the equations.
+        chemical_exergy_enabled : bool
+            Whether chemical exergy is part of the analysis.
+        split_physical_exergy : bool, optional
+            Kept for a uniform component interface; the heat streams of the field carry a
+            single cost variable either way. Default is True.
+
+        Returns
+        -------
+        tuple
+            The unchanged matrix, vector, row index and equation dictionary.
+        """
+        return A, b, counter, equations
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
-        r"""Exergoeconomic balance is not yet implemented for this component."""
-        raise NotImplementedError("Exergoeconomic analysis is not yet implemented for the Heliostatfield component.")
+        r"""
+        Perform the exergoeconomic cost balance of the heliostat field.
+
+        Fuel and product follow :meth:`calc_exergy_balance`: the fuel is the incoming solar
+        radiation and the product is the heat delivered to the receiver. The specific cost of
+        the solar radiation is a boundary condition of the system and is usually set to zero.
+
+        Parameters
+        ----------
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}`.
+        chemical_exergy_enabled : bool, optional
+            If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            Kept for a uniform component interface. Default is True.
+        """
+        solar_inlets = [c for c in self.inl.values() if c is not None and c.get("kind") == "heat"]
+        receiver_outlets = [c for c in self.outl.values() if c is not None and c.get("kind") == "heat"]
+        if not solar_inlets or not receiver_outlets:
+            msg = (
+                f"Heliostat field {self.name} needs the solar radiation as a heat inlet and the heat "
+                f"delivered to the receiver as a heat outlet for the exergoeconomic balance."
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+
+        self.C_F = solar_inlets[0].get("C_TOT", 0.0)
+        self.C_P = receiver_outlets[0].get("C_TOT", 0.0)
+
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

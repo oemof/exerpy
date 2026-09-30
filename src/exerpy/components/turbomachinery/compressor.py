@@ -180,29 +180,59 @@ class Compressor(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the compressor.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        The power driving the compressor is its fuel and what the stream gains is its product. With
+        chemical exergy enabled the composition does not change, so its specific cost passes through
+        unchanged (F-principle), whether or not the physical exergy is split:
 
-        (1) Chemical exergy cost equation (if enabled):
-            1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
-            - F-principle: specific chemical exergy costs equalized between inlet/outlet
+        .. math::
 
-        (2) Thermal/Mechanical exergy cost equations (based on temperature conditions):
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
 
-            Case 1 (T_in > T0, T_out > T0):
-            1/dET * C_T_out - 1/dET * C_T_in - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
-            - P-principle: relates inlet/outlet thermal and mechanical exergy costs
+        **Without split physical exergy** no further equation is written. The stream carries a single
+        cost variable for its physical exergy, that variable is the only one the component produces,
+        and the cost balance alone determines it:
 
-            Case 2 (T_in ≤ T0, T_out > T0):
-            1/E_T_out * C_T_out - 1/dEM * C_M_out + 1/dEM * C_M_in = 0
-            - P-principle: relates outlet thermal and inlet/outlet mechanical exergy costs
+        .. math::
 
-            Case 3 (T_in ≤ T0, T_out ≤ T0):
-            1/E_T_out * C_T_out - 1/E_T_in * C_T_in = 0
-            - F-principle: specific thermal exergy costs equalized between inlet/outlet
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \dot{C}^\mathrm{PH}_\mathrm{in} + \dot{C}^\mathrm{TOT}_\mathrm{power} + \dot{Z}
+
+        **With split physical exergy** the outlet carries two cost variables, so one equation is
+        needed, and which one depends on where the stream sits relative to the ambient temperature.
+
+        Both streams above :math:`T_0`: the thermal and the mechanical exergy are both gained, so
+        both are part of the product and are priced alike (P-principle):
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{out} - \dot{C}^\mathrm{T}_\mathrm{in}}
+                 {\dot{E}^\mathrm{T}_\mathrm{out} - \dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out} - \dot{C}^\mathrm{M}_\mathrm{in}}
+                   {\dot{E}^\mathrm{M}_\mathrm{out} - \dot{E}^\mathrm{M}_\mathrm{in}}
+
+        Inlet at or below and outlet above :math:`T_0`: the outlet carries thermal exergy that the
+        inlet did not have, so the whole of it is product:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out} - \dot{C}^\mathrm{M}_\mathrm{in}}
+                   {\dot{E}^\mathrm{M}_\mathrm{out} - \dot{E}^\mathrm{M}_\mathrm{in}}
+
+        Both streams at or below :math:`T_0`: the cold exergy of the stream is consumed, so it is
+        fuel and follows the F-principle:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
+
+        Below the ambient temperature the split is what separates the cold exergy from the pressure
+        rise, so running without it there makes the component warn.
 
         Parameters
         ----------
@@ -395,23 +425,6 @@ class Compressor(Component):
             = \dot{C}^{\mathrm{TOT}}_{\mathrm{power,in}}
             + \bigl(\dot{C}^{\mathrm{T}}_{\mathrm{in}}
             - \dot{C}^{\mathrm{T}}_{\mathrm{out}}\bigr)
-
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
 
         Parameters
         ----------

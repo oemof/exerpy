@@ -126,6 +126,24 @@ In the following example, we demonstrate how to extend the exergy analysis with 
     Exergoeconomic analysis with manually defined component investment costs and
     input stream specific costs.
 
+In the following example, we demonstrate how the purchase equipment costs of the components are turned into the cost rates the exergoeconomic analysis needs.
+
+.. toctree::
+    :maxdepth: 1
+    :hidden:
+
+    examples/heatpump_exergoeconomic.rst
+
+.. card::
+    :link: examples_heatpump_exergoeconomic_label
+    :link-type: ref
+
+    **From Equipment Costs to the Cost of the Product**
+    ^^^
+
+    The air source heat pump costed with the total revenue requirement method, from the
+    purchase equipment cost of every component to the specific cost of the heat delivered.
+
 In the following example, we demonstrate how the split of the physical exergy into a thermal and a mechanical share changes the result of an exergoeconomic analysis.
 
 .. toctree::

@@ -1,17 +1,19 @@
 #######################
 Exergoeconomic Analysis
 #######################
-.. warning::
-    **Development Status: Beta**
+.. note::
 
-    The exergoeconomic analysis functionality is currently in development and undergoing testing. 
-    Methods, interfaces, and results may change in future versions. While we strive for accuracy, 
-    users should validate results independently for critical applications. We welcome feedback and 
-    bug reports to help improve this feature.
+    Every component of ExerPy takes part in the exergoeconomic analysis. Two of them need an input
+    that the thermodynamic model does not carry: a combustion chamber needs the chemical exergy, so
+    the analysis has to run with a ``chemExLib``, and a steam generator needs the temperature of its
+    heat source in its ``T_hot`` attribute, since that source is usually outside of the model.
 
-    For some components, such as combustion chambers, the chemical exergy is necessary.
+    Results depend on the auxiliary equations, and those are a modelling choice. Check the cost
+    balance of every component with
+    :meth:`~exerpy.analyses.ExergoeconomicAnalysis.check_cost_balance` and validate the results
+    independently before they carry a decision.
 
-    
+
 Exergoeconomic analysis provides a systematic methodology to quantify both the thermodynamic performance and
 the associated economic costs of energy‐conversion systems. Building upon exergy analysis, which accounts for
 irreversibilities and the quality of energy, exergoeconomics introduces cost formulation rules to allocate
@@ -253,7 +255,9 @@ The cost dictionary passed to :code:`run()` requires two types of entries:
 
 **Mandatory costs:**
 
-- All components must have a :code:`_Z` cost (except :code:`CycleCloser` and :code:`PowerBus`, which are helper components)
+- All components must have a :code:`_Z` cost, except the :code:`CycleCloser`, the :code:`PowerBus`
+  and the :code:`Splitter`. Those pass their streams on without a cost balance of their own, so a
+  cost given for one of them could not be charged to any stream and is rejected.
 - All material and power/heat streams entering the system boundary must have a :code:`_c` cost
 
 **Examples:**
@@ -329,5 +333,6 @@ As a workaround, you can use a least-squares solver:
 
 If you see :code:`ValueError: ... mandatory but not provided`, ensure that:
 
-- Every component (except CycleCloser and PowerBus) has a :code:`"<name>_Z"` entry
+- Every component, except the CycleCloser, the PowerBus and the Splitter, has a
+  :code:`"<name>_Z"` entry
 - Every input stream crossing the system boundary has a :code:`"<name>_c"` entry

@@ -441,72 +441,68 @@ class HeatExchanger(Component):
         r"""
         Add auxiliary cost equations for the heat exchanger.
 
-        This method appends rows to the cost matrix to enforce:
+        The hot stream gives up exergy and the cold stream takes it up, so which stream carries the
+        product depends on where the two sit relative to the ambient temperature. The stream that is
+        fuel follows the F-principle; the product is left to the cost balance.
 
-        Case 1: All streams above ambient temperature
+        Writing :math:`x` for the cost variable of the physical exergy, the rules below hold in both
+        split modes: :math:`x = \mathrm{T}` with split physical exergy and :math:`x = \mathrm{PH}`
+        without it. What changes is only that the mechanical rule at the end exists only with the
+        split.
 
-        F rule for thermal exergy of the hot stream:
-
-        .. math::
-            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
-            = 0
-
-        Case 2: All streams below or equal to ambient temperature
-
-        F rule for thermal exergy of the cold stream:
+        Case 1, all streams above :math:`T_0`: the hot stream is the fuel.
 
         .. math::
-            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
-            = 0
 
-        Case 3: Both stream crossing ambient temperature
+            \frac{\dot{C}^{x}_{\mathrm{in},1}}{\dot{E}^{x}_{\mathrm{in},1}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},1}}{\dot{E}^{x}_{\mathrm{out},1}}
 
-        P rule for thermal exergy of both outlets:
-
-        .. math::
-            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-            = 0
-
-        Case 4: Only the hot inlet above ambient temperature
-
-        F rule for thermal exergy of the cold stream:
+        Case 2, all streams at or below :math:`T_0`: the cold stream carries the cold exergy that is
+        consumed, so it is the fuel.
 
         .. math::
-            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},2}
-            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},2}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},2}
-            = 0
 
-        Case 5: Only the cold inlet below ambient temperature
+            \frac{\dot{C}^{x}_{\mathrm{in},2}}{\dot{E}^{x}_{\mathrm{in},2}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},2}}{\dot{E}^{x}_{\mathrm{out},2}}
 
-        F rule for thermal exergy of the hot stream:
-
-        .. math::
-            -\frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{out},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{out},1}
-            + \frac{1}{\dot{E}^{\mathrm{T}}_{\mathrm{in},1}}\,\dot{C}^{\mathrm{T}}_{\mathrm{in},1}
-            = 0
-
-        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case):
-
-        The dissipative is not handeld here!
-
-        For all cases, the mechanical and chemical exergy costs are handled as follows:
-
-        F rule for mechanical exergy of the hot stream:
+        Case 3, both streams crossing :math:`T_0`: both outlets are product, priced alike
+        (P-principle).
 
         .. math::
-            -\frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{out},i}
-            + \frac{1}{\dot{E}^{\mathrm{M}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{M}}_{\mathrm{in},i}
-            = 0
 
-        F rule for chemical exergy on hot branch:
+            \frac{\dot{C}^{x}_{\mathrm{out},1}}{\dot{E}^{x}_{\mathrm{out},1}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},2}}{\dot{E}^{x}_{\mathrm{out},2}}
+
+        Case 4, only the hot inlet above :math:`T_0`: the cold stream is the fuel.
 
         .. math::
-            -\frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{out},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{out},i}
-            + \frac{1}{\dot{E}^{\mathrm{CH}}_{\mathrm{in},i}}\,\dot{C}^{\mathrm{CH}}_{\mathrm{in},i}
-            = 0
+
+            \frac{\dot{C}^{x}_{\mathrm{in},2}}{\dot{E}^{x}_{\mathrm{in},2}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},2}}{\dot{E}^{x}_{\mathrm{out},2}}
+
+        Case 5, only the cold inlet below :math:`T_0`: the hot stream is the fuel.
+
+        .. math::
+
+            \frac{\dot{C}^{x}_{\mathrm{in},1}}{\dot{E}^{x}_{\mathrm{in},1}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},1}}{\dot{E}^{x}_{\mathrm{out},1}}
+
+        Case 6, the hot stream always above and the cold stream always below :math:`T_0`: the unit
+        has no product and is dissipative. It is handled by :meth:`dis_eqs`, and nothing is written
+        here.
+
+        On top of the rule for the case, the pressure and the composition pass through on both
+        branches :math:`i` at their own specific cost. The mechanical rule exists only with split
+        physical exergy, since without it the stream has no mechanical cost variable; the chemical
+        rule exists whenever chemical exergy is enabled:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{M}_{\mathrm{in},i}}{\dot{E}^\mathrm{M}_{\mathrm{in},i}}
+            = \frac{\dot{C}^\mathrm{M}_{\mathrm{out},i}}{\dot{E}^\mathrm{M}_{\mathrm{out},i}}
+            \qquad
+            \frac{\dot{C}^\mathrm{CH}_{\mathrm{in},i}}{\dot{E}^\mathrm{CH}_{\mathrm{in},i}}
+            = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out},i}}{\dot{E}^\mathrm{CH}_{\mathrm{out},i}}
 
         Parameters
         ----------

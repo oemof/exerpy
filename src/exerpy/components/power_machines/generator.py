@@ -93,15 +93,19 @@ class Generator(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the generator.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the auxiliary cost relations for the generator. Since the generator converts mechanical
-        or thermal energy to electrical energy, the auxiliary equations typically enforce:
+        The generator converts shaft power into electrical power. Both streams are power, each carrying one cost variable, and the
+        outlet is the only one the component produces, so the cost balance alone determines it:
 
-        - No additional auxiliary equations are needed for generators as electrical energy
-          is pure exergy and the cost balance equations are sufficient.
+        .. math::
+
+            \dot{C}^\mathrm{TOT}_\mathrm{out}
+            = \dot{C}^\mathrm{TOT}_\mathrm{in} + \dot{Z}
+
+        No auxiliary equation is therefore written, and the split of the physical exergy does not
+        apply: it concerns material streams only, and this component has none.
 
         Parameters
         ----------
@@ -156,33 +160,6 @@ class Generator(Component):
 
         .. math::
             \dot{C}_{\mathrm{F}} = \dot{C}_{\mathrm{in}}^{\mathrm{TOT}}
-
-        **Calculated exergoeconomic indicators:**
-
-        Specific cost of fuel:
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        Specific cost of product:
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        Cost rate of exergy destruction:
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        Relative cost difference:
-
-        .. math::
-            r = \frac{\dot{C}_{\mathrm{P}} - \dot{C}_{\mathrm{F}}}{\dot{C}_{\mathrm{F}}}
-
-        Exergoeconomic factor:
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
 
         Parameters
         ----------

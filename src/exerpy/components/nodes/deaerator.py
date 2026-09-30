@@ -168,26 +168,37 @@ class Deaerator(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the deaerator.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        A deaerator mixes several streams into one. The stream leaving it is warmer than the colder
+        inlets, so its thermal exergy is the product of the mixing, while what the component does
+        not raise is simply blended.
 
-        (1) Mixing equation for chemical exergy costs (if enabled):
+        Writing :math:`x` for a cost variable that merely passes through, the outlet takes the
+        mass-weighted mean of the specific costs of the inlets:
 
-        - The outlet's specific chemical exergy cost is calculated as a mass-weighted average of the inlet streams' specific chemical exergy costs
+        .. math::
 
-        - This enforces proper chemical exergy cost distribution through the deaerator
+            \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+            = \sum_{i} \frac{\dot{m}_{\mathrm{in},i}}{\sum_{k} \dot{m}_{\mathrm{in},k}}
+              \cdot \frac{\dot{C}^{x}_{\mathrm{in},i}}{\dot{E}^{x}_{\mathrm{in},i}}
 
-        (2) Mixing equation for mechanical exergy costs:
+        With split physical exergy this rule is written for the mechanical exergy,
+        :math:`x = \mathrm{M}`, while the thermal exergy of the outlet is the product of the
+        mixing and is left to the cost balance.
 
-        - The outlet's specific mechanical exergy cost is calculated as a mass-weighted average of the inlet streams' specific mechanical exergy costs
+        Without the split there is no mechanical cost variable, and the single cost variable of the
+        physical exergy of the outlet is the product, so **no mixing rule is written at all**; the
+        cost balance alone determines it:
 
-        - This ensures mechanical exergy costs are properly conserved in the mixing process
+        .. math::
 
-        Both equations implement the proportionality rule for mixing processes where
-        the outlet's specific costs should reflect the contribution of each inlet stream.
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \sum_{i} \dot{C}^\mathrm{PH}_{\mathrm{in},i} + \dot{Z}
+
+        With chemical exergy enabled the rule is written for :math:`x = \mathrm{CH}` in either
+        mode, since the composition of the outlet is the mixture of the inlets.
 
         Parameters
         ----------
@@ -359,23 +370,6 @@ class Deaerator(Component):
             + \sum \dot{C}_{\mathrm{F,cold}}
             - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
             - \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
-
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
 
         Parameters
         ----------

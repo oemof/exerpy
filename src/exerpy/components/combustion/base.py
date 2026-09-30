@@ -136,9 +136,25 @@ class CombustionChamber(Component):
         r"""
         Add auxiliary cost equations for the combustion chamber.
 
-        This method appends two rows to the cost matrix to enforce:
+        The hot gas leaving the chamber is the product, so the cost of its thermal exergy is left to
+        the cost balance. What the chamber does not raise is blended: the outlet takes the
+        mass-weighted mean of the specific costs of the two inlets (F-principle).
 
-        1. F rule for mechanical exergy:
+        **With split physical exergy** the rule is written for the mechanical exergy; **without the
+        split** the stream carries a single cost variable for its physical exergy, that variable is
+        the product, and no mechanical rule exists:
+
+        .. math::
+
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \dot{C}^\mathrm{PH}_{\mathrm{in},1} + \dot{C}^\mathrm{PH}_{\mathrm{in},2} + \dot{Z}
+
+        The chemical rule is written in either mode, and a combustion chamber needs the chemical
+        exergy to be enabled at all, since the fuel enters as chemical exergy.
+
+        The two rules, as they are written into the matrix:
+
+        1. F rule for mechanical exergy (only with split physical exergy):
 
         .. math::
             -\frac{1}{\dot{E}^{\mathrm{M}}_{\text{out}}}\,\dot{C}^{\mathrm{M}}_{\text{out}}

@@ -219,27 +219,42 @@ class Valve(Component):
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the valve.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        A valve destroys exergy and produces nothing, unless it expands into the range below the
+        ambient temperature: there the cold exergy the stream gains is a product. A valve that stays
+        above :math:`T_0` is dissipative, handled by :meth:`dis_eqs` instead, and this method writes
+        nothing for it.
 
-        For (T_in > T0 and T_out > T0) or (T_in <= T0 and T_out > T0):
-            - Valve is treated as dissipative (warning issued)
+        For a productive valve, expanding to :math:`T_\mathrm{out} \leq T_0`, the pressure the stream
+        gives up is the fuel and follows the F-principle.
 
-        For T_out <= T0:
-        (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+        With split physical exergy the cold exergy the stream gains is the product, determined by
+        the cost balance, and the mechanical exergy needs the rule:
 
-        - F-principle: specific mechanical exergy costs equalized between inlet/outlet
+        .. math::
 
-        - If E_M is zero for either stream, appropriate fallback coefficients are used
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
 
-        When chemical_exergy_enabled is True:
-        (2) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+        Without the split there is no mechanical cost variable to rule on: the stream carries one
+        variable for its physical exergy, and the cost balance alone determines it:
 
-        - F-principle: specific chemical exergy costs equalized between inlet/outlet
-        - If E_CH is zero for either stream, appropriate fallback coefficients are used
+        .. math::
+
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \dot{C}^\mathrm{PH}_\mathrm{in} + \dot{Z}
+
+        With chemical exergy enabled, either way, the composition does not change:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        Where a stream carries no exergy of a given kind, its cost variable is fixed directly
+        instead of being equated, since the specific cost of nothing is undefined.
 
         Parameters
         ----------
@@ -495,33 +510,6 @@ class Valve(Component):
 
         .. math::
             \dot{C}_{\mathrm{F}} = \dot{C}_{\mathrm{in}}^{\mathrm{M}} - \dot{C}_{\mathrm{out}}^{\mathrm{M}}
-
-        **Calculated exergoeconomic indicators:**
-
-        Specific cost of fuel:
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        Specific cost of product:
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        Cost rate of exergy destruction:
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        Relative cost difference:
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        Exergoeconomic factor:
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
 
         Parameters
         ----------

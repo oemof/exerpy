@@ -24,5 +24,3 @@ New Features
 Contributors
 ############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
-</content>
-</invoke>

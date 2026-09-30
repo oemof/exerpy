@@ -1,25 +1,18 @@
+.. _whats_new_label:
+
 ##########
 What's New
 ##########
 
-Discover notable new features and improvements in each release.
+Notable new features and improvements of the current release series. The changelogs of the earlier
+series are linked at the bottom of this page.
 
-.. include:: whats_new/v0-0-10.rst
+.. include:: whats_new/v0-1-0.rst
 
-.. include:: whats_new/v0-0-9.rst
+Earlier releases
+++++++++++++++++
 
-.. include:: whats_new/v0-0-8.rst
+.. toctree::
+    :maxdepth: 1
 
-.. include:: whats_new/v0-0-7.rst
-
-.. include:: whats_new/v0-0-6.rst
-
-.. include:: whats_new/v0-0-5.rst
-
-.. include:: whats_new/v0-0-4.rst
-
-.. include::  whats_new/v0-0-3.rst
-
-.. include::  whats_new/v0-0-2.rst
-
-.. include::  whats_new/v0-0-1.rst
+    whats_new/v0-0

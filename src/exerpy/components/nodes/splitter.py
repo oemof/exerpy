@@ -78,13 +78,44 @@ class Splitter(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
+        r"""
         Auxiliary equations for the splitter.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        equality of specific exergy costs between the single inlet stream and each outlet stream.
-        Thermal and mechanical costs are always equated; chemical costs are equated only if enabled.
+        A splitter divides one stream into several of the same state, so every branch leaves at the
+        specific cost of the inlet. It converts nothing and gets no cost balance of its own.
+
+        With split physical exergy, for every outlet :math:`j`:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_{\mathrm{out},j}}{\dot{E}^\mathrm{T}_{\mathrm{out},j}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_{\mathrm{out},j}}{\dot{E}^\mathrm{M}_{\mathrm{out},j}}
+
+        Without the split, one rule per outlet instead of two:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{PH}_{\mathrm{out},j}}{\dot{E}^\mathrm{PH}_{\mathrm{out},j}}
+
+        With chemical exergy enabled, either way:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out},j}}{\dot{E}^\mathrm{CH}_{\mathrm{out},j}}
+
+        A branch that carries no exergy carries no cost either, so its cost variable is set to zero
+        rather than equated:
+
+        .. math::
+
+            \dot{C}^{x}_{\mathrm{out},j} = 0
+            \qquad \text{for} \qquad \dot{E}^{x}_{\mathrm{out},j} = 0
 
         Parameters
         ----------
@@ -100,6 +131,10 @@ class Splitter(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -112,55 +147,38 @@ class Splitter(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        inlet = self.inl[0]
+        # The single inlet is not necessarily on connector 0: the parsers number the
+        # connectors as the model does, so take the connection itself.
+        inlet = next(iter(self.inl.values()))
 
-        # Thermal cost equality for each outlet: c_T_inlet = c_T_outlet
-        # where c_T = C_T / (m * e_T), so we divide by (m * e_T) to equate specific costs.
-        for outlet in self.outl.values():
-            E_T_in = inlet["m"] * inlet["e_T"]
-            E_T_out = outlet["m"] * outlet["e_T"]
-            A[counter, inlet["CostVar_index"]["T"]] = (1 / E_T_in) if E_T_in != 0 else 1
-            A[counter, outlet["CostVar_index"]["T"]] = (-1 / E_T_out) if E_T_out != 0 else -1
-            equations[counter] = {
-                "kind": "aux_equality",
-                "objects": [self.name, inlet["name"], outlet["name"]],
-                "property": "c_T",
-            }
-            b[counter] = 0
-            counter += 1
-
-        # Mechanical cost equality for each outlet: c_M_inlet = c_M_outlet
-        for outlet in self.outl.values():
-            E_M_in = inlet["m"] * inlet["e_M"]
-            E_M_out = outlet["m"] * outlet["e_M"]
-            A[counter, inlet["CostVar_index"]["M"]] = (1 / E_M_in) if E_M_in != 0 else 1
-            A[counter, outlet["CostVar_index"]["M"]] = (-1 / E_M_out) if E_M_out != 0 else -1
-            equations[counter] = {
-                "kind": "aux_equality",
-                "objects": [self.name, inlet["name"], outlet["name"]],
-                "property": "c_M",
-            }
-            b[counter] = 0
-            counter += 1
-
-        # Chemical cost equality for each outlet (if enabled)
+        # Cost equality of the physical exergy for each outlet: c_x_inlet = c_x_outlet,
+        # where c_x = C_x / (m * e_x), so we divide by (m * e_x) to equate specific costs.
+        labels = ["T", "M"] if split_physical_exergy else ["PH"]
         if chemical_exergy_enabled:
+            labels.append("CH")
+
+        for label in labels:
             for outlet in self.outl.values():
-                E_CH_in = inlet["m"] * inlet["e_CH"]
-                E_CH_out = outlet["m"] * outlet["e_CH"]
-                A[counter, inlet["CostVar_index"]["CH"]] = (1 / E_CH_in) if E_CH_in != 0 else 1
-                A[counter, outlet["CostVar_index"]["CH"]] = (-1 / E_CH_out) if E_CH_out != 0 else -1
+                E_in = inlet["m"] * inlet[f"e_{label}"]
+                E_out = outlet["m"] * outlet[f"e_{label}"]
+                if E_out == 0:
+                    # A branch that carries no exergy carries no cost either. Equating specific
+                    # costs would leave a cost on it that then leaves the system unaccounted.
+                    A[counter, outlet["CostVar_index"][label]] = 1
+                else:
+                    A[counter, inlet["CostVar_index"][label]] = (1 / E_in) if E_in != 0 else 1
+                    A[counter, outlet["CostVar_index"][label]] = -1 / E_out
                 equations[counter] = {
                     "kind": "aux_equality",
                     "objects": [self.name, inlet["name"], outlet["name"]],
-                    "property": "c_CH",
+                    "property": f"c_{label}",
                 }
                 b[counter] = 0
                 counter += 1
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         """
         The exergoeconomic balance for the Splitter component is not neglected,
         as it does not perform any conversion of energy forms.
@@ -173,6 +191,10 @@ class Splitter(Component):
             Ambient temperature
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
         """
 
         self.C_P = np.nan

@@ -278,7 +278,7 @@ The import of the exerpy dependency is the same for all simulators:
 
 
 Running the exergy analysis and working with the results is now
-independant for all simulators.
+independent for all simulators.
 
 4. **Perform the Exergy Analysis**
 

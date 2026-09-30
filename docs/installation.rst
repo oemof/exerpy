@@ -78,7 +78,7 @@ Installation of ExerPy
          3.x (64 or 32 bit).
       2. Install miniforge3
       3. Open 'miniforge prompt' to manage your virtual environments. You can
-         create a new environment and acivate it by
+         create a new environment and activate it by
 
          .. code-block:: console
 
@@ -110,6 +110,12 @@ Installation of ExerPy
          .. code-block:: console
 
             pip install exerpy[aspen]
+
+         - if you want to create Sankey and waterfall diagrams
+
+         .. code-block:: console
+
+            pip install exerpy[viz]
 
    .. tab-item:: Developer Version
 

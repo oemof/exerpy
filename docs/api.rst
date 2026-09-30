@@ -99,6 +99,51 @@ Example:
     model_path = 'my_model.ebs'
     ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts')
 
+.. note::
+
+    **Profiles (Ebsilon only).** An Ebsilon model can hold several profiles, i.e.
+    operating points of the same plant such as part load or seasonal cases. They form a
+    tree: the root profile holds the design case and its children hold the deviations.
+    ExerPy simulates and analyses one profile at a time, by default the one the model was
+    saved with.
+
+    Use :code:`get_ebsilon_profiles` to see which profiles a model contains. It opens the
+    model without simulating it and returns the name, id, parent and active flag of each
+    profile:
+
+    .. code-block:: python
+
+        from exerpy.parser.from_ebsilon.ebsilon_parser import get_ebsilon_profiles
+
+        for profile in get_ebsilon_profiles('my_model.ebs'):
+            print(profile)
+        # {'name': 'Design', 'id': 0, 'parent': None, 'active': True}
+        # {'name': 'Part load 50%', 'id': 1, 'parent': 'Design', 'active': False}
+
+    Pass one of them as :code:`profile` (name or id) to analyse that operating point.
+    The profile is activated before the simulation runs, so all results refer to it. An
+    unknown name raises a :code:`ValueError` listing the available profiles:
+
+    .. code-block:: python
+
+        ean = ExergyAnalysis.from_ebsilon(
+            'my_model.ebs', chemExLib='Ahrendts', profile='Part load 50%'
+        )
+
+    A part load study is then a loop over the profiles, for instance:
+
+    .. code-block:: python
+
+        for profile in get_ebsilon_profiles('my_model.ebs'):
+            ean = ExergyAnalysis.from_ebsilon(
+                'my_model.ebs', chemExLib='Ahrendts', profile=profile['name']
+            )
+            ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+            ean.export_to_json(f"results/{profile['name']}.json")
+
+    The same argument is available in :code:`run_ebsilon`, which returns the parsed data
+    of a single profile without performing the analysis.
+
 The parsing process involves the following key steps:
 
     1. **Initialization and Simulation**: ExerPy initializes the model by connecting
@@ -236,9 +281,15 @@ to determine cost rates and specific costs for every connection and component.
 
 .. note::
 
-    Exergoeconomic analysis requires the exergy analysis to be performed with
-    :code:`split_physical_exergy=True`, which separates thermal and mechanical exergy components.
-    This is currently not available for Aspen Plus models.
+    With :code:`split_physical_exergy=True` a material stream carries a cost rate for its thermal
+    (:code:`C^T`) and one for its mechanical exergy (:code:`C^M`). With :code:`False` it carries a
+    single cost rate for its physical exergy (:code:`C^PH`) instead, which is what Aspen Plus models
+    have to use. The split resolves the fuel and the product of a component more finely, so the two
+    do not give the same specific costs. Below the ambient temperature the split is needed to charge
+    the cold exergy of a stream to the product of the component producing it; without it such a
+    component either keeps the cold exergy in its outlet stream or turns dissipative, and a warning
+    says so. The two settings are compared on the CGAM process in
+    :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
 
 ======
 Inputs
@@ -246,8 +297,8 @@ Inputs
 
 The exergoeconomic analysis requires the following inputs:
 
-- **Completed ExergyAnalysis**: An :code:`ExergyAnalysis` instance with :code:`split_physical_exergy=True`
-  on which :code:`analyse()` has already been called.
+- **Completed ExergyAnalysis**: An :code:`ExergyAnalysis` instance on which :code:`analyse()` has
+  already been called.
 
 - **Cost dictionary**: A dictionary containing:
 
@@ -312,3 +363,4 @@ API References
     api/components.rst
     api/functions.rst
     api/parser.rst
+    api/visualization.rst

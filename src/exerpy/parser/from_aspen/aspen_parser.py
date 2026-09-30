@@ -615,6 +615,7 @@ class AspenModelParser:
         Assign connectors for a Turbine (Compr with MODEL_TYPE=TURBINE).
 
         In Aspen, a gas turbine has up to one input and one output power connection:
+
         - F(IN): inlet gas flow → inlet connector 0
         - P(OUT): outlet gas flow → outlet connector 0
         - WS(OUT): power output → outlet connector 1

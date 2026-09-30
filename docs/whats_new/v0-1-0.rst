@@ -1,0 +1,222 @@
+v0.1.0 (30.09.2026)
+++++++++++++++++++++++
+
+New Features
+############
+- The exergoeconomic analysis is no longer marked as beta: every component provides its auxiliary
+  equations and its cost balance.
+- The exergoeconomic analysis runs without split physical exergy as well. A material stream then
+  carries a single cost rate for its physical exergy, ``C^PH``, instead of one for its thermal and
+  one for its mechanical exergy, and the auxiliary equations of every component follow. Models that
+  cannot provide the split, such as the ones exported from Aspen Plus, can be costed now. The split
+  resolves the fuel and the product of a component more finely, so the specific costs of the two
+  cases differ, and below the ambient temperature a component either keeps the cold exergy in its
+  outlet stream or turns dissipative, with a warning that names it.
+- The cost columns of the connection results follow the cost variables of the analysis: ``C^T`` and
+  ``C^M`` with split physical exergy, ``C^PH`` without.
+- A new example costs the CGAM process with and without split physical exergy and compares the two,
+  component by component and stream by stream. See
+  :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
+- The CGAM example takes its investment cost rates from Kelly (2008), who evaluated the cost model
+  of the CGAM problem for this base case, so the results can be held against the ones published
+  there. The specific costs agree within about 6 % and the exergoeconomic factor within about 1.5
+  points; the remaining difference comes from the thermodynamic model, real fluid properties here
+  against the ideal gas with constant heat capacity of the reference.
+- The solar thermal components take part in the exergoeconomic analysis. The heliostat field, the
+  parabolic trough and the solar tower provide their auxiliary equations and their cost balance, so
+  a solar plant can be costed end to end. The incoming radiation is a stream of the plant and
+  carries a cost of its own, which is zero in the examples, and the optical and thermal losses of
+  the collector field show up as exergy destruction rather than as a loss.
+- The ``Drum`` provides its exergoeconomic balance.
+- The ``Storage`` takes part in the exergoeconomic analysis. A storage that charges or discharges
+  does not balance over its streams alone, so the analysis gives the exergy that stays behind in the
+  store, or comes out of it, a cost variable of its own. That variable is priced like the physical
+  exergy of the outlet, since the store is filled at the state of the outlet, and it enters the cost
+  balance of the component and of the system on the side it flows to. A storage holding its level
+  stores nothing and is costed like a pipe.
+- The ``SteamGenerator`` takes part in the exergoeconomic analysis, with the drain priced like the
+  high pressure steam, the mechanical and chemical exergy passed through, and both steam outlets
+  produced at the same specific cost.
+- A TESPy ``ParabolicTrough`` is a ``ParabolicTrough`` in ExerPy now, not a ``SimpleHeatExchanger``,
+  and the parser adds the radiation on its aperture, :math:`E \cdot A`, as a heat connection named
+  after the collector with a ``_Q`` suffix. The fuel of the collector is therefore the incoming
+  radiation, as in the models exported from EBSILON.
+- The solar thermal examples run an exergoeconomic analysis as well, and the parabolic trough plant
+  exists as a TESPy model beside the EBSILON one. A test costs both and holds the results of every
+  component of the one against the other, so the exergy of the streams, the auxiliary equations and
+  the scaling of the solar field are checked across two simulators at once.
+- :class:`~exerpy.analyses.EconomicAnalysis` turns the purchase equipment costs of the components
+  into the cost rates the exergoeconomic analysis needs, with the total revenue requirement method of
+  Bejan et al. (1996). It grows the equipment cost into the total capital investment, which the class
+  did not do before and without which every cost rate was roughly six times too low, and levelizes
+  the investment and the operating and maintenance cost over the lifetime of the plant.
+- Every cost factor of the economic analysis may be given once for the whole plant or separately per
+  component, so a heat exchanger can carry a different installation effort from a motor and a
+  compressor a different maintenance share from a valve. Each component then carries its own
+  investment and its own operating cost instead of the plant total being pooled and shared out by
+  purchase equipment cost.
+- Equipment quoted in an earlier year is carried to a reference year with a plant cost index, given
+  per component or once for the whole plant, and given by the user. Where the reference year lies
+  beyond the last entry of the index, the cost is carried with the index as far as it reaches and the
+  remaining years are bridged with the nominal escalation rate, with a warning saying so. A year that
+  the index does not cover at all is an error naming the year.
+- The first-year operating and maintenance cost may be a share of the purchase equipment cost or of
+  the total capital investment, selected with ``omc_basis``. The two differ by the installation
+  factor, so a share meant for one basis is wrong on the other by that factor.
+- The cost of the streams entering the plant is levelized over the lifetime of the plant as well,
+  each with its own nominal escalation rate, so the cost of the fuel and the cost of the equipment
+  are levelized over the same period and the specific cost of the product is a levelized cost too. A
+  cost may be given per unit of exergy or per unit of energy. The levelized fuel cost and the
+  complete total revenue requirement are part of the results.
+- :meth:`~exerpy.analyses.EconomicAnalysis.compute_costs` returns the cost rates of the components
+  and the costs of the entering streams in one dictionary, keyed for
+  :meth:`~exerpy.analyses.ExergoeconomicAnalysis.run`, and checks both against the plant: a component
+  without an equipment cost, a cost for something that is not in the plant, a cost for a component
+  that carries no cost balance and a stream entering the plant without a cost are all reported.
+  :meth:`~exerpy.analyses.EconomicAnalysis.compute_z` and
+  :meth:`~exerpy.analyses.EconomicAnalysis.compute_c` return the two halves on their own.
+  :meth:`~exerpy.analyses.EconomicAnalysis.economic_results` prints the levelized costs of the plant
+  and the cost rate of every component.
+- :meth:`~exerpy.analyses.EconomicAnalysis.from_json` reads the cost assumptions from a file, which
+  keeps everything about one component in one entry instead of several dictionaries keyed by the same
+  names. A value given for the whole plant applies to every component that does not name its own, so
+  only what differs has to be written out, and a component or a stream cost may be a plain number
+  instead of an object.
+- A new example costs the heat pump from the equipment costs of its components, so the whole way from
+  what a component costs to what its product costs is in one place. It comes with two cost files for
+  the same plant, one with a single set of assumptions throughout and one with the quotes coming from
+  three different years and the factors differing per component. See
+  :ref:`From Equipment Costs to the Cost of the Product <examples_heatpump_exergoeconomic_label>`.
+- The documentation has a page of its own on the economic analysis, with the nomenclature, the
+  capital investment, the levelizing factors and the cost of the fuel, alongside the pages on the
+  exergy and the exergoeconomic analysis.
+- The exergoeconomic examples are part of the repository now. They cover the CGAM process, whose
+  investment cost rates and fuel cost are the ones of the CGAM problem itself (Valero et al., 1994)
+  instead of round numbers, and they run without any cost correlation module. The cost model is
+  verified against the purchase costs the paper reports for its optimal design.
+
+Bug Fixes
+#########
+- The relative cost difference ``r`` of the turbine, the compressor, the pump, the generator and the
+  motor was computed from the cost rates, ``(C_P - C_F) / C_F``, instead of from the specific costs,
+  ``(c_P - c_F) / c_F``. The two agree only where the exergy of fuel and product are equal, so the
+  value was wrong wherever a component destroys exergy: for the compressor of the CGAM example it
+  read 6.6 % instead of 14.7 %. The heat exchangers and the other components already used the
+  correct definition.
+- The ``c^TOT`` column of a heat or power stream in the table of the material connections was filled
+  with the value of ``C^TOT``.
+- A ``PowerBus`` with several inlets and a single outlet contributed no equation at all, which left
+  the cost matrix singular. It writes its cost balance now.
+- The ``PowerBus``, the ``Splitter`` and the ``Mixer`` assumed that their single inlet or outlet sits
+  on connector 0. A parser is free to number the connectors as the model does, so the lookup raised a
+  ``KeyError`` on models that do not start at 0.
+- The cost of fuel and product of the ``FlashTank`` added up only one of the cost variables of a
+  stream, so the two were not comparable quantities wherever the split or the chemical exergy added
+  another one.
+- The EBSILON parser attached the synthetic solar heat connection of a collector as an outlet of the
+  component instead of an inlet, so the radiation left the collector rather than entering it.
+- The console output of the analysis used characters outside of the encoding of a Windows console,
+  which raised a ``UnicodeEncodeError`` instead of printing the report.
+- The relative cost difference of the ``TOT`` row divided by a cost of fuel of zero, which happens
+  whenever the fuel of the plant is free, as for a solar plant.
+- The exergy fuel of the ``SteamGenerator`` was derived from the very streams it is meant to heat,
+  so the component destroyed no exergy at all without split physical exergy and too little with it.
+  It is the exergy of the incoming heat now.
+- The cost of the product of a turbine was the cost of all the power leaving it, while its exergy
+  product is the power it adds. On a shaft that carries the power of the stages before it, as the
+  models exported from EBSILON have it, every stage but the first was therefore credited with the
+  power of the stages in front of it: the specific cost of the product of the last stage of the
+  parabolic trough example read 86.3 instead of 26.3 EUR/GJ.
+- A collector standing in for ``num_branches`` identical parallel branches scaled the exergy balance
+  but not the cost balance, so the plant was costed as if it had one branch. The cost balance of
+  every component counts a branch stream as often as it exists now. Without it the parabolic trough
+  example of EBSILON, whose solar field is 100 branches behind a header, lost 99 % of the cost of
+  its field.
+- The specific cost of an outlet of a ``Splitter`` that carries no exergy was equated with the cost
+  of the inlet, which left a cost on a stream with nothing in it. Such an outlet costs nothing now.
+- An investment cost given for a ``CycleCloser``, a ``PowerBus`` or a ``Splitter`` was swallowed:
+  those components have no cost balance to charge it to. A non-zero cost for one of them is an error
+  now, and a cost is no longer mandatory for a ``Splitter``.
+- The ``Mixer`` divided by zero when its inlets were already at the state of its outlet.
+- The auxiliary equations of the ``CycleCloser`` were written on the specific exergy of its streams
+  instead of on their exergy flow, which is what the F-principle of the SPECO method asks for. The
+  two agree for a cycle closer, whose inlet and outlet carry the same mass flow, so no result
+  changes; every other component already used the exergy flow.
+- The auxiliary equations of the ``FlashTank`` equated the cost per unit of specific exergy of its
+  streams instead of their specific cost, so the two outlets were priced wrongly relative to each
+  other whenever they did not carry the same mass flow. In a tank splitting a stream 3 to 7 the
+  vapour came out 2.33 times as expensive as the liquid, instead of equally expensive.
+- The exergy destruction ratio ``y*`` of a component divided by the exergy destruction of the plant
+  without checking it against zero.
+- The constant escalation levelization factor of the economic analysis was missing the factor ``k``
+  that Bejan et al. put in front of it, so every levelized operating, maintenance and fuel cost came
+  out too high, by ``1 + i_eff``, that is 12 % at a rate of return of 12 %. The factor now reproduces
+  the worked example of the reference, and a test holds it against those numbers.
+- The ``Storage`` assumed its streams sit on connector 0 and reported no fuel and no product at all
+  when it neither charged nor discharged.
+- The source distribution shipped the tests and the documentation of the CGAM exergoeconomic example
+  but not the example itself, so neither the test suite nor the documentation could be built from it.
+
+Documentation
+#############
+- The auxiliary equations of every component are written out as equations, for the analysis with and
+  without split physical exergy. Where the two differ in more than the name of a cost variable, the
+  docstring says so: a compressor, a pump, a mixer, a valve or a solar collector writes no rule at
+  all on the physical exergy without the split, because the stream then carries a single cost
+  variable that the cost balance determines, and the drum loses the rule coupling its thermal and
+  its mechanical cost with the variables it coupled.
+- The definitions that hold for every component, the specific costs of fuel and product, the cost of
+  exergy destruction, the relative cost difference and the exergoeconomic factor, are stated once in
+  :class:`~exerpy.components.component.Component` instead of being repeated in every component. Each
+  component documents only its own cost of fuel and cost of product.
+- The economic analysis states its equations as equations. The capital recovery factor, the cost
+  escalation levelization factor, the levelized investment cost and the cost rate of a component
+  were written as plain text, and two of them ran together into one unreadable line.
+- The docstring of the auxiliary equations of the ``PowerBus`` described a cycle closer, a component
+  it has nothing in common with.
+
+API Changes
+###########
+- The cost that :class:`~exerpy.analyses.EconomicAnalysis` levelizes is the one at the beginning of
+  the first year, in the price level of the reference year, as the reference defines it. An
+  expenditure known for the first year of operation has to be divided by ``1 + r_n`` before it is
+  given to the analysis.
+- :class:`~exerpy.analyses.EconomicAnalysis` takes its parameters as arguments instead of one
+  ``pars`` dictionary, and the purchase equipment costs as ``{"<component>": cost}`` instead of a
+  list whose order had to match something unstated. ``PEC``, ``i_eff``, ``n``, ``tau``, ``f_tci`` and
+  ``omc_share`` are required, since none of them can be defaulted without silently changing the
+  result; only ``r_n`` and ``currency`` have defaults. ``compute_component_costs()`` takes no
+  arguments any more and returns a dictionary keyed by component name, and
+  ``compute_levelized_investment_cost()`` is gone: the investment now follows from the total capital
+  investment of every component.
+- The ``SteamGenerator`` takes the temperature of its heat source from a new ``T_hot`` attribute, in
+  K. Without it the component falls back to the former approximation of its exergy fuel and warns.
+- A TESPy model with a ``ParabolicTrough`` has to specify the irradiance ``E`` and the aperture area
+  ``A`` of the collector, since the exergy fuel is the radiation on the aperture. Without them the
+  parser falls back to the heat transferred to the fluid and warns that the optical and thermal
+  losses are missing from the exergy destruction.
+- ``aux_eqs()``, ``dis_eqs()`` and ``exergoeconomic_balance()`` of a component take an additional
+  ``split_physical_exergy`` argument. Custom components have to accept it; it defaults to ``True``,
+  so an implementation that ignores it keeps working as long as the split is used.
+
+Testing
+#######
+- Every component is checked against the counting invariant of the cost matrix: it has to provide one
+  auxiliary equation less than it has cost variables on its outlet streams (one more than that, and
+  no cost balance, when it is dissipative). The check runs over three models, with and without split
+  physical exergy and with and without chemical exergy.
+- The parabolic trough plant is costed in both of its models, the one exported from EBSILON and the
+  one built in TESPy, and the results of every component of the one are held against the other. That
+  one test covers the exergy of the streams, the auxiliary equations of every component in the plant
+  and the scaling of the solar field at once.
+- The solar thermal components, the ``Storage`` and the ``SteamGenerator`` are covered, each with and
+  without split physical exergy, over the cost balance of the component, the indicators it reports
+  and the errors it raises when a stream it needs is missing.
+- The four components that no costed example contains, the ``FlashTank``, the
+  ``SimpleHeatExchanger``, the ``Storage`` and the ``SteamGenerator``, are costed on a plant of their
+  own, so every component of the library takes part in an exergoeconomic analysis somewhere in the
+  test suite.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

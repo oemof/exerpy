@@ -2,9 +2,8 @@
 ExerPy: Exergy Analysis in Python
 #################################
 
-ExerPy is a Python library and framework for automated exergy analysis of energy-conversion systems. It builds on the exergy analysis methodology
-implemented in TESPy and extends its capabilities to seamlessly integrate
-with simulation tools such as Ebsilon Professional, Aspen Plus, and TESPy itself.
+ExerPy is a Python library and framework for automated exergy analysis of energy-conversion systems.
+It integrates seamlessly with simulation tools such as Ebsilon Professional, Aspen Plus and TESPy.
 ExerPy enables engineers and researchers to identify inefficiencies and optimize
 the performance of thermodynamic systems through automated workflows and
 consistent data handling.
@@ -13,6 +12,8 @@ With its advanced features, ExerPy accounts for both physical and chemical exerg
 allows users to perform automated analysis of individual components and entire processes. This
 helps identify where and why exergy losses occur, facilitating strategies to improve
 efficiency, reduce costs, and support sustainable energy use.
+
+This release has been tested with TESPy 0.11.2, Ebsilon Professional 17 and Aspen Plus 14.5.
 
 ExerPy is part of the Open Energy Modelling Framework `oemof <https://oemof.org/>`_.
 
@@ -129,7 +130,7 @@ ongoing development. Use the following BibTeX entry:
          title = {{ExerPy}: Exergy Analysis in Python},
          note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou}
          url = {https://github.com/oemof/exerpy},
-         version = {0.0.9},
+         version = {0.1.0},
          year = {2026}
     }
 

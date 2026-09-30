@@ -1335,6 +1335,26 @@ class ExergoeconomicAnalysis:
         self.currency = currency  # EUR is default currency for cost calculations
 
     @property
+    def _branch_scales(self) -> dict:
+        """Return how often each stream exists in the plant.
+
+        A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
+        streams then carry the mass flow and the cost of a single branch, while the heat it takes
+        in and its investment cost belong to all of them. The streams of the headers on either side
+        carry the whole field. Every cost balance that a branch stream enters has to count it that
+        often, or the cost of the field is the cost of one branch.
+        """
+        scales = {}
+        for comp in self.components.values():
+            branches = getattr(comp, "beta", 1) or 1
+            if branches == 1 or not hasattr(comp, "_fluid_streams"):
+                continue
+            for conn in list(comp.inl.values()) + list(comp.outl.values()):
+                if conn is not None and conn.get("kind", "material") == "material":
+                    scales[conn["name"]] = branches
+        return scales
+
+    @property
     def cost_labels(self) -> tuple[str, ...]:
         """
         Cost variables of a material stream.
@@ -1553,15 +1573,16 @@ class ExergoeconomicAnalysis:
                 # Assign the row index for the cost balance equation to this component.
                 comp.exergy_cost_line = counter
                 for conn in self.connections.values():
+                    scale = self._branch_scales.get(conn.get("name"), 1)
                     # Check if the connection is linked to a valid component.
                     # If the connection's target is the component, it is an inlet (add +1).
                     if conn.get("target_component") == comp.name:
                         for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = 1  # Incoming costs
+                            self._A[counter, col] = scale  # Incoming costs
                     # If the connection's source is the component, it is an outlet (subtract -1).
                     elif conn.get("source_component") == comp.name:
                         for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = -1  # Outgoing costs
+                            self._A[counter, col] = -scale  # Outgoing costs
                     self.equations[counter] = {"kind": "cost_balance", "object": [comp.name], "property": "Z_costs"}
 
                 self._b[counter] = -getattr(comp, "Z_costs", 1)
@@ -1957,10 +1978,11 @@ class ExergoeconomicAnalysis:
                 else:
                     # For heat/power streams, use C_TOT directly (no loss attribution applies)
                     cost = conn.get("C_TOT", 0) or 0
+                scale = self._branch_scales.get(conn.get("name"), 1)
                 if conn.get("target_component") == name:
-                    inlet_sum += cost
+                    inlet_sum += scale * cost
                 if conn.get("source_component") == name:
-                    outlet_sum += cost
+                    outlet_sum += scale * cost
             comp.C_in = inlet_sum
             comp.C_out = outlet_sum
             z_cost = getattr(comp, "Z_costs", 0)

@@ -232,27 +232,49 @@ class Turbine(Component):
         return material_outlets[min(material_outlets)]
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
-        """
+        r"""
         Auxiliary equations for the turbine.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        The power is the product of the turbine and the expanding stream is its fuel, so every cost
+        variable the stream carries follows the F-principle: it leaves the component at the specific
+        cost at which it entered.
 
-        For each material outlet (when inlet and first outlet are above ambient temperature T0):
+        With split physical exergy, for every material outlet:
 
-        (1) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
-            - F-principle: specific thermal exergy costs equalized between inlet and each outlet
+        .. math::
 
-        (2) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
-            - F-principle: specific mechanical exergy costs equalized between inlet and each outlet
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
 
-        (3) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0 (if chemical_exergy_enabled)
-            - F-principle: specific chemical exergy costs equalized between inlet and each outlet
+        Without the split the stream carries a single cost variable for its physical exergy, and the
+        two rules above collapse into one:
 
-        For power outlets (with both source and target components):
+        .. math::
 
-        (4) 1/E_ref * C_ref - 1/E_out * C_out = 0
-            - P-principle: specific power exergy costs equalized across all power outlets
+            \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{PH}_\mathrm{out}}{\dot{E}^\mathrm{PH}_\mathrm{out}}
+
+        With chemical exergy enabled, either way:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        The power leaving the turbine is one single product, so all of its outlets are priced alike
+        (P-principle), against the first of them as a reference:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{TOT}_\mathrm{ref}}{\dot{E}^\mathrm{TOT}_\mathrm{ref}}
+            = \frac{\dot{C}^\mathrm{TOT}_\mathrm{out}}{\dot{E}^\mathrm{TOT}_\mathrm{out}}
+
+        Expanding below the ambient temperature is only resolved with the split. Without it the
+        component warns and charges the outlet with the specific cost of the physical exergy of the
+        inlet; with it, the case is not implemented and no equation is written.
 
         Parameters
         ----------
@@ -408,23 +430,6 @@ class Turbine(Component):
             = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
             - \sum \dot{C}^{\mathrm{M}}_{\mathrm{material,out}}
 
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -454,8 +459,12 @@ class Turbine(Component):
         f : float
             Exergoeconomic factor (dimensionless).
         """
-        # Sum the cost of all outlet power streams.
-        C_power_out = sum(stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power")
+        # The cost of the power the turbine delivers. A stage of a turbine train may sit on a shaft
+        # that already carries the power of the stages before it, and then only the power it adds is
+        # its own product, exactly as in the exergy balance.
+        C_power_out = sum(
+            stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power"
+        ) - sum(stream.get("C_TOT", 0) for stream in self.inl.values() if stream.get("kind") == "power")
         # Assume a single primary inlet for material cost properties.
         inlet = self.inl[0]
         # Filter material outlets and sum their cost components.

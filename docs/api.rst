@@ -361,6 +361,7 @@ API References
 
     api/analyses.rst
     api/components.rst
+    api/costing.rst
     api/functions.rst
     api/parser.rst
     api/visualization.rst

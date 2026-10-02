@@ -96,6 +96,109 @@ class ExergyAnalysis:
         self.components = _construct_components(component_data, connection_data, Tamb)
         self.connections = connection_data
 
+    def boundary_streams(self):
+        """
+        Return the streams crossing the system boundary.
+
+        A stream crosses the boundary when one of its ends is no component of the analysis. That end
+        may be missing, as in the Ebsilon exports, or name a source or sink of the simulation that is
+        no component of the plant, such as "ambient air" or "chimney" in the TESPy and Aspen exports.
+        Only material, heat and power streams are reported; control signals are left out.
+
+        Returns
+        -------
+        list of dict
+            One entry per stream, in the order of the connections, with its ``name`` and ``kind``,
+            its ``direction`` (``"in"`` when it enters the plant, ``"out"`` when it leaves it and
+            ``None`` when neither end is a component), the ``outside`` end it comes from or goes to,
+            and its ``E``, ``energy_flow``, ``m``, ``T`` and ``p`` where the stream has them. ``E``
+            is the value at the time of the call; the exergy of a heat stream may only be known
+            after :meth:`analyse`.
+        """
+        streams = []
+        for name, conn in self.connections.items():
+            kind = conn.get("kind", "")
+            if kind not in ("material", "heat", "power"):
+                continue
+            source = conn.get("source_component")
+            target = conn.get("target_component")
+            if conn.get("source_component_type") == 1:
+                source = None
+            source_in = source in self.components
+            target_in = target in self.components
+            if source_in and target_in:
+                continue
+            direction = "in" if target_in else "out" if source_in else None
+            outside = source if direction == "in" else target if direction == "out" else None
+            streams.append(
+                {
+                    "name": name,
+                    "kind": kind,
+                    "direction": direction,
+                    "outside": outside,
+                    "E": conn.get("E"),
+                    "energy_flow": conn.get("energy_flow"),
+                    "m": conn.get("m"),
+                    "T": conn.get("T"),
+                    "p": conn.get("p"),
+                }
+            )
+        return streams
+
+    def flows_from_roles(self, roles):
+        """
+        Build the fuel, product and loss definitions of the plant from the role of its boundary streams.
+
+        :meth:`analyse` sums each of the three as the streams listed under ``"inputs"`` minus the
+        ones under ``"outputs"``. A stream feeding the plant adds to the fuel, a stream leaving it
+        adds to the product or to the loss, and the stream on the other side of the same service is
+        subtracted: the water entering a heat pump is an output of the product formed by the heated
+        water, and the cooling water entering a condenser an output of the loss formed by the warm
+        cooling water.
+
+        Parameters
+        ----------
+        roles : dict
+            The role of a boundary stream by its name: ``"F"``, ``"P"`` or ``"L"``, or spelled out
+            as ``"fuel"``, ``"product"`` or ``"loss"``. A stream that is left out is part of no
+            definition.
+
+        Returns
+        -------
+        tuple of dict
+            ``(E_F, E_P, E_L)`` as :meth:`analyse` takes them.
+
+        Raises
+        ------
+        ValueError
+            If a name is no stream crossing the system boundary, if a stream is attached to the
+            plant on neither side, or if a role is not one of the three.
+
+        Examples
+        --------
+        >>> ean = ExergyAnalysis.from_json("hp.json")  # doctest: +SKIP
+        >>> E_F, E_P, E_L = ean.flows_from_roles({"e1": "F", "21": "P", "23": "P", "11": "L", "13": "L"})  # doctest: +SKIP
+        >>> E_P  # doctest: +SKIP
+        {'inputs': ['23'], 'outputs': ['21']}
+        """
+        directions = {stream["name"]: stream["direction"] for stream in self.boundary_streams()}
+        letters = {"F": "F", "FUEL": "F", "P": "P", "PRODUCT": "P", "L": "L", "LOSS": "L"}
+        flows = {letter: {"inputs": [], "outputs": []} for letter in "FPL"}
+        for name, role in roles.items():
+            letter = letters.get(str(role).strip().upper())
+            if letter is None:
+                raise ValueError(f"The role of stream '{name}' is neither fuel, product nor loss: {role!r}.")
+            if name not in directions:
+                raise ValueError(f"'{name}' is no stream crossing the system boundary.")
+            direction = directions[name]
+            if direction is None:
+                raise ValueError(
+                    f"Stream '{name}' is attached to the plant on neither side, so it cannot be part of a definition."
+                )
+            adds = direction == "in" if letter == "F" else direction == "out"
+            flows[letter]["inputs" if adds else "outputs"].append(name)
+        return flows["F"], flows["P"], flows["L"]
+
     def analyse(self, E_F, E_P, E_L=None) -> None:
         """
         Run the exergy analysis for the entire system and calculate overall exergy efficiency.
@@ -953,35 +1056,14 @@ class ExergyAnalysis:
         list
             Names of the boundary connections that are part of no exergy flow definition.
         """
-        # Collect all accounted streams
         accounted_streams = set()
         for dictionary in [self.E_F_dict, self.E_P_dict, self.E_L_dict]:
             accounted_streams.update(dictionary.get("inputs", []))
             accounted_streams.update(dictionary.get("outputs", []))
 
-        analysed_components = set(self.components)
-
-        # Identify actual system boundary connections
-        system_boundary_conns = []
-        for conn_name, conn_data in self.connections.items():
-            source = conn_data.get("source_component", None)
-            target = conn_data.get("target_component", None)
-            if conn_data.get("source_component_type", None) == 1:
-                source = None
-
-            # Connection is at system boundary if one side is no component of the analysis
-            if source not in analysed_components or target not in analysed_components:
-                kind = conn_data.get("kind", "")
-                # Treat an explicit None exergy as zero to avoid a TypeError in abs().
-                exergy = conn_data.get("E")
-                if exergy is None:
-                    exergy = 0
-                # Only consider material/heat/power streams with significant exergy
-                if kind in ["material", "heat", "power"] and abs(exergy) > 1e-3:
-                    system_boundary_conns.append(conn_name)
-
-        # Find unaccounted boundary connections
-        unaccounted = sorted(conn for conn in system_boundary_conns if conn not in accounted_streams)
+        # Only streams carrying exergy matter for the balance.
+        significant = [stream["name"] for stream in self.boundary_streams() if abs(stream["E"] or 0) > 1e-3]
+        unaccounted = sorted(conn for conn in significant if conn not in accounted_streams)
 
         if unaccounted:
             conn_list = ", ".join(f"'{conn}'" for conn in unaccounted)
@@ -2756,10 +2838,39 @@ class EconomicAnalysis:
         ValueError
             If the file has no components, if a component has no purchase equipment cost, or if a
             key is not one the class knows.
+
+        See Also
+        --------
+        EconomicAnalysis.from_dict : The same from a dictionary already in memory.
         """
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
+        return cls.from_dict(data)
 
+    @classmethod
+    def from_dict(cls, data):
+        """
+        Read the cost assumptions of a plant from a dictionary.
+
+        The dictionary has the structure of the file :meth:`from_json` reads, so the same document
+        can be kept in memory, written to a file or read back from one.
+
+        Parameters
+        ----------
+        data : dict
+            The cost assumptions, structured as in :meth:`from_json`.
+
+        Returns
+        -------
+        EconomicAnalysis
+            The analysis described by the dictionary.
+
+        Raises
+        ------
+        ValueError
+            If the dictionary has no components, if a component has no purchase equipment cost, or
+            if a key is not one the class knows.
+        """
         plant_keys = {
             "i_eff",
             "n",
@@ -2833,54 +2944,90 @@ class EconomicAnalysis:
         return resolved
 
     def _check_years(self):
-        """Every year a cost is given in has to be covered by the index."""
+        """Every cost year has to be reachable from the reference year; say how the gaps are bridged."""
         years = {year for year in self.cost_year.values() if year is not None}
         if not years or years == {self.reference_year}:
             return
         if self.reference_year is None:
             raise ValueError("Costs come from more than one year, so 'reference_year' is required.")
         if not self.cost_index:
-            raise ValueError("Costs come from more than one year, so 'cost_index' is required.")
-        last_indexed = max(self.cost_index)
-        needed = {*years, min(self.reference_year, last_indexed)}
-        missing = sorted(needed - set(self.cost_index))
-        if missing:
-            raise ValueError(f"The cost index has no value for the years {missing}.")
-        if self.reference_year > last_indexed:
             logger.warning(
-                f"The cost index ends in {last_indexed} and the reference year is "
-                f"{self.reference_year}, so the remaining {self.reference_year - last_indexed} year(s) "
-                f"are bridged with the nominal escalation rate r_n = {self.r_n}. A published index is "
-                f"the better basis wherever one exists."
+                f"No plant cost index is given, so the costs from {sorted(years)} are carried to "
+                f"{self.reference_year} with the nominal escalation rate r_n = {self.r_n} alone. A published "
+                f"index is the better basis wherever one exists."
             )
+            return
+        first, last = min(self.cost_index), max(self.cost_index)
+        bridged = set()
+        for year in {*years, self.reference_year}:
+            self.escalation_factor(year)
+            if year < first:
+                bridged.update(range(year, first))
+            if year > last:
+                bridged.update(range(last + 1, year + 1))
+        if bridged:
+            logger.warning(
+                f"The cost index covers {first}–{last}; the years {min(bridged)}–{max(bridged)} are bridged "
+                f"with the nominal escalation rate r_n = {self.r_n}. A published index is the better basis "
+                f"wherever one exists."
+            )
+
+    def escalation_factor(self, year):
+        r"""
+        Return the factor that carries a cost from the price level of a year to that of the reference year.
+
+        Within the years the plant cost index covers, the factor is the ratio of the two index values.
+        Outside of them, before the first or after the last entry, every year is bridged with the
+        nominal escalation rate, forward or backward:
+
+        .. math::
+
+            f = \frac{I_{\bar{y}_\mathrm{ref}}}{I_{\bar{y}}}
+            \cdot \left(1 + r_\mathrm{n}\right)^{(\bar{y} - y) + (y_\mathrm{ref} - \bar{y}_\mathrm{ref})}
+
+        where :math:`\bar{y}` is a year clamped to the range of the index. Without an index, the rate
+        bridges the whole span.
+
+        Parameters
+        ----------
+        year : int or None
+            The year the cost is given in. ``None`` means the reference year.
+
+        Returns
+        -------
+        float
+
+        Raises
+        ------
+        ValueError
+            If a year inside the range of the index has no value, which no rate can bridge.
+        """
+        if year is None or self.reference_year is None or year == self.reference_year:
+            return 1.0
+        if not self.cost_index:
+            return (1 + self.r_n) ** (self.reference_year - year)
+        first, last = min(self.cost_index), max(self.cost_index)
+        clamped = min(max(year, first), last)
+        clamped_reference = min(max(self.reference_year, first), last)
+        for needed in (clamped, clamped_reference):
+            if needed not in self.cost_index:
+                raise ValueError(f"The cost index has no value for the year {needed}.")
+        bridged = (clamped - year) + (self.reference_year - clamped_reference)
+        return self.cost_index[clamped_reference] / self.cost_index[clamped] * (1 + self.r_n) ** bridged
 
     @property
     def reference_PEC(self):
         r"""Purchase equipment cost of every component in the price level of the reference year.
 
-        A cost from an earlier year is carried forward with the plant cost index. Where the index
-        does not reach the reference year, the remaining years are bridged with the nominal
-        escalation rate, since an index is published for the past and not for the future:
+        Every cost is carried from its year to the reference year with :meth:`escalation_factor`:
+        with the plant cost index where it covers the years, with the nominal escalation rate beyond
+        it, since an index is published for the past and not for the future.
 
         .. math::
 
-            \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j
-            \cdot \frac{I_{y_\mathrm{last}}}{I_{y(j)}}
-            \cdot \left(1 + r_\mathrm{n}\right)^{y_\mathrm{ref} - y_\mathrm{last}}
+            \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot f\left(y(j)\right)
         """
-        reference = {}
-        last_indexed = max(self.cost_index) if self.cost_index else None
-        for name, cost in self.PEC.items():
-            year = self.cost_year.get(name)
-            if year is None or year == self.reference_year or not self.cost_index:
-                reference[name] = cost
-                continue
-            indexed_to = min(self.reference_year, last_indexed)
-            factor = self.cost_index[indexed_to] / self.cost_index[year]
-            if self.reference_year > last_indexed:
-                factor *= (1 + self.r_n) ** (self.reference_year - last_indexed)
-            reference[name] = cost * factor
-        return reference
+        return {name: cost * self.escalation_factor(self.cost_year.get(name)) for name, cost in self.PEC.items()}
 
     @property
     def total_PEC(self):

@@ -141,16 +141,19 @@ index, whose values are an input of the analysis, and a cost into the future wit
 
     \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot \frac{I_\mathrm{ref}}{I_{y(j)}}
 
-An index reaches only as far as the years that have passed, so the reference year may lie beyond its
-last entry. The cost is then carried with the index as far as it reaches and the remaining years are
-bridged with the nominal escalation rate:
+An index reaches only as far as the years that have passed, so the reference year, or a recent quote,
+may lie beyond its last entry; an old quote may lie before its first. The index is used for the years it
+covers and the nominal escalation rate bridges every year outside of it, forward or backward:
 
 .. math::
 
-    \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot \frac{I_{y_\mathrm{last}}}{I_{y(j)}}
-    \cdot \left(1 + r_\mathrm{n}\right)^{y_\mathrm{ref} - y_\mathrm{last}}
+    \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot \frac{I_{\bar{y}_\mathrm{ref}}}{I_{\bar{y}(j)}}
+    \cdot \left(1 + r_\mathrm{n}\right)^{(\bar{y}(j) - y(j)) + (y_\mathrm{ref} - \bar{y}_\mathrm{ref})}
 
-and says in a warning that it did so.
+where :math:`\bar{y}` is a year clamped to the range of the index. A cost given in the reference year
+needs no index at all; without any index the rate alone carries the costs. Both cases are said in a
+warning. Only a year inside the range of the index that has no value is an error, since no rate can
+stand in for a published value.
 
 *****************************
 Levelizing

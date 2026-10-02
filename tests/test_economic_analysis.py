@@ -395,17 +395,79 @@ class TestCostIndexAndOmBasis:
         )
         assert eco.reference_PEC["C"] == pytest.approx(100000.0 * 143.0 / 112.0)
 
-    def test_costs_from_several_years_need_an_index(self):
-        with pytest.raises(ValueError, match="'cost_index' is required"):
-            EconomicAnalysis(
+    def test_without_an_index_the_rate_alone_carries_the_costs(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco = EconomicAnalysis(
                 PEC={"A": 1.0, "B": 2.0},
                 i_eff=0.1,
                 n=20,
                 tau=7500,
                 f_tci=4.0,
                 omc_share=0.03,
-                cost_year={"A": 2020, "B": 2024},
+                cost_year={"A": 2023, "B": 2025},
+                reference_year=2025,
+                r_n=0.05,
+            )
+        assert "No plant cost index is given" in caplog.text
+        assert eco.reference_PEC == pytest.approx({"A": 1.05**2, "B": 2.0})
+
+    def test_a_cost_given_in_the_reference_year_needs_no_index_entry_for_it(self):
+        """The index ends before the reference year; a cost quoted in the reference year is taken as it is."""
+        eco = EconomicAnalysis(
+            PEC={"A": 1.0, "B": 1.0},
+            i_eff=0.1,
+            n=20,
+            tau=7500,
+            f_tci=4.0,
+            omc_share=0.03,
+            cost_year={"A": 2010, "B": 2025},
+            reference_year=2025,
+            cost_index={2010: 100.0, 2024: 150.0},
+            r_n=0.04,
+        )
+        assert eco.reference_PEC["B"] == 1.0
+        assert eco.reference_PEC["A"] == pytest.approx(1.5 * 1.04)
+
+    @pytest.mark.parametrize(
+        ("cost_year", "reference_year", "expected"),
+        [
+            (2025, 2026, 1.04),  # both beyond the index: one year of escalation
+            (2026, 2025, 1 / 1.04),  # a quote from the future is deflated
+            (1994, 2024, 1.04**2 * 1.5),  # before the index: escalated to its first year, then indexed
+            (2010, 2024, 1.5),  # inside the index: its ratio alone
+        ],
+    )
+    def test_the_rate_bridges_the_years_outside_the_index(self, cost_year, reference_year, expected, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco = EconomicAnalysis(
+                PEC={"A": 1.0, "B": 1.0},
+                i_eff=0.1,
+                n=20,
+                tau=7500,
+                f_tci=4.0,
+                omc_share=0.03,
+                cost_year={"A": cost_year, "B": reference_year},
+                reference_year=reference_year,
+                cost_index={1996: 100.0, 2010: 100.0, 2024: 150.0},
+                r_n=0.04,
+            )
+        assert eco.escalation_factor(cost_year) == pytest.approx(expected)
+        assert eco.reference_PEC["B"] == 1.0
+        outside = not 1996 <= cost_year <= 2024 or reference_year > 2024
+        assert ("bridged with the nominal escalation rate" in caplog.text) is outside
+
+    def test_a_gap_inside_the_index_is_an_error(self):
+        with pytest.raises(ValueError, match="no value for the year 2015"):
+            EconomicAnalysis(
+                PEC={"A": 1.0},
+                i_eff=0.1,
+                n=20,
+                tau=7500,
+                f_tci=4.0,
+                omc_share=0.03,
+                cost_year=2015,
                 reference_year=2024,
+                cost_index={2010: 100.0, 2024: 150.0},
             )
 
     @pytest.mark.parametrize("basis", ["PEC", "TCI"])

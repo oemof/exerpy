@@ -1,3 +1,4 @@
+import numpy as np
 from tespy.connections import Connection
 from tespy.connections import PowerConnection
 from tespy.networks import Network
@@ -93,6 +94,10 @@ def _connection_to_exerpy(c: Connection, pamb: float, Tamb: float) -> dict:
     for param in ["m", "T", "p", "h", "s", "v"]:
         connection_json[c.label].update({param: c.get_attr(param).val_SI})
     connection_json[c.label].update({"e_T": c.ex_therm, "e_M": c.ex_mech, "e_PH": c.ex_physical})
+    # The vapour quality is known for a pure fluid only.
+    quality = getattr(getattr(c, "x", None), "val_SI", None)
+    if quality is not None and not np.isnan(quality):
+        connection_json[c.label]["x"] = float(quality)
 
     return connection_json
 

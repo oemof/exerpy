@@ -15,6 +15,7 @@ exclude = [
     "docs/_build",
     "src/exerpy/cost_estimation/**",
     "src/exerpy/data/cost_correlations/**",
+    "src/exerpy/cost_library/**",
     "examples/visualization/*.html",
     "examples/visualization/*.png",
     "examples/opt_examples/**",

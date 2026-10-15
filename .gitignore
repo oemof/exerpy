@@ -148,6 +148,7 @@ examples/ccpp/_0108erv
 # Copyrighted cost correlation data
 src/exerpy/data/cost_correlations/
 src/exerpy/cost_estimation/
+src/exerpy/cost_library/
 
 # Optimization examples (local only; kept on the optimization branch)
 examples/opt_examples/

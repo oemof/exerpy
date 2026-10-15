@@ -783,11 +783,9 @@ class ExergoeconomicOptimizer:
         # Run optimization
         logger.info(f"Starting optimization with {algorithm}, {n_gen} generations, pop_size={pop_size}")
 
-        # Suppress noisy logging during optimization (TESPy errors on failed
-        # evaluations, cost estimation warnings, etc.)
+        # Suppress noisy logging during optimization (TESPy errors on failed evaluations, etc.)
         _loggers_to_suppress = [
             logging.getLogger("TESPyLogger"),
-            logging.getLogger("exerpy.cost_estimation"),
             logging.getLogger("exerpy.optimization.adapters"),
         ]
         _saved_levels = {lgr: lgr.level for lgr in _loggers_to_suppress}

@@ -21,6 +21,8 @@ POWER_LAW = re.compile(r"\bPEC\w*\s*=\s*[\d_.]+\s*\*.*\*\*\s*\(?\s*\d*\.\d+", re
 # Index values of a year, e.g. "2013: 567.3"; two or more in one file make a table.
 YEAR_VALUE = re.compile(r"""["']?\b(?:19[5-9]\d|20\d\d)\b["']?\s*:\s*(\d{3,4}(?:\.\d+)?)\b""")
 INDEX_RANGE = (300.0, 3000.0)
+# Reads the index of OpenPyTEA at runtime by its attribute name and holds no values itself.
+EXTERNAL_INDEX_READERS = {"src/exerpy/costing.py"}
 
 
 def files_to_scan(root):
@@ -39,7 +41,7 @@ def scan(path, label):
         return findings
     index_lines = []
     for number, line in enumerate(data.decode("utf-8", errors="ignore").splitlines(), start=1):
-        if BLOCKED_TEXT.search(line):
+        if BLOCKED_TEXT.search(line) and label not in EXTERNAL_INDEX_READERS:
             findings.append(f"{label}:{number}: cost correlation or cost index name")
         if POWER_LAW.search(line):
             findings.append(f"{label}:{number}: cost correlation with literal coefficients")

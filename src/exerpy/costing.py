@@ -25,7 +25,7 @@ is the sum of :math:`\\dot{Q}_i / (U_i \\, \\Delta T_{\\mathrm{lm},i})`. Otherwi
 :math:`kA / U` with the heat transfer capacity of the simulation, or of
 :math:`\\dot{Q} / \\Delta T_\\mathrm{lm}` when the model carries none, and one coefficient.
 
-OpenPyTEA is an optional dependency, ``pip install exerpy[gui]`` or ``pip install openpytea``. Its
+OpenPyTEA is an optional dependency, ``pip install exerpy[costs]`` or ``pip install openpytea``. Its
 costs are in US dollars.
 """
 

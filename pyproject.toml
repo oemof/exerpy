@@ -75,6 +75,7 @@ dev = [
     "furo",
     "isort",
     "matplotlib>=3.10",
+    "openpytea>=3.0",
     "plotly>=6.8",
     "pytest",
     "sphinx>=7.2.2",
@@ -88,6 +89,9 @@ dev = [
 ]
 tespy = [
     "tespy>=0.11.3",
+]
+costs = [
+    "openpytea>=3.0",
 ]
 ebsilon = [
     "pywin32"

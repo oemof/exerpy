@@ -80,13 +80,13 @@ dev = [
     "sphinx-copybutton",
     "sphinx-design",
     "sphinxcontrib.bibtex",
-    "tespy>=0.11",
+    "tespy>=0.11.3",
     "tox",
     "black>=24.10.0",
     "ruff>=0.6.9",
 ]
 tespy = [
-    "tespy>=0.11",
+    "tespy>=0.11.3",
 ]
 ebsilon = [
     "pywin32"

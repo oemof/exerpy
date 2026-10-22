@@ -6,7 +6,7 @@ Initial release of ExerPy.
 The exergy analysis module is fully functional and allows for comprehensive
 exergy analysis of thermal systems.
 
-The exergoeconomic analysis module is in an early stage and will be further developed
+The exergoeconomic analysis module is at an early stage and will be further developed
 and tested in future releases.
 
 Developers
@@ -21,4 +21,4 @@ Supervision
 
 Acknowledgements
 ################
-This project incorporates code originally developed by Friederike Roßberg (`@FriederikeTUB <https://github.com/FriederikeTUB/tespy-friederike>`__)
+This project incorporates code originally developed by Friederike Roßberg (`@FriederikeTUB <https://github.com/FriederikeTUB/tespy-friederike>`__).

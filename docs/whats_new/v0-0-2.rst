@@ -3,7 +3,7 @@ v0.0.2 (01.07.2025)
 
 Bug fixes
 #########
-- HeatExchanger and SimpleHeatExchanger correctly parsed from Ebsilon 
+- HeatExchanger and SimpleHeatExchanger are now parsed correctly from Ebsilon.
 
 Documentation
 #############

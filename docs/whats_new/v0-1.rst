@@ -1,0 +1,9 @@
+.. _whats_new_v0_1_label:
+
+####
+v0.1
+####
+
+Changelog of the v0.1 release series.
+
+.. include:: /whats_new/v0-1-0.rst

@@ -480,7 +480,7 @@ class ExergoeconomicOptimizer:
         ...     # Calculate Z based on component power/heat duty
         ...     for name, comp in ea.components.items():
         ...         if hasattr(comp, 'E_F'):
-        ...             # Simple cost correlation: Z = a * E_F^b
+        ...             # fictitious placeholder, not a published cost correlation
         ...             costs[f"{name}_Z"] = 0.1 * comp.E_F ** 0.6
         ...     # Add boundary costs
         ...     costs["fuel_c"] = 111.111  # EUR/GJ

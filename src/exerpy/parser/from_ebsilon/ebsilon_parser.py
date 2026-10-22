@@ -1028,7 +1028,7 @@ class EbsilonModelParser:
 
     def _create_storage_connections(self):
         """
-        Create fictive charging/discharging connections for storage components.
+        Create fictitious charging/discharging connections for storage components.
 
         After all real connections are parsed, uses stored storage parameters
         and existing connections_data to generate and insert material connections.
@@ -1092,7 +1092,7 @@ class EbsilonModelParser:
 
     def _create_heatflow_connections(self):
         """
-        Create fictive heat flow connections for solar feat flow components
+        Create fictitious heat flow connections for solar heat flow components
         (Heliostat Field, Parabolic Trough, Solar Tower).
 
         After all real connections are parsed, uses stored feat flow parameters

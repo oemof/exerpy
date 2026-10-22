@@ -3,7 +3,7 @@ v0.0.3 (31.10.2025)
 
 Bug fixes
 #########
-- Turbine, Pump and Compressor now consider all losses from simulation done with Ebsilon.
+- Turbine, Pump and Compressor now consider all losses from simulations done with Ebsilon.
 - Substances that are not fluid under ambient conditions are now better handled in exergy calculations.
 
 New features

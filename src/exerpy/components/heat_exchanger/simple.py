@@ -46,6 +46,18 @@ class SimpleHeatExchanger(Component):
         Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
     Ex_C_col : dict
         Custom cost coefficients collection passed via `kwargs`.
+    T_hot : float, optional
+        Temperature of the heat source in K, for a stream that takes in heat above the ambient
+        temperature. Given, the fuel is the exergy of the heat at that temperature,
+        :math:`\dot{E}_\mathrm{F} = \dot{Q}\,(1 - T_0/T_\mathrm{hot})`, so the loss of the heat
+        transfer from the source counts as exergy destruction of the component.
+    T_cold : float, optional
+        Temperature of the heat consumer in K, for a stream that releases heat above the ambient
+        temperature. Given, the product is the exergy of the heat at that temperature,
+        :math:`\dot{E}_\mathrm{P} = |\dot{Q}|\,(1 - T_0/T_\mathrm{cold})`.
+
+    Without them, the heat is valued at the exergy change of the stream itself, and the loss of the
+    heat transfer to or from the outside lies outside the component.
     """
 
     def __init__(self, **kwargs):
@@ -59,7 +71,11 @@ class SimpleHeatExchanger(Component):
             - dissipative (bool): whether component has dissipative behavior, default False
             - Ex_C_col (dict): custom cost coefficients, default {}
             - Z_costs (float): investment cost rate in currency/h, default 0.0
+            - T_hot (float): temperature of the heat source in K, default None
+            - T_cold (float): temperature of the heat consumer in K, default None
         """
+        self.T_hot = None
+        self.T_cold = None
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
@@ -385,6 +401,8 @@ class SimpleHeatExchanger(Component):
             self.E_P = np.nan
             self.E_F = inlet["m"] * (inlet["e_PH"] - outlet["e_PH"])
 
+        self._heat_at = self._value_heat_at_temperature(Q, inlet, outlet, T0)
+
         # Calculate exergy destruction
         if np.isnan(self.E_P):
             self.E_D = self.E_F
@@ -400,6 +418,52 @@ class SimpleHeatExchanger(Component):
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
         )
+
+    def _heat_stream(self):
+        """The heat connection of the component, or ``None``."""
+        for conn in [*self.inl.values(), *self.outl.values()]:
+            if conn.get("kind") == "heat":
+                return conn
+        return None
+
+    def _value_heat_at_temperature(self, Q, inlet, outlet, T0):
+        """Value the heat at ``T_hot`` or ``T_cold`` where given; return ``"source"``, ``"consumer"`` or None."""
+        above_ambient = inlet["T"] >= T0 and outlet["T"] >= T0
+        heat = self._heat_stream()
+        if Q > 0 and self.T_hot is not None:
+            if not above_ambient:
+                logger.warning(
+                    f"SimpleHeatExchanger {self.name}: T_hot is used only for a stream above the ambient "
+                    f"temperature, so it is ignored."
+                )
+                return None
+            if self.T_hot <= max(inlet["T"], outlet["T"]):
+                raise ValueError(
+                    f"SimpleHeatExchanger {self.name}: the heat source at T_hot = {self.T_hot} K has to be "
+                    f"hotter than the stream it heats, which reaches {max(inlet['T'], outlet['T']):.2f} K."
+                )
+            self.E_F = Q * (1 - T0 / self.T_hot)
+            if heat is not None:
+                heat["E"] = self.E_F
+            return "source"
+        if Q < 0 and self.T_cold is not None and not getattr(self, "dissipative", False):
+            if not above_ambient:
+                logger.warning(
+                    f"SimpleHeatExchanger {self.name}: T_cold is used only for a stream above the ambient "
+                    f"temperature, so it is ignored."
+                )
+                return None
+            if not T0 < self.T_cold < min(inlet["T"], outlet["T"]):
+                raise ValueError(
+                    f"SimpleHeatExchanger {self.name}: the heat consumer at T_cold = {self.T_cold} K has to "
+                    f"be colder than the stream that heats it, which falls to {min(inlet['T'], outlet['T']):.2f} K, "
+                    f"and warmer than the ambient temperature."
+                )
+            self.E_P = -Q * (1 - T0 / self.T_cold)
+            if heat is not None:
+                heat["E"] = self.E_P
+            return "consumer"
+        return None
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""
@@ -769,6 +833,15 @@ class SimpleHeatExchanger(Component):
         else:
             self.C_P = np.nan
             self.C_F = inlet["C_PH"] - outlet["C_PH"]
+
+        # Heat valued at the temperature of its source or consumer: its cost is the fuel or the product.
+        heat = self._heat_stream()
+        heat_at = getattr(self, "_heat_at", None)
+        if heat is not None and heat.get("C_TOT") is not None:
+            if heat_at == "source":
+                self.C_F = heat["C_TOT"]
+            elif heat_at == "consumer":
+                self.C_P = heat["C_TOT"]
 
         # Calculate specific costs and exergoeconomic indicators
         self.c_F = self.C_F / self.E_F if self.E_F else np.nan

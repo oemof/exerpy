@@ -1,3 +1,5 @@
+.. _exergy_analysis_label:
+
 ###############
 Exergy Analysis
 ###############
@@ -10,12 +12,16 @@ identify where and why irreversibilities occur, enabling engineers and
 researchers to develop strategies for improving efficiency, reducing costs,
 and supporting sustainable energy conversion.
 
+.. dropdown:: Where this step fits: step 1 of the workflow
+
+    .. include:: /_workflow.rst
+
 The ExerPy library offers a flexible, Python-based solution for conducting
 exergy analysis on energy-conversion systems. It supports integration with
 simulation tools like Ebsilon Professional, Aspen Plus, and TESPy, allowing
 users to extract detailed data about components and connections.
 
-The features described in this section are based on a paper published for TESPy.
+The features described in this section are based on a paper on the exergy analysis in TESPy.
 For more details, see :cite:`Witte2022`.
 
 
@@ -30,13 +36,13 @@ thermodynamics, the conversion of heat and internal energy into work is
 limited. This constraint and the idea of destruction are applied to introduce a
 new concept: "Exergy".
 
-Exergy can be destroyed due to irreversibilities. It is also able to describe the
-quality of different energy forms. The difference in energy quality can be illustrated by the following example. 1 kJ of electrical
+Exergy can be destroyed due to irreversibilities. It also describes the
+quality of different energy forms. The difference in energy quality can be illustrated by the following example: 1 kJ of electrical
 energy is clearly more valuable than 1 kJ of energy in a glass of water at
 ambient temperature :cite:`Bejan1996`.
 
 
-In literature, exergy is defined as follows:
+In the literature, exergy is defined as follows:
 
     *"An opportunity for doing useful work exists whenever two systems at
     different states are placed in communication, for in principle work can be
@@ -62,7 +68,7 @@ is defined as :cite:`Bejan1996`:
 
 where :math:`h_i` and :math:`s_i` are the specific enthalpy and entropy at state 
 :math:`i`, and :math:`h_0` and :math:`s_0` are the specific enthalpy and entropy 
-at the ambient conditions (:math:`T_0`, :math:`p_0`).
+at ambient conditions (:math:`T_0`, :math:`p_0`).
 
 .. warning::
 
@@ -84,12 +90,12 @@ at the ambient conditions (:math:`T_0`, :math:`p_0`).
 Splitting of physical exergy
 =============================
 
-Since some thermal systems include states at ambient temperature, the splitting 
+Since some thermal systems include states below the ambient temperature, the splitting 
 of physical exergy into thermal and mechanical parts enables a more comprehensive 
 analysis of the system's components :cite:`morosuk2019splitting`. These two parts represent 
-the contribution of the temperature and pressure to the physical exergy. This 
+the contributions of the temperature and pressure to the physical exergy. This 
 separation is particularly valuable for defining more meaningful exergetic 
-efficiencies for components operating below ambient temperature and components 
+efficiencies for components operating below ambient temperature and for components
 where distinguishing between thermal and mechanical exergy contributions provides 
 more precise thermodynamic characterization. The separation is given by:
 
@@ -115,7 +121,7 @@ pressure :math:`p_i`.
 Component-level exergy balance
 ===============================
 
-The exergy analysis at the component-level uses standardized balance equations, 
+The exergy analysis at the component level uses standardized balance equations, 
 following the approach developed by :cite:`Witte2022`. The exergy balance 
 equation of component :math:`k` can be formulated as:
 
@@ -125,9 +131,9 @@ equation of component :math:`k` can be formulated as:
 
 Each component :math:`k` is evaluated by three metrics that quantify its 
 performance and losses: the exergetic efficiency :math:`\varepsilon_k`, the 
-exergy destruction ratio :math:`y_k` measuring the share of the total exergy 
-fuel destroyed by component :math:`k`, and the exergy destruction ratio 
-:math:`y^*_k` measuring the share of the total exergy destruction attributable 
+exergy destruction ratio :math:`y_{\mathrm{D},k}` measuring the share of the total fuel
+exergy destroyed by component :math:`k`, and the exergy destruction ratio 
+:math:`y^*_{\mathrm{D},k}` measuring the share of the total exergy destruction attributable 
 to component :math:`k`:
 
 .. math::
@@ -136,11 +142,51 @@ to component :math:`k`:
 
 .. math::
 
-    y_k = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{F,tot}}}
+    y_{\mathrm{D},k} = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{F,tot}}}
 
 .. math::
 
-    y^*_k = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{D,tot}}}
+    y^*_{\mathrm{D},k} = \frac{\dot{E}_{\mathrm{D},k}}{\dot{E}_{\mathrm{D,tot}}}
+
+.. _heat_boundary_label:
+
+Heat from or to outside the model
+=================================
+
+A component that exchanges heat with something the model does not contain, such as a furnace, a
+heat source or a heat consumer, needs a rule for the exergy of that heat: the model knows the stream
+that takes in or gives off the heat, but not the temperature on the other side. Where that
+temperature :math:`T` is given, ExerPy values the heat at it,
+
+.. math::
+
+    \dot{E}_\mathrm{Q} = |\dot{Q}| \left(1 - \frac{T_0}{T}\right)
+
+- A **steam generator** takes the temperature of its heat source as ``T_hot``; its fuel is the exergy
+  of the heat at that temperature. Without ``T_hot``, the fuel is approximated by the thermal exergy
+  the water and steam gain, and the component warns.
+- A **simple heat exchanger** may take ``T_hot``, the temperature of the source of the heat it takes
+  in, which then gives its fuel, or ``T_cold``, the temperature of the consumer of the heat it gives
+  off, which then gives its product. Without them, the heat is valued at the exergy change of the
+  stream itself, so the loss of the heat transfer to or from the outside lies outside the component.
+  The option applies to streams above the ambient temperature; a source has to be hotter than the
+  stream, and a consumer colder.
+
+The exergy of the heat connection is set to the same value, so the totals of the plant and the costs
+of the exergoeconomic analysis follow it. The temperatures are given in K, in the entry of the
+component in a JSON file, or on the component once the model is loaded and before ``analyse()``:
+
+.. code-block:: python
+
+    ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb)     # or from_ebsilon, from_aspen, from_json
+    ean.components["SG"].T_hot = 1173.15                 # the furnace of a steam generator
+    ean.components["HC"].T_cold = 363.15                 # a heating network supplied by a heat exchanger
+    ean.analyse(E_F=fuel, E_P=product, E_L=loss)
+
+The choice moves exergy destruction across the boundary of the component. In the combined cycle of
+the examples, the extraction steam supplies 100 MW of heat through a simple heat exchanger: valued
+at the steam, the heat carries 39.7 MW of exergy and the exchanger destroys none; delivered to a
+heating network at 90 °C, the heat carries 20.7 MW, and the exchanger destroys the other 19.1 MW.
 
 System-level exergy balance
 ============================
@@ -188,11 +234,9 @@ potential exergy are neglected and therefore not considered.
     * - :code:`e_CH`, :code:`E_CH`
       - (specific) chemical exergy
       - :math:`e^\mathrm{CH}`, :math:`E^\mathrm{CH}`
-      - based on standard chemical exergy in ambient model, the `exerpy.data`
-        module provides three different datasets for standard exergy based on
-        various sources, i.e. `Ahrendts`
-        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`, `Szargut1988`
-        :cite:`Szargut1988` and `Szargut2007` :cite:`Szargut2007,Bakshi2011`.
+      - based on the standard chemical exergies of the reference environment; the `exerpy.data`
+        module provides the dataset of Ahrendts
+        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`.
     * - :code:`E_P`
       - product exergy
       - :math:`\dot{E}_\mathrm{P}`
@@ -219,12 +263,12 @@ potential exergy are neglected and therefore not considered.
       - ratio between product exergy and fuel exergy
     * - :code:`y`
       - exergy destruction ratio
-      - :math:`y_\mathrm{D,k}`
+      - :math:`y_{\mathrm{D},k}`
       - rate of exergy destruction in a component compared to the exergy rate
         of the fuel provided to the overall system
     * - :code:`y_star`
       - exergy destruction ratio
-      - :math:`y^*_\mathrm{D,k}`
+      - :math:`y^*_{\mathrm{D},k}`
       - rate of exergy destruction in a component compared to the total exergy
         destruction rate within the system
 

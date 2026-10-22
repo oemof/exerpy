@@ -144,7 +144,7 @@ class Drum(Component):
             \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
             = \frac{\dot{C}^\mathrm{CH}_{\mathrm{out,}j}}{\dot{E}^\mathrm{CH}_{\mathrm{out,}j}}
 
-        A blow down is costed at the same rate as the saturated steam and carries its share of the
+        A blowdown carries the same specific cost as the saturated steam and takes its share of the
         costs out of the plant; it is not charged back to the other outlets.
 
         Parameters

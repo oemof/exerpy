@@ -1,26 +1,25 @@
 """Exergoeconomic analysis of the heat pump with the cost rates derived from the equipment costs.
 
-The other exergoeconomic examples take the cost rate of every component as an input. Here only the
-purchase equipment costs are given, in a JSON file, and the total revenue requirement method turns
-them into the cost rates the exergoeconomic analysis needs.
+An exergoeconomic analysis needs the cost rate of every component. Here only the purchased equipment
+costs are given, in a JSON file, and the total revenue requirement method turns them into the cost
+rates the exergoeconomic analysis needs.
 
 Two files describe the same plant, and either can be used:
 
 ``hp_costs_simple.json``
-    Everything the components have in common is written once. Every quote comes from the same year,
+    Everything the components have in common is written once. Every cost comes from the same year,
     every component carries the same installation factor and the same maintenance share, so the
     components are plain numbers and no cost index is needed.
 
 ``hp_costs_detailed.json``
-    What the components do not have in common is written per component. The quotes come from 2021,
+    What the components do not have in common is written per component. The costs come from 2021,
     2023 and 2024 and are carried to 2025 with a plant cost index, the installation factor of a heat
     exchanger differs from that of a motor, and the rotating machines need more maintenance. A
     component still falls back to the value given for the whole plant for anything it does not name.
 
-In both, the electricity is bought and escalates over the lifetime of the plant, so its cost is
-levelized alongside the investment. Every cost figure in both files is a placeholder, the cost index
-included (revise later with a proper cost estimation). The point of the example is the workflow from
-the equipment cost to the cost of the product.
+In both, the electricity is bought over the lifetime of the plant and its price escalates, so its cost
+is levelized along with the investment. Every cost figure in both files is a placeholder, the cost index
+included. The point of the example is the workflow from the equipment cost to the cost of the product.
 """
 
 import logging
@@ -44,7 +43,7 @@ ean.analyse(E_F=fuel, E_P=product, E_L=loss)
 ean.exergy_results()
 
 # [economic_setup]
-# Swap in "hp_costs_simple.json" for the same plant costed with one set of assumptions throughout.
+# Swap in "hp_costs_simple.json" for the same plant with one set of cost assumptions throughout.
 eco_analysis = EconomicAnalysis.from_json(os.path.abspath(os.path.join(here, "hp_costs_detailed.json")))
 
 # [economic_results]

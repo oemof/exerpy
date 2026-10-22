@@ -665,7 +665,11 @@ class EbsilonModelParser:
                     else None
                 ),
                 "P_unit": fluid_property_data["power"]["SI_unit"],
-                "kA": (comp_cast.KA.Value if hasattr(comp_cast, "KA") and comp_cast.KA.Value is not None else None),
+                "kA": (
+                    convert_to_SI("kA", comp_cast.KA.Value, unit_id_to_string.get(comp_cast.KA.Dimension, "Unknown"))
+                    if hasattr(comp_cast, "KA") and comp_cast.KA.Value is not None
+                    else None
+                ),
                 "kA_unit": fluid_property_data["kA"]["SI_unit"],
                 "A": (comp_cast.A.Value if hasattr(comp_cast, "A") and comp_cast.A.Value is not None else None),
                 "A_unit": fluid_property_data["A"]["SI_unit"],
@@ -1024,7 +1028,7 @@ class EbsilonModelParser:
 
     def _create_storage_connections(self):
         """
-        Create fictive charging/discharging connections for storage components.
+        Create fictitious charging/discharging connections for storage components.
 
         After all real connections are parsed, uses stored storage parameters
         and existing connections_data to generate and insert material connections.
@@ -1088,7 +1092,7 @@ class EbsilonModelParser:
 
     def _create_heatflow_connections(self):
         """
-        Create fictive heat flow connections for solar feat flow components
+        Create fictitious heat flow connections for solar heat flow components
         (Heliostat Field, Parabolic Trough, Solar Tower).
 
         After all real connections are parsed, uses stored feat flow parameters

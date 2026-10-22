@@ -6,9 +6,9 @@ New Features
 - Solar thermal components for the exergy analysis of concentrating-solar-power
   plants: ``Heliostatfield``, ``ParabolicTrough`` and ``SolarTower``. Incoming
   solar radiation is converted to exergy with the Petela/Spanner factor. These new
-  components can be currently parsed only from Ebsilon models. Two examples were
+  components can currently be parsed only from Ebsilon models. Two examples were
   added (solar tower and parabolic trough). This contribution originates from
-  the Bachelor thesis of Alexandros Breous (TU Berlin, 2025).
+  the bachelor's thesis of Alexandros Breous (TU Berlin, 2025).
 - ``Mixer`` and ``Splitter`` now accept a ``num_branches`` scaling factor, so a
   single modelled branch can represent several identical parallel branches
   (collecting and distributing headers).

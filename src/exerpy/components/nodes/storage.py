@@ -277,7 +277,7 @@ class Storage(Component):
         Fuel and product follow :meth:`calc_exergy_balance`: while the storage charges, the fuel is
         what the stream gives up and the product is what goes into the store; while it discharges,
         the store is the fuel and the gain of the stream is the product. A storage holding its
-        level is costed like a pipe.
+        level is treated like a pipe in the cost balance.
 
         Parameters
         ----------

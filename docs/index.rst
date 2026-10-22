@@ -4,27 +4,44 @@
 
 ..  toctree::
     :maxdepth: 2
+    :caption: Get Started
     :hidden:
 
-    introduction
+    About ExerPy <introduction>
+    Installation <installation>
 
 ..  toctree::
     :maxdepth: 2
-    :caption: User Guide
+    :caption: Methods
     :hidden:
 
-    installation
-    examples
     exergy_analysis
-    exergoeconomic_analysis
+    component_sizing
     economic_analysis
-    contribute
-    zliterature
+    exergoeconomic_analysis
 
 ..  toctree::
     :maxdepth: 2
-    :caption: Documentation
+    :caption: Examples
+    :hidden:
+
+    examples
+    examples/exergy_analysis/index
+    examples/economic_analysis/index
+    examples/exergoeconomic_analysis/index
+
+..  toctree::
+    :maxdepth: 2
+    :caption: Project
+    :hidden:
+
+    Contribute <contribute>
+
+..  toctree::
+    :maxdepth: 2
+    :caption: Reference
     :hidden:
 
     api
     whats_new
+    zliterature

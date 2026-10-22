@@ -140,7 +140,7 @@ class TestValidation:
             EconomicAnalysis(PEC={}, **PARAMETERS)
 
     def test_a_share_for_a_component_without_an_equipment_cost(self):
-        with pytest.raises(ValueError, match="names components without a purchase equipment cost"):
+        with pytest.raises(ValueError, match="names components without a purchased equipment cost"):
             _economic(omc_share={"NOT_THERE": 0.02})
 
 
@@ -172,7 +172,7 @@ def _heatpump_analysis():
 
 
 def _example_pec():
-    """The purchase equipment costs of the heat pump example."""
+    """The purchased equipment costs of the heat pump example."""
     return EconomicAnalysis.from_json(os.path.join(HEATPUMP, "hp_costs_detailed.json")).PEC
 
 
@@ -182,7 +182,7 @@ class TestAgainstAPlant:
         incomplete = dict(_example_pec())
         del incomplete["VAL"]
         eco = EconomicAnalysis(PEC=incomplete, **PARAMETERS)
-        with pytest.raises(ValueError, match=r"No purchase equipment cost for the components \['VAL'\]"):
+        with pytest.raises(ValueError, match=r"No purchased equipment cost for the components \['VAL'\]"):
             eco.compute_z(ean)
 
     def test_an_equipment_cost_for_a_component_that_is_not_there(self):
@@ -258,14 +258,14 @@ class TestFromJson:
                 "tau": 6000,
                 "f_tci": 4.5,
                 "omc_share": 0.015,
-                "reference_year": 2025,
+                "base_year": 2025,
                 "cost_index": {"2021": 112.0, "2025": 143.0},
-                "components": {"COMP": {"PEC": 100000.0, "cost_year": 2021}},
+                "components": {"COMP": {"PEC": 100000.0, "reference_year": 2021}},
             },
         )
         eco = EconomicAnalysis.from_json(path)
         assert set(eco.cost_index) == {2021, 2025}
-        assert eco.reference_PEC["COMP"] == pytest.approx(100000.0 * 143.0 / 112.0)
+        assert eco.base_PEC["COMP"] == pytest.approx(100000.0 * 143.0 / 112.0)
 
     def test_a_stream_cost_may_be_a_plain_number(self, tmp_path):
         path = self._write(
@@ -312,7 +312,7 @@ class TestFromJson:
                 "components": {"VAL": {"f_tci": 3.0}},
             },
         )
-        with pytest.raises(ValueError, match="has no purchase equipment cost"):
+        with pytest.raises(ValueError, match="has no purchased equipment cost"):
             EconomicAnalysis.from_json(path)
 
     def test_no_components_at_all(self, tmp_path):
@@ -336,7 +336,7 @@ class TestFromJson:
         eco = EconomicAnalysis.from_json(os.path.join(HEATPUMP, "hp_costs_simple.json"))
         assert set(eco.f_tci.values()) == {6.32}
         assert set(eco.omc_share.values()) == {0.015}
-        assert set(eco.cost_year.values()) == {None}
+        assert set(eco.reference_year.values()) == {None}
         assert eco.cost_index == {}
         # Nothing is escalated, so the reference cost is the cost as given.
         assert eco.total_PEC == pytest.approx(sum(eco.PEC.values()))
@@ -351,8 +351,8 @@ class TestFromJson:
         system = exergoeco.system_costs
         assert system["C_P"] == pytest.approx(system["C_F"] + system["Z"], rel=1e-6)
         assert system["Z"] == pytest.approx(sum(eco.compute_z().values()), rel=1e-9)
-        # The quotes come from three different years and are all carried to 2025.
-        assert eco.reference_year == 2025
+        # The costs come from three different years and are all carried to 2025.
+        assert eco.base_year == 2025
         assert eco.total_PEC > sum(eco.PEC.values())
         for name, (residual, balanced) in exergoeco.check_cost_balance(tol=1e-6).items():
             assert balanced, f"{name} not balanced: residual={residual}"
@@ -370,13 +370,13 @@ class TestCostIndexAndOmBasis:
             tau=7500,
             f_tci=4.16,
             omc_share=0.03,
-            cost_year=2013,
-            reference_year=2026,
+            reference_year=2013,
+            base_year=2026,
             cost_index={2013: 1.0, 2024: 1.4102},
             r_n=0.02,
         )
         with caplog.at_level(logging.WARNING):
-            escalated = eco.reference_PEC["C"]
+            escalated = eco.base_PEC["C"]
         assert escalated == pytest.approx(100000.0 * 1.4102 * 1.02**2)
         assert "bridged with the nominal escalation rate" in caplog.text
 
@@ -388,24 +388,86 @@ class TestCostIndexAndOmBasis:
             tau=7500,
             f_tci=4.0,
             omc_share=0.03,
-            cost_year=2021,
-            reference_year=2025,
+            reference_year=2021,
+            base_year=2025,
             cost_index={2021: 112.0, 2025: 143.0},
             r_n=0.02,
         )
-        assert eco.reference_PEC["C"] == pytest.approx(100000.0 * 143.0 / 112.0)
+        assert eco.base_PEC["C"] == pytest.approx(100000.0 * 143.0 / 112.0)
 
-    def test_costs_from_several_years_need_an_index(self):
-        with pytest.raises(ValueError, match="'cost_index' is required"):
-            EconomicAnalysis(
+    def test_without_an_index_the_rate_alone_carries_the_costs(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco = EconomicAnalysis(
                 PEC={"A": 1.0, "B": 2.0},
                 i_eff=0.1,
                 n=20,
                 tau=7500,
                 f_tci=4.0,
                 omc_share=0.03,
-                cost_year={"A": 2020, "B": 2024},
-                reference_year=2024,
+                reference_year={"A": 2023, "B": 2025},
+                base_year=2025,
+                r_n=0.05,
+            )
+        assert "No plant cost index is given" in caplog.text
+        assert eco.base_PEC == pytest.approx({"A": 1.05**2, "B": 2.0})
+
+    def test_a_cost_given_in_the_reference_year_needs_no_index_entry_for_it(self):
+        """The index ends before the base year; a cost from the base year is taken as it is."""
+        eco = EconomicAnalysis(
+            PEC={"A": 1.0, "B": 1.0},
+            i_eff=0.1,
+            n=20,
+            tau=7500,
+            f_tci=4.0,
+            omc_share=0.03,
+            reference_year={"A": 2010, "B": 2025},
+            base_year=2025,
+            cost_index={2010: 100.0, 2024: 150.0},
+            r_n=0.04,
+        )
+        assert eco.base_PEC["B"] == 1.0
+        assert eco.base_PEC["A"] == pytest.approx(1.5 * 1.04)
+
+    @pytest.mark.parametrize(
+        ("reference_year", "base_year", "expected"),
+        [
+            (2025, 2026, 1.04),  # both beyond the index: one year of escalation
+            (2026, 2025, 1 / 1.04),  # a cost from the future is deflated
+            (1994, 2024, 1.04**2 * 1.5),  # before the index: escalated to its first year, then indexed
+            (2010, 2024, 1.5),  # inside the index: its ratio alone
+        ],
+    )
+    def test_the_rate_bridges_the_years_outside_the_index(self, reference_year, base_year, expected, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco = EconomicAnalysis(
+                PEC={"A": 1.0, "B": 1.0},
+                i_eff=0.1,
+                n=20,
+                tau=7500,
+                f_tci=4.0,
+                omc_share=0.03,
+                reference_year={"A": reference_year, "B": base_year},
+                base_year=base_year,
+                cost_index={1996: 100.0, 2010: 100.0, 2024: 150.0},
+                r_n=0.04,
+            )
+        assert eco.escalation_factor(reference_year) == pytest.approx(expected)
+        assert eco.base_PEC["B"] == 1.0
+        outside = not 1996 <= reference_year <= 2024 or base_year > 2024
+        assert ("bridged with the nominal escalation rate" in caplog.text) is outside
+
+    def test_a_gap_inside_the_index_is_an_error(self):
+        with pytest.raises(ValueError, match="no value for the year 2015"):
+            EconomicAnalysis(
+                PEC={"A": 1.0},
+                i_eff=0.1,
+                n=20,
+                tau=7500,
+                f_tci=4.0,
+                omc_share=0.03,
+                reference_year=2015,
+                base_year=2024,
+                cost_index={2010: 100.0, 2024: 150.0},
             )
 
     @pytest.mark.parametrize("basis", ["PEC", "TCI"])
@@ -492,3 +554,78 @@ class TestLevelizedFuelCost:
             fuel_costs={"e1": 0.0, "11": 0.0, "21": 0.0},
         )
         assert eco.levelized_fuel_costs(_heatpump_analysis()) == pytest.approx(0.0)
+
+
+class TestScaledCost:
+    REFERENCE = {"PEC_ref": 100000.0, "size_ref": 80.0}
+
+    def test_the_reference_cost_is_scaled_with_the_default_exponent(self):
+        eco = EconomicAnalysis(PEC={"COND": {**self.REFERENCE, "size": 120.0}}, **PARAMETERS)
+        assert eco.PEC["COND"] == pytest.approx(100000.0 * 1.5**0.6)
+        assert eco.scaling["COND"]["exponent"] == 0.6
+
+    def test_an_own_exponent(self):
+        eco = EconomicAnalysis(PEC={"COND": {**self.REFERENCE, "size": 120.0, "exponent": 0.8}}, **PARAMETERS)
+        assert eco.PEC["COND"] == pytest.approx(100000.0 * 1.5**0.8)
+
+    def test_the_reference_cost_is_escalated_from_its_year(self):
+        eco = EconomicAnalysis(
+            PEC={"COND": {**self.REFERENCE, "size": 80.0}, "COMP": 1000.0},
+            reference_year={"COND": 2021, "COMP": 2024},
+            base_year=2024,
+            cost_index={2021: 100.0, 2024: 125.0},
+            **PARAMETERS,
+        )
+        assert eco.base_PEC["COND"] == pytest.approx(125000.0)
+
+    def test_the_size_is_read_from_the_model(self):
+        from exerpy import costing
+
+        ean = _heatpump_analysis()
+        U = {("gas", "liquid"): 500.0, ("two-phase", "liquid"): 2500.0, ("liquid", "liquid"): 1500.0}
+        spec = {**self.REFERENCE, "size_by": "area", "U": U}
+        eco = EconomicAnalysis(PEC={"COND": spec}, exergy_analysis=ean, **PARAMETERS)
+        assert eco.scaling["COND"]["size"] == pytest.approx(costing.size(ean.components["COND"], "area", U=U))
+        assert eco.scaling["COND"]["size_by"] == "area"
+        by_heat = {"PEC_ref": 100000.0, "size_ref": 2.0e6, "size_by": "heat"}
+        heat = EconomicAnalysis(PEC={"COND": by_heat}, exergy_analysis=ean, **PARAMETERS)
+        assert heat.scaling["COND"]["size"] == pytest.approx(costing.size(ean.components["COND"], "heat"))
+
+    @pytest.mark.parametrize(
+        ("spec", "match"),
+        [
+            ({"size_ref": 80.0, "size": 120.0}, "'PEC_ref' of the scaled cost"),
+            ({"PEC_ref": 100000.0, "size": 120.0}, "'size_ref' of the scaled cost"),
+            ({"PEC_ref": 100000.0, "size_ref": 80.0}, "needs its 'size'"),
+            ({"PEC_ref": 100000.0, "size_ref": 80.0, "size_by": "area"}, "needs its 'size'"),
+            ({"PEC_ref": 100000.0, "size_ref": 80.0, "size": 0.0}, "'size' of the scaled cost"),
+            ({"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0, "exponent": -1}, "'exponent'"),
+            ({"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0, "area": 1.0}, "not scaling inputs"),
+        ],
+    )
+    def test_an_incomplete_scaled_cost(self, spec, match):
+        with pytest.raises(ValueError, match=match):
+            EconomicAnalysis(PEC={"COND": spec}, **PARAMETERS)
+
+    def test_a_scaled_cost_from_a_file(self, tmp_path):
+        path = tmp_path / "costs.json"
+        path.write_text(
+            '{"i_eff": 0.12, "n": 20, "tau": 6000, "f_tci": 6.32, "omc_share": 0.015, "components": '
+            '{"COND": {"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0, "f_tci": 4.0}}}'
+        )
+        eco = EconomicAnalysis.from_json(str(path))
+        assert eco.PEC["COND"] == pytest.approx(100000.0 * 1.5**0.6)
+        assert eco.f_tci["COND"] == 4.0
+
+    def test_a_file_with_a_cost_and_a_scaled_one_for_the_same_component(self, tmp_path):
+        path = tmp_path / "costs.json"
+        path.write_text(
+            '{"i_eff": 0.12, "n": 20, "tau": 6000, "f_tci": 6.32, "omc_share": 0.015, "components": '
+            '{"COND": {"PEC": 1.0, "PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0}}}'
+        )
+        with pytest.raises(ValueError, match="both a purchased equipment cost and a scaled one"):
+            EconomicAnalysis.from_json(str(path))
+
+    def test_the_scaled_costs_are_printed(self, capsys):
+        EconomicAnalysis(PEC={"COND": {**self.REFERENCE, "size": 120.0}}, **PARAMETERS).economic_results()
+        assert "Costs scaled from a reference component" in capsys.readouterr().out

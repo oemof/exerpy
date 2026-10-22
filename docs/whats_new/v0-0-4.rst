@@ -3,8 +3,8 @@ v0.0.4 (05.02.2026)
 
 Bug fixes
 #########
-- Fixed problem with exergoeconomic balance equations check.
-- Fixed issue in heat exchanger auxiliary equations (aux_eqs).
+- Fixed a problem with the check of the exergoeconomic balance equations.
+- Fixed an issue in the heat exchanger auxiliary equations (aux_eqs).
 - Minor fixes in turbomachinery components.
 
 New features
@@ -13,8 +13,8 @@ New features
 
 Examples
 ########
-- Added exergoeconomic analysis example for a heat pump system.
-- Updated heat pump example to latest TESPy API.
+- Added an exergoeconomic analysis example for a heat pump system.
+- Updated the heat pump example to the latest TESPy API.
 
 Contributors
 ############

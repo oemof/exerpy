@@ -195,6 +195,26 @@ class AspenModelParser:
                             else None
                         ),
                         "m_unit": fluid_property_data["m"]["SI_unit"],
+                        "v": (
+                            convert_to_SI(
+                                "v",
+                                self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\VOLFLMX\MIXED").Value,
+                                self.aspen.Tree.FindNode(
+                                    rf"\Data\Streams\{stream_name}\Output\VOLFLMX\MIXED"
+                                ).UnitString,
+                            )
+                            if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\VOLFLMX\MIXED")
+                            is not None
+                            else None
+                        ),
+                        "v_unit": fluid_property_data["v"]["SI_unit"],
+                        # Vapour mass fraction; Aspen states it for mixtures as well.
+                        "x": (
+                            self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA").Value
+                            if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA") is not None
+                            else None
+                        ),
+                        "x_unit": fluid_property_data["x"]["SI_unit"],
                         "energy_flow": (
                             convert_to_SI(
                                 "power",

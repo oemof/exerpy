@@ -4,15 +4,37 @@
 CGAM Process (Exergoeconomic Analysis)
 **************************************
 
-This tutorial demonstrates how to perform an exergoeconomic analysis using ExerPy with
-manually defined component and stream costs. 
+.. seealso::
+
+    The method behind this example: :ref:`Exergoeconomic Analysis <exergoeconomic_analysis_label>`.
+
+This example performs the exergoeconomic analysis of the CGAM process. The plant is the base case
+of the CGAM problem of Valero et al. :cite:`Valero1994`, modelled as in the :ref:`exergy analysis
+example <examples_cgam_label>`, and the investment cost rates and the cost of the fuel follow the
+cost model of the same paper, see :ref:`the cost basis <cgam_cost_basis>`.
 
 .. note::
 
-    This tutorial builds upon the :ref:`CGAM Process exergy analysis example <examples_cgam_label>` and uses 
-    data imported from a previously saved JSON file. Make sure you understand how to set up exergy analysis 
+    This tutorial builds upon the :ref:`CGAM Process exergy analysis example <examples_cgam_label>` and uses
+    data imported from a previously saved JSON file. Make sure you understand how to set up an exergy analysis
     from JSON data before proceeding.
 
+
+The flowsheet below names the components and the streams used throughout this example.
+
+.. figure:: /_static/images/flowsheets/cgam.svg
+    :align: center
+    :alt: CGAM flowsheet
+    :figclass: only-light
+
+    Figure: Flowsheet of the CGAM process
+
+.. figure:: /_static/images/flowsheets/cgam_darkmode.svg
+    :align: center
+    :alt: CGAM flowsheet
+    :figclass: only-dark
+
+    Figure: Flowsheet of the CGAM process
 
 1. **Exergy Analysis (Prerequisite)**
 
@@ -49,10 +71,9 @@ The cost dictionary requires two types of entries:
 **The cost basis**
 
 The CGAM problem :cite:`Valero1994` defines the plant, its operating point and the correlations for
-the purchase equipment costs of its components. The cost rates used here are the ones Kelly
-:cite:`Kelly2008` obtained by evaluating that cost model for this base case, so that the results of
-this example can be compared with the ones published there. Both works turn a purchase equipment
-cost into a cost rate the same way,
+the purchased equipment costs of its components. The cost rates used here follow from that cost
+model for this base case; Kelly :cite:`Kelly2008` uses the same ones. Both works turn a purchased
+equipment cost into a cost rate the same way,
 
 .. math::
 
@@ -61,7 +82,7 @@ cost into a cost rate the same way,
 where :math:`\mathrm{CRF} = 0.182` is the annual capital recovery factor, :math:`\varphi = 1.06`
 the maintenance factor, which adds the operation and maintenance expenses as a flat surcharge on
 the capital cost, and :math:`N = 8000\,\mathrm{h/yr}` the operating hours per year. Note that the
-purchase equipment cost is annualized directly: it is not scaled up to a total capital investment
+purchased equipment cost is annualized directly: it is not scaled up to a total capital investment
 first, as the levelization of Bejan, Tsatsaronis and Moran :cite:`Bejan1996` does.
 
 .. csv-table:: Investment cost of the components
@@ -83,8 +104,8 @@ dictionary. The ambient air and the feedwater enter free of charge, and neither 
 equation for the generator, so its cost rate is zero.
 
 Both references report a single cost rate for the heat recovery steam generator, 16.93 USD/h, while
-the model has an evaporator and an economizer as separate components. It is split over the two in
-the ratio of the purchase equipment costs of their sections, 67.8 % to 32.2 %, which follows from
+the model has an evaporator and an economizer as separate components. It is split between the two in
+the ratio of the purchased equipment costs of their sections, 67.8 % to 32.2 %, which follows from
 the correlation of the paper. This split is a convention of this example.
 
 **What this example computes**
@@ -130,54 +151,28 @@ the whole plant. The cost part of that table is:
     "PH", "1911.4", "14.773", "n/a", "5.092", "n/a"
     "TOT", "39466.7", "3.862", "8.581", "20.180", "122.165"
 
-The plant converts fuel at 3.862 USD/GJ into a product at 8.581 USD/GJ. The combustion chamber
-dominates the cost of the exergy destruction with 367.67 USD/h at an exergoeconomic factor of
-1.2 %, so its cost is caused almost entirely by irreversibility and not by its investment — the
-classic result for the CGAM plant. The compressor and the gas turbine are the opposite case, with
-:math:`f` around 38 to 48 %: there the investment carries a large share of the cost, and spending
-more on them pays off only if it buys efficiency elsewhere.
+**How to read the tables.** The plant converts fuel at 3.862 USD/GJ into a product at
+8.581 USD/GJ. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
+dominates the total cost rate of a component. Following Bejan et al. :cite:`Bejan1996`, a low
+:math:`f` points to improving the efficiency of the component, even at a higher investment, and a
+high :math:`f` to reducing its investment, even at some loss of efficiency. Here the combustion chamber has the largest cost rate of exergy destruction, 367.67 USD/h,
+at :math:`f = 1.2` %, so its total cost rate is almost entirely the cost of its exergy destruction.
+The compressor and the gas turbine have :math:`f` between 38 and 48 %, so the investment accounts for a
+large share of their total cost rate.
 
-**Compared with the literature**
+.. _cgam_literature:
 
-Because the investment costs are the ones of Kelly :cite:`Kelly2008`, the results can be compared
-with the ones published there directly. What is compared is then the exergoeconomic method itself
-and the underlying thermodynamics, not the cost correlations:
+**Relation to the literature**
 
-.. csv-table:: Comparison with the conventional exergoeconomic analysis of Kelly (2008), this example first
-    :header: "Component", ":math:`\dot{E}_\mathrm{D}` [MW]", ":math:`\varepsilon` [%]", ":math:`c_\mathrm{F}` [USD/GJ]", ":math:`c_\mathrm{P}` [USD/GJ]", ":math:`\dot{C}_\mathrm{D}` [USD/h]", ":math:`f` [%]", ":math:`r` [%]"
-    :widths: 14 14 12 13 13 13 11 11
-
-    "AC", "2.10 / 2.10", "92.9 / 93.1", "8.02 / 7.6", "9.27 / 8.8", "60.7 / 57.6", "48.4 / 49.8", "15.5 / 14.9"
-    "APH", "2.56 / 2.82", "84.6 / 83.0", "6.87 / 7.0", "8.50 / 8.6", "63.3 / 70.7", "16.2 / 14.8", "23.8 / 24.0"
-    "CC", "25.3 / 30.5", "69.9 / 66.8", "4.03 / 3.8", "6.14 / 5.8", "368 / 421", "1.2 / 1.0", "52.1 / 50.3"
-    "EXP", "2.99 / 3.06", "95.2 / 95.2", "7.39 / 7.0", "8.02 / 7.5", "79.6 / 76.7", "37.7 / 38.6", "8.6 / 8.2"
-
-The specific costs agree within about 6 % and the exergoeconomic factor within about 1.5 points. The
-remaining differences come from the thermodynamic model rather than from the costing: Kelly follows
-the paper and treats air and combustion gas as ideal gases with constant :math:`c_p`, while ExerPy
-evaluates real fluid properties. That shows most clearly in the combustion chamber, whose exergy
-destruction differs by 17 %, and it carries over into its cost of exergy destruction.
-
-
-The reference reports nothing for the plant as a whole, so there is no row for it here. Its plant
-does differ from this one at that level: both deliver the same product, but it burns 7 % more fuel
-for it, 1.773 against 1.644 kg/s of methane.
-
-The evaporator and the economizer are not in the table because the reference treats the heat
-recovery steam generator as a single component, while the model here resolves it into two. Their
-exergy destruction adds up to 6.50 MW against the 6.72 MW reported for the whole HRSG, but the fuel
-of the economizer alone is not the fuel of the HRSG, so their specific costs are not comparable.
-
-.. note::
-
-    The reference costs each stream with a single specific cost on its total exergy, that is,
-    without splitting the physical exergy into a thermal and a mechanical part. The comparison above
-    therefore holds for that convention; see
-    :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>` for the
-    same plant costed both ways and for how far each of the two lands from these published values.
+Kelly :cite:`Kelly2008` uses the same investment cost rates, but the results of the two works
+are not comparable. The thesis does not state its thermodynamic model, and its stream data do not
+follow from that of the CGAM problem, ideal gases with constant specific heats :cite:`Valero1994`.
+Its plant also operates at a different point: it burns 1.773 kg/s of methane for the same product,
+compared with 1.644 kg/s here. The results are therefore shown as they are, without a comparison with the
+published values.
 
 The :code:`evaluate_results()` method ranks components by their total cost rate
-(:math:`\dot{C}_D + \dot{Z}`) to identify the most promising targets for optimization.
+(:math:`\dot{C}_\mathrm{D} + \dot{Z}`) to identify the most promising targets for optimization.
 You can sort by different criteria using the :code:`sort_by` parameter:
 
 .. code-block:: python
@@ -191,5 +186,13 @@ You can sort by different criteria using the :code:`sort_by` parameter:
 
 .. seealso::
 
-    The same model is costed with and without split physical exergy in
+    The same model is analysed with and without split physical exergy in
     :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
+
+Full code
+=========
+
+.. dropdown:: Full code of this example
+
+    .. literalinclude:: /../examples/exergoeconomic_analysis/cgam/cgam_exergoeconomic.py
+        :language: python

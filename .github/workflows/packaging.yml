@@ -33,7 +33,7 @@ jobs:
       run: twine check dist/*
     - name: Verify excluded paths not in wheel
       run: |
-        BLOCKED="cost_estimation cost_correlations"
+        BLOCKED="cost_estimation cost_correlations cost_library"
         for whl in dist/*.whl; do
           echo "Inspecting $whl ..."
           for pattern in $BLOCKED; do

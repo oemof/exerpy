@@ -15,6 +15,7 @@ exclude = [
     "docs/_build",
     "src/exerpy/cost_estimation/**",
     "src/exerpy/data/cost_correlations/**",
+    "src/exerpy/cost_library/**",
     "examples/visualization/*.html",
     "examples/visualization/*.png",
     "examples/opt_examples/**",
@@ -27,9 +28,7 @@ dynamic = ["version"]
 description = "Exergy analysis for tabular input data"
 readme = "README.rst"
 authors = [
-    {name = "Sergio Tomasinelli", email = "s.tomasinelli@tu-berlin.de"},
-    {name = "Robert Müller", email = "robert.mueller.2@tu-berlin.de"},
-    {name = "Francesco Witte", email = "github@witte.sh"},
+    {name = "ExerPy Developers, see https://github.com/oemof/exerpy/graphs/contributors", email = "s.tomasinelli@tu-berlin.de"},
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -74,19 +73,23 @@ dev = [
     "furo",
     "isort",
     "matplotlib>=3.10",
+    "openpytea>=3.1.0",
     "plotly>=6.8",
     "pytest",
     "sphinx>=7.2.2",
     "sphinx-copybutton",
     "sphinx-design",
     "sphinxcontrib.bibtex",
-    "tespy>=0.11",
+    "tespy>=0.11.3",
     "tox",
     "black>=24.10.0",
     "ruff>=0.6.9",
 ]
 tespy = [
-    "tespy>=0.11",
+    "tespy>=0.11.3",
+]
+costs = [
+    "openpytea>=3.1.0",
 ]
 ebsilon = [
     "pywin32"

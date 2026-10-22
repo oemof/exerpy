@@ -4,7 +4,7 @@ v0.0.6 (12.02.2026)
 Build & Packaging
 #################
 - Added explicit exclude rules in ``pyproject.toml`` for paths that should not be distributed.
-- Added CI verification step in the packaging workflow to check wheels for blocked paths.
+- Added a CI verification step in the packaging workflow to check wheels for blocked paths.
 
 Contributors
 ############

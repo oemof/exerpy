@@ -1285,7 +1285,7 @@ def test_both_simulators_give_the_same_exergoeconomic_results():
 
 
 # =============================================================================
-# Components that no costed example contains
+# Components that no example with costs contains
 # =============================================================================
 
 
@@ -1311,10 +1311,10 @@ def _material(source, target, connector, m, e_T, e_M, T=450.0, h=2.0e6):
     }
 
 
-def _run_single_component(component_type, connections, costs, split_physical_exergy=True, **flows):
+def _run_single_component(component_type, connections, costs, split_physical_exergy=True, attributes=None, **flows):
     """Cost a plant made of one component between boundary streams."""
     name = next(iter(costs)).removesuffix("_Z")
-    components = {component_type: {name: {"name": name, "type": component_type}}}
+    components = {component_type: {name: {"name": name, "type": component_type, **(attributes or {})}}}
     ean = ExergyAnalysis(components, connections, 298.15, 101325, split_physical_exergy=split_physical_exergy)
     ean.analyse(**flows)
     eco = ExergoeconomicAnalysis(ean)
@@ -1332,7 +1332,7 @@ def _flash_tank_connections():
 
 
 class TestFlashTankExergoeconomics:
-    """No costed example contains a flash tank, so it is covered here."""
+    """No example with costs contains a flash tank, so it is covered here."""
 
     @pytest.mark.parametrize("split", [True, False])
     def test_cost_balance_closes(self, split):
@@ -1405,7 +1405,7 @@ def _simple_heat_exchanger_connections(releasing):
 
 
 class TestSimpleHeatExchangerExergoeconomics:
-    """The simple heat exchanger appears in the CCPP example, which is not costed."""
+    """The simple heat exchanger appears in the CCPP example, which has no costs."""
 
     @pytest.mark.parametrize("split", [True, False])
     def test_releasing_heat_the_cost_balance_closes(self, split):
@@ -1447,3 +1447,73 @@ class TestSimpleHeatExchangerExergoeconomics:
         assert eco.connections["out"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
         # Releasing heat above the ambient temperature, the thermal exergy follows the F-principle.
         assert eco.connections["out"]["c_T"] == pytest.approx(eco.connections["in"]["c_T"])
+
+
+class TestSimpleHeatExchangerHeatTemperature:
+    """The heat valued at the temperature of its source (T_hot) or its consumer (T_cold)."""
+
+    T0 = 298.15
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_heat_released_to_a_consumer(self, split):
+        streams = _simple_heat_exchanger_connections(releasing=True)
+        Q = streams["Q"]["energy_flow"]
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            streams,
+            {"SHE_Z": 20.0, "in_c": 6.0},
+            split,
+            attributes={"T_cold": 350.0},
+            E_F={"inputs": ["in"], "outputs": ["out"]},
+            E_P={"inputs": ["Q"], "outputs": []},
+        )
+        assert pytest.approx(Q * (1 - self.T0 / 350.0)) == unit.E_P
+        assert eco.connections["Q"]["E"] == pytest.approx(unit.E_P)
+        assert pytest.approx(unit.E_F - unit.E_P) == unit.E_D
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
+        assert balanced, f"residual={residual}"
+        # The heat is the product, so its cost is the cost of the product.
+        assert pytest.approx(eco.connections["Q"]["C_TOT"]) == unit.C_P
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_heat_taken_from_a_source(self, split):
+        streams = _simple_heat_exchanger_connections(releasing=False)
+        Q = streams["Q"]["energy_flow"]
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            streams,
+            {"SHE_Z": 20.0, "in_c": 6.0, "Q_c": 4.0},
+            split,
+            attributes={"T_hot": 900.0},
+            E_F={"inputs": ["Q"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": ["in"]},
+        )
+        assert pytest.approx(Q * (1 - self.T0 / 900.0)) == unit.E_F
+        assert eco.connections["Q"]["E"] == pytest.approx(unit.E_F)
+        # The loss of the heat transfer from the source is now destruction of the component.
+        assert unit.E_D > 0
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
+        assert balanced, f"residual={residual}"
+        assert pytest.approx(eco.connections["Q"]["C_TOT"]) == unit.C_F
+
+    def test_a_source_colder_than_the_stream_is_rejected(self):
+        with pytest.raises(ValueError, match="hotter than the stream"):
+            _run_single_component(
+                "SimpleHeatExchanger",
+                _simple_heat_exchanger_connections(releasing=False),
+                {"SHE_Z": 20.0, "in_c": 6.0, "Q_c": 4.0},
+                attributes={"T_hot": 500.0},
+                E_F={"inputs": ["Q"], "outputs": []},
+                E_P={"inputs": ["out"], "outputs": ["in"]},
+            )
+
+    def test_a_consumer_warmer_than_the_stream_is_rejected(self):
+        with pytest.raises(ValueError, match="colder than the stream"):
+            _run_single_component(
+                "SimpleHeatExchanger",
+                _simple_heat_exchanger_connections(releasing=True),
+                {"SHE_Z": 20.0, "in_c": 6.0},
+                attributes={"T_cold": 450.0},
+                E_F={"inputs": ["in"], "outputs": ["out"]},
+                E_P={"inputs": ["Q"], "outputs": []},
+            )

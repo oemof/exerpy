@@ -72,11 +72,12 @@ class ExergoeconomicOptimizer:
 
     Examples
     --------
-    >>> from exerpy.optimization import ExergoeconomicOptimizer, TESPyAdapter
-    >>> from exerpy.optimization.objectives import MinimizeTotalCost, MaximizeExergyEfficiency
+    >>> from exerpy.optimization import ExergoeconomicOptimizer  # doctest: +SKIP
+    >>> from exerpy.optimization.adapters import TESPyAdapter  # doctest: +SKIP
+    >>> from exerpy.optimization.objectives import MinimizeTotalCost, MaximizeExergyEfficiency  # doctest: +SKIP
     >>>
-    >>> adapter = TESPyAdapter(network, Tamb=298.15, pamb=101325)
-    >>> optimizer = (
+    >>> adapter = TESPyAdapter(network, Tamb=298.15, pamb=101325)  # doctest: +SKIP
+    >>> optimizer = (  # doctest: +SKIP
     ...     ExergoeconomicOptimizer(adapter)
     ...     .add_variable("HP Pressure", "connection", "2", "p", bounds=(50e5, 150e5))
     ...     .add_variable("Reheat Temp", "connection", "5", "T", bounds=(700, 900))
@@ -88,7 +89,7 @@ class ExergoeconomicOptimizer:
     ...         E_P={"inputs": ["power_out"]},
     ...     )
     ... )
-    >>> result = optimizer.optimize(algorithm="NSGA2", n_gen=100)
+    >>> result = optimizer.optimize(algorithm="NSGA2", n_gen=100)  # doctest: +SKIP
     """
 
     def __init__(self, adapter: SimulatorAdapter):
@@ -389,7 +390,7 @@ class ExergoeconomicOptimizer:
 
         Examples
         --------
-        >>> optimizer.set_exergy_definitions(
+        >>> optimizer.set_exergy_definitions(  # doctest: +SKIP
         ...     E_F={"inputs": ["e1"]},  # Power input
         ...     E_P={"inputs": ["42"], "outputs": ["41"]},  # Steam generation
         ...     E_L={"inputs": ["12"], "outputs": ["11"]},  # Heat rejection
@@ -474,7 +475,7 @@ class ExergoeconomicOptimizer:
 
         Examples
         --------
-        >>> def my_cost_function(ea: ExergyAnalysis) -> dict:
+        >>> def my_cost_function(ea: ExergyAnalysis) -> dict:  # doctest: +SKIP
         ...     costs = {}
         ...     # Calculate Z based on component power/heat duty
         ...     for name, comp in ea.components.items():
@@ -485,7 +486,7 @@ class ExergoeconomicOptimizer:
         ...     costs["fuel_c"] = 111.111  # EUR/GJ
         ...     return costs
         ...
-        >>> optimizer.set_cost_function(my_cost_function)
+        >>> optimizer.set_cost_function(my_cost_function)  # doctest: +SKIP
         """
         self._cost_function = cost_function
         return self

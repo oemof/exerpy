@@ -39,10 +39,10 @@ class TESPyAdapter(SimulatorAdapter):
 
     Examples
     --------
-    >>> from tespy.networks import Network
-    >>> nw = Network(...)  # Build your TESPy model
-    >>> adapter = TESPyAdapter(nw, Tamb=298.15, pamb=101325)
-    >>> adapter.solve()
+    >>> from tespy.networks import Network  # doctest: +SKIP
+    >>> nw = Network(...)  # Build your TESPy model  # doctest: +SKIP
+    >>> adapter = TESPyAdapter(nw, Tamb=298.15, pamb=101325)  # doctest: +SKIP
+    >>> adapter.solve()  # doctest: +SKIP
     True
     """
 

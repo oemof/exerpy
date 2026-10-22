@@ -49,8 +49,8 @@ class EbsilonAdapter(SimulatorAdapter):
 
     Examples
     --------
-    >>> adapter = EbsilonAdapter("path/to/model.ebs")
-    >>> adapter.solve()
+    >>> adapter = EbsilonAdapter("path/to/model.ebs")  # doctest: +SKIP
+    >>> adapter.solve()  # doctest: +SKIP
     True
     """
 

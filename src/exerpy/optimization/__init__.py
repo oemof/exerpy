@@ -49,15 +49,15 @@ The adapters submodule provides simulator-specific implementations:
 
 Example
 -------
->>> from exerpy.optimization import ExergoeconomicOptimizer
->>> from exerpy.optimization.adapters import TESPyAdapter
->>> from exerpy.optimization.objectives import MinimizeTotalCost, MaximizeExergyEfficiency
+>>> from exerpy.optimization import ExergoeconomicOptimizer  # doctest: +SKIP
+>>> from exerpy.optimization.adapters import TESPyAdapter  # doctest: +SKIP
+>>> from exerpy.optimization.objectives import MinimizeTotalCost, MaximizeExergyEfficiency  # doctest: +SKIP
 >>>
 >>> # Create adapter for your simulation model
->>> adapter = TESPyAdapter(network, Tamb=298.15, pamb=101325)
+>>> adapter = TESPyAdapter(network, Tamb=298.15, pamb=101325)  # doctest: +SKIP
 >>>
 >>> # Build optimization problem
->>> optimizer = (
+>>> optimizer = (  # doctest: +SKIP
 ...     ExergoeconomicOptimizer(adapter)
 ...     .add_variable("HP Pressure", "connection", "2", "p", bounds=(50e5, 150e5))
 ...     .add_variable("Reheat Temp", "connection", "5", "T", bounds=(700, 900))
@@ -67,7 +67,7 @@ Example
 ... )
 >>>
 >>> # Run optimization
->>> result = optimizer.optimize(
+>>> result = optimizer.optimize(  # doctest: +SKIP
 ...     E_F={"fuel": 1.0},
 ...     E_P={"power": 1.0},
 ...     algorithm="NSGA2",
@@ -75,8 +75,8 @@ Example
 ... )
 >>>
 >>> # Analyze results
->>> print(result.summary())
->>> result.plot_pareto()
+>>> print(result.summary())  # doctest: +SKIP
+>>> result.plot_pareto()  # doctest: +SKIP
 """
 
 from .constraints import BoundConstraint

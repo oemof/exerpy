@@ -49,8 +49,8 @@ class AspenAdapter(SimulatorAdapter):
 
     Examples
     --------
-    >>> adapter = AspenAdapter("path/to/model.bkp")
-    >>> adapter.solve()
+    >>> adapter = AspenAdapter("path/to/model.bkp")  # doctest: +SKIP
+    >>> adapter.solve()  # doctest: +SKIP
     True
     """
 

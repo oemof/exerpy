@@ -7,6 +7,11 @@ from tabulate import tabulate
 
 from exerpy.logger import logger
 
+# Default exponent of the scaling of a purchased equipment cost with the size of a component.
+SCALING_EXPONENT = 0.6
+# Keys of a purchased equipment cost scaled from a reference component.
+SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger_type", "U"}
+
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
@@ -2621,29 +2626,29 @@ class ExergoeconomicAnalysis:
 
 class EconomicAnalysis:
     r"""
-    Turn the purchase equipment costs of a plant into the cost rates of its components.
+    Turn the purchased equipment costs of a plant into the cost rates of its components.
 
-    The method is the total revenue requirement (TRR) of Bejan et al. :cite:`Bejan1996`. Every cost
+    The method is the total revenue requirement (TRR) method of Bejan et al. :cite:`Bejan1996`. Every cost
     factor may be given once for the whole plant or separately per component, so a heat exchanger can
     carry a different installation effort from a motor:
 
     .. math::
 
-        \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot \frac{I_\mathrm{ref}}{I_{y(j)}}
+        \mathrm{PEC}_{\mathrm{base},j} = \mathrm{PEC}_j \cdot \frac{I_{y_\mathrm{base}}}{I_{y_{\mathrm{ref},j}}}
         \qquad
-        \mathrm{TCI}_j = f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{ref},j}
+        \mathrm{TCI}_j = f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{base},j}
 
     .. math::
 
         \dot{Z}^\mathrm{CC}_j = \frac{\mathrm{TCI}_j \cdot \mathrm{CRF}}{\tau}
         \qquad
-        \dot{Z}^\mathrm{OM}_j = \frac{\mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{ref},j}
+        \dot{Z}^\mathrm{OM}_j = \frac{\mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{base},j}
         \cdot \mathrm{CELF}}{\tau}
         \qquad
         \dot{Z}_j = \dot{Z}^\mathrm{CC}_j + \dot{Z}^\mathrm{OM}_j
 
-    Equipment costed in an earlier year is carried to the reference year with a plant cost index,
-    :math:`I`, whose values are an input of the analysis.
+    A cost from an earlier year is carried to the base year with a plant cost index,
+    :math:`I`, whose values are an input to the analysis.
 
     The cost of the streams entering the plant is levelized the same way. A stream bought at
     :math:`c_0` and escalating at its own nominal rate enters the exergoeconomic analysis at
@@ -2655,11 +2660,30 @@ class EconomicAnalysis:
     so the cost of the fuel and the cost of the equipment are levelized over the same lifetime and
     the specific cost of the product is a levelized cost too.
 
+    A purchased equipment cost may also be scaled from the cost of a reference component of the same
+    type but a different size, taken from the literature or from a manufacturer, with the six-tenths
+    rule of cost estimation:
+
+    .. math::
+
+        \mathrm{PEC}_j = \mathrm{PEC}_{\mathrm{ref},j}
+        \left(\frac{X_j}{X_{\mathrm{ref},j}}\right)^{\alpha_j}
+
+    The cost of the reference component is given at the price level of the ``reference_year`` of the
+    component and carried to the base year with the plant cost index like any other.
+
     Parameters
     ----------
     PEC : dict
-        Purchase equipment cost of every component, as ``{"<component>": cost}``, in the currency of
-        the analysis and in the price level of its ``cost_year``.
+        Purchased equipment cost of every component, as ``{"<component>": cost}``, in the currency of
+        the analysis and at the price level of its ``reference_year``. Instead of a cost, an entry may be
+        ``{"PEC_ref": cost of the reference, "size_ref": size of the reference, "size": size,
+        "exponent": alpha}`` to scale the cost of a reference component of the same type. ``size``
+        and ``size_ref`` are in the same units. Instead of ``size``, ``size_by`` names the size the
+        reference is given in, one of :func:`exerpy.costing.quantities`, for example ``"power"`` in
+        W or ``"area"`` in m², and ``exergy_analysis`` provides the model it is read from with
+        :func:`exerpy.costing.size`; an area takes ``exchanger_type`` (shell-and-tube by default)
+        and ``U``. ``exponent`` is 0.6 by default.
     i_eff : float
         Effective rate of return :math:`i_\mathrm{eff}`, per year.
     n : int
@@ -2667,31 +2691,31 @@ class EconomicAnalysis:
     tau : float
         Operating hours of the plant :math:`\tau`, per year. It scales every cost rate.
     f_tci : float or dict
-        Ratio of the total capital investment to the purchase equipment cost, for the whole plant or
+        Ratio of the total capital investment to the purchased equipment cost, for the whole plant or
         per component. It covers installation, piping, instrumentation, engineering, contingency,
         start-up and working capital.
     omc_share : float or dict
-        First-year operating and maintenance cost as a fraction of the purchase equipment cost or of
+        First-year operating and maintenance cost as a fraction of the purchased equipment cost or of
         the total capital investment, see ``omc_basis``, for the whole plant or per component.
     omc_basis : str, optional
-        Whether ``omc_share`` is a fraction of the purchase equipment cost, ``"PEC"``, or of the
+        Whether ``omc_share`` is a fraction of the purchased equipment cost, ``"PEC"``, or of the
         total capital investment, ``"TCI"``. The two differ by the installation factor, so a share
         meant for one basis is badly wrong on the other. Default is ``"PEC"``.
-    cost_year : int or dict, optional
-        Year whose price level a purchase equipment cost is given in, for the whole plant or per
-        component. Default is the reference year, so nothing is escalated and no cost index is
+    reference_year : int or dict, optional
+        Year whose price level a purchased equipment cost is given in, for the whole plant or per
+        component. Default is the base year, so nothing is escalated and no cost index is
         needed.
-    reference_year : int, optional
+    base_year : int, optional
         Year every cost is carried to. Required as soon as any cost comes from a different year.
     cost_index : dict, optional
         Plant cost index per year, as ``{year: index}``. Only the ratio of two entries is used, so
-        any consistent normalisation works. Required as soon as costs come from more than one year.
-        Where it does not reach the reference year, the remaining years are bridged with ``r_n``.
+        any consistent normalization works. Required as soon as costs come from more than one year.
+        Where it does not reach the base year, the remaining years are bridged with ``r_n``.
     fuel_costs : dict, optional
         Specific cost of every stream entering the plant, as
         ``{"<connection>": {"c": value, "r_n": rate, "basis": "exergy" | "energy"}}``. ``c`` is in
-        currency per GJ in the price level of the reference year, ``r_n`` is the nominal escalation
-        rate of that cost per year and falls back to the one of the operating and maintenance cost,
+        currency per GJ at the price level of the base year, ``r_n`` is the nominal escalation
+        rate of that cost per year and defaults to that of the operating and maintenance cost,
         and ``basis`` says whether ``c`` is per unit of exergy (the default) or per unit of energy.
         A cost on the energy basis is converted with the flows of the stream, which are read from the
         exergy analysis unless the entry gives ``energy_flow`` and ``exergy_flow`` itself. An entry
@@ -2702,13 +2726,15 @@ class EconomicAnalysis:
         Default is 0.05.
     currency : str, optional
         Currency of the costs, used in the results tables. Default is "EUR".
+    exergy_analysis : ExergyAnalysis, optional
+        The analysed plant, to read the sizes a scaled purchased equipment cost leaves out.
 
     Raises
     ------
     ValueError
         If a required parameter is missing or not positive, if a per-component factor names a
-        component without a purchase equipment cost, or if the cost index does not cover a year that
-        is used.
+        component without a purchased equipment cost, if the cost index does not cover a year that
+        is used, or if a scaled cost lacks a value of its reference or its size.
 
     See Also
     --------
@@ -2728,14 +2754,24 @@ class EconomicAnalysis:
     >>> {name: round(value, 3) for name, value in eco.compute_z().items()}
     {'COMP_Z': 32.548, 'COND_Z': 13.019}
 
-    Equipment costed in an earlier year is carried to the reference year:
+    A cost from an earlier year is carried to the base year:
 
     >>> eco = EconomicAnalysis(
     ...     PEC={"COMP": 300000.0}, i_eff=0.12, n=20, tau=8000, f_tci=6.32, omc_share=0.015,
-    ...     cost_year=2021, reference_year=2024, cost_index={2021: 100.0, 2024: 125.0},
+    ...     reference_year=2021, base_year=2024, cost_index={2021: 100.0, 2024: 125.0},
     ... )
-    >>> round(eco.reference_PEC["COMP"], 1)
+    >>> round(eco.base_PEC["COMP"], 1)
     375000.0
+
+    A heat exchanger of 120 m² scaled from a reference of 80 m² that cost 100 000 in 2021:
+
+    >>> eco = EconomicAnalysis(
+    ...     PEC={"COND": {"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0}},
+    ...     i_eff=0.12, n=20, tau=8000, f_tci=6.32, omc_share=0.015,
+    ...     reference_year=2021, base_year=2024, cost_index={2021: 100.0, 2024: 125.0},
+    ... )
+    >>> round(eco.PEC["COND"], 1), round(eco.base_PEC["COND"], 1)
+    (127542.5, 159428.1)
     """
 
     def __init__(
@@ -2746,24 +2782,31 @@ class EconomicAnalysis:
         tau,
         f_tci,
         omc_share,
-        cost_year=None,
         reference_year=None,
+        base_year=None,
         cost_index=None,
         fuel_costs=None,
         omc_basis="PEC",
         r_n=0.05,
         currency="EUR",
+        exergy_analysis=None,
     ):
         if not PEC:
-            raise ValueError("The purchase equipment cost of at least one component is required.")
+            raise ValueError("The purchased equipment cost of at least one component is required.")
+        self.scaling = {}
+        resolved = {}
         for name, cost in PEC.items():
+            if isinstance(cost, dict):
+                self.scaling[name] = self._scaled_cost(name, cost, exergy_analysis)
+                cost = self.scaling[name]["PEC"]
             if cost is None or cost < 0:
-                raise ValueError(f"The purchase equipment cost of '{name}' is not a positive number: {cost}.")
+                raise ValueError(f"The purchased equipment cost of '{name}' is not a positive number: {cost}.")
+            resolved[name] = cost
         for label, value in (("i_eff", i_eff), ("n", n), ("tau", tau)):
             if value is None or value <= 0:
                 raise ValueError(f"'{label}' has to be a positive number, got {value}.")
 
-        self.PEC = dict(PEC)
+        self.PEC = resolved
         self.i_eff = i_eff
         self.n = n
         self.tau = tau
@@ -2775,10 +2818,10 @@ class EconomicAnalysis:
         self.f_tci = self._per_component(f_tci, "f_tci", positive=True)
         self.omc_share = self._per_component(omc_share, "omc_share")
 
-        self.reference_year = reference_year
+        self.base_year = base_year
         self.cost_index = dict(cost_index) if cost_index else {}
-        self.cost_year = self._per_component(
-            cost_year if cost_year is not None else reference_year, "cost_year", allow_none=True
+        self.reference_year = self._per_component(
+            reference_year if reference_year is not None else base_year, "reference_year", allow_none=True
         )
         self._check_years()
 
@@ -2792,13 +2835,52 @@ class EconomicAnalysis:
                     f"The cost basis of stream '{name}' is neither 'exergy' nor 'energy': {spec['basis']}."
                 )
 
+    @staticmethod
+    def _scaled_cost(name, spec, exergy_analysis=None):
+        """Scale the purchased equipment cost of a reference component of the same type to the size of this one."""
+        unknown = set(spec) - SCALING_KEYS
+        if unknown:
+            raise ValueError(f"The scaled cost of '{name}' has keys that are not scaling inputs: {sorted(unknown)}.")
+        size, size_by = spec.get("size"), spec.get("size_by")
+        if size is None:
+            if size_by is None or exergy_analysis is None or name not in exergy_analysis.components:
+                raise ValueError(
+                    f"The scaled cost of '{name}' needs its 'size', or 'size_by' and the exergy analysis to read "
+                    "it from the model."
+                )
+            from exerpy import costing
+
+            size = costing.size(
+                exergy_analysis.components[name],
+                size_by,
+                U=spec.get("U"),
+                exchanger_type=spec.get("exchanger_type", "shell_and_tube"),
+            )
+            if size is None:
+                raise ValueError(f"The {size_by} of '{name}' does not follow from the model; give it as 'size'.")
+        exponent = spec.get("exponent", SCALING_EXPONENT)
+        for label, value in (("PEC_ref", spec.get("PEC_ref")), ("size_ref", spec.get("size_ref")), ("size", size)):
+            if value is None or value <= 0:
+                raise ValueError(f"'{label}' of the scaled cost of '{name}' is not a positive number: {value}.")
+        if exponent is None or exponent <= 0:
+            raise ValueError(f"'exponent' of the scaled cost of '{name}' is not a positive number: {exponent}.")
+        cost = spec["PEC_ref"] * (size / spec["size_ref"]) ** exponent
+        return {
+            "PEC_ref": spec["PEC_ref"],
+            "size_ref": spec["size_ref"],
+            "size": size,
+            "size_by": size_by,
+            "exponent": exponent,
+            "PEC": cost,
+        }
+
     @classmethod
-    def from_json(cls, path):
+    def from_json(cls, path, exergy_analysis=None):
         r"""
         Read the cost assumptions of a plant from a JSON file.
 
-        The file keeps everything about one component in one entry, so the purchase equipment cost,
-        the year it was quoted in and the factors that belong to it cannot drift apart:
+        The file keeps everything about one component in one entry, so the purchased equipment cost,
+        its reference year and the factors that belong to it cannot drift apart:
 
         .. code-block:: json
 
@@ -2806,13 +2888,14 @@ class EconomicAnalysis:
                 "i_eff": 0.12,
                 "n": 20,
                 "tau": 6000,
-                "reference_year": 2025,
+                "base_year": 2025,
                 "currency": "EUR",
                 "f_tci": 6.32,
                 "omc_share": 0.015,
                 "cost_index": {"2021": 112.0, "2025": 143.0},
                 "components": {
-                    "COMP": {"PEC": 300000.0, "cost_year": 2021, "f_tci": 4.2, "omc_share": 0.03},
+                    "COMP": {"PEC": 300000.0, "reference_year": 2021, "f_tci": 4.2, "omc_share": 0.03},
+                    "COND": {"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0, "reference_year": 2021},
                     "VAL": 5000.0
                 },
                 "fuel_costs": {"e1": {"c": 30.0, "r_n": 0.04}, "11": 0.0}
@@ -2821,12 +2904,16 @@ class EconomicAnalysis:
         A value given at the top level applies to the whole plant, and a component that names the
         same key overrides it, so only what differs has to be written out. A component entry may be
         a plain number instead of an object, and so may an entry of ``fuel_costs``; both are read as
-        the cost with everything else left at its default.
+        the cost with everything else left at its default. A component scaled from a reference gives
+        ``PEC_ref``, ``size_ref`` and ``size`` or ``size_by``, and optionally ``exponent``,
+        ``exchanger_type`` and ``U``, instead of ``PEC``, see :class:`EconomicAnalysis`.
 
         Parameters
         ----------
         path : str
             Path to the JSON file.
+        exergy_analysis : ExergyAnalysis, optional
+            The analysed plant, to read the sizes a scaled cost leaves out.
 
         Returns
         -------
@@ -2836,7 +2923,7 @@ class EconomicAnalysis:
         Raises
         ------
         ValueError
-            If the file has no components, if a component has no purchase equipment cost, or if a
+            If the file has no components, if a component has no purchased equipment cost, or if a
             key is not one the class knows.
 
         See Also
@@ -2845,10 +2932,10 @@ class EconomicAnalysis:
         """
         with open(path, encoding="utf-8") as file:
             data = json.load(file)
-        return cls.from_dict(data)
+        return cls.from_dict(data, exergy_analysis=exergy_analysis)
 
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data, exergy_analysis=None):
         """
         Read the cost assumptions of a plant from a dictionary.
 
@@ -2859,6 +2946,8 @@ class EconomicAnalysis:
         ----------
         data : dict
             The cost assumptions, structured as in :meth:`from_json`.
+        exergy_analysis : ExergyAnalysis, optional
+            The analysed plant, to read the sizes a scaled cost leaves out.
 
         Returns
         -------
@@ -2868,7 +2957,7 @@ class EconomicAnalysis:
         Raises
         ------
         ValueError
-            If the dictionary has no components, if a component has no purchase equipment cost, or
+            If the dictionary has no components, if a component has no purchased equipment cost, or
             if a key is not one the class knows.
         """
         plant_keys = {
@@ -2878,8 +2967,8 @@ class EconomicAnalysis:
             "f_tci",
             "omc_share",
             "omc_basis",
-            "cost_year",
             "reference_year",
+            "base_year",
             "r_n",
             "currency",
         }
@@ -2891,17 +2980,20 @@ class EconomicAnalysis:
         if not components:
             raise ValueError("The cost file describes no components.")
 
-        component_keys = {"PEC", "cost_year", "f_tci", "omc_share"}
-        PEC, per_component = {}, {"cost_year": {}, "f_tci": {}, "omc_share": {}}
+        component_keys = {"PEC", "reference_year", "f_tci", "omc_share"} | SCALING_KEYS
+        PEC, per_component = {}, {"reference_year": {}, "f_tci": {}, "omc_share": {}}
         for name, entry in components.items():
             if not isinstance(entry, dict):
                 entry = {"PEC": entry}
             unknown = set(entry) - component_keys
             if unknown:
                 raise ValueError(f"Component '{name}' has keys that are not cost assumptions: {sorted(unknown)}.")
-            if "PEC" not in entry:
-                raise ValueError(f"Component '{name}' has no purchase equipment cost.")
-            PEC[name] = entry["PEC"]
+            scaling = {key: entry[key] for key in SCALING_KEYS if key in entry}
+            if "PEC" in entry and scaling:
+                raise ValueError(f"Component '{name}' gives both a purchased equipment cost and a scaled one.")
+            if "PEC" not in entry and not scaling:
+                raise ValueError(f"Component '{name}' has no purchased equipment cost.")
+            PEC[name] = entry.get("PEC", scaling)
             for key in per_component:
                 per_component[key][name] = entry.get(key, data.get(key))
 
@@ -2918,13 +3010,14 @@ class EconomicAnalysis:
             tau=data.get("tau"),
             f_tci=per_component["f_tci"],
             omc_share=per_component["omc_share"],
-            cost_year=per_component["cost_year"],
-            reference_year=data.get("reference_year"),
+            reference_year=per_component["reference_year"],
+            base_year=data.get("base_year"),
             cost_index=cost_index,
             fuel_costs=fuel_costs,
             omc_basis=data.get("omc_basis", "PEC"),
             r_n=data.get("r_n", 0.05),
             currency=data.get("currency", "EUR"),
+            exergy_analysis=exergy_analysis,
         )
 
     def _per_component(self, value, label, positive=False, allow_none=False):
@@ -2932,7 +3025,7 @@ class EconomicAnalysis:
         if isinstance(value, dict):
             unknown = set(value) - set(self.PEC)
             if unknown:
-                raise ValueError(f"'{label}' names components without a purchase equipment cost: {sorted(unknown)}.")
+                raise ValueError(f"'{label}' names components without a purchased equipment cost: {sorted(unknown)}.")
             resolved = {name: value.get(name) for name in self.PEC}
         else:
             resolved = dict.fromkeys(self.PEC, value)
@@ -2944,22 +3037,22 @@ class EconomicAnalysis:
         return resolved
 
     def _check_years(self):
-        """Every cost year has to be reachable from the reference year; say how the gaps are bridged."""
-        years = {year for year in self.cost_year.values() if year is not None}
-        if not years or years == {self.reference_year}:
+        """Every reference year has to be reachable from the base year; say how the gaps are bridged."""
+        years = {year for year in self.reference_year.values() if year is not None}
+        if not years or years == {self.base_year}:
             return
-        if self.reference_year is None:
-            raise ValueError("Costs come from more than one year, so 'reference_year' is required.")
+        if self.base_year is None:
+            raise ValueError("Costs come from more than one year, so 'base_year' is required.")
         if not self.cost_index:
             logger.warning(
                 f"No plant cost index is given, so the costs from {sorted(years)} are carried to "
-                f"{self.reference_year} with the nominal escalation rate r_n = {self.r_n} alone. A published "
+                f"{self.base_year} with the nominal escalation rate r_n = {self.r_n} alone. A published "
                 f"index is the better basis wherever one exists."
             )
             return
         first, last = min(self.cost_index), max(self.cost_index)
         bridged = set()
-        for year in {*years, self.reference_year}:
+        for year in {*years, self.base_year}:
             self.escalation_factor(year)
             if year < first:
                 bridged.update(range(year, first))
@@ -2974,7 +3067,7 @@ class EconomicAnalysis:
 
     def escalation_factor(self, year):
         r"""
-        Return the factor that carries a cost from the price level of a year to that of the reference year.
+        Return the factor that carries a cost from the price level of a year to that of the base year.
 
         Within the years the plant cost index covers, the factor is the ratio of the two index values.
         Outside of them, before the first or after the last entry, every year is bridged with the
@@ -2982,8 +3075,8 @@ class EconomicAnalysis:
 
         .. math::
 
-            f = \frac{I_{\bar{y}_\mathrm{ref}}}{I_{\bar{y}}}
-            \cdot \left(1 + r_\mathrm{n}\right)^{(\bar{y} - y) + (y_\mathrm{ref} - \bar{y}_\mathrm{ref})}
+            f = \frac{I_{\bar{y}_\mathrm{base}}}{I_{\bar{y}}}
+            \cdot \left(1 + r_\mathrm{n}\right)^{(\bar{y} - y) + (y_\mathrm{base} - \bar{y}_\mathrm{base})}
 
         where :math:`\bar{y}` is a year clamped to the range of the index. Without an index, the rate
         bridges the whole span.
@@ -2991,7 +3084,7 @@ class EconomicAnalysis:
         Parameters
         ----------
         year : int or None
-            The year the cost is given in. ``None`` means the reference year.
+            The year the cost is given in. ``None`` means the base year.
 
         Returns
         -------
@@ -3002,43 +3095,43 @@ class EconomicAnalysis:
         ValueError
             If a year inside the range of the index has no value, which no rate can bridge.
         """
-        if year is None or self.reference_year is None or year == self.reference_year:
+        if year is None or self.base_year is None or year == self.base_year:
             return 1.0
         if not self.cost_index:
-            return (1 + self.r_n) ** (self.reference_year - year)
+            return (1 + self.r_n) ** (self.base_year - year)
         first, last = min(self.cost_index), max(self.cost_index)
         clamped = min(max(year, first), last)
-        clamped_reference = min(max(self.reference_year, first), last)
-        for needed in (clamped, clamped_reference):
+        clamped_base = min(max(self.base_year, first), last)
+        for needed in (clamped, clamped_base):
             if needed not in self.cost_index:
                 raise ValueError(f"The cost index has no value for the year {needed}.")
-        bridged = (clamped - year) + (self.reference_year - clamped_reference)
-        return self.cost_index[clamped_reference] / self.cost_index[clamped] * (1 + self.r_n) ** bridged
+        bridged = (clamped - year) + (self.base_year - clamped_base)
+        return self.cost_index[clamped_base] / self.cost_index[clamped] * (1 + self.r_n) ** bridged
 
     @property
-    def reference_PEC(self):
-        r"""Purchase equipment cost of every component in the price level of the reference year.
+    def base_PEC(self):
+        r"""Purchased equipment cost of every component at the price level of the base year.
 
-        Every cost is carried from its year to the reference year with :meth:`escalation_factor`:
+        Every cost is carried from its year to the base year with :meth:`escalation_factor`:
         with the plant cost index where it covers the years, with the nominal escalation rate beyond
         it, since an index is published for the past and not for the future.
 
         .. math::
 
-            \mathrm{PEC}_{\mathrm{ref},j} = \mathrm{PEC}_j \cdot f\left(y(j)\right)
+            \mathrm{PEC}_{\mathrm{base},j} = \mathrm{PEC}_j \cdot f\left(y_{\mathrm{ref},j}\right)
         """
-        return {name: cost * self.escalation_factor(self.cost_year.get(name)) for name, cost in self.PEC.items()}
+        return {name: cost * self.escalation_factor(self.reference_year.get(name)) for name, cost in self.PEC.items()}
 
     @property
     def total_PEC(self):
-        """Purchase equipment cost of the whole plant in the price level of the reference year."""
-        return sum(self.reference_PEC.values())
+        """Purchased equipment cost of the whole plant at the price level of the base year."""
+        return sum(self.base_PEC.values())
 
     @property
     def TCI(self):
-        r"""Total capital investment, :math:`\sum_j f_{\mathrm{TCI},j}\,\mathrm{PEC}_{\mathrm{ref},j}`."""
-        reference = self.reference_PEC
-        return sum(self.f_tci[name] * cost for name, cost in reference.items())
+        r"""Total capital investment, :math:`\sum_j f_{\mathrm{TCI},j}\,\mathrm{PEC}_{\mathrm{base},j}`."""
+        base = self.base_PEC
+        return sum(self.f_tci[name] * cost for name, cost in base.items())
 
     def compute_crf(self):
         r"""
@@ -3075,7 +3168,7 @@ class EconomicAnalysis:
             \qquad
             k = \frac{1 + r_\mathrm{n}}{1 + i_\mathrm{eff}}
 
-        The cost the analysis is given is that :math:`P_0`, in the price level of the reference year;
+        The cost the analysis is given is that :math:`P_0`, at the price level of the base year;
         the expenditure of the first year of operation is :math:`P_0 \cdot (1 + r_\mathrm{n})`. An
         escalation rate equal to the rate of return makes :math:`k = 1`, and the factor is then
         :math:`n \cdot \mathrm{CRF}`.
@@ -3083,7 +3176,7 @@ class EconomicAnalysis:
         Parameters
         ----------
         r_n : float, optional
-            Nominal escalation rate to use. Default is the one of the operating and maintenance cost.
+            Nominal escalation rate to use. Default is that of the operating and maintenance cost.
 
         Returns
         -------
@@ -3115,26 +3208,26 @@ class EconomicAnalysis:
         r"""
         Compute the operating and maintenance cost of the first year, per component.
 
-        The share is taken of the purchase equipment cost or of the total capital investment,
+        The share is taken of the purchased equipment cost or of the total capital investment,
         whichever ``omc_basis`` names. The two differ by the installation factor, so a share meant
         for one basis understates or overstates the cost badly when applied to the other:
 
         .. math::
 
-            \mathrm{OMC}_{0,j} = \mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{ref},j}
+            \mathrm{OMC}_{0,j} = \mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{base},j}
             \qquad \text{or} \qquad
             \mathrm{OMC}_{0,j} = \mathrm{omc}_j \cdot f_{\mathrm{TCI},j}
-            \cdot \mathrm{PEC}_{\mathrm{ref},j}
+            \cdot \mathrm{PEC}_{\mathrm{base},j}
 
         Returns
         -------
         dict
             The first-year operating and maintenance cost of every component, in currency per year.
         """
-        reference = self.reference_PEC
+        base = self.base_PEC
         if self.omc_basis == "TCI":
-            return {name: self.omc_share[name] * self.f_tci[name] * cost for name, cost in reference.items()}
-        return {name: self.omc_share[name] * cost for name, cost in reference.items()}
+            return {name: self.omc_share[name] * self.f_tci[name] * cost for name, cost in base.items()}
+        return {name: self.omc_share[name] * cost for name, cost in base.items()}
 
     def levelized_om_costs(self):
         r"""
@@ -3289,11 +3382,11 @@ class EconomicAnalysis:
         Compute the cost rate of every component, split into its investment and its O&M share.
 
         Each component carries its own investment and its own operating cost, so a component whose
-        installation effort or maintenance differs from the plant average is costed accordingly:
+        installation effort or maintenance differs from the plant average gets its own cost rate:
 
         .. math::
 
-            \dot{Z}^\mathrm{CC}_{j} = \frac{f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{ref},j}
+            \dot{Z}^\mathrm{CC}_{j} = \frac{f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{base},j}
             \cdot \mathrm{CRF}}{\tau}
             \qquad
             \dot{Z}^\mathrm{OM}_{j} = \frac{\mathrm{OMC}_{0,j} \cdot \mathrm{CELF}}{\tau}
@@ -3303,12 +3396,12 @@ class EconomicAnalysis:
         dict
             ``{"<component>": (Z_CC, Z_OM, Z_total)}``, each in currency per hour.
         """
-        reference = self.reference_PEC
+        base = self.base_PEC
         crf = self.compute_crf()
         celf = self.compute_celf()
         om = self.first_year_om_costs()
         costs = {}
-        for name, cost in reference.items():
+        for name, cost in base.items():
             Z_CC = self.f_tci[name] * cost * crf / self.tau
             Z_OM = om[name] * celf / self.tau
             costs[name] = (Z_CC, Z_OM, Z_CC + Z_OM)
@@ -3322,7 +3415,7 @@ class EconomicAnalysis:
         ----------
         exergy_analysis : ExergyAnalysis, optional
             The analysis the costs are meant for. When it is given, every component of the plant that
-            needs a cost rate has to have a purchase equipment cost, and a purchase equipment cost
+            needs a cost rate has to have a purchased equipment cost, and a purchased equipment cost
             given for a component that is not in the plant, or that carries no cost balance, is an
             error.
 
@@ -3334,7 +3427,7 @@ class EconomicAnalysis:
         Raises
         ------
         ValueError
-            If the components of the analysis and the purchase equipment costs do not match.
+            If the components of the analysis and the purchased equipment costs do not match.
         """
         if exergy_analysis is not None:
             components = getattr(exergy_analysis, "components", {})
@@ -3345,18 +3438,18 @@ class EconomicAnalysis:
             missing = needs_z - set(self.PEC)
             if missing:
                 raise ValueError(
-                    f"No purchase equipment cost for the components {sorted(missing)}. Every component "
+                    f"No purchased equipment cost for the components {sorted(missing)}. Every component "
                     f"of the plant needs one, except {sorted(exempt)}, which carry no cost balance."
                 )
             unknown = set(self.PEC) - set(components)
             if unknown:
                 raise ValueError(
-                    f"A purchase equipment cost is given for components not in the plant: {sorted(unknown)}."
+                    f"A purchased equipment cost is given for components not in the plant: {sorted(unknown)}."
                 )
             charged = set(self.PEC) & exempt
             if charged:
                 raise ValueError(
-                    f"The components {sorted(charged)} carry no cost balance, so their purchase "
+                    f"The components {sorted(charged)} carry no cost balance, so their purchased "
                     f"equipment cost could not be charged to any stream. Assign it to the components "
                     f"they belong to."
                 )
@@ -3395,13 +3488,13 @@ class EconomicAnalysis:
             The costs per component and the levelized costs of the plant.
         """
         costs = self.compute_component_costs()
-        reference = self.reference_PEC
+        base = self.base_PEC
         df_components = pd.DataFrame(
             {
                 name: {
-                    "cost year": str(self.cost_year.get(name) or self.reference_year or "-"),
+                    "reference year": str(self.reference_year.get(name) or self.base_year or "-"),
                     f"PEC [{self.currency}]": self.PEC[name],
-                    f"PEC at reference [{self.currency}]": reference[name],
+                    f"PEC at base year [{self.currency}]": base[name],
                     "f_TCI [-]": self.f_tci[name],
                     "omc [-]": self.omc_share[name],
                     f"Z_CC [{self.currency}/h]": Z_CC,
@@ -3411,14 +3504,14 @@ class EconomicAnalysis:
                 for name, (Z_CC, Z_OM, Z_tot) in costs.items()
             }
         ).T
-        totals = df_components.drop(columns=["cost year", "f_TCI [-]", "omc [-]"]).sum()
+        totals = df_components.drop(columns=["reference year", "f_TCI [-]", "omc [-]"]).sum()
         df_components.loc["TOT"] = {**dict.fromkeys(df_components.columns, np.nan), **totals.to_dict()}
-        df_components.loc["TOT", "cost year"] = ""
+        df_components.loc["TOT", "reference year"] = ""
 
         fuel = self.levelized_fuel_costs(exergy_analysis)
         rows = [
             ("PEC", sum(self.PEC.values()), self.currency),
-            ("PEC at reference year", self.total_PEC, self.currency),
+            ("PEC at base year", self.total_PEC, self.currency),
             ("TCI", self.TCI, self.currency),
             ("CRF", self.compute_crf(), "-"),
             ("CELF", self.compute_celf(), "-"),
@@ -3438,5 +3531,15 @@ class EconomicAnalysis:
             print(tabulate(df_plant, headers="keys", tablefmt="psql", floatfmt=".4f"))
             print("\nEconomic Analysis - Cost rates of the components:")
             print(tabulate(df_components, headers="keys", tablefmt="psql", floatfmt=".3f"))
+            if self.scaling:
+                df_scaling = pd.DataFrame(self.scaling).T.rename(
+                    columns={
+                        "PEC_ref": f"PEC_ref [{self.currency}]",
+                        "size_ref": "size_ref",
+                        "PEC": f"PEC [{self.currency}]",
+                    }
+                )
+                print("\nEconomic Analysis - Costs scaled from a reference component:")
+                print(tabulate(df_scaling, headers="keys", tablefmt="psql", floatfmt=".3f"))
 
         return df_components, df_plant

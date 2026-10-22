@@ -1,82 +1,75 @@
 """
-Purchase equipment costs of the components from the cost correlations of OpenPyTEA.
+Sizes of the components and their purchased equipment costs from the correlations of OpenPyTEA :cite:`Tamarona2026`.
 
-`OpenPyTEA <https://github.com/pbtamarona/OpenPyTEA>`__ collects published cost correlations of
-process equipment, most of them a function of one size, each with the year its cost refers to and
-the range of sizes it was fitted on. This module reads the size of a component from the model,
-converts it to the units of a correlation, says how the size relates to the range of the
-correlation and returns the purchase equipment cost at the correlation's year. That cost and that
-year are what :class:`~exerpy.analyses.EconomicAnalysis` takes per component; the escalation to
-the reference year stays with the plant cost index of the analysis.
+A cost function takes one or more sizes of a component. :func:`sizes` returns all that the model
+determines, in SI units: the power, mass flow, inlet volume flow and pressure ratio of a
+turbomachine, the power of a motor or a generator, and the heat flow, heat transfer capacity, logarithmic
+mean temperature difference and area of a heat exchanger, and the heat flow and live steam mass flow of a
+steam generator. A user-defined cost equation takes the ones it needs; :func:`estimate` takes the one a correlation of OpenPyTEA is based on and converts it into the
+units of the correlation.
 
-The correlations come from the process-industry literature (Turton et al., Towler and Sinnott,
-Seider et al., Perry's handbook, Ulrich). They cover pumps up to a few hundred kW, compressors up
-to about 30 MW, steam turbines and gas expanders up to about 20 MW, heat exchangers up to about
-1000 m², motors up to a few MW, fired heaters and boilers up to about 100 MW of duty, and vessels
-and tanks by their volume. Large power plant equipment, a gas turbine of several hundred MW for
-instance, lies outside every range; so do the smallest auxiliaries. A size outside the range is
-reported as such, and the cost is then either extrapolated from the nearest bound with a scaling
-exponent, split into parallel units as OpenPyTEA does, or replaced by a value of the user.
+The area of a heat exchanger follows from its sections: the exchanger is taken as counter-flow and
+cut at every phase change of either stream, and the area is the sum of
+:math:`\\dot{Q}_i / (U_i \\, \\Delta T_{\\mathrm{lm},i})`. Every section takes the overall heat transfer
+coefficient given as ``U`` or, without one, the default of its comparable cell in :data:`U_CELLS`:
+the exchanger type and the fluid group and phase of each stream. A default is the median of the
+published values of its cell, read from ``data/heat_transfer_coefficients.json``; a section without
+a cell asks for ``U``.
 
-The area of a heat exchanger follows from its streams in two ways. Where both fluids are known to
-CoolProp, the exchanger is cut into sections at every phase change of either stream, each section
-gets the overall heat transfer coefficient of its pair of phases from :data:`U_PHASE` and the area
-is the sum of :math:`\\dot{Q}_i / (U_i \\, \\Delta T_{\\mathrm{lm},i})`. Otherwise the area is
-:math:`kA / U` with the heat transfer capacity of the simulation, or of
-:math:`\\dot{Q} / \\Delta T_\\mathrm{lm}` when the model carries none, and one coefficient.
-
+The correlations of OpenPyTEA come from the process-industry literature. A size outside the range
+of a correlation is reported as such, and the cost is then extrapolated from the nearest bound with a
+scaling exponent, split into parallel units as OpenPyTEA does, or replaced by a value given by the user.
 OpenPyTEA is an optional dependency, ``pip install exerpy[costs]`` or ``pip install openpytea``. Its
 costs are in US dollars.
 """
 
+import contextlib
+import json
 import math
+import os
 import re
 
 import CoolProp.CoolProp as CP
 import pandas as pd
+
+from exerpy import __datapath__
+from exerpy.logger import logger
 
 HP = 745.69987  # W
 FT2 = 0.09290304  # m^2
 BTU_PER_HOUR = 0.29307107  # W
 GALLON = 0.003785411784  # m^3
 FT3 = 0.028316846592  # m^3
+LB = 0.45359237  # kg
 
-EXPONENT = 0.66
+EXPONENT = 0.6
 
-LIQUID, TWO_PHASE, GAS = 0, 1, 2
-PHASES = {LIQUID: "liquid", TWO_PHASE: "two-phase", GAS: "gas"}
+LIQUID, TWO_PHASE, GAS, SUPERCRITICAL = 0, 1, 2, 3
+PHASES = {LIQUID: "liquid", TWO_PHASE: "two-phase", GAS: "gas", SUPERCRITICAL: "supercritical"}
 PHASES_INDEX = {name: index for index, name in PHASES.items()}
 
-# Overall heat transfer coefficients in W/m²K by the phases of the hot and the cold stream. The
-# pairs with a liquid on one side are the values of Ommen et al. (2015) for a heat pump; the others
-# are assumptions in the same spirit.
-U_PHASE = {
-    (LIQUID, LIQUID): 1494.0,
-    (LIQUID, TWO_PHASE): 1483.0,
-    (LIQUID, GAS): 380.0,
-    (TWO_PHASE, LIQUID): 3696.0,
-    (TWO_PHASE, TWO_PHASE): 2500.0,
-    (TWO_PHASE, GAS): 1000.0,
-    (GAS, LIQUID): 466.0,
-    (GAS, TWO_PHASE): 750.0,
-    (GAS, GAS): 35.0,
+# Overall heat transfer coefficients in W/m²K per comparable cell, with their sources; see the data file.
+with open(os.path.join(__datapath__, "heat_transfer_coefficients.json"), encoding="utf-8") as file:
+    _HEAT_TRANSFER = json.load(file)
+U_SOURCES = _HEAT_TRANSFER["sources"]
+U_CELLS = _HEAT_TRANSFER["cells"]
+EXCHANGER_TYPES = _HEAT_TRANSFER["exchanger_types"]
+U_DEFAULTS = {
+    (cell["exchanger_type"], cell["hot"], cell["cold"], cell["hot_fluid"], cell["cold_fluid"]): cell
+    for cell in U_CELLS
+    if cell["default"]
 }
 
-# The size a component class is costed by. A combustion chamber, a valve, a mixer and the solar
-# components have none the streams determine.
+# The sizes the model determines per component class; a cost function takes the ones it needs.
 QUANTITIES = {
-    "Compressor": "power",
-    "Pump": "power",
-    "Turbine": "power",
-    "Generator": "power",
-    "Motor": "power",
-    "HeatExchanger": "area",
-    "SimpleHeatExchanger": "duty",
-    "SteamGenerator": "duty",
-    "Drum": "volume",
-    "Deaerator": "volume",
-    "FlashTank": "volume",
-    "Storage": "volume",
+    "Compressor": ("power", "mass_flow", "volume_flow", "pressure_ratio"),
+    "Pump": ("power", "mass_flow", "volume_flow", "pressure_ratio"),
+    "Turbine": ("power", "mass_flow", "volume_flow", "pressure_ratio"),
+    "Generator": ("power",),
+    "Motor": ("power",),
+    "HeatExchanger": ("heat", "kA", "dT_lm", "area"),
+    "SimpleHeatExchanger": ("heat",),
+    "SteamGenerator": ("heat", "mass_flow"),
 }
 
 # The OpenPyTEA categories that cost a component class.
@@ -107,14 +100,32 @@ DEFAULTS = {
 }
 STEAM_TURBINE = "condensing_steam_turbine_towler_2010"
 
-UNITS = {"power": "kW", "duty": "kW", "area": "m²", "volume": "m³"}
-DIMENSIONS = {"power": "rate", "duty": "rate", "area": "area", "volume": "volume"}
+UNITS = {
+    "power": "W",
+    "heat": "W",
+    "mass_flow": "kg/s",
+    "volume_flow": "m³/s",
+    "pressure_ratio": "-",
+    "kA": "W/K",
+    "dT_lm": "K",
+    "area": "m²",
+    "volume": "m³",
+}
+# The dimension of each size, as dimension() reads it from the units of a correlation.
+DIMENSIONS = {
+    "power": "rate",
+    "heat": "rate",
+    "area": "area",
+    "volume": "volume",
+    "volume_flow": "volume_flow",
+    "mass_flow": "mass_flow",
+}
 
 CURRENCY = "USD"
 
 # Annual averages of the euro reference rate of the European Central Bank, in USD per EUR. The
 # years before the euro carry the average of its predecessor, the ECU, which the Perry (1996) and
-# ESDU (1997) correlations need. 2025 is the average of the year as it closed.
+# ESDU (1997) correlations need. 2025 is the average of the full year.
 USD_PER_EUR = {
     1996: 1.2698,
     1997: 1.1340,
@@ -153,7 +164,7 @@ WATER_NAMES = {"h2og", "h2ol", "l_h2o", "steam"}
 
 
 def available():
-    """Whether OpenPyTEA is installed."""
+    """Whether OpenPyTEA :cite:`Tamarona2026` is installed."""
     try:
         import openpytea  # noqa: F401
     except ImportError:
@@ -165,34 +176,45 @@ def _openpytea():
     try:
         from openpytea import equipment
     except ImportError:
-        raise ImportError("Estimating purchase equipment costs needs OpenPyTEA: pip install openpytea") from None
+        raise ImportError("Estimating purchased equipment costs needs OpenPyTEA: pip install openpytea") from None
     return equipment
 
 
 def correlations(component_class=None):
     """
-    Return the cost correlations of OpenPyTEA, or the ones that cost a class of component.
+    Return the cost correlations of OpenPyTEA :cite:`Tamarona2026`, or the ones that cost a class of component.
 
     Parameters
     ----------
     component_class : str, optional
-        Name of a component class, e.g. ``"Compressor"``. Without it every correlation is returned.
+        Name of a component class, e.g. ``"Compressor"``. Without it, every correlation is returned.
 
     Returns
     -------
     pandas.DataFrame
         Columns ``key``, ``category``, ``type``, ``units``, ``s_lower``, ``s_upper``,
-        ``cost_year``, ``material``, ``source`` and ``remarks``, one row per correlation. The
+        ``reference_year``, ``material``, ``source`` and ``remarks``, one row per correlation. The
         correlations whose size cannot be derived from the units they state are included; they
         take a size given by hand.
     """
     df = _openpytea().COST_DB_DF.copy()
     df.columns = [column.strip().lower() for column in df.columns]
-    df = df.rename(columns={"default material": "material"})
+    df = df.rename(columns={"default material": "material", "cost_year": "reference_year"})
     if component_class is not None:
         wanted = [category.lower() for category in CATEGORIES.get(component_class, [])]
         df = df[df["category"].str.lower().isin(wanted)]
-    columns = ["key", "category", "type", "units", "s_lower", "s_upper", "cost_year", "material", "source", "remarks"]
+    columns = [
+        "key",
+        "category",
+        "type",
+        "units",
+        "s_lower",
+        "s_upper",
+        "reference_year",
+        "material",
+        "source",
+        "remarks",
+    ]
     for column in columns:
         if column not in df.columns:
             df[column] = None
@@ -220,13 +242,27 @@ def dimension(units):
     Returns
     -------
     tuple or None
-        ``(dimension, factor)`` with the dimension ``"rate"``, ``"area"`` or ``"volume"`` and the
-        factor that turns the SI value (W, m², m³) into the units of the correlation. ``None``
-        when the units are none of these: a mass flow, a volume flow, a shell mass.
+        ``(dimension, factor)`` with the dimension ``"rate"``, ``"area"``, ``"volume"``,
+        ``"volume_flow"`` or ``"mass_flow"`` and the factor that turns the SI value (W, m², m³,
+        m³/s, kg/s) into the units of the correlation. ``None`` for a size of another kind, a
+        product of two sizes or a volume flow at standard conditions.
     """
     text = str(units or "")
+    if re.search(r"\bx\b|sqrt|&|\^0\.|/\s*\(|\)\s*/|torr|\bSm\^?3", text, flags=re.IGNORECASE):
+        return None
     # A unit followed by "/" is a flow, not a size.
     rules = [
+        (r"\bACFM\b|\bft\^?3/min\b", "volume_flow", 60 / FT3),
+        (r"\bft\^?3/hr?\b", "volume_flow", 3600 / FT3),
+        (r"\bm\^?3/s\b", "volume_flow", 1.0),
+        (r"\bm\^?3/h\b", "volume_flow", 3600.0),
+        (r"\bL/s\b", "volume_flow", 1e3),
+        (r"\bgal/min\b|\bgpm\b", "volume_flow", 60 / GALLON),
+        (r"\bkg/s\b", "mass_flow", 1.0),
+        (r"\bkg/h\b", "mass_flow", 3600.0),
+        (r"\bt/h\b", "mass_flow", 3.6),
+        (r"\blb/hr?\b", "mass_flow", 3600 / LB),
+        (r"\blb/s\b", "mass_flow", 1 / LB),
         (r"\bMMBTU/h\b", "rate", 1e-6 / BTU_PER_HOUR),
         (r"\bBtu/hr?\b", "rate", 1 / BTU_PER_HOUR),
         (r"\bMWe?\b(?!/)", "rate", 1e-6),
@@ -244,9 +280,9 @@ def dimension(units):
     return None
 
 
-def quantity(component):
-    """The size a component is costed by, ``"power"``, ``"duty"``, ``"area"`` or ``"volume"``, or ``None``."""
-    return QUANTITIES.get(type(component).__name__)
+def quantities(component):
+    """The sizes the model determines for a component, see :data:`QUANTITIES`; empty for any other class."""
+    return QUANTITIES.get(type(component).__name__, ())
 
 
 def _streams(component, kind="material"):
@@ -264,7 +300,7 @@ def _power(component):
     return max(powers) if powers else None
 
 
-def _duty(component):
+def _heat(component):
     inlets, outlets = _streams(component)
     if not inlets or not outlets:
         return None
@@ -273,6 +309,45 @@ def _duty(component):
     except (KeyError, TypeError):
         return None
     return abs(absorbed)
+
+
+def _material(connections):
+    return [conn for _, conn in sorted(connections.items()) if conn.get("kind", "material") == "material"]
+
+
+def _inlet(component):
+    inlets = _material(getattr(component, "inl", {}))
+    return inlets[0] if inlets else None
+
+
+def _mass_flow(component):
+    # A steam generator is sized by the live steam it raises, its first outlet.
+    if type(component).__name__ == "SteamGenerator":
+        outlets = _material(getattr(component, "outl", {}))
+        return outlets[0].get("m") if outlets else None
+    inlet = _inlet(component)
+    return None if inlet is None else inlet.get("m")
+
+
+def _volume_flow(component):
+    """The volume flow at the inlet in m³/s, from the specific volume of the export or from CoolProp."""
+    inlet = _inlet(component)
+    if inlet is None or not inlet.get("m"):
+        return None
+    v = _specific_volume(inlet)
+    if v is None and _fluid(inlet) is not None:
+        with contextlib.suppress(KeyError, ValueError):
+            v = 1 / CP.PropsSI("D", "T", inlet["T"], "P", inlet["p"], _fluid(inlet))
+    return None if v is None else inlet["m"] * v
+
+
+def _pressure_ratio(component):
+    inlet, outlets = _inlet(component), _material(getattr(component, "outl", {}))
+    try:
+        ratio = outlets[0]["p"] / inlet["p"]
+    except (IndexError, KeyError, TypeError, ZeroDivisionError):
+        return None
+    return max(ratio, 1 / ratio) if ratio > 0 else None
 
 
 # ----------------------------------------------------------------------------------------------
@@ -323,7 +398,7 @@ def heat_exchanger(component):
     Returns
     -------
     dict or None
-        ``Q`` is the duty in W; ``dT_lm`` the logarithmic mean temperature difference of the
+        ``Q`` is the heat flow in W; ``dT_lm`` the logarithmic mean temperature difference of the
         counter-flow arrangement in K, ``None`` on a temperature cross; ``kA`` the heat transfer
         capacity in W/K, taken from the simulation where the model carries it and from
         :math:`\\dot{Q} / \\Delta T_\\mathrm{lm}` otherwise, with ``kA_source`` saying which;
@@ -349,7 +424,7 @@ def heat_exchanger(component):
 
     kA, source = _simulated_kA(component), "simulation"
     if kA is not None and dT_lm:
-        # An export may state the capacity in kW/K; the duty tells which it is.
+        # An export may state the capacity in kW/K; the heat flow tells which it is.
         kA = min((kA, kA * 1e3), key=lambda value: abs(math.log(value / (Q / dT_lm))))
     if kA is None and dT_lm:
         kA, source = Q / dT_lm, "Q/dT_lm"
@@ -374,11 +449,128 @@ def _fluid(conn):
     return name
 
 
+# Names of the species of a fluid group of :data:`U_CELLS`, as the exports and CoolProp spell them, and
+# parts of the names of the incompressible fluids.
+_GROUP_NAMES = {
+    "water/steam": {"WATER", "H2O", "R718", *(name.upper() for name in WATER_NAMES)},
+    "ammonia": {"AMMONIA", "NH3", "R717"},
+    "CO2": {"CO2", "CARBONDIOXIDE", "R744"},
+    "hydrogen": {"HYDROGEN", "H2", "PARAHYDROGEN", "ORTHOHYDROGEN"},
+    "natural gas": {"METHANE", "CH4", "R50"},
+    "hydrocarbon refrigerants": {
+        "ETHANE",
+        "C2H6",
+        "R170",
+        "PROPANE",
+        "C3H8",
+        "R290",
+        "PROPYLENE",
+        "PROPENE",
+        "C3H6",
+        "R1270",
+        "BUTANE",
+        "N-BUTANE",
+        "NBUTANE",
+        "C4H10",
+        "R600",
+        "ISOBUTANE",
+        "IBUTANE",
+        "R600A",
+        "PENTANE",
+        "N-PENTANE",
+        "NPENTANE",
+        "R601",
+        "ISOPENTANE",
+        "IPENTANE",
+        "R601A",
+        "CYCLOPENTANE",
+        "HEXANE",
+        "N-HEXANE",
+        "NHEXANE",
+    },
+    "siloxanes": {"MM", "MDM", "MD2M", "MD3M", "MD4M", "D4", "D5", "D6", "HEXAMETHYLDISILOXANE"},
+    "toluene/aromatics": {"TOLUENE", "BENZENE", "ETHYLBENZENE", "M-XYLENE", "O-XYLENE", "P-XYLENE"},
+}
+_GROUP_PARTS = {
+    "thermal oil": ("THERMINOL", "DOWTHERM", "SYLTHERM", "TVP1", "THERMAL OIL", "THERMALOIL"),
+    "molten salt": ("SALT", "NITRATE", "HITEC", "KNO3"),
+    "glycol/brine": ("GLYCOL", "BRINE", "MEG", "MPG", "CACL2", "NACL"),
+}
+
+
+def fluid_group(conn):
+    """
+    The fluid group of :data:`U_CELLS` a stream belongs to, from its mass composition.
+
+    A stream of one species is placed by its name: water/steam, ammonia, CO2, hydrogen, natural gas
+    (methane), hydrocarbon refrigerants, siloxanes, toluene/aromatics, HFC/HFO (the other
+    refrigerants named R...), thermal oil, molten salt or glycol/brine. A mixture of ammonia and
+    water is an absorption mixture, one of nitrogen and oxygen is air, one that also carries carbon
+    dioxide from combustion is flue gas, and one of mostly methane is natural gas.
+
+    Returns
+    -------
+    str or None
+        The group, or ``None`` for a stream no group describes.
+    """
+    composition = {}
+    raw = conn.get("mass_composition") or {}
+    # EBSILON states the gaseous part of the water again as H2OG, next to the total as H2O.
+    duplicate = "H2OG" if any(str(name).split("::")[-1].strip().upper() == "H2O" for name in raw) else None
+    for name, x in raw.items():
+        species = str(name).split("::")[-1].strip().upper()
+        if x and x > 0.005 and species != duplicate:
+            species = "H2O" if species == "H2OG" else species
+            composition[species] = composition.get(species, 0.0) + x
+    if len(composition) == 1:
+        (name,) = composition
+        for group, names in _GROUP_NAMES.items():
+            if name in names:
+                return group
+        for group, parts in _GROUP_PARTS.items():
+            if any(part in name for part in parts):
+                return group
+        return "HFC/HFO" if re.fullmatch(r"R\d{2,4}[A-Z]*(\([EZ]\))?", name) else None
+    total = sum(composition.values())
+    if not total:
+        return None
+
+    def share(*names):
+        return sum(composition.get(name, 0.0) for name in names) / total
+
+    ammonia, water = ("NH3", "AMMONIA", "R717"), ("H2O", "WATER", "R718")
+    if share(*ammonia, *water) >= 0.99 and share(*ammonia) > 0 and share(*water) > 0:
+        return "ammonia-water (absorption)"
+    if share("CH4", "METHANE") >= 0.7:
+        return "natural gas"
+    gas = ("N2", "NITROGEN", "O2", "OXYGEN", "AR", "ARGON", "CO2", "CARBONDIOXIDE", "H2O", "WATER")
+    if share(*gas) >= 0.99 and share("N2", "NITROGEN") >= 0.5:
+        return "flue gas" if share("CO2", "CARBONDIOXIDE") >= 0.01 else "air"
+    return None
+
+
 def _specific_volume(conn):
-    v = conn.get("v")
-    if v is None and conn.get("VM") is not None and conn.get("m"):
-        v = conn["VM"] / conn["m"]
-    return v
+    """Specific volume in m³/kg from the volume flow of the export (``v`` of TESPy and Aspen, ``VM`` of EBSILON)."""
+    flow = conn.get("v")
+    flow = conn.get("VM") if flow is None else flow
+    return flow / conn["m"] if flow is not None and conn.get("m") else None
+
+
+_GAS_GROUPS = ("air", "flue gas", "natural gas", "hydrogen")
+_LIQUID_GROUPS = ("thermal oil", "molten salt", "glycol/brine")
+
+
+def _single_phase(conn):
+    """Gas or liquid for a stream not followed through CoolProp: by its specific volume, else by its fluid group."""
+    v = _specific_volume(conn)
+    if v is not None:
+        return GAS if v > 0.01 else LIQUID
+    group = fluid_group(conn)
+    if group in _GAS_GROUPS:
+        return GAS
+    if group in _LIQUID_GROUPS:
+        return LIQUID
+    raise ValueError(f"the phase of stream '{conn.get('name')}' is unknown: the export has no volume flow")
 
 
 class _Side:
@@ -390,6 +582,10 @@ class _Side:
         self.T_in, self.T_out = inlet["T"], outlet["T"]
         self.p = 0.5 * (inlet["p"] + outlet["p"])
         self.fluid = _fluid(inlet)
+        self.supercritical = False
+        if self.fluid is not None:
+            with contextlib.suppress(ValueError):
+                self.supercritical = self.p >= CP.PropsSI("Pcrit", self.fluid)
         self.h_L = self.h_V = None
         if self.fluid is not None:
             try:
@@ -405,8 +601,7 @@ class _Side:
             h_in, h_out = self._coolprop_enthalpies(inlet, outlet)
             self.h0 = h_in if hot else h_out
         self.Q = Q
-        v = _specific_volume(inlet)
-        self.single_phase = GAS if v is not None and v > 0.01 else LIQUID
+        self.single_phase = None if self.h0 is not None else _single_phase(inlet)
 
     def _coolprop_enthalpies(self, inlet, outlet):
         """Inlet and outlet enthalpy in the frame of CoolProp; a saturated end follows the other through the stream."""
@@ -428,12 +623,17 @@ class _Side:
             values.append(h)
         h_in, h_out = values
         if h_in is None and h_out is None:
-            # Without a quality, the enthalpies of the export are taken as CoolProp's own, which
-            # holds for a TESPy model; the saturation dome bounds them.
+            # Both ends are saturated and their quality is unknown, so the stream stays inside the
+            # dome. The enthalpies of the export are kept where they lie in it, as with the reference
+            # of CoolProp; with another reference the stream is placed at the middle of the dome.
             h_in, h_out = inlet["h"], outlet["h"]
             margin = 0.02 * (self.h_V - self.h_L)
             if not all(self.h_L - margin <= h <= self.h_V + margin for h in (h_in, h_out)):
-                raise ValueError("both ends of the stream are saturated and their quality is unknown")
+                dh = h_in - h_out
+                if abs(dh) > self.h_V - self.h_L + 2 * margin:
+                    raise ValueError("both ends of the stream are saturated and their quality is unknown")
+                h_mid = 0.5 * (self.h_L + self.h_V)
+                h_in, h_out = h_mid + 0.5 * dh, h_mid - 0.5 * dh
         if h_in is None:
             h_in = h_out + (inlet["h"] - outlet["h"])
         if h_out is None:
@@ -465,7 +665,7 @@ class _Side:
         if self.fluid is None or self.h0 is None:
             return self.single_phase
         if self.h_L is None:
-            return GAS
+            return SUPERCRITICAL if self.supercritical else GAS
         h = self.enthalpy(Q)
         if h <= self.h_L:
             return LIQUID
@@ -474,38 +674,83 @@ class _Side:
         return TWO_PHASE
 
 
-def heat_exchanger_sections(component, U=None):
+def _coefficient(pair, fluids, U, exchanger_type):
+    """The coefficient of a section and its cell: given by the user (cell ``None``), the default of its cell, or ``None``."""
+    if U is not None and not isinstance(U, dict):
+        return float(U), None
+    given = {(PHASES.get(hot, hot), PHASES.get(cold, cold)): value for (hot, cold), value in (U or {}).items()}
+    if pair in given:
+        return float(given[pair]), None
+    cell = U_DEFAULTS.get((exchanger_type, *pair, *fluids))
+    return None if cell is None else (cell["U"], cell)
+
+
+def exchanger_type_of(key):
+    """The type in :data:`U_DEFAULTS` that a heat exchanger correlation of OpenPyTEA :cite:`Tamarona2026` describes."""
+    kind = str(correlation(key)["type"]).lower()
+    if "air" in kind:
+        return "air_cooled"
+    if "pipe" in kind:
+        return "double_pipe"
+    if "spiral" in kind:
+        return "other"
+    if "plate & fin" in kind:
+        return "plate_fin"
+    if "plate" in kind:
+        return "plate"
+    return "shell_and_tube"
+
+
+def heat_exchanger_sections(component, U=None, exchanger_type="shell_and_tube"):
     """
-    Area of a heat exchanger from its sections, each with the heat transfer coefficient of its phases.
+    Area of a heat exchanger from its sections, each with the heat transfer coefficient of its phases and fluids.
 
     The exchanger is taken as counter-flow and cut at every point where one of the streams
     crosses a saturation line, so every section has one phase on each side. A stream of one fluid
-    CoolProp knows is followed through its saturation enthalpies; a mixture or an unknown fluid is
-    taken as single-phase with a temperature linear in the heat transferred, as a gas when its
-    specific volume is above 0.01 m³/kg and as a liquid otherwise.
+    CoolProp knows is followed through its saturation enthalpies, from the temperatures, pressures,
+    qualities and enthalpy differences of the export, so the enthalpy reference of the simulator does
+    not matter; a mixture or an unknown fluid is taken as single-phase with a temperature linear in
+    the heat transferred, as a gas when its specific volume is above 0.01 m³/kg and as a liquid
+    otherwise, or by its fluid group where the export has no volume flow.
 
     Parameters
     ----------
     component : Component
         A heat exchanger with two streams in and two out.
-    U : dict, optional
-        Heat transfer coefficients in W/m²K by pair of phases, as :data:`U_PHASE`, which is the
-        default.
+    U : float or dict, optional
+        Overall heat transfer coefficient in W/m²K of every section, or per section by its pair of
+        phases, the phase of the hot stream first, as ``{("gas", "liquid"): 450.0,
+        ("two-phase", "liquid"): 2500.0}``. A section not
+        given takes the default of its cell in :data:`U_CELLS`.
+    exchanger_type : str, optional
+        A key of :data:`EXCHANGER_TYPES`. Default is ``"shell_and_tube"``.
 
     Returns
     -------
     dict or None
         ``area`` in m², ``Q`` in W and ``sections``, one entry per section with ``Q``, ``dT_lm``,
-        ``hot`` and ``cold`` (the phases as words), ``U`` and ``area``; ``profile`` lists
-        ``(Q, T_hot, T_cold)`` points along the exchanger in W and K. ``None`` when the streams
-        do not allow it: a temperature cross, a saturated end whose quality is unknown, a stream
-        state CoolProp does not accept.
+        ``hot`` and ``cold`` (the phases as words), ``U``, ``U_scope`` (``"user"`` or
+        ``"default"``), ``U_cell`` (the cell, ``None`` for a value given by the user), ``U_sources`` (keys
+        of :data:`U_SOURCES`), ``U_n_sources`` and ``area``; ``fluids`` holds the groups of the hot
+        and the cold stream, see :func:`fluid_group`; ``profile`` lists ``(Q, T_hot, T_cold)``
+        points along the exchanger in W and K. ``None`` when the streams do not allow it: a
+        temperature cross, a saturated end whose quality is unknown, or a stream state CoolProp does
+        not accept.
+
+    Raises
+    ------
+    ValueError
+        If the exchanger type is unknown, or if a section has no comparable cell and ``U`` gives
+        none.
     """
-    U = U or U_PHASE
+    if exchanger_type not in EXCHANGER_TYPES:
+        raise ValueError(f"Unknown exchanger type '{exchanger_type}'; one of {list(EXCHANGER_TYPES)}.")
+    missing = None
     sides = _sides(component)
     if sides is None:
         return None
     (hot_in, hot_out), (cold_in, cold_out) = sides
+    fluids = (fluid_group(hot_in), fluid_group(cold_in))
     try:
         Q = hot_in["m"] * (hot_in["h"] - hot_out["h"])
         if Q <= 0:
@@ -527,73 +772,155 @@ def heat_exchanger_sections(component, U=None):
                 return None
             dT_lm = dT_a if math.isclose(dT_a, dT_b, rel_tol=1e-6) else (dT_a - dT_b) / math.log(dT_a / dT_b)
             middle = 0.5 * (start + end)
-            pair = (hot.phase(middle), cold.phase(middle))
-            coefficient = U[pair]
+            pair = (PHASES[hot.phase(middle)], PHASES[cold.phase(middle)])
+            found = _coefficient(pair, fluids, U, exchanger_type)
+            if found is None:
+                missing = pair
+                break
+            coefficient, cell = found
             sections.append(
                 {
                     "Q": end - start,
                     "dT_lm": dT_lm,
-                    "hot": PHASES[pair[0]],
-                    "cold": PHASES[pair[1]],
+                    "hot": pair[0],
+                    "cold": pair[1],
                     "U": coefficient,
+                    "U_scope": "user" if cell is None else "default",
+                    "U_cell": None if cell is None else cell["cell"],
+                    "U_sources": [] if cell is None else list(cell["sources"]),
+                    "U_n_sources": None if cell is None else cell["n_sources"],
                     "area": (end - start) / (coefficient * dT_lm),
                 }
             )
     except (KeyError, TypeError, ValueError, ZeroDivisionError):
         return None
-    return {"area": sum(section["area"] for section in sections), "Q": Q, "sections": sections, "profile": profile}
+    if missing is not None:
+        hot_fluid, cold_fluid = (fluid or "an unknown fluid" for fluid in fluids)
+        raise ValueError(
+            f"{component.name}: no comparable cell for {hot_fluid} ({missing[0]}) to {cold_fluid} ({missing[1]}) in a "
+            f"{exchanger_type} exchanger; give it as U={{{missing!r}: value}} in W/m²K."
+        )
+    for section in sections:
+        if section["U_scope"] == "default" and section["U_n_sources"] < 3:
+            logger.warning(
+                f"{component.name}: the U of the {section['hot']} to {section['cold']} section, "
+                f"{section['U']:.0f} W/m²K, rests on {section['U_n_sources']} independent source(s) "
+                f"(cell {section['U_cell']}); give the U of the actual exchanger for a design."
+            )
+    return {
+        "area": sum(section["area"] for section in sections),
+        "Q": Q,
+        "sections": sections,
+        "fluids": {"hot": fluids[0], "cold": fluids[1]},
+        "profile": profile,
+    }
 
 
-def size(component, U=None, method="sections"):
+def heat_exchanger_area(component, U=None, exchanger_type="shell_and_tube", method="sections"):
     """
-    Read the size of a component from the model.
+    Area of a heat exchanger, by its sections or by its heat transfer capacity.
 
     Parameters
     ----------
     component : Component
-        A component of an analysed plant; the power of a turbomachine and the duty of a heat
-        exchanger are known once the exergy balances are.
-    U : float, optional
-        Overall heat transfer coefficient of a heat exchanger in W/m²K for the ``"kA"`` method,
+        A heat exchanger with two streams in and two out.
+    U : float or dict, optional
+        Overall heat transfer coefficient in W/m²K. The sections take one value or one per pair of
+        phases, see :func:`heat_exchanger_sections`; the ``"kA"`` method needs one value,
         :math:`A = kA / U`.
+    exchanger_type : str, optional
+        A key of :data:`EXCHANGER_TYPES`, for the defaults of the sections.
     method : str, optional
-        How the area of a heat exchanger is found: ``"sections"`` (default) through
-        :func:`heat_exchanger_sections`, falling back to ``"kA"`` where the sections cannot be
-        formed, or ``"kA"`` through :func:`heat_exchanger` and ``U``.
+        ``"sections"`` (default), falling back to ``"kA"`` where the sections cannot be formed, or
+        ``"kA"``.
 
     Returns
     -------
     dict or None
-        ``{"quantity", "value", "unit", "details"}`` with the value in SI units (W, m², m³). For a
-        heat exchanger ``details`` holds the result of :func:`heat_exchanger`, the ``method`` that
-        gave the area and, with the sections, their list. ``None`` when the size does not follow
-        from the model, as for the volume of a vessel.
+        ``area`` in m² (``None`` when ``"kA"`` has no single ``U``), ``method``, ``exchanger_type``,
+        ``sections`` (the result of :func:`heat_exchanger_sections`, or ``None``) and ``U``.
+        ``None`` when the component does not have two streams in and out.
     """
-    what = quantity(component)
-    if what == "power":
-        value = _power(component)
-        return None if not value else {"quantity": what, "value": value, "unit": "W", "details": {}}
-    if what == "duty":
-        value = _duty(component)
-        return None if not value else {"quantity": what, "value": value, "unit": "W", "details": {}}
-    if what == "area":
+    design = heat_exchanger(component)
+    if design is None:
+        return None
+    if method == "sections":
+        sections = heat_exchanger_sections(component, U=U, exchanger_type=exchanger_type)
+        if sections is not None:
+            return {
+                "area": sections["area"],
+                "method": "sections",
+                "exchanger_type": exchanger_type,
+                "sections": sections,
+                "U": U,
+            }
+    single = U if U and not isinstance(U, dict) else None
+    area = design["kA"] / single if single and design["kA"] else None
+    return {"area": area, "method": "kA", "exchanger_type": exchanger_type, "sections": None, "U": single}
+
+
+def size(component, quantity, U=None, exchanger_type="shell_and_tube", method="sections"):
+    """
+    Read one size of a component from the model, in SI units.
+
+    Parameters
+    ----------
+    component : Component
+        A component of an analysed plant.
+    quantity : str
+        One of :func:`quantities` of the component, see :data:`QUANTITIES`; the unit is in
+        :data:`UNITS`.
+    U, exchanger_type, method
+        For the area of a heat exchanger, see :func:`heat_exchanger_area`.
+
+    Returns
+    -------
+    float or None
+        The size, or ``None`` when the model does not determine it.
+
+    Raises
+    ------
+    ValueError
+        If the component has no such size, or if a section of a heat exchanger has no coefficient.
+    """
+    if quantity not in quantities(component):
+        raise ValueError(
+            f"{component.name} has no size '{quantity}' from the model; it has {list(quantities(component))}."
+        )
+    if quantity == "power":
+        return _power(component)
+    if quantity == "mass_flow":
+        return _mass_flow(component)
+    if quantity == "volume_flow":
+        return _volume_flow(component)
+    if quantity == "pressure_ratio":
+        return _pressure_ratio(component)
+    if quantity == "area":
+        found = heat_exchanger_area(component, U=U, exchanger_type=exchanger_type, method=method)
+        return None if found is None else found["area"]
+    if type(component).__name__ == "HeatExchanger":
         design = heat_exchanger(component)
-        if design is None:
-            return None
-        details = dict(design)
-        if method == "sections":
-            sections = heat_exchanger_sections(component)
-            if sections is not None:
-                details.update({"method": "sections", "sections": sections["sections"]})
-                return {"quantity": what, "value": sections["area"], "unit": "m²", "details": details}
-        details["method"] = "kA"
-        if design["kA"] is None:
-            return None
-        if not U:
-            return {"quantity": what, "value": None, "unit": "m²", "details": details}
-        details["U"] = U
-        return {"quantity": what, "value": design["kA"] / U, "unit": "m²", "details": details}
-    return None
+        return None if design is None else design["Q" if quantity == "heat" else quantity]
+    return _heat(component)
+
+
+def sizes(component, U=None, exchanger_type="shell_and_tube", method="sections"):
+    """
+    Read all sizes the model determines for a component, in SI units.
+
+    A cost function takes the ones it needs, for example ``sizes(compressor)["volume_flow"]``. The
+    parameters are those of :func:`size`.
+
+    Returns
+    -------
+    dict
+        ``{quantity: value}`` for every one of :func:`quantities`, ``None`` where the model does
+        not determine it; empty for a component the model gives no size for.
+    """
+    return {
+        quantity: size(component, quantity, U=U, exchanger_type=exchanger_type, method=method)
+        for quantity in quantities(component)
+    }
 
 
 def convert(value, what, units):
@@ -603,9 +930,9 @@ def convert(value, what, units):
     Parameters
     ----------
     value : float
-        The size in W, m² or m³.
+        The size in SI units, see :data:`UNITS`.
     what : str
-        ``"power"``, ``"duty"``, ``"area"`` or ``"volume"``.
+        A key of :data:`UNITS`.
     units : str
         The ``units`` text of the correlation.
 
@@ -613,7 +940,7 @@ def convert(value, what, units):
     -------
     float or None
         The size in the units of the correlation, or ``None`` when the correlation is based on
-        another kind of size than the component provides.
+        a kind of size other than the one the component provides.
     """
     found = dimension(units)
     if found is None or found[0] != DIMENSIONS.get(what):
@@ -622,7 +949,7 @@ def convert(value, what, units):
 
 
 def default_correlation(component):
-    """The correlation suggested for a component, or ``None`` when OpenPyTEA has none that fits."""
+    """The correlation suggested for a component, or ``None`` when OpenPyTEA :cite:`Tamarona2026` has none that fits."""
     name = type(component).__name__
     if name == "Turbine" and _is_steam(component):
         return STEAM_TURBINE
@@ -640,7 +967,7 @@ def _is_steam(component):
 
 def fit(row, value):
     """
-    Say how a size relates to the range a correlation was fitted on.
+    Say how a size relates to the range a correlation was fitted over.
 
     Parameters
     ----------
@@ -673,7 +1000,7 @@ def fit(row, value):
 
 def purchase_cost(key, value, outside="scale", exponent=EXPONENT):
     """
-    Evaluate a correlation of OpenPyTEA, inside or outside its range.
+    Evaluate a correlation of OpenPyTEA :cite:`Tamarona2026`, inside or outside its range.
 
     Parameters
     ----------
@@ -686,16 +1013,16 @@ def purchase_cost(key, value, outside="scale", exponent=EXPONENT):
         extrapolates from the nearest bound with the scaling exponent,
         :math:`C = C(S_\\mathrm{b}) \\, (S / S_\\mathrm{b})^{n}`, so the component stays one unit.
         ``"parallel"`` lets OpenPyTEA split a size above the range into identical units; a size
-        below the range is an error then.
+        below the range is then an error.
     exponent : float, optional
-        The scaling exponent :math:`n`. Default 0.66.
+        The scaling exponent :math:`n`. Default 0.6.
 
     Returns
     -------
     dict
-        ``PEC`` is the cost in USD at ``cost_year``, the year of the correlation; ``units`` the
+        ``PEC`` is the cost in USD of ``reference_year``, the year of the correlation; ``units`` the
         number of parallel units; ``method`` is ``"correlation"``, ``"scaled"`` or ``"parallel"``;
-        ``bound`` the bound the cost was scaled from, when it was.
+        ``bound`` the bound the cost was scaled from, if any.
 
     Raises
     ------
@@ -710,36 +1037,58 @@ def purchase_cost(key, value, outside="scale", exponent=EXPONENT):
         bound = where["lower"] if where["status"] == "below" else where["upper"]
         cost, units, year = db.evaluate(key, bound)
         cost = cost / units * (float(value) / bound) ** exponent
-        return {"PEC": cost, "cost_year": year, "units": 1, "method": "scaled", "bound": bound, "exponent": exponent}
+        return {
+            "PEC": cost,
+            "reference_year": year,
+            "units": 1,
+            "method": "scaled",
+            "bound": bound,
+            "exponent": exponent,
+        }
     cost, units, year = db.evaluate(key, float(value))
     method = "parallel" if units > 1 else "correlation"
-    return {"PEC": cost, "cost_year": year, "units": units, "method": method, "bound": None}
+    return {"PEC": cost, "reference_year": year, "units": units, "method": method, "bound": None}
 
 
-def estimate(component, key, U=None, value=None, outside="scale", exponent=EXPONENT, method="sections"):
+def _quantity_of(component, kind):
+    """The size of a component that has the dimension of a correlation, or ``None``."""
+    found = [quantity for quantity in quantities(component) if DIMENSIONS.get(quantity) == kind]
+    return found[0] if found else None
+
+
+def estimate(
+    component, key, U=None, value=None, outside="scale", exponent=EXPONENT, method="sections", exchanger_type=None
+):
     """
-    Estimate the purchase equipment cost of a component with a correlation of OpenPyTEA.
+    Estimate the purchased equipment cost of a component with a correlation of OpenPyTEA :cite:`Tamarona2026`.
+
+    The size is the one of :func:`sizes` that has the dimension of the units of the correlation, a
+    power or a heat flow, an area, a volume flow at the inlet or a mass flow, converted into those units.
 
     Parameters
     ----------
     component : Component
     key : str
         The correlation to use, see :func:`correlations`.
-    U : float, optional
-        Overall heat transfer coefficient in W/m²K for the area of a heat exchanger by ``kA``.
+    U : float or dict, optional
+        Overall heat transfer coefficient of a heat exchanger in W/m²K, see :func:`heat_exchanger_area`.
     value : float, optional
         The size in the units of the correlation, given by hand when the model does not determine
-        it or when the correlation is based on another kind of size.
+        it.
     outside, exponent
         See :func:`purchase_cost`.
     method : str, optional
-        See :func:`size`.
+        See :func:`heat_exchanger_area`.
+    exchanger_type : str, optional
+        A key of :data:`EXCHANGER_TYPES`; by default the one the correlation describes, see
+        :func:`exchanger_type_of`.
 
     Returns
     -------
     dict
-        The result of :func:`purchase_cost` together with ``size``, ``size_units``, ``key`` and
-        ``fit`` (see :func:`fit`).
+        The result of :func:`purchase_cost` together with ``size``, ``size_units``, ``quantity``
+        (the size read from the model, ``None`` for one given by hand), ``key``, ``fit`` (see
+        :func:`fit`) and ``sizing``, the result of :func:`heat_exchanger_area` for an area.
 
     Raises
     ------
@@ -749,18 +1098,37 @@ def estimate(component, key, U=None, value=None, outside="scale", exponent=EXPON
     """
     row = correlation(key)
     units = row["units"]
+    read = quantity = None
     if value is None:
-        read = size(component, U=U, method=method)
-        if read is None or read["value"] is None:
-            raise ValueError(f"The size of {component.name} does not follow from the model; give it in '{units}'.")
-        value = convert(read["value"], read["quantity"], units)
-        if value is None:
+        found = dimension(units)
+        quantity = None if found is None else _quantity_of(component, found[0])
+        if quantity is None:
             raise ValueError(
-                f"The correlation '{key}' is based on '{units}', which {component.name} does not provide; "
-                f"give the size by hand."
+                f"The correlation '{key}' is based on '{units}', which the model does not give for "
+                f"{component.name}; give the size in '{units}' as 'value'."
             )
+        if quantity == "area":
+            exchanger_type = exchanger_type or exchanger_type_of(key)
+            read = heat_exchanger_area(component, U=U, exchanger_type=exchanger_type, method=method)
+            si = None if read is None else read["area"]
+        else:
+            si = size(component, quantity)
+        if si is None:
+            raise ValueError(
+                f"The {quantity} of {component.name} does not follow from the model; give it in '{units}'."
+            )
+        value = si * found[1]
     result = purchase_cost(key, value, outside=outside, exponent=exponent)
-    result.update({"size": float(value), "size_units": units, "key": key, "fit": fit(row, float(value))})
+    result.update(
+        {
+            "size": float(value),
+            "size_units": units,
+            "quantity": quantity,
+            "key": key,
+            "fit": fit(row, float(value)),
+            "sizing": read,
+        }
+    )
     return result
 
 
@@ -836,6 +1204,6 @@ def per_dollar(currency, year):
 
 
 def cost_index():
-    """The plant cost index OpenPyTEA ships, as ``{year: value}``."""
+    """The plant cost index OpenPyTEA :cite:`Tamarona2026` ships, as ``{year: value}``."""
     df = _openpytea().CEPCI_DF
     return {int(year): float(value) for year, value in df["cepci"].items() if pd.notna(value)}

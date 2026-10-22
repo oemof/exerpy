@@ -98,6 +98,10 @@ class Mixer(Component):
         # ordinary mixer; >1 when one branch stands in for a field of parallel branches).
         self.num_branches = kwargs.get("num_branches", 1) or 1
 
+    def _single_outlet(self):
+        """Return the single outlet, whatever connector index the model gave it."""
+        return next(iter(self.outl.values()))
+
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Calculate the exergy balance of the mixer.
@@ -189,24 +193,37 @@ class Mixer(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
+        r"""
         Auxiliary equations for the mixer.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        A mixer brings several streams together into one. The thermal exergy of the outlet is the
+        product of the mixing, while what the component does not raise is simply blended.
 
-        (1) Mixing equation for chemical exergy costs (if enabled):
+        Writing :math:`x` for a cost variable that merely passes through, the outlet takes the
+        mass-weighted mean of the specific costs of the inlets:
 
-        - The outlet's specific chemical exergy cost is calculated as a mass-weighted average of the inlet streams' specific chemical exergy costs
+        .. math::
 
-        - This enforces proper chemical exergy cost distribution through the deaerator
+            \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+            = \sum_{i} \frac{\dot{m}_{\mathrm{in},i}}{\sum_{k} \dot{m}_{\mathrm{in},k}}
+              \cdot \frac{\dot{C}^{x}_{\mathrm{in},i}}{\dot{E}^{x}_{\mathrm{in},i}}
 
-        (2) Mixing equation for mechanical exergy costs:
+        With split physical exergy this rule is written for the mechanical exergy,
+        :math:`x = \mathrm{M}`, while the thermal exergy of the outlet is the product of the
+        mixing and is left to the cost balance.
 
-        - The outlet's specific mechanical exergy cost is calculated as a mass-weighted average of the inlet streams' specific mechanical exergy costs
+        Without the split there is no mechanical cost variable, and the single cost variable of the
+        physical exergy of the outlet is the product, so **no mixing rule is written at all**; the
+        cost balance alone determines it:
 
-        - This ensures mechanical exergy costs are properly conserved in the mixing process
+        .. math::
+
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \sum_{i} \dot{C}^\mathrm{PH}_{\mathrm{in},i} + \dot{Z}
+
+        With chemical exergy enabled the rule is written for :math:`x = \mathrm{CH}` in either
+        mode, since the composition of the outlet is the mixture of the inlets.
 
         Parameters
         ----------
@@ -222,6 +239,10 @@ class Mixer(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -236,64 +257,67 @@ class Mixer(Component):
         """
         # --- Chemical cost auxiliary equation (conditionally added) ---
         if chemical_exergy_enabled:
-            if self.outl[0]["e_CH"] != 0:
-                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1 / self.outl[0]["E_CH"]
+            if self._single_outlet()["e_CH"] != 0:
+                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1 / self._single_outlet()["E_CH"]
                 # Iterate over inlet streams for chemical mixing.
                 for inlet in self.inl.values():
                     if inlet["e_CH"] != 0:
-                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (self.outl[0]["m"] * inlet["E_CH"])
+                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (
+                            self._single_outlet()["m"] * inlet["E_CH"]
+                        )
                     else:
                         A[counter, inlet["CostVar_index"]["CH"]] = 1
             else:
                 # Outlet chemical exergy is zero: enforce cost conservation sum(C_CH_inlets) - C_CH_outlet = 0
                 for inlet in self.inl.values():
                     A[counter, inlet["CostVar_index"]["CH"]] = 1
-                A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
+                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1
             equations[counter] = {
                 "kind": "aux_mixing",
-                "objects": [self.name, self.inl[0]["name"], self.inl[1]["name"], self.outl[0]["name"]],
+                "objects": [self.name] + [i["name"] for i in self.inl.values()] + [self._single_outlet()["name"]],
                 "property": "c_CH",
             }
             chem_row = 1  # One row added for chemical equation.
         else:
             chem_row = 0  # No row added.
 
-        # --- Mechanical cost auxiliary equation ---
-        if self.outl[0]["e_M"] != 0:
-            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
-            # Iterate over inlet streams for mechanical mixing.
-            for inlet in self.inl.values():
-                if inlet["e_M"] != 0:
-                    A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (self.outl[0]["m"] * inlet["E_M"])
-                else:
+        # Mechanical cost auxiliary equation. Without the split the cost balance of the component is
+        # the mixing rule for the physical exergy of the outlet already.
+        if split_physical_exergy:
+            if self._single_outlet()["e_M"] != 0:
+                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1 / self._single_outlet()["E_M"]
+                # Iterate over inlet streams for mechanical mixing.
+                for inlet in self.inl.values():
+                    if inlet["e_M"] != 0:
+                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (
+                            self._single_outlet()["m"] * inlet["E_M"]
+                        )
+                    else:
+                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
+            else:
+                # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
+                for inlet in self.inl.values():
                     A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-        else:
-            # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
-            for inlet in self.inl.values():
-                A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-            A[counter + chem_row, self.outl[0]["CostVar_index"]["M"]] = -1
+                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1
 
-        # Dynamically build the list of inlet names
-        inlet_names = [inlet["name"] for inlet in self.inl.values()]
+            # Dynamically build the list of inlet names
+            inlet_names = [inlet["name"] for inlet in self.inl.values()]
 
-        equations[counter + chem_row] = {
-            "kind": "aux_mixing",
-            "objects": [self.name] + inlet_names + [self.outl[0]["name"]],
-            "property": "c_M",
-        }
+            equations[counter + chem_row] = {
+                "kind": "aux_mixing",
+                "objects": [self.name] + inlet_names + [self._single_outlet()["name"]],
+                "property": "c_M",
+            }
 
         # Set the right-hand side entries to zero for the added rows.
-        if chemical_exergy_enabled:
-            b[counter] = 0
-            b[counter + 1] = 0
-            counter += 2  # Two rows were added.
-        else:
-            b[counter] = 0
-            counter += 1  # Only one row was added.
+        num_rows = (1 if chemical_exergy_enabled else 0) + (1 if split_physical_exergy else 0)
+        for i in range(num_rows):
+            b[counter + i] = 0
+        counter += num_rows
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the mixer.
 
@@ -426,23 +450,6 @@ class Mixer(Component):
             - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
             - \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
 
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -450,6 +457,10 @@ class Mixer(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------
@@ -479,9 +490,24 @@ class Mixer(Component):
         """
         self.C_P = 0
         self.C_F = 0
-        if self.outl[0]["T"] > T0:
+        # Without the split the cost of the fuel follows the physical exergy of the streams that the
+        # exergy balance uses in the same case.
+        if not split_physical_exergy:
+            out = self._single_outlet()
+            if abs(out["T"] - T0) < 1e-6:
+                for i in self.inl.values():
+                    self.C_F += i["C_TOT"]
+            else:
+                heating = out["T"] > T0
+                for i in self.inl.values():
+                    fuel_side = (i["T"] >= out["T"]) if heating else (i["T"] <= out["T"])
+                    if fuel_side:
+                        self.C_F += i["C_PH"] - i["m"] * out["c_PH"] * out["e_PH"]
+                    elif (i["T"] < T0) if heating else (i["T"] >= T0):
+                        self.C_F += i["C_PH"]
+        elif self._single_outlet()["T"] > T0:
             for i in self.inl.values():
-                if i["T"] < self.outl[0]["T"]:
+                if i["T"] < self._single_outlet()["T"]:
                     # cold inlets
                     self.C_F += i["C_M"]
                     if chemical_exergy_enabled:
@@ -491,16 +517,16 @@ class Mixer(Component):
                     self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
-            self.C_F += -self.outl[0]["C_M"]
+            self.C_F += -self._single_outlet()["C_M"]
             if chemical_exergy_enabled:
-                self.C_F += -self.outl[0]["C_CH"]
-        elif self.outl[0]["T"] - 1e-6 < T0 and self.outl[0]["T"] + 1e-6 > T0:
+                self.C_F += -self._single_outlet()["C_CH"]
+        elif self._single_outlet()["T"] - 1e-6 < T0 and self._single_outlet()["T"] + 1e-6 > T0:
             # dissipative
             for i in self.inl.values():
                 self.C_F += i["C_TOT"]
         else:
             for i in self.inl.values():
-                if i["T"] > self.outl[0]["T"]:
+                if i["T"] > self._single_outlet()["T"]:
                     # hot inlets
                     self.C_F += i["C_M"]
                     if chemical_exergy_enabled:
@@ -510,13 +536,13 @@ class Mixer(Component):
                     self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
-            self.C_F += -self.outl[0]["C_M"]
+            self.C_F += -self._single_outlet()["C_M"]
             if chemical_exergy_enabled:
-                self.C_F += -self.outl[0]["C_CH"]
+                self.C_F += -self._single_outlet()["C_CH"]
         self.C_P = self.C_F + self.Z_costs + getattr(self, "Z_diss", 0)
 
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
         self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

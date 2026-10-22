@@ -81,6 +81,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/_generated/
 
 # PyBuilder
 .pybuilder/
@@ -148,9 +149,7 @@ examples/ccpp/_0108erv
 # Copyrighted cost correlation data
 src/exerpy/data/cost_correlations/
 src/exerpy/cost_estimation/
-examples/exergoeconomic_analysis/cgam/
-examples/exergoeconomic_analysis/ccpp/
-examples/exergoeconomic_analysis/heatpump/
+src/exerpy/cost_library/
 
 # Optimization examples (local only; kept on the optimization branch)
 examples/opt_examples/

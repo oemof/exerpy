@@ -46,6 +46,18 @@ class SimpleHeatExchanger(Component):
         Exergoeconomic factor, :math:`\dot{Z}/(\dot{Z} + \dot{C}_D)`.
     Ex_C_col : dict
         Custom cost coefficients collection passed via `kwargs`.
+    T_hot : float, optional
+        Temperature of the heat source in K, for a stream that takes in heat above the ambient
+        temperature. Given, the fuel is the exergy of the heat at that temperature,
+        :math:`\dot{E}_\mathrm{F} = \dot{Q}\,(1 - T_0/T_\mathrm{hot})`, so the loss of the heat
+        transfer from the source counts as exergy destruction of the component.
+    T_cold : float, optional
+        Temperature of the heat consumer in K, for a stream that releases heat above the ambient
+        temperature. Given, the product is the exergy of the heat at that temperature,
+        :math:`\dot{E}_\mathrm{P} = |\dot{Q}|\,(1 - T_0/T_\mathrm{cold})`.
+
+    Without them, the heat is valued at the exergy change of the stream itself, and the loss of the
+    heat transfer to or from the outside lies outside the component.
     """
 
     def __init__(self, **kwargs):
@@ -59,7 +71,11 @@ class SimpleHeatExchanger(Component):
             - dissipative (bool): whether component has dissipative behavior, default False
             - Ex_C_col (dict): custom cost coefficients, default {}
             - Z_costs (float): investment cost rate in currency/h, default 0.0
+            - T_hot (float): temperature of the heat source in K, default None
+            - T_cold (float): temperature of the heat consumer in K, default None
         """
+        self.T_hot = None
+        self.T_cold = None
         super().__init__(**kwargs)
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
@@ -385,6 +401,8 @@ class SimpleHeatExchanger(Component):
             self.E_P = np.nan
             self.E_F = inlet["m"] * (inlet["e_PH"] - outlet["e_PH"])
 
+        self._heat_at = self._value_heat_at_temperature(Q, inlet, outlet, T0)
+
         # Calculate exergy destruction
         if np.isnan(self.E_P):
             self.E_D = self.E_F
@@ -401,13 +419,116 @@ class SimpleHeatExchanger(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
+    def _heat_stream(self):
+        """The heat connection of the component, or ``None``."""
+        for conn in [*self.inl.values(), *self.outl.values()]:
+            if conn.get("kind") == "heat":
+                return conn
+        return None
+
+    def _value_heat_at_temperature(self, Q, inlet, outlet, T0):
+        """Value the heat at ``T_hot`` or ``T_cold`` where given; return ``"source"``, ``"consumer"`` or None."""
+        above_ambient = inlet["T"] >= T0 and outlet["T"] >= T0
+        heat = self._heat_stream()
+        if Q > 0 and self.T_hot is not None:
+            if not above_ambient:
+                logger.warning(
+                    f"SimpleHeatExchanger {self.name}: T_hot is used only for a stream above the ambient "
+                    f"temperature, so it is ignored."
+                )
+                return None
+            if self.T_hot <= max(inlet["T"], outlet["T"]):
+                raise ValueError(
+                    f"SimpleHeatExchanger {self.name}: the heat source at T_hot = {self.T_hot} K has to be "
+                    f"hotter than the stream it heats, which reaches {max(inlet['T'], outlet['T']):.2f} K."
+                )
+            self.E_F = Q * (1 - T0 / self.T_hot)
+            if heat is not None:
+                heat["E"] = self.E_F
+            return "source"
+        if Q < 0 and self.T_cold is not None and not getattr(self, "dissipative", False):
+            if not above_ambient:
+                logger.warning(
+                    f"SimpleHeatExchanger {self.name}: T_cold is used only for a stream above the ambient "
+                    f"temperature, so it is ignored."
+                )
+                return None
+            if not T0 < self.T_cold < min(inlet["T"], outlet["T"]):
+                raise ValueError(
+                    f"SimpleHeatExchanger {self.name}: the heat consumer at T_cold = {self.T_cold} K has to "
+                    f"be colder than the stream that heats it, which falls to {min(inlet['T'], outlet['T']):.2f} K, "
+                    f"and warmer than the ambient temperature."
+                )
+            self.E_P = -Q * (1 - T0 / self.T_cold)
+            if heat is not None:
+                heat["E"] = self.E_P
+            return "consumer"
+        return None
+
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
         r"""
-        This function must be implemented in the future.
+        Auxiliary equations for the simple heat exchanger.
 
-        The exergoeconomic analysis of SimpleHeatExchanger is not implemented yet.
+        Writing :math:`x` for the cost variable of the physical exergy, the rules hold in both split
+        modes with :math:`x = \mathrm{T}` for split physical exergy and :math:`x = \mathrm{PH}`
+        without it.
+
+        **Releasing heat** above the ambient temperature, the heat is the product and the stream is
+        the fuel, so it follows the F-principle:
+
+        .. math::
+
+            \frac{\dot{C}^{x}_\mathrm{in}}{\dot{E}^{x}_\mathrm{in}}
+            = \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+
+        **Absorbing heat**, the exergy the stream gains is the product and the cost balance alone
+        determines it, so no rule is written:
+
+        .. math::
+
+            \dot{C}^{x}_\mathrm{out}
+            = \dot{C}^{x}_\mathrm{in} + \dot{C}^\mathrm{TOT}_\mathrm{heat} + \dot{Z}
+
+        The pressure and the composition pass through at their own specific cost in either case.
+        The mechanical rule exists only with split physical exergy, since without it the stream has
+        no mechanical cost variable; the chemical rule exists whenever chemical exergy is enabled:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
+            \qquad
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        A stream that crosses the ambient temperature inside the component, and one that stays below
+        it while the component releases heat, are not covered; the component warns and writes no
+        equation for the physical exergy, which leaves the cost matrix singular.
+
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Coefficient matrix of the cost equation system.
+        b : numpy.ndarray
+            Right-hand side vector of the cost equation system.
+        counter : int
+            Index of the next free row.
+        T0 : float
+            Ambient temperature in :math:`\mathrm{K}`.
+        equations : dict
+            Dictionary documenting the equations.
+        chemical_exergy_enabled : bool
+            Whether chemical exergy is part of the analysis.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
+
+        Returns
+        -------
+        tuple
+            The updated matrix, vector, row index and equation dictionary.
         """
-
         # Extract inlet and outlet
         inlet = self.inl[0]
         outlet = self.outl[0]
@@ -419,16 +540,20 @@ class SimpleHeatExchanger(Component):
         T_in = inlet["T"]
         T_out = outlet["T"]
 
-        # Equality equation for mechanical exergy costs (c_M,in = c_M,out)
-        A[counter, inlet["CostVar_index"]["M"]] = 1 / inlet["E_M"] if inlet["e_M"] != 0 else 1
-        A[counter, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
-        equations[counter] = {
-            "kind": "aux_equality",
-            "objects": [self.name, inlet["name"], outlet["name"]],
-            "property": "c_M",
-        }
-        b[counter] = 0
-        counter += 1
+        # Equality equation for mechanical exergy costs (c_M,in = c_M,out). Without the split there is no
+        # mechanical cost variable, the rule below acts on the physical exergy instead.
+        if split_physical_exergy:
+            A[counter, inlet["CostVar_index"]["M"]] = 1 / inlet["E_M"] if inlet["e_M"] != 0 else 1
+            A[counter, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
+            equations[counter] = {
+                "kind": "aux_equality",
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_M",
+            }
+            b[counter] = 0
+            counter += 1
+
+        phys = "T" if split_physical_exergy else "PH"
 
         # Equality equation for chemical exergy costs (c_CH,in = c_CH,out)
         if chemical_exergy_enabled:
@@ -449,12 +574,12 @@ class SimpleHeatExchanger(Component):
             # Case 1.1: Both streams above ambient temperature
             if T_in >= T0 and T_out >= T0:
                 # Apply F-rule to thermal exergy (c_T,in = c_T,out)
-                A[counter, inlet["CostVar_index"]["T"]] = 1 / inlet["E_T"] if inlet["e_T"] != 0 else 1
-                A[counter, outlet["CostVar_index"]["T"]] = -1 / outlet["E_T"] if outlet["e_T"] != 0 else -1
+                A[counter, inlet["CostVar_index"][phys]] = 1 / inlet[f"E_{phys}"] if inlet[f"e_{phys}"] != 0 else 1
+                A[counter, outlet["CostVar_index"][phys]] = -1 / outlet[f"E_{phys}"] if outlet[f"e_{phys}"] != 0 else -1
                 equations[counter] = {
                     "kind": "aux_f_rule",
                     "objects": [self.name, inlet["name"], outlet["name"]],
-                    "property": "c_T",
+                    "property": f"c_{phys}",
                 }
                 b[counter] = 0
                 counter += 1
@@ -496,7 +621,7 @@ class SimpleHeatExchanger(Component):
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the simple heat exchanger.
 
@@ -611,23 +736,6 @@ class SimpleHeatExchanger(Component):
             = \dot{E}^{\mathrm{PH}}_{\mathrm{in}}
             - \dot{E}^{\mathrm{PH}}_{\mathrm{out}}
 
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -635,6 +743,10 @@ class SimpleHeatExchanger(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------
@@ -659,8 +771,30 @@ class SimpleHeatExchanger(Component):
         # Determine heat transfer direction
         Q = outlet["m"] * outlet["h"] - inlet["m"] * inlet["h"]
 
+        # Without the split the cost of the product follows the physical exergy of the streams that the
+        # exergy balance uses in the same case.
+        if not split_physical_exergy:
+            if Q < 0 and inlet["T"] >= T0 and outlet["T"] >= T0:
+                self.C_P = np.nan if getattr(self, "dissipative", False) else inlet["C_PH"] - outlet["C_PH"]
+                self.C_F = inlet["C_PH"] - outlet["C_PH"]
+            elif Q < 0 and inlet["T"] >= T0:
+                self.C_P = outlet["C_PH"]
+                self.C_F = inlet["C_PH"]
+            elif Q < 0:
+                self.C_P = np.nan if getattr(self, "dissipative", False) else outlet["C_PH"] - inlet["C_PH"]
+                self.C_F = outlet["C_PH"] - inlet["C_PH"]
+            elif Q > 0 and inlet["T"] < T0 and outlet["T"] <= T0:
+                self.C_P = np.nan if getattr(self, "dissipative", False) else inlet["C_PH"] - outlet["C_PH"]
+                self.C_F = inlet["C_PH"] - outlet["C_PH"]
+            elif Q > 0:
+                self.C_P = outlet["C_PH"] - inlet["C_PH"]
+                self.C_F = outlet["C_PH"] - inlet["C_PH"]
+            else:
+                self.C_P = np.nan
+                self.C_F = inlet["C_PH"] - outlet["C_PH"]
+
         # Case 1: Heat is released (Q < 0)
-        if Q < 0:
+        elif Q < 0:
             if inlet["T"] >= T0 and outlet["T"] >= T0:
                 # Both streams above ambient
                 self.C_P = outlet["C_T"] - inlet["C_T"]
@@ -699,6 +833,15 @@ class SimpleHeatExchanger(Component):
         else:
             self.C_P = np.nan
             self.C_F = inlet["C_PH"] - outlet["C_PH"]
+
+        # Heat valued at the temperature of its source or consumer: its cost is the fuel or the product.
+        heat = self._heat_stream()
+        heat_at = getattr(self, "_heat_at", None)
+        if heat is not None and heat.get("C_TOT") is not None:
+            if heat_at == "source":
+                self.C_F = heat["C_TOT"]
+            elif heat_at == "consumer":
+                self.C_P = heat["C_TOT"]
 
         # Calculate specific costs and exergoeconomic indicators
         self.c_F = self.C_F / self.E_F if self.E_F else np.nan

@@ -4,9 +4,9 @@ v0.0.7 (24.02.2026)
 Bug Fixes
 #########
 - Fixed floating-point temperature comparison in ``HeatExchanger`` and ``Condenser`` components.
-  Added ``_temperature_case()`` helper with 0.01 K tolerance to prevent misclassification
-  when stream temperatures are at exactly Tamb.
-- Changed case 6 (all streams at Tamb) log level from ``warning`` to ``info`` in
+  Added a ``_temperature_case()`` helper with a 0.01 K tolerance to prevent misclassification
+  when stream temperatures are exactly at Tamb.
+- Changed the log level of case 6 (all streams at Tamb) from ``warning`` to ``info`` in
   ``HeatExchanger`` and ``Condenser``.
 
 New Features

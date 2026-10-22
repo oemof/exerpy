@@ -7,10 +7,16 @@ from tabulate import tabulate
 
 from exerpy.logger import logger
 
+# Default exponent of the scaling of a purchased equipment cost with the size of a component.
+SCALING_EXPONENT = 0.6
+# Keys of a purchased equipment cost scaled from a reference component.
+SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger_type", "U"}
+
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
 from .components.nodes.splitter import Splitter
+from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
 
@@ -95,6 +101,109 @@ class ExergyAnalysis:
         # Convert the parsed data into components
         self.components = _construct_components(component_data, connection_data, Tamb)
         self.connections = connection_data
+
+    def boundary_streams(self):
+        """
+        Return the streams crossing the system boundary.
+
+        A stream crosses the boundary when one of its ends is no component of the analysis. That end
+        may be missing, as in the Ebsilon exports, or name a source or sink of the simulation that is
+        no component of the plant, such as "ambient air" or "chimney" in the TESPy and Aspen exports.
+        Only material, heat and power streams are reported; control signals are left out.
+
+        Returns
+        -------
+        list of dict
+            One entry per stream, in the order of the connections, with its ``name`` and ``kind``,
+            its ``direction`` (``"in"`` when it enters the plant, ``"out"`` when it leaves it and
+            ``None`` when neither end is a component), the ``outside`` end it comes from or goes to,
+            and its ``E``, ``energy_flow``, ``m``, ``T`` and ``p`` where the stream has them. ``E``
+            is the value at the time of the call; the exergy of a heat stream may only be known
+            after :meth:`analyse`.
+        """
+        streams = []
+        for name, conn in self.connections.items():
+            kind = conn.get("kind", "")
+            if kind not in ("material", "heat", "power"):
+                continue
+            source = conn.get("source_component")
+            target = conn.get("target_component")
+            if conn.get("source_component_type") == 1:
+                source = None
+            source_in = source in self.components
+            target_in = target in self.components
+            if source_in and target_in:
+                continue
+            direction = "in" if target_in else "out" if source_in else None
+            outside = source if direction == "in" else target if direction == "out" else None
+            streams.append(
+                {
+                    "name": name,
+                    "kind": kind,
+                    "direction": direction,
+                    "outside": outside,
+                    "E": conn.get("E"),
+                    "energy_flow": conn.get("energy_flow"),
+                    "m": conn.get("m"),
+                    "T": conn.get("T"),
+                    "p": conn.get("p"),
+                }
+            )
+        return streams
+
+    def flows_from_roles(self, roles):
+        """
+        Build the fuel, product and loss definitions of the plant from the role of its boundary streams.
+
+        :meth:`analyse` sums each of the three as the streams listed under ``"inputs"`` minus the
+        ones under ``"outputs"``. A stream feeding the plant adds to the fuel, a stream leaving it
+        adds to the product or to the loss, and the stream on the other side of the same service is
+        subtracted: the water entering a heat pump is an output of the product formed by the heated
+        water, and the cooling water entering a condenser an output of the loss formed by the warm
+        cooling water.
+
+        Parameters
+        ----------
+        roles : dict
+            The role of a boundary stream by its name: ``"F"``, ``"P"`` or ``"L"``, or spelled out
+            as ``"fuel"``, ``"product"`` or ``"loss"``. A stream that is left out is part of no
+            definition.
+
+        Returns
+        -------
+        tuple of dict
+            ``(E_F, E_P, E_L)`` as :meth:`analyse` takes them.
+
+        Raises
+        ------
+        ValueError
+            If a name is no stream crossing the system boundary, if a stream is attached to the
+            plant on neither side, or if a role is not one of the three.
+
+        Examples
+        --------
+        >>> ean = ExergyAnalysis.from_json("hp.json")  # doctest: +SKIP
+        >>> E_F, E_P, E_L = ean.flows_from_roles({"e1": "F", "21": "P", "23": "P", "11": "L", "13": "L"})  # doctest: +SKIP
+        >>> E_P  # doctest: +SKIP
+        {'inputs': ['23'], 'outputs': ['21']}
+        """
+        directions = {stream["name"]: stream["direction"] for stream in self.boundary_streams()}
+        letters = {"F": "F", "FUEL": "F", "P": "P", "PRODUCT": "P", "L": "L", "LOSS": "L"}
+        flows = {letter: {"inputs": [], "outputs": []} for letter in "FPL"}
+        for name, role in roles.items():
+            letter = letters.get(str(role).strip().upper())
+            if letter is None:
+                raise ValueError(f"The role of stream '{name}' is neither fuel, product nor loss: {role!r}.")
+            if name not in directions:
+                raise ValueError(f"'{name}' is no stream crossing the system boundary.")
+            direction = directions[name]
+            if direction is None:
+                raise ValueError(
+                    f"Stream '{name}' is attached to the plant on neither side, so it cannot be part of a definition."
+                )
+            adds = direction == "in" if letter == "F" else direction == "out"
+            flows[letter]["inputs" if adds else "outputs"].append(name)
+        return flows["F"], flows["P"], flows["L"]
 
     def analyse(self, E_F, E_P, E_L=None) -> None:
         """
@@ -219,12 +328,8 @@ class ExergyAnalysis:
             if component.__class__.__name__ == "CycleCloser":
                 continue
             # Safely calculate y and y* avoiding division by zero
-            if self.E_F != 0:
-                component.y = component.E_D / self.E_F
-                component.y_star = component.E_D / self.E_D if component.E_D is not None else np.nan
-            else:
-                component.y = np.nan
-                component.y_star = np.nan
+            component.y = component.E_D / self.E_F if self.E_F else np.nan
+            component.y_star = component.E_D / self.E_D if self.E_D and component.E_D is not None else np.nan
             # Sum component destruction if available
             if component.E_D is not np.nan:
                 total_component_E_D += component.E_D
@@ -1126,35 +1231,14 @@ class ExergyAnalysis:
         list
             Names of the boundary connections that are part of no exergy flow definition.
         """
-        # Collect all accounted streams
         accounted_streams = set()
         for dictionary in [self.E_F_dict, self.E_P_dict, self.E_L_dict]:
             accounted_streams.update(dictionary.get("inputs", []))
             accounted_streams.update(dictionary.get("outputs", []))
 
-        analysed_components = set(self.components)
-
-        # Identify actual system boundary connections
-        system_boundary_conns = []
-        for conn_name, conn_data in self.connections.items():
-            source = conn_data.get("source_component", None)
-            target = conn_data.get("target_component", None)
-            if conn_data.get("source_component_type", None) == 1:
-                source = None
-
-            # Connection is at system boundary if one side is no component of the analysis
-            if source not in analysed_components or target not in analysed_components:
-                kind = conn_data.get("kind", "")
-                # Treat an explicit None exergy as zero to avoid a TypeError in abs().
-                exergy = conn_data.get("E")
-                if exergy is None:
-                    exergy = 0
-                # Only consider material/heat/power streams with significant exergy
-                if kind in ["material", "heat", "power"] and abs(exergy) > 1e-3:
-                    system_boundary_conns.append(conn_name)
-
-        # Find unaccounted boundary connections
-        unaccounted = sorted(conn for conn in system_boundary_conns if conn not in accounted_streams)
+        # Only streams carrying exergy matter for the balance.
+        significant = [stream["name"] for stream in self.boundary_streams() if abs(stream["E"] or 0) > 1e-3]
+        unaccounted = sorted(conn for conn in significant if conn not in accounted_streams)
 
         if unaccounted:
             conn_list = ", ".join(f"'{conn}'" for conn in unaccounted)
@@ -1487,17 +1571,16 @@ class ExergoeconomicAnalysis:
         This class inherits all exergy analysis results from the provided instance
         and prepares data structures for economic equations and cost variables.
         """
-        if not exergy_analysis_instance.split_physical_exergy:
-            raise ValueError(
-                "ExergoeconomicAnalysis requires split_physical_exergy=True. "
-                "The exergoeconomic cost allocation uses separate thermal (C_T) and mechanical (C_M) "
-                "cost variables for material streams. Please re-run the exergy analysis with "
-                "split_physical_exergy=True."
-            )
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
         self.chemical_exergy_enabled = exergy_analysis_instance.chemical_exergy_enabled
+        self.split_physical_exergy = exergy_analysis_instance.split_physical_exergy
+        if not self.split_physical_exergy:
+            logger.info(
+                "The physical exergy is not split, so the cost of a material stream is allocated to its "
+                "physical exergy (C_PH) instead of a thermal (C_T) and a mechanical (C_M) share."
+            )
         self.E_F_dict = exergy_analysis_instance.E_F_dict
         self.E_P_dict = exergy_analysis_instance.E_P_dict
         self.E_L_dict = exergy_analysis_instance.E_L_dict
@@ -1507,6 +1590,44 @@ class ExergoeconomicAnalysis:
         self.variables = {}  # New dictionary to map variable indices to names
         self.equations = {}  # New dictionary to map equation indices to kind of equation
         self.currency = currency  # EUR is default currency for cost calculations
+
+    @property
+    def _branch_scales(self) -> dict:
+        """Return how often each stream exists in the plant.
+
+        A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
+        streams then carry the mass flow and the cost of a single branch, while the heat it takes
+        in and its investment cost belong to all of them. The streams of the headers on either side
+        carry the whole field. Every cost balance that a branch stream enters has to count it that
+        often, or the cost of the field is the cost of one branch.
+        """
+        scales = {}
+        for comp in self.components.values():
+            branches = getattr(comp, "beta", 1) or 1
+            if branches == 1 or not hasattr(comp, "_fluid_streams"):
+                continue
+            for conn in list(comp.inl.values()) + list(comp.outl.values()):
+                if conn is not None and conn.get("kind", "material") == "material":
+                    scales[conn["name"]] = branches
+        return scales
+
+    @property
+    def cost_labels(self) -> tuple[str, ...]:
+        """
+        Cost variables of a material stream.
+
+        With split physical exergy a stream carries a thermal and a mechanical cost, without it a
+        single cost of its physical exergy. The chemical cost is added when chemical exergy is
+        enabled. Every part of the analysis derives the number of cost variables of a stream from
+        this, so that the matrix stays square: the components have to provide one auxiliary
+        equation per cost variable of their outlets, except for the one covered by their cost
+        balance.
+        """
+        labels = ("T", "M") if self.split_physical_exergy else ("PH",)
+        return (*labels, "CH") if self.chemical_exergy_enabled else labels
+
+    # Specific exergy of a stream belonging to each cost variable
+    _EXERGY_OF_LABEL = {"T": "e_T", "M": "e_M", "PH": "e_PH", "CH": "e_CH"}
 
     def initialize_cost_variables(self):
         """
@@ -1541,17 +1662,11 @@ class ExergoeconomicAnalysis:
                 kind = conn.get("kind", "material")
                 # For material streams, assign indices based on the flag.
                 if kind == "material":
-                    if self.exergy_analysis.chemical_exergy_enabled:
-                        conn["CostVar_index"] = {"T": col_number, "M": col_number + 1, "CH": col_number + 2}
-                        self.variables[str(col_number)] = f"C_{name}_T"
-                        self.variables[str(col_number + 1)] = f"C_{name}_M"
-                        self.variables[str(col_number + 2)] = f"C_{name}_CH"
-                        col_number += 3
-                    else:
-                        conn["CostVar_index"] = {"T": col_number, "M": col_number + 1}
-                        self.variables[str(col_number)] = f"C_{name}_T"
-                        self.variables[str(col_number + 1)] = f"C_{name}_M"
-                        col_number += 2
+                    conn["CostVar_index"] = {}
+                    for label in self.cost_labels:
+                        conn["CostVar_index"][label] = col_number
+                        self.variables[str(col_number)] = f"C_{name}_{label}"
+                        col_number += 1
                     # Check if this connection's target is a dissipative component.
                     target = conn.get("target_component")
                     if target in valid_components:
@@ -1571,6 +1686,15 @@ class ExergoeconomicAnalysis:
                     conn["CostVar_index"] = {"exergy": col_number}
                     self.variables[str(col_number)] = f"C_{name}_TOT"
                     col_number += 1
+
+        # A storage does not balance over its streams alone: while it charges or discharges, part
+        # of the exergy stays behind in the store or comes out of it. That share is not carried by
+        # any connection, so it gets a cost variable of its own.
+        for comp in self.exergy_analysis.components.values():
+            if isinstance(comp, Storage):
+                comp.stored_cost_index = col_number
+                self.variables[str(col_number)] = f"stored_{comp.name}"
+                col_number += 1
 
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
@@ -1600,16 +1724,21 @@ class ExergoeconomicAnalysis:
         """
         # --- Component Costs ---
         for comp_name, comp in self.components.items():
-            if isinstance(comp, CycleCloser | PowerBus):
-                continue
-            else:
-                cost_key = f"{comp_name}_Z"
-                if cost_key in Exe_Eco_Costs:
-                    comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
-                else:
+            cost_key = f"{comp_name}_Z"
+            # These components have no cost balance of their own, so an investment cost given for
+            # them would disappear from the system instead of being charged to a stream.
+            if isinstance(comp, CycleCloser | PowerBus | Splitter):
+                if Exe_Eco_Costs.get(cost_key):
                     raise ValueError(
-                        f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs."
+                        f"Component '{comp_name}' has no cost balance, so the investment cost "
+                        f"'{cost_key}' cannot be charged to any stream. Assign it to the component "
+                        f"it belongs to."
                     )
+                continue
+            if cost_key in Exe_Eco_Costs:
+                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
+            else:
+                raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
         # --- Connection Costs ---
         accepted_kinds = {"material", "heat", "power"}
@@ -1646,13 +1775,9 @@ class ExergoeconomicAnalysis:
                     conn["C_TOT"] = c_TOT * conn.get("E", 0)
 
                     # Assign cost breakdown for material streams.
-                    if self.chemical_exergy_enabled:
-                        exergy_terms = {"T": "e_T", "M": "e_M", "CH": "e_CH"}
-                    else:
-                        exergy_terms = {"T": "e_T", "M": "e_M"}
-                    for label, exergy_key in exergy_terms.items():
+                    for label in self.cost_labels:
                         conn[f"c_{label}"] = c_TOT
-                        conn[f"C_{label}"] = c_TOT * conn.get(exergy_key, 0) * conn.get("m", 0)
+                        conn[f"C_{label}"] = c_TOT * conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
 
                 elif kind in {"heat", "power"}:
                     # Ensure energy flow "E" is present before computing cost.
@@ -1700,19 +1825,21 @@ class ExergoeconomicAnalysis:
                 not getattr(comp, "is_dissipative", False)
                 and not isinstance(comp, Splitter)
                 and not isinstance(comp, PowerBus)
+                and not isinstance(comp, Storage)
             ):
                 # Assign the row index for the cost balance equation to this component.
                 comp.exergy_cost_line = counter
                 for conn in self.connections.values():
+                    scale = self._branch_scales.get(conn.get("name"), 1)
                     # Check if the connection is linked to a valid component.
                     # If the connection's target is the component, it is an inlet (add +1).
                     if conn.get("target_component") == comp.name:
                         for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = 1  # Incoming costs
+                            self._A[counter, col] = scale  # Incoming costs
                     # If the connection's source is the component, it is an outlet (subtract -1).
                     elif conn.get("source_component") == comp.name:
                         for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = -1  # Outgoing costs
+                            self._A[counter, col] = -scale  # Outgoing costs
                     self.equations[counter] = {"kind": "cost_balance", "object": [comp.name], "property": "Z_costs"}
 
                 self._b[counter] = -getattr(comp, "Z_costs", 1)
@@ -1732,8 +1859,7 @@ class ExergoeconomicAnalysis:
             ):
                 kind = conn.get("kind", "material")
                 if kind == "material":
-                    exergy_terms = ["T", "M", "CH"] if self.chemical_exergy_enabled else ["T", "M"]
-                    for label in exergy_terms:
+                    for label in self.cost_labels:
                         idx = conn["CostVar_index"][label]
                         self._A[counter, idx] = 1  # Fix the cost variable.
                         self._b[counter] = conn.get(f"C_{label}", conn.get("C_TOT", 0))
@@ -1804,7 +1930,13 @@ class ExergoeconomicAnalysis:
                     # The aux_eqs function should accept the current matrix, vector, counter, and Tamb,
                     # and return the updated (A, b, counter).
                     self._A, self._b, counter, self.equations = comp.aux_eqs(
-                        self._A, self._b, counter, self.Tamb, self.equations, self.chemical_exergy_enabled
+                        self._A,
+                        self._b,
+                        counter,
+                        self.Tamb,
+                        self.equations,
+                        self.chemical_exergy_enabled,
+                        self.split_physical_exergy,
                     )
                 else:
                     # If no auxiliary equations are provided.
@@ -1825,6 +1957,7 @@ class ExergoeconomicAnalysis:
                     self.equations,
                     self.chemical_exergy_enabled,
                     list(self.components.values()),
+                    self.split_physical_exergy,
                 )
 
     def solve_exergoeconomic_analysis(self, allow_singular=False):
@@ -1894,6 +2027,11 @@ class ExergoeconomicAnalysis:
         # Step 3: Distribute the cost differences of dissipative components to the serving components
         self.distribute_all_Z_diff(C_solution)
 
+        for comp in self.exergy_analysis.components.values():
+            stored_index = getattr(comp, "stored_cost_index", None)
+            if stored_index is not None:
+                comp.C_stored = C_solution[stored_index]
+
         # Step 4: Assign solutions to connections
         for conn_name, conn in self.connections.items():
             is_part_of_the_system = (
@@ -1904,34 +2042,26 @@ class ExergoeconomicAnalysis:
             else:
                 kind = conn.get("kind")
                 if kind == "material":
-                    # Retrieve mass flow and specific exergy values
                     m_val = conn.get("m", 1)  # mass flow [kg/s]
-                    e_T = conn.get("e_T", 0)  # thermal specific exergy [kJ/kg]
-                    e_M = conn.get("e_M", 0)  # mechanical specific exergy [kJ/kg]
-                    E_T = m_val * e_T  # thermal exergy flow [kW]
-                    E_M = m_val * e_M  # mechanical exergy flow [kW]
 
-                    conn["C_T"] = C_solution[conn["CostVar_index"]["T"]]
-                    conn["c_T"] = conn["C_T"] / E_T if E_T != 0 else 0.0
+                    # One cost variable per label, each divided by the exergy flow it belongs to
+                    for label in self.cost_labels:
+                        E_label = m_val * conn.get(self._EXERGY_OF_LABEL[label], 0)
+                        conn[f"C_{label}"] = C_solution[conn["CostVar_index"][label]]
+                        conn[f"c_{label}"] = conn[f"C_{label}"] / E_label if E_label != 0 else 0.0
 
-                    conn["C_M"] = C_solution[conn["CostVar_index"]["M"]]
-                    conn["c_M"] = conn["C_M"] / E_M if E_M != 0 else 0.0
+                    # The cost of the physical exergy is the sum of its shares when they are split
+                    if self.split_physical_exergy:
+                        E_PH = m_val * (conn.get("e_T", 0) + conn.get("e_M", 0))
+                        conn["C_PH"] = conn["C_T"] + conn["C_M"]
+                        conn["c_PH"] = conn["C_PH"] / E_PH if E_PH != 0 else 0.0
 
-                    conn["C_PH"] = conn["C_T"] + conn["C_M"]
-                    conn["c_PH"] = conn["C_PH"] / (E_T + E_M) if (E_T + E_M) != 0 else 0.0
-
-                    if self.chemical_exergy_enabled:
-                        e_CH = conn.get("e_CH", 0)  # chemical specific exergy [kJ/kg]
-                        E_CH = m_val * e_CH  # chemical exergy flow [kW]
-                        conn["C_CH"] = C_solution[conn["CostVar_index"]["CH"]]
-                        conn["c_CH"] = conn["C_CH"] / E_CH if E_CH != 0 else 0.0
-                        conn["C_TOT"] = conn["C_T"] + conn["C_M"] + conn["C_CH"]
-                        total_E = E_T + E_M + E_CH
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
-                    else:
-                        conn["C_TOT"] = conn["C_T"] + conn["C_M"]
-                        total_E = E_T + E_M
-                        conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
+                    conn["C_TOT"] = conn["C_PH"] + (conn["C_CH"] if self.chemical_exergy_enabled else 0.0)
+                    total_E = m_val * (
+                        conn.get("e_PH", conn.get("e_T", 0) + conn.get("e_M", 0))
+                        + (conn.get("e_CH", 0) if self.chemical_exergy_enabled else 0.0)
+                    )
+                    conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
                     conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
@@ -1939,7 +2069,9 @@ class ExergoeconomicAnalysis:
         # Step 5: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
             if hasattr(comp, "exergoeconomic_balance") and callable(comp.exergoeconomic_balance):
-                comp.exergoeconomic_balance(self.exergy_analysis.Tamb, self.chemical_exergy_enabled)
+                comp.exergoeconomic_balance(
+                    self.exergy_analysis.Tamb, self.chemical_exergy_enabled, self.split_physical_exergy
+                )
 
         # Check cost balances before loss attribution (Step 6) modifies C_TOT values
         self.check_cost_balance()
@@ -2000,6 +2132,17 @@ class ExergoeconomicAnalysis:
 
         # The total loss cost is assigned to the product already, so we don't need to consider it here.
 
+        # A store that fills up keeps part of what the plant produced, and one that empties feeds
+        # the plant. Neither crosses the system boundary on a connection, so it is added here.
+        for comp in self.exergy_analysis.components.values():
+            C_stored = getattr(comp, "C_stored", None)
+            if C_stored is None:
+                continue
+            if getattr(comp, "charging", True):
+                C_P_total += C_stored
+            else:
+                C_F_total += C_stored
+
         # Compute the sum of all Z costs (Z_total) from all components except CycleCloser.
         Z_total = 0.0
         for comp in self.exergy_analysis.components.values():
@@ -2020,7 +2163,7 @@ class ExergoeconomicAnalysis:
             raise ValueError(
                 f"Exergoeconomic cost balance of the entire system is not satisfied: \n"
                 f"C_P = {self.system_costs['C_P']:.3f} and is not equal to \n"
-                f"C_F ({self.system_costs['C_F']:.3f}) + ∑Z ({self.system_costs['Z']:.3f}) = {self.system_costs['C_F'] + self.system_costs['Z']:.3f}. \n"
+                f"C_F ({self.system_costs['C_F']:.3f}) + sum(Z) ({self.system_costs['Z']:.3f}) = {self.system_costs['C_F'] + self.system_costs['Z']:.3f}. \n"
                 f"The problem may be caused by incorrect specifications of E_F, E_P, and E_L."
             )
 
@@ -2085,22 +2228,27 @@ class ExergoeconomicAnalysis:
                 # modified by loss attribution (Step 6) which is not part of the matrix equation.
                 kind = conn.get("kind", "material")
                 if kind == "material":
-                    cost = (conn.get("C_T", 0) or 0) + (conn.get("C_M", 0) or 0)
+                    # C_PH is the cost of the physical exergy, whether or not it is split
+                    cost = conn.get("C_PH", 0) or 0
                     if self.chemical_exergy_enabled:
                         cost += conn.get("C_CH", 0) or 0
                 else:
                     # For heat/power streams, use C_TOT directly (no loss attribution applies)
                     cost = conn.get("C_TOT", 0) or 0
+                scale = self._branch_scales.get(conn.get("name"), 1)
                 if conn.get("target_component") == name:
-                    inlet_sum += cost
+                    inlet_sum += scale * cost
                 if conn.get("source_component") == name:
-                    outlet_sum += cost
+                    outlet_sum += scale * cost
             comp.C_in = inlet_sum
             comp.C_out = outlet_sum
             z_cost = getattr(comp, "Z_costs", 0)
             z_diss = getattr(comp, "Z_diss", 0)
             c_diff = getattr(comp, "C_diff", 0)
-            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff
+            # The exergy a storage takes out of its store enters its balance, the exergy it puts
+            # in leaves it.
+            c_stored = getattr(comp, "C_stored_flow", 0)
+            balance = inlet_sum - outlet_sum + z_cost + z_diss - c_diff + c_stored
             balances[name] = (balance, abs(balance) <= tol)
 
         all_ok = all(flag for _, flag in balances.values())
@@ -2254,50 +2402,50 @@ class ExergoeconomicAnalysis:
 
         # empty equations
         if deps["zero_rows"]:
-            print("\n⚠ Equations with no variables:")
+            print("\n[!] Equations with no variables:")
             for eq in deps["zero_rows"]:
-                print(f"  • Eq[{eq}]: {self.equations.get(eq)}")
+                print(f"  - Eq[{eq}]: {self.equations.get(eq)}")
         else:
-            print("✓ No empty equations.")
+            print("[ok] No empty equations.")
 
         # unused variables
         if deps["zero_columns"]:
-            print("\n⚠ Variables never used in any equation:")
+            print("\n[!] Variables never used in any equation:")
             for var in deps["zero_columns"]:
                 name = self.variables.get(str(var))
-                print(f"  • Var[{var}]: {name}")
+                print(f"  - Var[{var}]: {name}")
         else:
-            print("✓ All variables appear in at least one equation.")
+            print("[ok] All variables appear in at least one equation.")
 
         # exactly colinear
         if deps["colinear_equations_strict"]:
-            print("\n⚠ Exactly colinear (redundant) equation pairs:")
+            print("\n[!] Exactly colinear (redundant) equation pairs:")
             for i, j in deps["colinear_equations_strict"]:
-                print(f"  • Eq[{i}] {self.equations[i]!r}  ≈  Eq[{j}] {self.equations[j]!r}")
+                print(f"  - Eq[{i}] {self.equations[i]!r}  ~  Eq[{j}] {self.equations[j]!r}")
         else:
-            print("✓ No exactly colinear equation pairs detected.")
+            print("[ok] No exactly colinear equation pairs detected.")
 
         # near-colinear
         if deps["colinear_equations_near_only"]:
-            print("\n⚠ Nearly colinear equation pairs (|cosine| ≈ 1):")
+            print("\n[!] Nearly colinear equation pairs (|cosine| ~ 1):")
             for i, j in deps["colinear_equations_near_only"]:
-                print(f"  • Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
+                print(f"  - Eq[{i}] {self.equations[i]!r}  ≈? Eq[{j}] {self.equations[j]!r}")
         else:
-            print("✓ No near-colinear equation pairs detected.")
+            print("[ok] No near-colinear equation pairs detected.")
 
         # SVD null-space analysis
         svd_deps = deps.get("svd_dependencies", [])
         if svd_deps:
-            print(f"\n⚠ SVD null-space analysis found {len(svd_deps)} dependency(ies):")
+            print(f"\n[!] SVD null-space analysis found {len(svd_deps)} dependency(ies):")
             for dep in svd_deps:
                 print(f"\n  Dependency #{dep['null_vector_index'] + 1} (singular value: {dep['singular_value']:.2e}):")
                 print("  Equations involved (with coefficients in null vector):")
                 sorted_eqs = sorted(dep["involved_equations"], key=lambda x: abs(x[1]), reverse=True)
                 for eq_idx, coeff in sorted_eqs:
                     eq_info = self.equations.get(eq_idx, "unknown")
-                    print(f"    • Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
+                    print(f"    - Eq[{eq_idx}] coeff={coeff:+.6f}: {eq_info}")
         else:
-            print("\n✓ SVD analysis: no linear dependencies detected (matrix is full rank).")
+            print("\n[ok] SVD analysis: no linear dependencies detected (matrix is full rank).")
 
     def exergoeconomic_results(self, print_results=True):
         """
@@ -2386,10 +2534,12 @@ class ExergoeconomicAnalysis:
         df_comp.loc["TOT", "f [%]"] = (
             df_comp.loc["TOT", f"Z [{self.currency}/h]"] / df_comp.loc["TOT", f"C_D+Z [{self.currency}/h]"] * 100
         )
+        # A plant running on a free resource, such as solar radiation, has c_F = 0 and therefore
+        # no finite relative cost difference.
+        c_F_tot = df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
         df_comp.loc["TOT", "r [%]"] = (
-            (df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"])
-            / df_comp.loc["TOT", f"c_F [{self.currency}/GJ]"]
-        ) * 100
+            ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - c_F_tot) / c_F_tot) * 100 if c_F_tot else np.nan
+        )
 
         # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf
         df_comp["r [%]"] = df_comp["r [%]"].where(df_comp["r [%]"].abs() <= 1e8, np.inf)
@@ -2397,16 +2547,9 @@ class ExergoeconomicAnalysis:
         # -------------------------
         # Add cost columns to material connections.
         # -------------------------
-        # Uppercase cost columns (in currency/h)
-        C_T_list = []
-        C_M_list = []
-        C_CH_list = []
-        C_TOT_list = []
-        # Lowercase cost columns (in {currency}/GJ_ex)
-        c_T_list = []
-        c_M_list = []
-        c_CH_list = []
-        c_TOT_list = []
+        # One column pair per cost variable of a material stream, plus the total.
+        labels = (*self.cost_labels, "TOT")
+        columns = {label: [] for label in labels}
 
         # Create set of valid component names
         valid_components = {comp.name for comp in self.components.values()}
@@ -2420,61 +2563,30 @@ class ExergoeconomicAnalysis:
                 conn_data.get("source_component") in valid_components
                 or conn_data.get("target_component") in valid_components
             )
-            if not is_part_of_the_system:
-                # Skip this connection
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                # ... append nan for all other lists
-                continue
-
             kind = conn_data.get("kind", None)
-            if kind == "material":
-                C_T = conn_data.get("C_T", None)
-                C_M = conn_data.get("C_M", None)
-                C_CH = conn_data.get("C_CH", None)
-                C_TOT = conn_data.get("C_TOT", None)
-                c_T = conn_data.get("c_T", None)
-                c_M = conn_data.get("c_M", None)
-                c_CH = conn_data.get("c_CH", None)
-                c_TOT = conn_data.get("c_TOT", None)
-                C_T_list.append(C_T * 3600 if C_T is not None else None)
-                C_M_list.append(C_M * 3600 if C_M is not None else None)
-                C_CH_list.append(C_CH * 3600 if C_CH is not None else None)
-                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
-                c_T_list.append(c_T * 1e9 if c_T is not None else None)
-                c_M_list.append(c_M * 1e9 if c_M is not None else None)
-                c_CH_list.append(c_CH * 1e9 if c_CH is not None else None)
-                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
-            elif kind in {"heat", "power"}:
-                # For non-material streams in the material table, only C^TOT is defined.
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                C_CH_list.append(np.nan)
-                c_T_list.append(np.nan)
-                c_M_list.append(np.nan)
-                c_CH_list.append(np.nan)
-                C_TOT = conn_data.get("C_TOT", None)
-                C_TOT_list.append(C_TOT * 3600 if C_TOT is not None else None)
-                c_TOT = conn_data.get("C_TOT", None)
-                c_TOT_list.append(c_TOT * 1e9 if c_TOT is not None else None)
-            else:
-                C_T_list.append(np.nan)
-                C_M_list.append(np.nan)
-                C_CH_list.append(np.nan)
-                C_TOT_list.append(np.nan)
-                c_T_list.append(np.nan)
-                c_M_list.append(np.nan)
-                c_CH_list.append(np.nan)
-                c_TOT_list.append(np.nan)
+            for label in labels:
+                # Of a heat or power stream only the total cost is defined.
+                if (
+                    not is_part_of_the_system
+                    or kind not in {"material", "heat", "power"}
+                    or (kind != "material" and label != "TOT")
+                ):
+                    value = None
+                else:
+                    value = conn_data.get(f"C_{label}", None), conn_data.get(f"c_{label}", None)
+                columns[label].append(
+                    (np.nan, np.nan)
+                    if value is None
+                    else (
+                        value[0] * 3600 if value[0] is not None else None,
+                        value[1] * 1e9 if value[1] is not None else None,
+                    )
+                )
 
-        df_mat[f"C^T [{self.currency}/h]"] = C_T_list
-        df_mat[f"C^M [{self.currency}/h]"] = C_M_list
-        df_mat[f"C^CH [{self.currency}/h]"] = C_CH_list
-        df_mat[f"C^TOT [{self.currency}/h]"] = C_TOT_list
-        df_mat[f"c^T [{self.currency}/GJ_ex]"] = c_T_list
-        df_mat[f"c^M [{self.currency}/GJ_ex]"] = c_M_list
-        df_mat[f"c^CH [{self.currency}/GJ_ex]"] = c_CH_list
-        df_mat[f"c^TOT [{self.currency}/GJ_ex]"] = c_TOT_list
+        for label in labels:
+            df_mat[f"C^{label} [{self.currency}/h]"] = [value[0] for value in columns[label]]
+        for label in labels:
+            df_mat[f"c^{label} [{self.currency}/GJ_ex]"] = [value[1] for value in columns[label]]
 
         # -------------------------
         # Add cost columns to non-material connections.
@@ -2518,14 +2630,8 @@ class ExergoeconomicAnalysis:
             "e^T [kJ/kg]",
             "e^M [kJ/kg]",
             "e^CH [kJ/kg]",
-            f"C^T [{self.currency}/h]",
-            f"C^M [{self.currency}/h]",
-            f"C^CH [{self.currency}/h]",
-            f"C^TOT [{self.currency}/h]",
-            f"c^T [{self.currency}/GJ_ex]",
-            f"c^M [{self.currency}/GJ_ex]",
-            f"c^CH [{self.currency}/GJ_ex]",
-            f"c^TOT [{self.currency}/GJ_ex]",
+            *[f"C^{label} [{self.currency}/h]" for label in labels],
+            *[f"c^{label} [{self.currency}/GJ_ex]" for label in labels],
         ]
         df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
@@ -2689,137 +2795,921 @@ class ExergoeconomicAnalysis:
 
 
 class EconomicAnalysis:
-    """
-    Perform economic analysis of a power plant using the total revenue requirement method.
+    r"""
+    Turn the purchased equipment costs of a plant into the cost rates of its components.
+
+    The method is the total revenue requirement (TRR) method of Bejan et al. :cite:`Bejan1996`. Every cost
+    factor may be given once for the whole plant or separately per component, so a heat exchanger can
+    carry a different installation effort from a motor:
+
+    .. math::
+
+        \mathrm{PEC}_{\mathrm{base},j} = \mathrm{PEC}_j \cdot \frac{I_{y_\mathrm{base}}}{I_{y_{\mathrm{ref},j}}}
+        \qquad
+        \mathrm{TCI}_j = f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{base},j}
+
+    .. math::
+
+        \dot{Z}^\mathrm{CC}_j = \frac{\mathrm{TCI}_j \cdot \mathrm{CRF}}{\tau}
+        \qquad
+        \dot{Z}^\mathrm{OM}_j = \frac{\mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{base},j}
+        \cdot \mathrm{CELF}}{\tau}
+        \qquad
+        \dot{Z}_j = \dot{Z}^\mathrm{CC}_j + \dot{Z}^\mathrm{OM}_j
+
+    A cost from an earlier year is carried to the base year with a plant cost index,
+    :math:`I`, whose values are an input to the analysis.
+
+    The cost of the streams entering the plant is levelized the same way. A stream bought at
+    :math:`c_0` and escalating at its own nominal rate enters the exergoeconomic analysis at
+
+    .. math::
+
+        c_\mathrm{L} = c_0 \cdot \mathrm{CELF}(r_{\mathrm{n},\mathrm{fuel}})
+
+    so the cost of the fuel and the cost of the equipment are levelized over the same lifetime and
+    the specific cost of the product is a levelized cost too.
+
+    A purchased equipment cost may also be scaled from the cost of a reference component of the same
+    type but a different size, taken from the literature or from a manufacturer, with the six-tenths
+    rule of cost estimation:
+
+    .. math::
+
+        \mathrm{PEC}_j = \mathrm{PEC}_{\mathrm{ref},j}
+        \left(\frac{X_j}{X_{\mathrm{ref},j}}\right)^{\alpha_j}
+
+    The cost of the reference component is given at the price level of the ``reference_year`` of the
+    component and carried to the base year with the plant cost index like any other.
 
     Parameters
     ----------
-    pars : dict
-        Dictionary containing the following keys:
-        - tau: Full load hours of the plant (hours/year)
-        - i_eff: Effective rate of return (yearly based)
-        - n: Lifetime of the plant (years)
-        - r_n: Nominal escalation rate (yearly based)
-
-    Attributes
-    ----------
-    tau : float
-        Full load hours of the plant (hours/year).
+    PEC : dict
+        Purchased equipment cost of every component, as ``{"<component>": cost}``, in the currency of
+        the analysis and at the price level of its ``reference_year``. Instead of a cost, an entry may be
+        ``{"PEC_ref": cost of the reference, "size_ref": size of the reference, "size": size,
+        "exponent": alpha}`` to scale the cost of a reference component of the same type. ``size``
+        and ``size_ref`` are in the same units. Instead of ``size``, ``size_by`` names the size the
+        reference is given in, one of :func:`exerpy.costing.quantities`, for example ``"power"`` in
+        W or ``"area"`` in m², and ``exergy_analysis`` provides the model it is read from with
+        :func:`exerpy.costing.size`; an area takes ``exchanger_type`` (shell-and-tube by default)
+        and ``U``. ``exponent`` is 0.6 by default.
     i_eff : float
-        Effective rate of return (yearly based).
+        Effective rate of return :math:`i_\mathrm{eff}`, per year.
     n : int
-        Lifetime of the plant (years).
-    r_n : float
-        Nominal escalation rate (yearly based).
+        Lifetime of the plant :math:`n`, in years.
+    tau : float
+        Operating hours of the plant :math:`\tau`, per year. It scales every cost rate.
+    f_tci : float or dict
+        Ratio of the total capital investment to the purchased equipment cost, for the whole plant or
+        per component. It covers installation, piping, instrumentation, engineering, contingency,
+        start-up and working capital.
+    omc_share : float or dict
+        First-year operating and maintenance cost as a fraction of the purchased equipment cost or of
+        the total capital investment, see ``omc_basis``, for the whole plant or per component.
+    omc_basis : str, optional
+        Whether ``omc_share`` is a fraction of the purchased equipment cost, ``"PEC"``, or of the
+        total capital investment, ``"TCI"``. The two differ by the installation factor, so a share
+        meant for one basis is badly wrong on the other. Default is ``"PEC"``.
+    reference_year : int or dict, optional
+        Year whose price level a purchased equipment cost is given in, for the whole plant or per
+        component. Default is the base year, so nothing is escalated and no cost index is
+        needed.
+    base_year : int, optional
+        Year every cost is carried to. Required as soon as any cost comes from a different year.
+    cost_index : dict, optional
+        Plant cost index per year, as ``{year: index}``. Only the ratio of two entries is used, so
+        any consistent normalization works. Required as soon as costs come from more than one year.
+        Where it does not reach the base year, the remaining years are bridged with ``r_n``.
+    fuel_costs : dict, optional
+        Specific cost of every stream entering the plant, as
+        ``{"<connection>": {"c": value, "r_n": rate, "basis": "exergy" | "energy"}}``. ``c`` is in
+        currency per GJ at the price level of the base year, ``r_n`` is the nominal escalation
+        rate of that cost per year and defaults to that of the operating and maintenance cost,
+        and ``basis`` says whether ``c`` is per unit of exergy (the default) or per unit of energy.
+        A cost on the energy basis is converted with the flows of the stream, which are read from the
+        exergy analysis unless the entry gives ``energy_flow`` and ``exergy_flow`` itself. An entry
+        may be a plain number instead of a dictionary, which is read as its specific cost with
+        everything else left at its default, so a stream entering free of charge is ``0.0``.
+    r_n : float, optional
+        Nominal escalation rate of the operating and maintenance cost :math:`r_\mathrm{n}`, per year.
+        Default is 0.05.
+    currency : str, optional
+        Currency of the costs, used in the results tables. Default is "EUR".
+    exergy_analysis : ExergyAnalysis, optional
+        The analysed plant, to read the sizes a scaled purchased equipment cost leaves out.
+
+    Raises
+    ------
+    ValueError
+        If a required parameter is missing or not positive, if a per-component factor names a
+        component without a purchased equipment cost, if the cost index does not cover a year that
+        is used, or if a scaled cost lacks a value of its reference or its size.
+
+    See Also
+    --------
+    EconomicAnalysis.from_json : Read the same assumptions from a file instead.
+    EconomicAnalysis.compute_costs : The cost rates and the stream costs in one dictionary, ready
+        for :meth:`ExergoeconomicAnalysis.run`.
+
+    Examples
+    --------
+    >>> from exerpy import EconomicAnalysis
+    >>> eco = EconomicAnalysis(
+    ...     PEC={"COMP": 300000.0, "COND": 120000.0},
+    ...     i_eff=0.12, n=20, tau=8000, f_tci=6.32, omc_share=0.015,
+    ... )
+    >>> round(eco.compute_crf(), 5)
+    0.13388
+    >>> {name: round(value, 3) for name, value in eco.compute_z().items()}
+    {'COMP_Z': 32.548, 'COND_Z': 13.019}
+
+    A cost from an earlier year is carried to the base year:
+
+    >>> eco = EconomicAnalysis(
+    ...     PEC={"COMP": 300000.0}, i_eff=0.12, n=20, tau=8000, f_tci=6.32, omc_share=0.015,
+    ...     reference_year=2021, base_year=2024, cost_index={2021: 100.0, 2024: 125.0},
+    ... )
+    >>> round(eco.base_PEC["COMP"], 1)
+    375000.0
+
+    A heat exchanger of 120 m² scaled from a reference of 80 m² that cost 100 000 in 2021:
+
+    >>> eco = EconomicAnalysis(
+    ...     PEC={"COND": {"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0}},
+    ...     i_eff=0.12, n=20, tau=8000, f_tci=6.32, omc_share=0.015,
+    ...     reference_year=2021, base_year=2024, cost_index={2021: 100.0, 2024: 125.0},
+    ... )
+    >>> round(eco.PEC["COND"], 1), round(eco.base_PEC["COND"], 1)
+    (127542.5, 159428.1)
     """
 
-    def __init__(self, pars):
-        """
-        Initialize the EconomicAnalysis with plant parameters provided in a dictionary.
+    def __init__(
+        self,
+        PEC,
+        i_eff,
+        n,
+        tau,
+        f_tci,
+        omc_share,
+        reference_year=None,
+        base_year=None,
+        cost_index=None,
+        fuel_costs=None,
+        omc_basis="PEC",
+        r_n=0.05,
+        currency="EUR",
+        exergy_analysis=None,
+    ):
+        if not PEC:
+            raise ValueError("The purchased equipment cost of at least one component is required.")
+        self.scaling = {}
+        resolved = {}
+        for name, cost in PEC.items():
+            if isinstance(cost, dict):
+                self.scaling[name] = self._scaled_cost(name, cost, exergy_analysis)
+                cost = self.scaling[name]["PEC"]
+            if cost is None or cost < 0:
+                raise ValueError(f"The purchased equipment cost of '{name}' is not a positive number: {cost}.")
+            resolved[name] = cost
+        for label, value in (("i_eff", i_eff), ("n", n), ("tau", tau)):
+            if value is None or value <= 0:
+                raise ValueError(f"'{label}' has to be a positive number, got {value}.")
+
+        self.PEC = resolved
+        self.i_eff = i_eff
+        self.n = n
+        self.tau = tau
+        self.r_n = r_n
+        self.currency = currency
+        if omc_basis not in ("PEC", "TCI"):
+            raise ValueError(f"'omc_basis' is neither 'PEC' nor 'TCI': {omc_basis}.")
+        self.omc_basis = omc_basis
+        self.f_tci = self._per_component(f_tci, "f_tci", positive=True)
+        self.omc_share = self._per_component(omc_share, "omc_share")
+
+        self.base_year = base_year
+        self.cost_index = dict(cost_index) if cost_index else {}
+        self.reference_year = self._per_component(
+            reference_year if reference_year is not None else base_year, "reference_year", allow_none=True
+        )
+        self._check_years()
+
+        # A stream cost may be a plain number, the same shorthand the JSON file allows.
+        self.fuel_costs = {
+            name: dict(spec) if isinstance(spec, dict) else {"c": spec} for name, spec in (fuel_costs or {}).items()
+        }
+        for name, spec in self.fuel_costs.items():
+            if spec.get("basis", "exergy") not in ("exergy", "energy"):
+                raise ValueError(
+                    f"The cost basis of stream '{name}' is neither 'exergy' nor 'energy': {spec['basis']}."
+                )
+
+    @staticmethod
+    def _scaled_cost(name, spec, exergy_analysis=None):
+        """Scale the purchased equipment cost of a reference component of the same type to the size of this one."""
+        unknown = set(spec) - SCALING_KEYS
+        if unknown:
+            raise ValueError(f"The scaled cost of '{name}' has keys that are not scaling inputs: {sorted(unknown)}.")
+        size, size_by = spec.get("size"), spec.get("size_by")
+        if size is None:
+            if size_by is None or exergy_analysis is None or name not in exergy_analysis.components:
+                raise ValueError(
+                    f"The scaled cost of '{name}' needs its 'size', or 'size_by' and the exergy analysis to read "
+                    "it from the model."
+                )
+            from exerpy import costing
+
+            size = costing.size(
+                exergy_analysis.components[name],
+                size_by,
+                U=spec.get("U"),
+                exchanger_type=spec.get("exchanger_type", "shell_and_tube"),
+            )
+            if size is None:
+                raise ValueError(f"The {size_by} of '{name}' does not follow from the model; give it as 'size'.")
+        exponent = spec.get("exponent", SCALING_EXPONENT)
+        for label, value in (("PEC_ref", spec.get("PEC_ref")), ("size_ref", spec.get("size_ref")), ("size", size)):
+            if value is None or value <= 0:
+                raise ValueError(f"'{label}' of the scaled cost of '{name}' is not a positive number: {value}.")
+        if exponent is None or exponent <= 0:
+            raise ValueError(f"'exponent' of the scaled cost of '{name}' is not a positive number: {exponent}.")
+        cost = spec["PEC_ref"] * (size / spec["size_ref"]) ** exponent
+        return {
+            "PEC_ref": spec["PEC_ref"],
+            "size_ref": spec["size_ref"],
+            "size": size,
+            "size_by": size_by,
+            "exponent": exponent,
+            "PEC": cost,
+        }
+
+    @classmethod
+    def from_json(cls, path, exergy_analysis=None):
+        r"""
+        Read the cost assumptions of a plant from a JSON file.
+
+        The file keeps everything about one component in one entry, so the purchased equipment cost,
+        its reference year and the factors that belong to it cannot drift apart:
+
+        .. code-block:: json
+
+            {
+                "i_eff": 0.12,
+                "n": 20,
+                "tau": 6000,
+                "base_year": 2025,
+                "currency": "EUR",
+                "f_tci": 6.32,
+                "omc_share": 0.015,
+                "cost_index": {"2021": 112.0, "2025": 143.0},
+                "components": {
+                    "COMP": {"PEC": 300000.0, "reference_year": 2021, "f_tci": 4.2, "omc_share": 0.03},
+                    "COND": {"PEC_ref": 100000.0, "size_ref": 80.0, "size": 120.0, "reference_year": 2021},
+                    "VAL": 5000.0
+                },
+                "fuel_costs": {"e1": {"c": 30.0, "r_n": 0.04}, "11": 0.0}
+            }
+
+        A value given at the top level applies to the whole plant, and a component that names the
+        same key overrides it, so only what differs has to be written out. A component entry may be
+        a plain number instead of an object, and so may an entry of ``fuel_costs``; both are read as
+        the cost with everything else left at its default. A component scaled from a reference gives
+        ``PEC_ref``, ``size_ref`` and ``size`` or ``size_by``, and optionally ``exponent``,
+        ``exchanger_type`` and ``U``, instead of ``PEC``, see :class:`EconomicAnalysis`.
 
         Parameters
         ----------
-        pars : dict
-            Dictionary containing the following keys:
-            - tau: Full load hours of the plant (hours/year)
-            - i_eff: Effective rate of return (yearly based)
-            - n: Lifetime of the plant (years)
-            - r_n: Nominal escalation rate (yearly based)
+        path : str
+            Path to the JSON file.
+        exergy_analysis : ExergyAnalysis, optional
+            The analysed plant, to read the sizes a scaled cost leaves out.
+
+        Returns
+        -------
+        EconomicAnalysis
+            The analysis described by the file.
+
+        Raises
+        ------
+        ValueError
+            If the file has no components, if a component has no purchased equipment cost, or if a
+            key is not one the class knows.
+
+        See Also
+        --------
+        EconomicAnalysis.from_dict : The same from a dictionary already in memory.
         """
-        self.tau = pars["tau"]
-        self.i_eff = pars["i_eff"]
-        self.n = pars["n"]
-        self.r_n = pars["r_n"]
+        with open(path, encoding="utf-8") as file:
+            data = json.load(file)
+        return cls.from_dict(data, exergy_analysis=exergy_analysis)
+
+    @classmethod
+    def from_dict(cls, data, exergy_analysis=None):
+        """
+        Read the cost assumptions of a plant from a dictionary.
+
+        The dictionary has the structure of the file :meth:`from_json` reads, so the same document
+        can be kept in memory, written to a file or read back from one.
+
+        Parameters
+        ----------
+        data : dict
+            The cost assumptions, structured as in :meth:`from_json`.
+        exergy_analysis : ExergyAnalysis, optional
+            The analysed plant, to read the sizes a scaled cost leaves out.
+
+        Returns
+        -------
+        EconomicAnalysis
+            The analysis described by the dictionary.
+
+        Raises
+        ------
+        ValueError
+            If the dictionary has no components, if a component has no purchased equipment cost, or
+            if a key is not one the class knows.
+        """
+        plant_keys = {
+            "i_eff",
+            "n",
+            "tau",
+            "f_tci",
+            "omc_share",
+            "omc_basis",
+            "reference_year",
+            "base_year",
+            "r_n",
+            "currency",
+        }
+        unknown = set(data) - plant_keys - {"components", "cost_index", "fuel_costs"}
+        if unknown:
+            raise ValueError(f"The cost file has keys that are not cost assumptions: {sorted(unknown)}.")
+
+        components = data.get("components")
+        if not components:
+            raise ValueError("The cost file describes no components.")
+
+        component_keys = {"PEC", "reference_year", "f_tci", "omc_share"} | SCALING_KEYS
+        PEC, per_component = {}, {"reference_year": {}, "f_tci": {}, "omc_share": {}}
+        for name, entry in components.items():
+            if not isinstance(entry, dict):
+                entry = {"PEC": entry}
+            unknown = set(entry) - component_keys
+            if unknown:
+                raise ValueError(f"Component '{name}' has keys that are not cost assumptions: {sorted(unknown)}.")
+            scaling = {key: entry[key] for key in SCALING_KEYS if key in entry}
+            if "PEC" in entry and scaling:
+                raise ValueError(f"Component '{name}' gives both a purchased equipment cost and a scaled one.")
+            if "PEC" not in entry and not scaling:
+                raise ValueError(f"Component '{name}' has no purchased equipment cost.")
+            PEC[name] = entry.get("PEC", scaling)
+            for key in per_component:
+                per_component[key][name] = entry.get(key, data.get(key))
+
+        fuel_costs = {}
+        for name, entry in (data.get("fuel_costs") or {}).items():
+            fuel_costs[name] = entry if isinstance(entry, dict) else {"c": entry}
+
+        cost_index = {int(year): value for year, value in (data.get("cost_index") or {}).items()}
+
+        return cls(
+            PEC=PEC,
+            i_eff=data.get("i_eff"),
+            n=data.get("n"),
+            tau=data.get("tau"),
+            f_tci=per_component["f_tci"],
+            omc_share=per_component["omc_share"],
+            reference_year=per_component["reference_year"],
+            base_year=data.get("base_year"),
+            cost_index=cost_index,
+            fuel_costs=fuel_costs,
+            omc_basis=data.get("omc_basis", "PEC"),
+            r_n=data.get("r_n", 0.05),
+            currency=data.get("currency", "EUR"),
+            exergy_analysis=exergy_analysis,
+        )
+
+    def _per_component(self, value, label, positive=False, allow_none=False):
+        """Spread one value over all components, or validate a value given per component."""
+        if isinstance(value, dict):
+            unknown = set(value) - set(self.PEC)
+            if unknown:
+                raise ValueError(f"'{label}' names components without a purchased equipment cost: {sorted(unknown)}.")
+            resolved = {name: value.get(name) for name in self.PEC}
+        else:
+            resolved = dict.fromkeys(self.PEC, value)
+        for name, entry in resolved.items():
+            if entry is None and not allow_none:
+                raise ValueError(f"'{label}' is missing for component '{name}'.")
+            if entry is not None and (entry < 0 or (positive and entry == 0)):
+                raise ValueError(f"'{label}' of component '{name}' is not a positive number: {entry}.")
+        return resolved
+
+    def _check_years(self):
+        """Every reference year has to be reachable from the base year; say how the gaps are bridged."""
+        years = {year for year in self.reference_year.values() if year is not None}
+        if not years or years == {self.base_year}:
+            return
+        if self.base_year is None:
+            raise ValueError("Costs come from more than one year, so 'base_year' is required.")
+        if not self.cost_index:
+            logger.warning(
+                f"No plant cost index is given, so the costs from {sorted(years)} are carried to "
+                f"{self.base_year} with the nominal escalation rate r_n = {self.r_n} alone. A published "
+                f"index is the better basis wherever one exists."
+            )
+            return
+        first, last = min(self.cost_index), max(self.cost_index)
+        bridged = set()
+        for year in {*years, self.base_year}:
+            self.escalation_factor(year)
+            if year < first:
+                bridged.update(range(year, first))
+            if year > last:
+                bridged.update(range(last + 1, year + 1))
+        if bridged:
+            logger.warning(
+                f"The cost index covers {first}–{last}; the years {min(bridged)}–{max(bridged)} are bridged "
+                f"with the nominal escalation rate r_n = {self.r_n}. A published index is the better basis "
+                f"wherever one exists."
+            )
+
+    def escalation_factor(self, year):
+        r"""
+        Return the factor that carries a cost from the price level of a year to that of the base year.
+
+        Within the years the plant cost index covers, the factor is the ratio of the two index values.
+        Outside of them, before the first or after the last entry, every year is bridged with the
+        nominal escalation rate, forward or backward:
+
+        .. math::
+
+            f = \frac{I_{\bar{y}_\mathrm{base}}}{I_{\bar{y}}}
+            \cdot \left(1 + r_\mathrm{n}\right)^{(\bar{y} - y) + (y_\mathrm{base} - \bar{y}_\mathrm{base})}
+
+        where :math:`\bar{y}` is a year clamped to the range of the index. Without an index, the rate
+        bridges the whole span.
+
+        Parameters
+        ----------
+        year : int or None
+            The year the cost is given in. ``None`` means the base year.
+
+        Returns
+        -------
+        float
+
+        Raises
+        ------
+        ValueError
+            If a year inside the range of the index has no value, which no rate can bridge.
+        """
+        if year is None or self.base_year is None or year == self.base_year:
+            return 1.0
+        if not self.cost_index:
+            return (1 + self.r_n) ** (self.base_year - year)
+        first, last = min(self.cost_index), max(self.cost_index)
+        clamped = min(max(year, first), last)
+        clamped_base = min(max(self.base_year, first), last)
+        for needed in (clamped, clamped_base):
+            if needed not in self.cost_index:
+                raise ValueError(f"The cost index has no value for the year {needed}.")
+        bridged = (clamped - year) + (self.base_year - clamped_base)
+        return self.cost_index[clamped_base] / self.cost_index[clamped] * (1 + self.r_n) ** bridged
+
+    @property
+    def base_PEC(self):
+        r"""Purchased equipment cost of every component at the price level of the base year.
+
+        Every cost is carried from its year to the base year with :meth:`escalation_factor`:
+        with the plant cost index where it covers the years, with the nominal escalation rate beyond
+        it, since an index is published for the past and not for the future.
+
+        .. math::
+
+            \mathrm{PEC}_{\mathrm{base},j} = \mathrm{PEC}_j \cdot f\left(y_{\mathrm{ref},j}\right)
+        """
+        return {name: cost * self.escalation_factor(self.reference_year.get(name)) for name, cost in self.PEC.items()}
+
+    @property
+    def total_PEC(self):
+        """Purchased equipment cost of the whole plant at the price level of the base year."""
+        return sum(self.base_PEC.values())
+
+    @property
+    def TCI(self):
+        r"""Total capital investment, :math:`\sum_j f_{\mathrm{TCI},j}\,\mathrm{PEC}_{\mathrm{base},j}`."""
+        base = self.base_PEC
+        return sum(self.f_tci[name] * cost for name, cost in base.items())
 
     def compute_crf(self):
-        """
-        Compute the Capital Recovery Factor (CRF) using the effective rate of return.
+        r"""
+        Compute the capital recovery factor using the effective rate of return.
+
+        The factor turns a single investment at the start of the plant's life into the equal yearly
+        payment that repays it over the plant's lifetime:
+
+        .. math::
+
+            \mathrm{CRF} = \frac{i_\mathrm{eff}\,(1 + i_\mathrm{eff})^{n}}
+                                {(1 + i_\mathrm{eff})^{n} - 1}
 
         Returns
         -------
         float
             The capital recovery factor.
-
-        Notes
-        -----
-        CRF = i_eff * (1 + i_eff)**n / ((1 + i_eff)**n - 1)
         """
         return self.i_eff * (1 + self.i_eff) ** self.n / ((1 + self.i_eff) ** self.n - 1)
 
-    def compute_celf(self):
-        """
-        Compute the Cost Escalation Levelization Factor (CELF) for repeating expenditures.
+    def compute_celf(self, r_n=None):
+        r"""
+        Compute the constant escalation levelization factor for a repeating expenditure.
+
+        An expenditure that repeats every year and escalates at the constant nominal rate
+        :math:`r_\mathrm{n}` is an uneven series of payments. The factor relates its value at the
+        beginning of the first year, :math:`P_0`, to the equal yearly payment that replaces it
+        :cite:`Bejan1996`:
+
+        .. math::
+
+            \mathrm{CELF} = \frac{A}{P_0}
+            = \frac{k\,\left(1 - k^{n}\right)}{1 - k} \cdot \mathrm{CRF}
+            \qquad
+            k = \frac{1 + r_\mathrm{n}}{1 + i_\mathrm{eff}}
+
+        The cost the analysis is given is that :math:`P_0`, at the price level of the base year;
+        the expenditure of the first year of operation is :math:`P_0 \cdot (1 + r_\mathrm{n})`. An
+        escalation rate equal to the rate of return makes :math:`k = 1`, and the factor is then
+        :math:`n \cdot \mathrm{CRF}`.
+
+        Parameters
+        ----------
+        r_n : float, optional
+            Nominal escalation rate to use. Default is that of the operating and maintenance cost.
 
         Returns
         -------
         float
-            The cost escalation levelization factor.
-
-        Notes
-        -----
-        k = (1 + r_n) / (1 + i_eff)
-        CELF = ((1 - k**n) / (1 - k)) * CRF
+            The constant escalation levelization factor.
         """
-        k = (1 + self.r_n) / (1 + self.i_eff)
-        return (1 - k**self.n) / (1 - k) * self.compute_crf()
+        rate = self.r_n if r_n is None else r_n
+        k = (1 + rate) / (1 + self.i_eff)
+        if k == 1:
+            return self.n * self.compute_crf()
+        return k * (1 - k**self.n) / (1 - k) * self.compute_crf()
 
-    def compute_levelized_investment_cost(self, total_PEC):
-        """
-        Compute the levelized investment cost (annualized investment cost).
+    def levelized_carrying_charges(self):
+        r"""
+        Compute the levelized carrying charges of the plant.
 
-        Parameters
-        ----------
-        total_PEC : float
-            Total purchasing equipment cost (PEC) across all components.
+        .. math::
+
+            \mathrm{CC}_\mathrm{L} = \mathrm{TCI} \cdot \mathrm{CRF}
 
         Returns
         -------
         float
-            Levelized investment cost (currency/year).
+            Levelized carrying charges in currency per year.
         """
-        return total_PEC * self.compute_crf()
+        return self.TCI * self.compute_crf()
 
-    def compute_component_costs(self, PEC_list, OMC_relative):
-        """
-        Compute the cost rates for each component.
+    def first_year_om_costs(self):
+        r"""
+        Compute the operating and maintenance cost of the first year, per component.
 
-        Parameters
-        ----------
-        PEC_list : list of float
-            The purchasing equipment cost (PEC) of each component (in currency).
-        OMC_relative : list of float
-            For each component, the first-year OM cost as a fraction of its PEC.
+        The share is taken of the purchased equipment cost or of the total capital investment,
+        whichever ``omc_basis`` names. The two differ by the installation factor, so a share meant
+        for one basis understates or overstates the cost badly when applied to the other:
+
+        .. math::
+
+            \mathrm{OMC}_{0,j} = \mathrm{omc}_j \cdot \mathrm{PEC}_{\mathrm{base},j}
+            \qquad \text{or} \qquad
+            \mathrm{OMC}_{0,j} = \mathrm{omc}_j \cdot f_{\mathrm{TCI},j}
+            \cdot \mathrm{PEC}_{\mathrm{base},j}
 
         Returns
         -------
-        tuple
-            (Z_CC, Z_OM, Z_total) where:
-            - Z_CC: List of investment cost rates per component (currency/hour)
-            - Z_OM: List of operating and maintenance cost rates per component (currency/hour)
-            - Z_total: List of total cost rates per component (currency/hour)
+        dict
+            The first-year operating and maintenance cost of every component, in currency per year.
         """
-        total_PEC = sum(PEC_list)
-        # Levelize total investment cost and allocate proportionally.
-        levelized_investment_cost = self.compute_levelized_investment_cost(total_PEC)
-        if total_PEC == 0:
-            Z_CC = [0 for _ in PEC_list]
-        else:
-            Z_CC = [(levelized_investment_cost * pec / total_PEC) / self.tau for pec in PEC_list]
+        base = self.base_PEC
+        if self.omc_basis == "TCI":
+            return {name: self.omc_share[name] * self.f_tci[name] * cost for name, cost in base.items()}
+        return {name: self.omc_share[name] * cost for name, cost in base.items()}
 
-        # Compute first-year OMC for each component as a fraction of PEC.
-        first_year_OMC = [frac * pec for frac, pec in zip(OMC_relative, PEC_list, strict=False)]
-        total_first_year_OMC = sum(first_year_OMC)
+    def levelized_om_costs(self):
+        r"""
+        Compute the levelized operating and maintenance cost of the plant.
 
-        # Levelize the total operating and maintenance cost.
-        celf_value = self.compute_celf()
-        levelized_om_cost = total_first_year_OMC * celf_value
+        .. math::
 
-        # Allocate the levelized OM cost to each component in proportion to its PEC.
-        if total_PEC == 0:
-            Z_OM = [0 for _ in PEC_list]
-        else:
-            Z_OM = [(levelized_om_cost * pec / total_PEC) / self.tau for pec in PEC_list]
+            \mathrm{OMC}_\mathrm{L} = \mathrm{CELF}(r_\mathrm{n}) \cdot \sum_j \mathrm{OMC}_{0,j}
 
-        # Total cost rate per component.
-        Z_total = [zcc + zom for zcc, zom in zip(Z_CC, Z_OM, strict=False)]
-        return Z_CC, Z_OM, Z_total
+        Returns
+        -------
+        float
+            Levelized operating and maintenance cost in currency per year.
+        """
+        return self.compute_celf() * sum(self.first_year_om_costs().values())
+
+    def compute_c(self, exergy_analysis=None):
+        r"""
+        Return the levelized specific cost of every stream entering the plant.
+
+        The cost of a stream bought over the lifetime of the plant escalates, so the cost the
+        exergoeconomic analysis works with is the levelized one:
+
+        .. math::
+
+            c_\mathrm{L} = c_0 \cdot \mathrm{CELF}(r_{\mathrm{n},\mathrm{fuel}})
+
+        A cost given per unit of energy is converted to a cost per unit of exergy with the ratio of
+        the two flows of that stream, since the exergoeconomic analysis costs exergy.
+
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis, optional
+            The analysis the costs are meant for. When it is given, every stream entering the plant
+            has to have a cost, and a cost given for a stream that does not enter the plant is an
+            error. The energy basis needs it as well, to read the flows of the stream.
+
+        Returns
+        -------
+        dict
+            ``{"<connection>_c": specific cost}`` in currency per GJ.
+
+        Raises
+        ------
+        ValueError
+            If the streams of the analysis and the given costs do not match, or if a cost on the
+            energy basis belongs to a stream whose energy flow is unknown.
+        """
+        if exergy_analysis is not None:
+            entering = self._entering_streams(exergy_analysis)
+            missing = set(entering) - set(self.fuel_costs)
+            if missing:
+                raise ValueError(
+                    f"No cost for the streams {sorted(missing)} entering the plant. A stream entering "
+                    f"free of charge is given a cost of zero."
+                )
+            unknown = set(self.fuel_costs) - set(entering)
+            if unknown:
+                raise ValueError(f"A cost is given for streams that do not enter the plant: {sorted(unknown)}.")
+
+        costs = {}
+        for name, spec in self.fuel_costs.items():
+            c_0 = spec.get("c", 0.0)
+            levelized = c_0 * self.compute_celf(spec.get("r_n", self.r_n))
+            if spec.get("basis", "exergy") == "energy":
+                levelized *= self._energy_to_exergy(name, spec, exergy_analysis)
+            costs[f"{name}_c"] = levelized
+        return costs
+
+    @staticmethod
+    def _entering_streams(exergy_analysis):
+        """Names of the streams that cross the system boundary into the plant and need a cost."""
+        components = getattr(exergy_analysis, "components", {})
+        entering = {}
+        for name, conn in getattr(exergy_analysis, "connections", {}).items():
+            source, target = conn.get("source_component"), conn.get("target_component")
+            enters = (source is None or source not in components) and target in components
+            if enters and conn.get("kind", "material") in ("material", "heat", "power"):
+                entering[name] = conn
+        return entering
+
+    def _energy_to_exergy(self, name, spec, exergy_analysis):
+        """Ratio of energy to exergy of a stream, to convert a cost given per unit of energy."""
+        energy = spec.get("energy_flow")
+        exergy = spec.get("exergy_flow")
+        if energy is None or exergy is None:
+            if exergy_analysis is None:
+                raise ValueError(
+                    f"The cost of stream '{name}' is given per unit of energy, so the exergy analysis "
+                    f"is needed to read its flows."
+                )
+            conn = getattr(exergy_analysis, "connections", {}).get(name, {})
+            energy = conn.get("energy_flow") if energy is None else energy
+            exergy = conn.get("E") if exergy is None else exergy
+        if not energy or not exergy:
+            raise ValueError(
+                f"The cost of stream '{name}' is given per unit of energy, but its energy flow is not "
+                f"known. Give 'energy_flow' and 'exergy_flow' in its entry, or use the exergy basis."
+            )
+        return energy / exergy
+
+    def levelized_fuel_costs(self, exergy_analysis=None):
+        r"""
+        Compute the levelized cost of the streams entering the plant.
+
+        .. math::
+
+            \mathrm{FC}_\mathrm{L} = \tau \cdot \sum_i c_{\mathrm{L},i} \cdot \dot{E}_i
+
+        Returns
+        -------
+        float
+            Levelized cost of the entering streams in currency per year, or 0.0 when no stream cost
+            is given.
+        """
+        if not self.fuel_costs or exergy_analysis is None:
+            return 0.0
+        connections = getattr(exergy_analysis, "connections", {})
+        costs = self.compute_c()
+        total = 0.0
+        for name in self.fuel_costs:
+            exergy = connections.get(name, {}).get("E") or 0.0
+            total += costs[f"{name}_c"] * 1e-9 * exergy * 3600
+        return total * self.tau
+
+    def total_revenue_requirement(self, exergy_analysis=None):
+        r"""
+        Compute the levelized total revenue requirement of the plant.
+
+        .. math::
+
+            \mathrm{TRR}_\mathrm{L} = \mathrm{CC}_\mathrm{L} + \mathrm{OMC}_\mathrm{L}
+            + \mathrm{FC}_\mathrm{L}
+
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis, optional
+            Needed for the fuel cost, which follows from the exergy of the entering streams. Without
+            it the fuel cost is left out and the sum is the capital and the operating cost alone.
+
+        Returns
+        -------
+        float
+            Levelized total revenue requirement in currency per year.
+        """
+        return (
+            self.levelized_carrying_charges() + self.levelized_om_costs() + self.levelized_fuel_costs(exergy_analysis)
+        )
+
+    def compute_component_costs(self):
+        r"""
+        Compute the cost rate of every component, split into its investment and its O&M share.
+
+        Each component carries its own investment and its own operating cost, so a component whose
+        installation effort or maintenance differs from the plant average gets its own cost rate:
+
+        .. math::
+
+            \dot{Z}^\mathrm{CC}_{j} = \frac{f_{\mathrm{TCI},j} \cdot \mathrm{PEC}_{\mathrm{base},j}
+            \cdot \mathrm{CRF}}{\tau}
+            \qquad
+            \dot{Z}^\mathrm{OM}_{j} = \frac{\mathrm{OMC}_{0,j} \cdot \mathrm{CELF}}{\tau}
+
+        Returns
+        -------
+        dict
+            ``{"<component>": (Z_CC, Z_OM, Z_total)}``, each in currency per hour.
+        """
+        base = self.base_PEC
+        crf = self.compute_crf()
+        celf = self.compute_celf()
+        om = self.first_year_om_costs()
+        costs = {}
+        for name, cost in base.items():
+            Z_CC = self.f_tci[name] * cost * crf / self.tau
+            Z_OM = om[name] * celf / self.tau
+            costs[name] = (Z_CC, Z_OM, Z_CC + Z_OM)
+        return costs
+
+    def compute_z(self, exergy_analysis=None):
+        r"""
+        Return the cost rates of the components, ready for the exergoeconomic analysis.
+
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis, optional
+            The analysis the costs are meant for. When it is given, every component of the plant that
+            needs a cost rate has to have a purchased equipment cost, and a purchased equipment cost
+            given for a component that is not in the plant, or that carries no cost balance, is an
+            error.
+
+        Returns
+        -------
+        dict
+            ``{"<component>_Z": cost rate}`` in currency per hour.
+
+        Raises
+        ------
+        ValueError
+            If the components of the analysis and the purchased equipment costs do not match.
+        """
+        if exergy_analysis is not None:
+            components = getattr(exergy_analysis, "components", {})
+            needs_z = {
+                name for name, comp in components.items() if not isinstance(comp, CycleCloser | PowerBus | Splitter)
+            }
+            exempt = set(components) - needs_z
+            missing = needs_z - set(self.PEC)
+            if missing:
+                raise ValueError(
+                    f"No purchased equipment cost for the components {sorted(missing)}. Every component "
+                    f"of the plant needs one, except {sorted(exempt)}, which carry no cost balance."
+                )
+            unknown = set(self.PEC) - set(components)
+            if unknown:
+                raise ValueError(
+                    f"A purchased equipment cost is given for components not in the plant: {sorted(unknown)}."
+                )
+            charged = set(self.PEC) & exempt
+            if charged:
+                raise ValueError(
+                    f"The components {sorted(charged)} carry no cost balance, so their purchased "
+                    f"equipment cost could not be charged to any stream. Assign it to the components "
+                    f"they belong to."
+                )
+        return {f"{name}_Z": costs[2] for name, costs in self.compute_component_costs().items()}
+
+    def compute_costs(self, exergy_analysis):
+        """
+        Return the cost rates of the components and the costs of the entering streams together.
+
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis
+            The analysis the costs are meant for; both sides are checked against it.
+
+        Returns
+        -------
+        dict
+            The dictionary to pass to :meth:`ExergoeconomicAnalysis.run`.
+        """
+        return {**self.compute_z(exergy_analysis), **self.compute_c(exergy_analysis)}
+
+    def economic_results(self, exergy_analysis=None, print_results=True):
+        """
+        Return the cost rates of the components and the levelized costs of the plant.
+
+        Parameters
+        ----------
+        exergy_analysis : ExergyAnalysis, optional
+            Needed for the levelized cost of the entering streams.
+        print_results : bool, optional
+            If True, print both tables. Default is True.
+
+        Returns
+        -------
+        tuple of pandas.DataFrame
+            The costs per component and the levelized costs of the plant.
+        """
+        costs = self.compute_component_costs()
+        base = self.base_PEC
+        df_components = pd.DataFrame(
+            {
+                name: {
+                    "reference year": str(self.reference_year.get(name) or self.base_year or "-"),
+                    f"PEC [{self.currency}]": self.PEC[name],
+                    f"PEC at base year [{self.currency}]": base[name],
+                    "f_TCI [-]": self.f_tci[name],
+                    "omc [-]": self.omc_share[name],
+                    f"Z_CC [{self.currency}/h]": Z_CC,
+                    f"Z_OM [{self.currency}/h]": Z_OM,
+                    f"Z [{self.currency}/h]": Z_tot,
+                }
+                for name, (Z_CC, Z_OM, Z_tot) in costs.items()
+            }
+        ).T
+        totals = df_components.drop(columns=["reference year", "f_TCI [-]", "omc [-]"]).sum()
+        df_components.loc["TOT"] = {**dict.fromkeys(df_components.columns, np.nan), **totals.to_dict()}
+        df_components.loc["TOT", "reference year"] = ""
+
+        fuel = self.levelized_fuel_costs(exergy_analysis)
+        rows = [
+            ("PEC", sum(self.PEC.values()), self.currency),
+            ("PEC at base year", self.total_PEC, self.currency),
+            ("TCI", self.TCI, self.currency),
+            ("CRF", self.compute_crf(), "-"),
+            ("CELF", self.compute_celf(), "-"),
+            ("CC levelized", self.levelized_carrying_charges(), f"{self.currency}/a"),
+            ("OMC levelized", self.levelized_om_costs(), f"{self.currency}/a"),
+            ("FC levelized", fuel, f"{self.currency}/a"),
+            ("TRR levelized", self.total_revenue_requirement(exergy_analysis), f"{self.currency}/a"),
+            ("sum of Z", sum(Z for _, _, Z in costs.values()), f"{self.currency}/h"),
+        ]
+        df_plant = pd.DataFrame(
+            {"value": [value for _, value, _ in rows], "unit": [unit for _, _, unit in rows]},
+            index=[label for label, _, _ in rows],
+        )
+
+        if print_results:
+            print("\nEconomic Analysis - Levelized costs of the plant:")
+            print(tabulate(df_plant, headers="keys", tablefmt="psql", floatfmt=".4f"))
+            print("\nEconomic Analysis - Cost rates of the components:")
+            print(tabulate(df_components, headers="keys", tablefmt="psql", floatfmt=".3f"))
+            if self.scaling:
+                df_scaling = pd.DataFrame(self.scaling).T.rename(
+                    columns={
+                        "PEC_ref": f"PEC_ref [{self.currency}]",
+                        "size_ref": "size_ref",
+                        "PEC": f"PEC [{self.currency}]",
+                    }
+                )
+                print("\nEconomic Analysis - Costs scaled from a reference component:")
+                print(tabulate(df_scaling, headers="keys", tablefmt="psql", floatfmt=".3f"))
+
+        return df_components, df_plant

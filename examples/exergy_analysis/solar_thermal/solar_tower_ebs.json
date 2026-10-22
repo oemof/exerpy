@@ -1,43 +1,5 @@
 {
     "components": {
-        "Condenser": {
-            "COND": {
-                "name": "COND",
-                "type": "Steam Turbine Condenser",
-                "type_index": 7,
-                "eta_s": null,
-                "eta_mech": null,
-                "eta_el": null,
-                "eta_cc": null,
-                "lamb": null,
-                "Q": 45330667.95466367,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "kA": 3575.5299357337435,
-                "kA_unit": "W / K",
-                "A": null,
-                "A_unit": "m2",
-                "mass_flow_1": 521.128205523401,
-                "mass_flow_1_unit": "kg / s",
-                "mass_flow_3": 21.9557028038227,
-                "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "energy_flow_1_unit": "W",
-                "Q_Solar": null,
-                "QEFF": null,
-                "RQINC": null,
-                "num_branches": null,
-                "exergy_results": {
-                    "E_F": null,
-                    "E_P": null,
-                    "E_D": 2131631.741332998,
-                    "epsilon": null,
-                    "y": 0.015877038552536266,
-                    "y_star": 0.020632121204206565
-                }
-            }
-        },
         "Deaerator": {
             "DEA": {
                 "name": "DEA",
@@ -149,6 +111,42 @@
                     "epsilon": 0.7423555495048636,
                     "y": 0.0011581140418457977,
                     "y_star": 0.0015049626037368954
+                }
+            },
+            "COND": {
+                "name": "COND",
+                "type": "Steam Turbine Condenser",
+                "type_index": 7,
+                "eta_s": null,
+                "eta_mech": null,
+                "eta_el": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": 45330667.95466367,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": 3575.5299357337435,
+                "kA_unit": "W / K",
+                "A": null,
+                "A_unit": "m2",
+                "mass_flow_1": 521.128205523401,
+                "mass_flow_1_unit": "kg / s",
+                "mass_flow_3": 21.9557028038227,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null,
+                "energy_flow_1_unit": "W",
+                "Q_Solar": null,
+                "QEFF": null,
+                "RQINC": null,
+                "num_branches": null,
+                "exergy_results": {
+                    "E_F": 2131631.741534682,
+                    "E_P": null,
+                    "E_D": 2131631.741534682,
+                    "epsilon": null,
+                    "y": 0.01587703855403847,
+                    "y_star": 0.02063212120615867
                 }
             },
             "ECO": {
@@ -1720,10 +1718,10 @@
         "SF_Q": {
             "name": "SF_Q",
             "kind": "heat",
-            "source_component": "SF",
-            "target_component": null,
-            "source_component_type": 121,
-            "target_component_type": null,
+            "source_component": null,
+            "target_component": "SF",
+            "source_component_type": null,
+            "target_component_type": 121,
             "source_connector": null,
             "target_connector": null,
             "energy_flow": 144000000.0,

@@ -129,7 +129,7 @@ Motor
 .. automodule:: exerpy.components.power_machines.motor
     :members:
     :undoc-members:
-        :show-inheritance:
+    :show-inheritance:
 
 
 *****

@@ -1,43 +1,5 @@
 {
     "components": {
-        "Condenser": {
-            "COND": {
-                "name": "COND",
-                "type": "Steam Turbine Condenser",
-                "type_index": 7,
-                "eta_s": null,
-                "eta_mech": null,
-                "eta_el": null,
-                "eta_cc": null,
-                "lamb": null,
-                "Q": 43499490.79606145,
-                "Q_unit": "W",
-                "P": null,
-                "P_unit": "W",
-                "kA": 3431.0928682111044,
-                "kA_unit": "W / K",
-                "A": null,
-                "A_unit": "m2",
-                "mass_flow_1": 500.3310598308587,
-                "mass_flow_1_unit": "kg / s",
-                "mass_flow_3": 23.259199154593794,
-                "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": null,
-                "energy_flow_1_unit": "W",
-                "Q_Solar": null,
-                "QEFF": null,
-                "RQINC": null,
-                "num_branches": null,
-                "exergy_results": {
-                    "E_F": null,
-                    "E_P": null,
-                    "E_D": 2069788.205303044,
-                    "epsilon": null,
-                    "y": 0.030487898641247,
-                    "y_star": 0.049802777149944785
-                }
-            }
-        },
         "Deaerator": {
             "DEA": {
                 "name": "DEA",
@@ -72,7 +34,7 @@
                     "E_D": 617170.6866052633,
                     "epsilon": 0.679016084632574,
                     "y": 0.009090899875340211,
-                    "y_star": 0.014850221916295087
+                    "y_star": 0.015344162225618234
                 }
             }
         },
@@ -98,19 +60,19 @@
                 "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 25751676.797019016,
+                "energy_flow_1": 27107028.207388446,
                 "energy_flow_1_unit": "W",
                 "Q_Solar": null,
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 25751676.797019016,
-                    "E_P": 25380852.651141945,
-                    "E_D": 370824.1458770707,
-                    "epsilon": 0.9856000000000001,
-                    "y": 0.005462225045181291,
-                    "y_star": 0.008922686993585609
+                    "E_F": 27107028.207388446,
+                    "E_P": 26716687.00120205,
+                    "E_D": 390341.20618639514,
+                    "epsilon": 0.9855999999999999,
+                    "y": 0.005749710573875116,
+                    "y_star": 0.009704703935328584
                 }
             }
         },
@@ -148,7 +110,43 @@
                     "E_D": 210234.03444742062,
                     "epsilon": 0.7893369161206433,
                     "y": 0.0030967390367532517,
-                    "y_star": 0.005058603938360797
+                    "y_star": 0.005226860575072432
+                }
+            },
+            "COND": {
+                "name": "COND",
+                "type": "Steam Turbine Condenser",
+                "type_index": 7,
+                "eta_s": null,
+                "eta_mech": null,
+                "eta_el": null,
+                "eta_cc": null,
+                "lamb": null,
+                "Q": 43499490.79606145,
+                "Q_unit": "W",
+                "P": null,
+                "P_unit": "W",
+                "kA": 3431.0928682111044,
+                "kA_unit": "W / K",
+                "A": null,
+                "A_unit": "m2",
+                "mass_flow_1": 500.3310598308587,
+                "mass_flow_1_unit": "kg / s",
+                "mass_flow_3": 23.259199154593794,
+                "mass_flow_3_unit": "kg / s",
+                "energy_flow_1": null,
+                "energy_flow_1_unit": "W",
+                "Q_Solar": null,
+                "QEFF": null,
+                "RQINC": null,
+                "num_branches": null,
+                "exergy_results": {
+                    "E_F": 2069788.205303044,
+                    "E_P": null,
+                    "E_D": 2069788.205303044,
+                    "epsilon": null,
+                    "y": 0.030487898641247,
+                    "y_star": 0.0514592910585755
                 }
             },
             "ECO": {
@@ -184,7 +182,7 @@
                     "E_D": 531511.4097879063,
                     "epsilon": 0.9356516434796966,
                     "y": 0.00782914210582595,
-                    "y_star": 0.012789107709909101
+                    "y_star": 0.013214492317210346
                 }
             },
             "EV": {
@@ -220,7 +218,7 @@
                     "E_D": 1224572.6748760566,
                     "epsilon": 0.9450569617600391,
                     "y": 0.018037907209445928,
-                    "y_star": 0.02946539161567728
+                    "y_star": 0.03044545405050225
                 }
             },
             "FWPH": {
@@ -256,7 +254,7 @@
                     "E_D": 746913.2304147407,
                     "epsilon": 0.8384799889806408,
                     "y": 0.011002002429208398,
-                    "y_star": 0.017972057754210832
+                    "y_star": 0.01856983493332137
                 }
             },
             "SH": {
@@ -292,7 +290,7 @@
                     "E_D": 332056.5642538145,
                     "epsilon": 0.9458975720441346,
                     "y": 0.004891180096684712,
-                    "y_star": 0.007989870184948593
+                    "y_star": 0.008255625065437939
                 }
             }
         },
@@ -330,7 +328,7 @@
                     "E_D": 4.4004991650581365e-07,
                     "epsilon": 0.0,
                     "y": 6.481917916598691e-15,
-                    "y_star": 1.0588381879092843e-14
+                    "y_star": 1.0940567095587946e-14
                 }
             }
         },
@@ -340,7 +338,7 @@
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": 0.88,
                 "eta_cc": null,
                 "lamb": null,
@@ -356,19 +354,19 @@
                 "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 6702.023756623669,
+                "energy_flow_1": 6675.242469691512,
                 "energy_flow_1_unit": "W",
                 "Q_Solar": null,
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 6702.023756623669,
-                    "E_P": 5885.985344017172,
-                    "E_D": 816.0384126064973,
-                    "epsilon": 0.8782400000000001,
-                    "y": 1.2020213636915731e-05,
-                    "y_star": 1.9635332303425564e-05
+                    "E_F": 6675.242469691512,
+                    "E_P": 5874.21337332853,
+                    "E_D": 801.0290963629823,
+                    "epsilon": 0.8799999999999999,
+                    "y": 1.1799127000546717e-05,
+                    "y_star": 1.9915269258235637e-05
                 }
             },
             "MOT_PUMP_FW": {
@@ -376,7 +374,7 @@
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": 0.88,
                 "eta_cc": null,
                 "lamb": null,
@@ -392,19 +390,19 @@
                 "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 489908.6363793672,
+                "energy_flow_1": 487950.9614683974,
                 "energy_flow_1_unit": "W",
                 "Q_Solar": null,
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 489908.6363793672,
-                    "E_P": 430257.3608138155,
-                    "E_D": 59651.27556555171,
-                    "epsilon": 0.8782400000000001,
-                    "y": 0.0008786609367103632,
-                    "y_star": 0.0014353155439235652
+                    "E_F": 487950.9614683974,
+                    "E_P": 429396.84609218966,
+                    "E_D": 58554.115376207745,
+                    "epsilon": 0.8799999999999999,
+                    "y": 0.0008624998103882463,
+                    "y_star": 0.001455778546858866
                 }
             },
             "MOT_PUMP_SF": {
@@ -412,7 +410,7 @@
                 "type": "Motor",
                 "type_index": 29,
                 "eta_s": null,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": 0.88,
                 "eta_cc": null,
                 "lamb": null,
@@ -428,19 +426,19 @@
                 "mass_flow_1_unit": "kg / s",
                 "mass_flow_3": null,
                 "mass_flow_3_unit": "kg / s",
-                "energy_flow_1": 4885.925595698544,
+                "energy_flow_1": 4866.401437042938,
                 "energy_flow_1_unit": "W",
                 "Q_Solar": null,
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 4885.925595698544,
-                    "E_P": 4291.015295166289,
-                    "E_D": 594.910300532255,
-                    "epsilon": 0.8782399999999999,
-                    "y": 8.763005266331395e-06,
-                    "y_star": 1.4314597525342753e-05
+                    "E_F": 4866.401437042938,
+                    "E_P": 4282.433264597785,
+                    "E_D": 583.968172445153,
+                    "epsilon": 0.8799999999999999,
+                    "y": 8.601828151115268e-06,
+                    "y_star": 1.4518677842402593e-05
                 }
             }
         },
@@ -478,7 +476,7 @@
                     "E_D": 31207179.004514962,
                     "epsilon": 0.5403194839301927,
                     "y": 0.4596805160698073,
-                    "y_star": 0.7509001053625864
+                    "y_star": 0.7758761516738266
                 }
             }
         },
@@ -538,7 +536,7 @@
                 "type": "Pump (fixed speed)",
                 "type_index": 8,
                 "eta_s": 0.8,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
@@ -561,12 +559,12 @@
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 5885.985344017172,
+                    "E_F": 5874.21337332853,
                     "E_P": 4794.472145359166,
-                    "E_D": 1091.5131986580063,
-                    "epsilon": 0.8145572686878199,
-                    "y": 1.6077946372003928e-05,
-                    "y_star": 2.626374449796859e-05
+                    "E_D": 1079.7412279693644,
+                    "epsilon": 0.816189647983872,
+                    "y": 1.5904545707992272e-05,
+                    "y_star": 2.684463945424993e-05
                 }
             },
             "PUMP_FW": {
@@ -574,7 +572,7 @@
                 "type": "Pump (fixed speed)",
                 "type_index": 8,
                 "eta_s": 0.8,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
@@ -597,12 +595,12 @@
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 430257.3608138155,
+                    "E_F": 429396.84609218966,
                     "E_P": 365829.93823188584,
-                    "E_D": 64427.422581929655,
-                    "epsilon": 0.8502584070611421,
-                    "y": 0.0009490133939124783,
-                    "y_star": 0.0015502381166209093
+                    "E_D": 63566.90786030382,
+                    "epsilon": 0.8519623317245878,
+                    "y": 0.0009363380459976476,
+                    "y_star": 0.0015804071184172645
                 }
             },
             "PUMP_SF": {
@@ -610,7 +608,7 @@
                 "type": "Pump (fixed speed)",
                 "type_index": 8,
                 "eta_s": 0.8,
-                "eta_mech": 0.998,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
@@ -633,12 +631,12 @@
                 "RQINC": null,
                 "num_branches": null,
                 "exergy_results": {
-                    "E_F": 4291.015295166289,
+                    "E_F": 4282.433264597785,
                     "E_P": 3835.7615191314835,
-                    "E_D": 455.2537760348059,
-                    "epsilon": 0.8939053476347109,
-                    "y": 6.705870167890899e-06,
-                    "y_star": 1.0954213719278927e-05
+                    "E_D": 446.6717454663012,
+                    "epsilon": 0.8956967411123794,
+                    "y": 6.579457196052388e-06,
+                    "y_star": 1.1105199700481906e-05
                 }
             }
         },
@@ -676,7 +674,7 @@
                     "E_D": 2.2351741790771484e-08,
                     "epsilon": null,
                     "y": 3.2924027512882237e-16,
-                    "y_star": 5.378225716364617e-16
+                    "y_star": 5.557113445378003e-16
                 }
             }
         },
@@ -686,13 +684,13 @@
                 "type": "Steam Turbine / General expander",
                 "type_index": 6,
                 "eta_s": 0.88,
-                "eta_mech": 0.95,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
                 "Q_unit": "W",
-                "P": 7491208.462706668,
+                "P": 7885482.592322807,
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "W / K",
@@ -710,11 +708,11 @@
                 "num_branches": null,
                 "exergy_results": {
                     "E_F": 8505607.87657234,
-                    "E_P": 7491208.462706668,
-                    "E_D": 1014399.4138656724,
-                    "epsilon": 0.8807375758927576,
-                    "y": 0.014942063363023601,
-                    "y_star": 0.024408249994056722
+                    "E_P": 7885482.592322807,
+                    "E_D": 620125.2842495339,
+                    "epsilon": 0.9270921851502709,
+                    "y": 0.009134420982124662,
+                    "y_star": 0.01541761974158434
                 }
             },
             "IPST": {
@@ -722,13 +720,13 @@
                 "type": "Steam Turbine / General expander",
                 "type_index": 6,
                 "eta_s": 0.88,
-                "eta_mech": 0.95,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
                 "Q_unit": "W",
-                "P": 10502779.780336572,
+                "P": 11055557.663512189,
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "W / K",
@@ -746,11 +744,11 @@
                 "num_branches": null,
                 "exergy_results": {
                     "E_F": 12174333.233150259,
-                    "E_P": 10502779.780336572,
-                    "E_D": 1671553.4528136868,
-                    "epsilon": 0.8626985625576513,
-                    "y": 0.024621916441614183,
-                    "y_star": 0.040220542319938574
+                    "E_P": 11055557.663512189,
+                    "E_D": 1118775.5696380697,
+                    "epsilon": 0.9081037500606862,
+                    "y": 0.016479520021438532,
+                    "y_star": 0.027815115343552663
                 }
             },
             "LPST": {
@@ -758,13 +756,13 @@
                 "type": "Steam Turbine / General expander",
                 "type_index": 6,
                 "eta_s": 0.88,
-                "eta_mech": 0.95,
+                "eta_mech": 1.0,
                 "eta_el": null,
                 "eta_cc": null,
                 "lamb": null,
                 "Q": null,
                 "Q_unit": "W",
-                "P": 7757688.553975775,
+                "P": 8165987.951553448,
                 "P_unit": "W",
                 "kA": null,
                 "kA_unit": "W / K",
@@ -782,11 +780,11 @@
                 "num_branches": null,
                 "exergy_results": {
                     "E_F": 9189433.956685927,
-                    "E_P": 7757688.553975776,
-                    "E_D": 1431745.402710151,
-                    "epsilon": 0.844196562110503,
-                    "y": 0.021089553320508648,
-                    "y_star": 0.034450335084498
+                    "E_P": 8165987.951553449,
+                    "E_D": 1023446.0051324777,
+                    "epsilon": 0.888627960116319,
+                    "y": 0.015075319295627956,
+                    "y_star": 0.02544502173020044
                 }
             }
         },
@@ -824,7 +822,7 @@
                     "E_D": 4709.894824216499,
                     "epsilon": null,
                     "y": 6.937656502425683e-05,
-                    "y_star": 0.00011332842738650604
+                    "y_star": 0.0001170978982263305
                 }
             }
         }
@@ -1793,9 +1791,9 @@
             "target_connector": 4,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 25380852.651141945,
+            "energy_flow": 26716687.00120205,
             "energy_flow_unit": "W",
-            "E": 25380852.651141945,
+            "E": 26716687.00120205,
             "E_unit": "W"
         },
         "E2": {
@@ -1809,9 +1807,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 6702.023756623669,
+            "energy_flow": 6675.242469691512,
             "energy_flow_unit": "W",
-            "E": 6702.023756623669,
+            "E": 6675.242469691512,
             "E_unit": "W"
         },
         "E3": {
@@ -1825,9 +1823,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 489908.6363793672,
+            "energy_flow": 487950.9614683974,
             "energy_flow_unit": "W",
-            "E": 489908.6363793672,
+            "E": 487950.9614683974,
             "E_unit": "W"
         },
         "E4": {
@@ -1841,9 +1839,9 @@
             "target_connector": 0,
             "fluid_type": "Electric",
             "fluid_type_id": 9,
-            "energy_flow": 4885.925595698544,
+            "energy_flow": 4866.401437042938,
             "energy_flow_unit": "W",
-            "E": 4885.925595698544,
+            "E": 4866.401437042938,
             "E_unit": "W"
         },
         "ETOT": {
@@ -1857,18 +1855,18 @@
             "target_connector": null,
             "fluid_type": "Logic",
             "fluid_type_id": 13,
-            "energy_flow": 24879356.065410256,
+            "energy_flow": 26217194.395826917,
             "energy_flow_unit": "W",
-            "E": 24879356.065410256,
+            "E": 26217194.395826917,
             "E_unit": "W"
         },
         "PARAB_Q": {
             "name": "PARAB_Q",
             "kind": "heat",
-            "source_component": "PARAB",
-            "target_component": null,
-            "source_component_type": 113,
-            "target_component_type": null,
+            "source_component": null,
+            "target_component": "PARAB",
+            "source_component_type": null,
+            "target_component_type": 113,
             "source_connector": null,
             "target_connector": null,
             "energy_flow": 72814559.87103254,
@@ -1888,9 +1886,9 @@
             "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 7491208.462706668,
+            "energy_flow": 7885482.592322807,
             "energy_flow_unit": "W",
-            "E": 7491208.462706668,
+            "E": 7885482.592322807,
             "E_unit": "W"
         },
         "W2": {
@@ -1904,9 +1902,9 @@
             "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 17993988.24304324,
+            "energy_flow": 18941040.255834997,
             "energy_flow_unit": "W",
-            "E": 17993988.24304324,
+            "E": 18941040.255834997,
             "E_unit": "W"
         },
         "W3": {
@@ -1920,9 +1918,9 @@
             "target_connector": 0,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 25751676.797019016,
+            "energy_flow": 27107028.207388446,
             "energy_flow_unit": "W",
-            "E": 25751676.797019016,
+            "E": 27107028.207388446,
             "E_unit": "W"
         },
         "W4": {
@@ -1936,9 +1934,9 @@
             "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 5885.985344017172,
+            "energy_flow": 5874.21337332853,
             "energy_flow_unit": "W",
-            "E": 5885.985344017172,
+            "E": 5874.21337332853,
             "E_unit": "W"
         },
         "W5": {
@@ -1952,9 +1950,9 @@
             "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 430257.3608138155,
+            "energy_flow": 429396.84609218966,
             "energy_flow_unit": "W",
-            "E": 430257.3608138155,
+            "E": 429396.84609218966,
             "E_unit": "W"
         },
         "W6": {
@@ -1968,9 +1966,9 @@
             "target_connector": 1,
             "fluid_type": "Shaft",
             "fluid_type_id": 10,
-            "energy_flow": 4291.015295166289,
+            "energy_flow": 4282.433264597785,
             "energy_flow_unit": "W",
-            "E": 4291.015295166289,
+            "E": 4282.433264597785,
             "E_unit": "W"
         }
     },
@@ -1986,9 +1984,9 @@
     },
     "system_results": {
         "E_F": 67888844.34635429,
-        "E_P": 24879356.065410256,
-        "E_D": 41559694.53412978,
+        "E_P": 26217194.395826917,
+        "E_D": 40221856.20371312,
         "E_L": 1449793.7468142472,
-        "epsilon": 0.3664719337168435
+        "epsilon": 0.38617823956572933
     }
 }

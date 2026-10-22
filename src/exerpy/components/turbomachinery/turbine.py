@@ -231,28 +231,50 @@ class Turbine(Component):
             return None
         return material_outlets[min(material_outlets)]
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
+        r"""
         Auxiliary equations for the turbine.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        The power is the product of the turbine and the expanding stream is its fuel, so every cost
+        variable the stream carries follows the F-principle: it leaves the component at the specific
+        cost at which it entered.
 
-        For each material outlet (when inlet and first outlet are above ambient temperature T0):
+        With split physical exergy, for every material outlet:
 
-        (1) 1/E_T_in * C_T_in - 1/E_T_out * C_T_out = 0
-            - F-principle: specific thermal exergy costs equalized between inlet and each outlet
+        .. math::
 
-        (2) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
-            - F-principle: specific mechanical exergy costs equalized between inlet and each outlet
+            \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
+            \qquad
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
 
-        (3) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0 (if chemical_exergy_enabled)
-            - F-principle: specific chemical exergy costs equalized between inlet and each outlet
+        Without the split the stream carries a single cost variable for its physical exergy, and the
+        two rules above collapse into one:
 
-        For power outlets (with both source and target components):
+        .. math::
 
-        (4) 1/E_ref * C_ref - 1/E_out * C_out = 0
-            - P-principle: specific power exergy costs equalized across all power outlets
+            \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{PH}_\mathrm{out}}{\dot{E}^\mathrm{PH}_\mathrm{out}}
+
+        With chemical exergy enabled, either way:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        The power leaving the turbine is one single product, so all of its outlets are priced alike
+        (P-principle), against the first of them as a reference:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{TOT}_\mathrm{ref}}{\dot{E}^\mathrm{TOT}_\mathrm{ref}}
+            = \frac{\dot{C}^\mathrm{TOT}_\mathrm{out}}{\dot{E}^\mathrm{TOT}_\mathrm{out}}
+
+        Expanding below the ambient temperature is only resolved with the split. Without it the
+        component warns and charges the outlet with the specific cost of the physical exergy of the
+        inlet; with it, the case is not implemented and no equation is written.
 
         Parameters
         ----------
@@ -268,6 +290,10 @@ class Turbine(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -280,61 +306,38 @@ class Turbine(Component):
         equations : list or dict
             Updated structure with equation labels.
         """
-        # Process only if the inlet and the first outlet are above T0.
-        if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-            # Filter material outlets
-            material_outlets = [outlet for outlet in self.outl.values() if outlet.get("kind") == "material"]
-            # Determine number of rows per outlet.
-            num_rows_per_outlet = 3 if chemical_exergy_enabled else 2
-
-            for i, outlet in enumerate(material_outlets):
-                row_offset = num_rows_per_outlet * i
-
-                # --- Thermal exergy equation ---
-                A[counter + row_offset, self.inl[0]["CostVar_index"]["T"]] = (
-                    1 / self.inl[0]["E_T"] if self.inl[0]["e_T"] != 0 else 1
-                )
-                A[counter + row_offset, outlet["CostVar_index"]["T"]] = -1 / outlet["E_T"] if outlet["e_T"] != 0 else -1
-                equations[counter + row_offset] = {
-                    "kind": "aux_f_rule",
-                    "objects": [self.name, self.inl[0]["name"], outlet["name"]],
-                    "property": "c_T",
-                }
-
-                # --- Mechanical exergy equation ---
-                A[counter + row_offset + 1, self.inl[0]["CostVar_index"]["M"]] = (
-                    1 / self.inl[0]["E_M"] if self.inl[0]["e_M"] != 0 else 1
-                )
-                A[counter + row_offset + 1, outlet["CostVar_index"]["M"]] = (
-                    -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
-                )
-                equations[counter + row_offset + 1] = {
-                    "kind": "aux_f_rule",
-                    "objects": [self.name, self.inl[0]["name"], outlet["name"]],
-                    "property": "c_M",
-                }
-
-                # --- Chemical exergy equation (conditionally added) ---
-                if chemical_exergy_enabled:
-                    A[counter + row_offset + 2, self.inl[0]["CostVar_index"]["CH"]] = (
-                        1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1
-                    )
-                    A[counter + row_offset + 2, outlet["CostVar_index"]["CH"]] = (
-                        -1 / outlet["E_CH"] if outlet["e_CH"] != 0 else -1
-                    )
-                    equations[counter + row_offset + 2] = {
-                        "kind": "aux_equality",
-                        "objects": [self.name, self.inl[0]["name"], outlet["name"]],
-                        "property": "c_CH",
-                    }
-
-            # Update counter based on number of rows added for all material outlets.
-            num_material_rows = num_rows_per_outlet * len(material_outlets)
-            for j in range(num_material_rows):
-                b[counter + j] = 0
-            counter += num_material_rows
+        if split_physical_exergy:
+            if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
+                labels = ["T", "M"]
+            else:
+                labels = []
+                logger.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
         else:
-            logger.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
+            labels = ["PH"]
+            if self.inl[0]["T"] <= T0 or self.outl[0]["T"] <= T0:
+                logger.warning(
+                    f"Turbine {self.name} expands below the ambient temperature: without split physical exergy, "
+                    "the cost of the outlet stream is charged with the specific cost of the physical exergy of "
+                    "the inlet instead of being resolved into a thermal and a mechanical share."
+                )
+        if chemical_exergy_enabled:
+            labels.append("CH")
+
+        material_outlets = [outlet for outlet in self.outl.values() if outlet.get("kind") == "material"]
+        inlet = self.inl[0]
+        for outlet in material_outlets:
+            for label in labels:
+                A[counter, inlet["CostVar_index"][label]] = 1 / inlet[f"E_{label}"] if inlet[f"e_{label}"] != 0 else 1
+                A[counter, outlet["CostVar_index"][label]] = (
+                    -1 / outlet[f"E_{label}"] if outlet[f"e_{label}"] != 0 else -1
+                )
+                b[counter] = 0
+                equations[counter] = {
+                    "kind": "aux_equality" if label == "CH" else "aux_f_rule",
+                    "objects": [self.name, inlet["name"], outlet["name"]],
+                    "property": f"c_{label}",
+                }
+                counter += 1
 
         # --- Auxiliary equation for shaft power equality ---
         power_outlets = [
@@ -359,7 +362,7 @@ class Turbine(Component):
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the turbine.
 
@@ -427,23 +430,6 @@ class Turbine(Component):
             = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
             - \sum \dot{C}^{\mathrm{M}}_{\mathrm{material,out}}
 
-        **Calculated exergoeconomic indicators:**
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -451,6 +437,10 @@ class Turbine(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------
@@ -469,8 +459,12 @@ class Turbine(Component):
         f : float
             Exergoeconomic factor (dimensionless).
         """
-        # Sum the cost of all outlet power streams.
-        C_power_out = sum(stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power")
+        # The cost of the power the turbine delivers. A stage of a turbine train may sit on a shaft
+        # that already carries the power of the stages before it, and then only the power it adds is
+        # its own product, exactly as in the exergy balance.
+        C_power_out = sum(
+            stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power"
+        ) - sum(stream.get("C_TOT", 0) for stream in self.inl.values() if stream.get("kind") == "power")
         # Assume a single primary inlet for material cost properties.
         inlet = self.inl[0]
         # Filter material outlets and sum their cost components.
@@ -479,8 +473,12 @@ class Turbine(Component):
         sum_C_T_out = sum(out.get("C_T", 0) for out in material_outlets)
         sum_C_M_out = sum(out.get("C_M", 0) for out in material_outlets)
 
-        # Case 1: Both inlet and first outlet above ambient.
-        if inlet["T"] >= T0 and self.outl[0]["T"] >= T0:
+        # Case 1: Both inlet and first outlet above ambient. Below the ambient temperature the split is
+        # needed to charge the cold exergy of the outlet to the product, so without it the power stays
+        # the only product and the definition of case 1 holds in every temperature case.
+        if (inlet["T"] >= T0 and self.outl[0]["T"] >= T0) or (
+            not split_physical_exergy and inlet["T"] >= self.outl[0]["T"]
+        ):
             self.C_P = C_power_out
             self.C_F = inlet.get("C_PH", 0) - sum_C_PH_out
 
@@ -505,5 +503,5 @@ class Turbine(Component):
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P
         self.C_D = self.c_F * self.E_D
-        self.r = (self.C_P - self.C_F) / self.C_F
+        self.r = (self.c_P - self.c_F) / self.c_F
         self.f = self.Z_costs / (self.Z_costs + self.C_D)

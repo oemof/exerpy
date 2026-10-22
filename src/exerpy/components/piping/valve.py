@@ -218,28 +218,43 @@ class Valve(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
+        r"""
         Auxiliary equations for the valve.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the following auxiliary cost relations:
+        A valve destroys exergy and produces nothing, unless it expands into the range below the
+        ambient temperature: there the cold exergy the stream gains is a product. A valve that stays
+        above :math:`T_0` is dissipative, handled by :meth:`dis_eqs` instead, and this method writes
+        nothing for it.
 
-        For (T_in > T0 and T_out > T0) or (T_in <= T0 and T_out > T0):
-            - Valve is treated as dissipative (warning issued)
+        For a productive valve, expanding to :math:`T_\mathrm{out} \leq T_0`, the pressure the stream
+        gives up is the fuel and follows the F-principle.
 
-        For T_out <= T0:
-        (1) 1/E_M_in * C_M_in - 1/E_M_out * C_M_out = 0
+        With split physical exergy the cold exergy the stream gains is the product, determined by
+        the cost balance, and the mechanical exergy needs the rule:
 
-        - F-principle: specific mechanical exergy costs equalized between inlet/outlet
+        .. math::
 
-        - If E_M is zero for either stream, appropriate fallback coefficients are used
+            \frac{\dot{C}^\mathrm{M}_\mathrm{in}}{\dot{E}^\mathrm{M}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{M}_\mathrm{out}}{\dot{E}^\mathrm{M}_\mathrm{out}}
 
-        When chemical_exergy_enabled is True:
-        (2) 1/E_CH_in * C_CH_in - 1/E_CH_out * C_CH_out = 0
+        Without the split there is no mechanical cost variable to rule on: the stream carries one
+        variable for its physical exergy, and the cost balance alone determines it:
 
-        - F-principle: specific chemical exergy costs equalized between inlet/outlet
-        - If E_CH is zero for either stream, appropriate fallback coefficients are used
+        .. math::
+
+            \dot{C}^\mathrm{PH}_\mathrm{out}
+            = \dot{C}^\mathrm{PH}_\mathrm{in} + \dot{Z}
+
+        With chemical exergy enabled, either way, the composition does not change:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
+
+        Where a stream carries no exergy of a given kind, its cost variable is fixed directly
+        instead of being equated, since the specific cost of nothing is undefined.
 
         Parameters
         ----------
@@ -255,6 +270,10 @@ class Valve(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -274,24 +293,26 @@ class Valve(Component):
             return A, b, counter, equations
 
         # Productive valve - T_out must be ≤ T0 (Cases 2 or 3)
-        # Mechanical cost equation (always added for productive valves)
-        if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
-        elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-        elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = 1
-        else:
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
-        equations[counter] = {
-            "kind": "aux_equality",
-            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-            "property": "c_M",
-        }
-        b[counter] = 0
-        counter += 1
+        # Mechanical cost equation. Without the split there is no mechanical cost variable and the cost
+        # balance alone determines the cost of the physical exergy of the outlet.
+        if split_physical_exergy:
+            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
+            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = 1
+            else:
+                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
+                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+            equations[counter] = {
+                "kind": "aux_equality",
+                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                "property": "c_M",
+            }
+            b[counter] = 0
+            counter += 1
 
         if chemical_exergy_enabled:
             # --- Chemical cost equation (conditionally added) ---
@@ -310,7 +331,17 @@ class Valve(Component):
 
         return A, b, counter, equations
 
-    def dis_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled=False, all_components=None):
+    def dis_eqs(
+        self,
+        A,
+        b,
+        counter,
+        T0,
+        equations,
+        chemical_exergy_enabled=False,
+        all_components=None,
+        split_physical_exergy=True,
+    ):
         r"""
         Constructs the cost equations for a dissipative Valve in ExerPy,
         distributing the valve's extra cost difference (C_diff) to all other productive
@@ -342,6 +373,10 @@ class Valve(Component):
             Flag indicating whether chemical exergy is considered. (Ignored here.)
         all_components : list, optional
             Global list of all component objects; if not provided, defaults to [].
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -353,35 +388,22 @@ class Valve(Component):
         - It is assumed that each inlet/outlet stream's CostVar_index dictionary has keys: "T" (thermal), "M" (mechanical), and "dissipative" (the extra unknown).
         - self.Z_costs is the known cost rate (in currency/s) for the valve.
         """
-        # --- Thermal difference row ---
-        if self.inl[0].get("E_T", 0) and self.outl[0].get("E_T", 0):
-            A[counter, self.inl[0]["CostVar_index"]["T"]] = 1 / self.inl[0]["E_T"]
-            A[counter, self.outl[0]["CostVar_index"]["T"]] = -1 / self.outl[0]["E_T"]
-        else:
-            A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
-            A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
-        b[counter] = 0
-        equations[counter] = {
-            "kind": "dis_equality",
-            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-            "property": "c_T",
-        }
-        counter += 1
-
-        # --- Mechanical difference row ---
-        if self.inl[0].get("E_M", 0) and self.outl[0].get("E_M", 0):
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
-        else:
-            A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-            A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
-        b[counter] = 0
-        equations[counter] = {
-            "kind": "dis_equality",
-            "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-            "property": "c_M",
-        }
-        counter += 1
+        # --- Physical exergy difference rows ---
+        phys_labels = ["T", "M"] if split_physical_exergy else ["PH"]
+        for label in phys_labels:
+            if self.inl[0].get(f"E_{label}", 0) and self.outl[0].get(f"E_{label}", 0):
+                A[counter, self.inl[0]["CostVar_index"][label]] = 1 / self.inl[0][f"E_{label}"]
+                A[counter, self.outl[0]["CostVar_index"][label]] = -1 / self.outl[0][f"E_{label}"]
+            else:
+                A[counter, self.inl[0]["CostVar_index"][label]] = 1
+                A[counter, self.outl[0]["CostVar_index"][label]] = -1
+            b[counter] = 0
+            equations[counter] = {
+                "kind": "dis_equality",
+                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                "property": f"c_{label}",
+            }
+            counter += 1
 
         # --- Chemical difference row (if chemical exergy is enabled) ---
         if chemical_exergy_enabled:
@@ -430,13 +452,9 @@ class Valve(Component):
         # --- Extra overall cost balance row ---
         # This row enforces:
         #   (C_in,T - C_out,T) + (C_in,M - C_out,M) - C_diff = - Z_costs
-        A[counter, self.inl[0]["CostVar_index"]["T"]] = 1
-        A[counter, self.outl[0]["CostVar_index"]["T"]] = -1
-        A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-        A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
-        if chemical_exergy_enabled:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = -1
+        for label in phys_labels + (["CH"] if chemical_exergy_enabled else []):
+            A[counter, self.inl[0]["CostVar_index"][label]] = 1
+            A[counter, self.outl[0]["CostVar_index"][label]] = -1
         # Subtract the unknown dissipative cost difference:
         A[counter, self.inl[0]["CostVar_index"]["dissipative"]] = -1
         b[counter] = -self.Z_costs
@@ -445,7 +463,7 @@ class Valve(Component):
 
         return A, b, counter, equations
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the valve (throttling component).
 
@@ -493,33 +511,6 @@ class Valve(Component):
         .. math::
             \dot{C}_{\mathrm{F}} = \dot{C}_{\mathrm{in}}^{\mathrm{M}} - \dot{C}_{\mathrm{out}}^{\mathrm{M}}
 
-        **Calculated exergoeconomic indicators:**
-
-        Specific cost of fuel:
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        Specific cost of product:
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        Cost rate of exergy destruction:
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        Relative cost difference:
-
-        .. math::
-            r = \frac{c_{\mathrm{P}} - c_{\mathrm{F}}}{c_{\mathrm{F}}}
-
-        Exergoeconomic factor:
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -527,6 +518,10 @@ class Valve(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------

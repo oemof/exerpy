@@ -92,16 +92,20 @@ class Generator(Component):
             f"Efficiency={self.epsilon:.2%}"
         )
 
-    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled):
-        """
+    def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
+        r"""
         Auxiliary equations for the generator.
 
-        This function adds rows to the cost matrix A and the right-hand-side vector b to enforce
-        the auxiliary cost relations for the generator. Since the generator converts mechanical
-        or thermal energy to electrical energy, the auxiliary equations typically enforce:
+        The generator converts shaft power into electrical power. Both streams are power, each carrying one cost variable, and the
+        outlet is the only one the component produces, so the cost balance alone determines it:
 
-        - No additional auxiliary equations are needed for generators as electrical energy
-          is pure exergy and the cost balance equations are sufficient.
+        .. math::
+
+            \dot{C}^\mathrm{TOT}_\mathrm{out}
+            = \dot{C}^\mathrm{TOT}_\mathrm{in} + \dot{Z}
+
+        No auxiliary equation is therefore written, and the split of the physical exergy does not
+        apply: it concerns material streams only, and this component has none.
 
         Parameters
         ----------
@@ -117,6 +121,10 @@ class Generator(Component):
             Dictionary for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Returns
         -------
@@ -132,7 +140,7 @@ class Generator(Component):
 
         return [A, b, counter, equations]
 
-    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False):
+    def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
         Perform exergoeconomic cost balance for the generator (power-producing component).
 
@@ -153,33 +161,6 @@ class Generator(Component):
         .. math::
             \dot{C}_{\mathrm{F}} = \dot{C}_{\mathrm{in}}^{\mathrm{TOT}}
 
-        **Calculated exergoeconomic indicators:**
-
-        Specific cost of fuel:
-
-        .. math::
-            c_{\mathrm{F}} = \frac{\dot{C}_{\mathrm{F}}}{\dot{E}_{\mathrm{F}}}
-
-        Specific cost of product:
-
-        .. math::
-            c_{\mathrm{P}} = \frac{\dot{C}_{\mathrm{P}}}{\dot{E}_{\mathrm{P}}}
-
-        Cost rate of exergy destruction:
-
-        .. math::
-            \dot{C}_{\mathrm{D}} = c_{\mathrm{F}} \cdot \dot{E}_{\mathrm{D}}
-
-        Relative cost difference:
-
-        .. math::
-            r = \frac{\dot{C}_{\mathrm{P}} - \dot{C}_{\mathrm{F}}}{\dot{C}_{\mathrm{F}}}
-
-        Exergoeconomic factor:
-
-        .. math::
-            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_{\mathrm{D}}}
-
         Parameters
         ----------
         T0 : float
@@ -187,6 +168,10 @@ class Generator(Component):
         chemical_exergy_enabled : bool, optional
             If True, chemical exergy is considered in the calculations.
             Default is False.
+        split_physical_exergy : bool, optional
+            If True, the physical exergy of a material stream is split into a thermal and a
+            mechanical share, each with its own cost variable. If False, the stream carries a
+            single cost variable for its physical exergy. Default is True.
 
         Attributes Set
         --------------
@@ -231,5 +216,5 @@ class Generator(Component):
         self.c_P = self.C_P / self.E_P
         self.c_F = self.C_F / self.E_F
         self.C_D = self.c_F * self.E_D  # Ensure that self.E_D is computed beforehand.
-        self.r = (self.C_P - self.C_F) / self.C_F
+        self.r = (self.c_P - self.c_F) / self.c_F
         self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else 0

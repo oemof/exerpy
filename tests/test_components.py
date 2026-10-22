@@ -1373,17 +1373,15 @@ def test_storage_discharging(storage, discharging_streams):
 
 
 def test_storage_missing_streams_raises(storage):
-    """
-    Test that calc_exergy_balance raises KeyError if inlet or outlet missing.
-    """
-    storage.inl = {}  # no inlet 0
+    """A storage needs exactly one inlet and one outlet."""
+    storage.inl = {}  # no inlet
     storage.outl = {0: {"m": 1, "e_PH": 50}}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="exactly one inlet and one outlet"):
         storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
     storage.inl = {0: {"m": 1, "e_PH": 50}}
     storage.outl = {}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="exactly one inlet and one outlet"):
         storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
 
@@ -1521,12 +1519,23 @@ def test_heliostatfield_no_heat_output_raises():
         hf.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
 
 
-def test_heliostatfield_exergoeconomics_not_implemented():
+def test_heliostatfield_exergoeconomics():
+    """The field costs the solar radiation it receives onto the heat it delivers."""
     hf = Heliostatfield(name="HF", Q_Solar=1000.0)
-    with pytest.raises(NotImplementedError):
-        hf.exergoeconomic_balance(T0=300)
-    with pytest.raises(NotImplementedError):
-        hf.aux_eqs(None, None, 0, 300, {}, False)
+    hf.inl = {0: {"kind": "heat", "name": "sun", "C_TOT": 0.0}}
+    hf.outl = {0: {"kind": "heat", "name": "to_receiver", "C_TOT": 2.0}}
+    hf.E_F, hf.E_P, hf.E_D = 1000.0, 600.0, 400.0
+    hf.Z_costs = 1.0
+    # A single heat outlet needs no auxiliary equation: the cost balance determines it.
+    A, b, counter, eq = hf.aux_eqs("A", "b", 7, 300, {}, False)
+    assert (A, b, counter, eq) == ("A", "b", 7, {})
+    hf.exergoeconomic_balance(T0=300)
+    assert hf.C_F == 0.0
+    assert hf.C_P == 2.0
+    assert hf.c_F == 0.0
+    assert hf.c_P == pytest.approx(2.0 / 600.0)
+    assert hf.C_D == 0.0
+    assert hf.f == 1.0
 
 
 def _trough_streams():
@@ -1609,12 +1618,74 @@ def test_parabolic_trough_missing_q_solar_raises():
         pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
 
 
-def test_parabolic_trough_exergoeconomics_not_implemented():
+def _solar_cost_streams(split):
+    """Working fluid and solar heat of a collector, with cost variables attached."""
+    inlet = {
+        "kind": "material",
+        "name": "in",
+        "T": 400.0,
+        "m": 3.0,
+        "e_PH": 100.0,
+        "e_T": 95.0,
+        "e_M": 5.0,
+        "e_CH": 0.0,
+        "E_PH": 300.0,
+        "E_T": 285.0,
+        "E_M": 15.0,
+        "E_CH": 0.0,
+        "C_PH": 3.0,
+        "C_T": 2.85,
+        "C_M": 0.15,
+        "CostVar_index": {"T": 0, "M": 1, "PH": 0},
+    }
+    outlet = {
+        "kind": "material",
+        "name": "out",
+        "T": 500.0,
+        "m": 3.0,
+        "e_PH": 200.0,
+        "e_T": 190.0,
+        "e_M": 10.0,
+        "e_CH": 0.0,
+        "E_PH": 600.0,
+        "E_T": 570.0,
+        "E_M": 30.0,
+        "E_CH": 0.0,
+        "C_PH": 9.0,
+        "C_T": 8.7,
+        "C_M": 0.3,
+        "CostVar_index": {"T": 2, "M": 3, "PH": 2},
+    }
+    heat = {"kind": "heat", "name": "sun", "C_TOT": 6.0, "CostVar_index": {"exergy": 4}}
+    return inlet, outlet, heat
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_parabolic_trough_exergoeconomics(split):
+    """Product is the thermal (split) or physical gain of the fluid, fuel is the solar heat."""
+    inlet, outlet, heat = _solar_cost_streams(split)
     pt = ParabolicTrough(name="PT", Q_Solar=1000.0, num_branches=1)
-    with pytest.raises(NotImplementedError):
-        pt.exergoeconomic_balance(T0=300)
-    with pytest.raises(NotImplementedError):
-        pt.aux_eqs(None, None, 0, 300, {}, False)
+    pt.inl = {0: inlet, 1: heat}
+    pt.outl = {0: outlet}
+    pt.Z_costs = 1.0
+    pt.E_F, pt.E_P = (1000.0 - 15.0, 285.0) if split else (1000.0, 300.0)
+    pt.E_D = pt.E_F - pt.E_P
+
+    A = np.zeros((4, 5))
+    b = np.zeros(4)
+    _, _, counter, _ = pt.aux_eqs(A, b, 0, 300, {}, False, split)
+    # The heat gain is the product, so only the mechanical share needs the F-principle.
+    assert counter == (1 if split else 0)
+
+    pt.exergoeconomic_balance(T0=300, split_physical_exergy=split)
+    if split:
+        assert pytest.approx(8.7 - 2.85) == pt.C_P
+        assert pytest.approx(6.0 + (0.15 - 0.3)) == pt.C_F
+    else:
+        assert pytest.approx(9.0 - 3.0) == pt.C_P
+        assert pytest.approx(6.0) == pt.C_F
+    assert pytest.approx(pt.c_F * pt.E_D) == pt.C_D
+    assert pt.f == pytest.approx(pt.Z_costs / (pt.Z_costs + pt.C_D))
 
 
 def _tower_streams(heat_conn):
@@ -1682,12 +1753,41 @@ def test_solar_tower_no_heat_input_raises():
         st.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
 
 
-def test_solar_tower_exergoeconomics_not_implemented():
+@pytest.mark.parametrize("split", [True, False])
+def test_solar_tower_exergoeconomics(split):
+    """The receiver costs the solar heat onto the working fluid, like a heat absorber."""
+    inlet, outlet, heat = _solar_cost_streams(split)
     st = SolarTower(name="ST")
-    with pytest.raises(NotImplementedError):
-        st.exergoeconomic_balance(T0=300)
-    with pytest.raises(NotImplementedError):
-        st.aux_eqs(None, None, 0, 300, {}, False)
+    st.inl = {0: inlet, 1: heat}
+    st.outl = {0: outlet}
+    st.Z_costs = 2.0
+    st.E_F, st.E_P = (1000.0 - 15.0, 285.0) if split else (1000.0, 300.0)
+    st.E_D = st.E_F - st.E_P
+
+    A = np.zeros((4, 5))
+    b = np.zeros(4)
+    _, _, counter, _ = st.aux_eqs(A, b, 0, 300, {}, False, split)
+    assert counter == (1 if split else 0)
+
+    st.exergoeconomic_balance(T0=300, split_physical_exergy=split)
+    if split:
+        assert pytest.approx(8.7 - 2.85) == st.C_P
+        assert pytest.approx(6.0 + (0.15 - 0.3)) == st.C_F
+    else:
+        assert pytest.approx(9.0 - 3.0) == st.C_P
+        assert pytest.approx(6.0) == st.C_F
+    assert pytest.approx(st.c_F * st.E_D) == st.C_D
+
+
+def test_solar_components_need_a_heat_inlet():
+    """Without the solar heat as an inlet the cost of the fuel cannot be determined."""
+    inlet, outlet, _ = _solar_cost_streams(False)
+    st = SolarTower(name="ST")
+    st.inl = {0: inlet}
+    st.outl = {0: outlet}
+    st.E_F, st.E_P, st.E_D, st.Z_costs = 1000.0, 300.0, 700.0, 1.0
+    with pytest.raises(ValueError, match="no solar heat inlet"):
+        st.exergoeconomic_balance(T0=300, split_physical_exergy=False)
 
 
 def test_splitter_default_conserves_exergy():

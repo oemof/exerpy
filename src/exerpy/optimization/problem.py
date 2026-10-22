@@ -8,12 +8,15 @@ with pymoo's optimization framework.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Callable
 
 import numpy as np
 
 if TYPE_CHECKING:
-    from ..analyses import ExergoeconomicAnalysis, ExergyAnalysis
+    from ..analyses import ExergoeconomicAnalysis
+    from ..analyses import ExergyAnalysis
     from .adapters.base import SimulatorAdapter
     from .constraints import Constraint
     from .objectives import ObjectiveFunction

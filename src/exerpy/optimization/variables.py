@@ -7,7 +7,8 @@ allowing the same optimization problem specification to work with TESPy, Ebsilon
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from enum import Enum
 from typing import Any
 

@@ -7,8 +7,10 @@ adapters must implement to work with the ExergoeconomicOptimizer.
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from abc import ABC
+from abc import abstractmethod
+from typing import TYPE_CHECKING
+from typing import Any
 
 if TYPE_CHECKING:
     from ..variables import VariableSpec
@@ -140,7 +142,8 @@ class SimulatorAdapter(ABC):
         float
             The parameter value.
         """
-        from ..variables import TargetType, VariableSpec
+        from ..variables import TargetType
+        from ..variables import VariableSpec
 
         spec = VariableSpec(target_type=TargetType.CONNECTION, target_id=connection_id, parameter=parameter)
         return self.get_param(spec)
@@ -158,7 +161,8 @@ class SimulatorAdapter(ABC):
         value : float
             The new value.
         """
-        from ..variables import TargetType, VariableSpec
+        from ..variables import TargetType
+        from ..variables import VariableSpec
 
         spec = VariableSpec(target_type=TargetType.CONNECTION, target_id=connection_id, parameter=parameter)
         self.set_param(spec, value)
@@ -179,7 +183,8 @@ class SimulatorAdapter(ABC):
         float
             The parameter value.
         """
-        from ..variables import TargetType, VariableSpec
+        from ..variables import TargetType
+        from ..variables import VariableSpec
 
         spec = VariableSpec(target_type=TargetType.COMPONENT, target_id=component_id, parameter=parameter)
         return self.get_param(spec)
@@ -197,7 +202,8 @@ class SimulatorAdapter(ABC):
         value : float
             The new value.
         """
-        from ..variables import TargetType, VariableSpec
+        from ..variables import TargetType
+        from ..variables import VariableSpec
 
         spec = VariableSpec(target_type=TargetType.COMPONENT, target_id=component_id, parameter=parameter)
         self.set_param(spec, value)

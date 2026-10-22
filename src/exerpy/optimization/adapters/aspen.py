@@ -12,7 +12,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+from typing import Any
 
 from .base import SimulatorAdapter
 

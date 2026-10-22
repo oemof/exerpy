@@ -79,36 +79,35 @@ Example
 >>> result.plot_pareto()
 """
 
-from .constraints import (
-    BoundConstraint,
-    Constraint,
-    ConstraintType,
-    CustomConstraint,
-    ExergoeconomicConstraint,
-    ExergyConstraint,
-    RelativeConstraint,
-)
-from .objectives import (
-    CustomObjective,
-    MaximizeComponentEfficiency,
-    MaximizeExergyEfficiency,
-    MaximizeProductExergy,
-    MinimizeComponentExergyDestruction,
-    MinimizeCostOfExergyDestruction,
-    MinimizeExergyDestruction,
-    MinimizeFuelConsumption,
-    MinimizeLevelizedCost,
-    MinimizeProductCost,
-    MinimizeProductSubsetCost,
-    MinimizeTotalCost,
-    ObjectiveFunction,
-    OptimizationSense,
-    WeightedSumObjective,
-)
+from .constraints import BoundConstraint
+from .constraints import Constraint
+from .constraints import ConstraintType
+from .constraints import CustomConstraint
+from .constraints import ExergoeconomicConstraint
+from .constraints import ExergyConstraint
+from .constraints import RelativeConstraint
+from .objectives import CustomObjective
+from .objectives import MaximizeComponentEfficiency
+from .objectives import MaximizeExergyEfficiency
+from .objectives import MaximizeProductExergy
+from .objectives import MinimizeComponentExergyDestruction
+from .objectives import MinimizeCostOfExergyDestruction
+from .objectives import MinimizeExergyDestruction
+from .objectives import MinimizeFuelConsumption
+from .objectives import MinimizeLevelizedCost
+from .objectives import MinimizeProductCost
+from .objectives import MinimizeProductSubsetCost
+from .objectives import MinimizeTotalCost
+from .objectives import ObjectiveFunction
+from .objectives import OptimizationSense
+from .objectives import WeightedSumObjective
 from .optimizer import ExergoeconomicOptimizer
 from .problem import ExergoeconomicProblem
-from .results import OptimizationResult, Solution
-from .variables import DesignVariable, TargetType, VariableSpec
+from .results import OptimizationResult
+from .results import Solution
+from .variables import DesignVariable
+from .variables import TargetType
+from .variables import VariableSpec
 
 __all__ = [
     # Main classes

@@ -8,7 +8,8 @@ to interact with TESPy simulation models.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+from typing import Any
 
 from .base import SimulatorAdapter
 
@@ -240,10 +241,7 @@ class TESPyAdapter(SimulatorAdapter):
             # values in postprocessing, e.g. a pinch violation). Fall back to
             # .converged for TESPy versions without the status attribute.
             status = getattr(self.model, "status", None)
-            self._last_solve_success = (
-                status == 0 if status is not None
-                else getattr(self.model, "converged", True)
-            )
+            self._last_solve_success = status == 0 if status is not None else getattr(self.model, "converged", True)
             if not self._last_solve_success:
                 logger.warning(f"TESPy solve not accepted (status={status}).")
                 # A failed solve corrupts internal solver state; re-initialize
@@ -391,7 +389,9 @@ class TESPyAdapter(SimulatorAdapter):
             return
         try:
             self.model.solve(
-                "design", init_only=True, init_path=self._baseline_state,
+                "design",
+                init_only=True,
+                init_path=self._baseline_state,
                 print_results=False,
             )
         except Exception as e:

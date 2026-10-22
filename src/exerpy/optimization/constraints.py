@@ -9,15 +9,19 @@ Constraints are formulated for pymoo as g(x) <= 0 (inequality) or h(x) == 0 (equ
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Callable
 
 from .variables import VariableSpec
 
 if TYPE_CHECKING:
-    from ..analyses import ExergoeconomicAnalysis, ExergyAnalysis
+    from ..analyses import ExergoeconomicAnalysis
+    from ..analyses import ExergyAnalysis
     from .adapters.base import SimulatorAdapter
 
 

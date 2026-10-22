@@ -1,45 +1,47 @@
 .. _exerpy_development_what_label:
 
 ####################
-Contribute to exerpy
+Contribute to ExerPy
 ####################
 
 What can I contribute?
 **********************
 
 ExerPy is developed as an open and free-to-use library by
-`Sergio Tomasinelli, MSc. <https://github.com/sertomas>`__ at the Department of Energy and
-Climate Protection, Technische Universität Berlin, under the supervision of Prof. Fontina Petrakopoulou.
+`Sergio Tomasinelli, MSc. <https://github.com/sertomas>`__ at the
+`Chair of Energy Engineering and Climate Protection <https://www.tu.berlin/en/energietechnik>`__,
+Institute of Energy Engineering, Technische Universität Berlin.
+The project was conceived and is supervised by Prof. Dr.-Ing. Fontina Petrakopoulou.
 The goal is to make the project widely accessible and to establish it as a community-driven
-initiative in the future, as users may request special components or flexible
-implementations of characteristics, or custom equations — basically, whatever the user
+initiative in the future, in which users can request special components, flexible
+implementations of characteristics or custom equations — basically, whatever they
 can think of.
 
 
-You are invited to contribute to this process, share your ideas and experience
+You are invited to contribute to this process, share your ideas and experience,
 and perhaps even start developing the software. Your solutions may help other users as
 well. Contributing to the development of ExerPy is straightforward and helps both the
 development team and the wider user community. Developing
 features is also a chance to engage in mutual code review and collaborate with other developers.
 
-There are a variety of ways you can contribute to the development;
-among others, these include:
+There are various ways to contribute to the development,
+including:
 
 Contribute to the documentation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-The easiest way to get involved in the developing process is by improving the
-documentation. If you spot mistakes or think, the documentation could be more
+The easiest way to get involved in the development process is by improving the
+documentation. If you spot mistakes or think the documentation could be more
 precise or clearer in some sections, feel free to fix it and create a pull
 request on the GitHub repository.
 
-If you come across typos, grammatical mistakes or want to improve
+If you come across typos or grammatical mistakes, or want to improve
 the clarity of the documentation, make your adjustments or suggestions
 and create a pull request for the dev branch. We appreciate your contribution!
 
 Share your projects
 ^^^^^^^^^^^^^^^^^^^
 Have you used the software in your research paper or project, or even in a
-real world application? We would love to feature your project on our
+real-world application? We would love to feature your project on our
 :ref:`Example Applications <examples_label>` page. Please reach out to
 us by opening a new issue on our GitHub page.
 
@@ -57,25 +59,25 @@ How can I contribute?
 
 You will find the most important information concerning the development process
 in the following sections. If you have any further questions, feel free to
-contact us. We look forward to hearing from you!
+`contact us <mailto:s.tomasinelli@tu-berlin.de>`__. We look forward to hearing from you!
 
 Install the developer version
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-It is recommended to use
-`virtual environments <https://docs.python.org/3/tutorial/venv.html>`_ for
-the development process. Fork the repository, clone your forked ExerPy GitHub
-repository, and install the development requirements with pip.
+Fork the repository, clone your fork and install ExerPy with its development requirements in a
+`virtual environment <https://docs.python.org/3/tutorial/venv.html>`_:
 
 .. code:: bash
 
     git clone https://github.com/YOUR_GITHUB_USERNAME/exerpy.git
     cd exerpy
+    python -m venv .venv
+    source .venv/bin/activate  # on Windows: .venv\Scripts\activate
     pip install -e .[dev]
 
 To stay in sync with the oemof/exerpy base repository, add the link to
-the oemof/exerpy repository as remote to your local copy of ExerPy. We will call
-the remote "upstream". Fetch the available branches and after that, you can pull
+the oemof/exerpy repository as a remote to your local copy of ExerPy. We will call
+the remote "upstream". Fetch the available branches; after that, you can pull
 changes from a specific branch of the oemof/exerpy repository (e.g., the "dev" branch in
 the example below).
 
@@ -85,9 +87,9 @@ the example below).
     git fetch upstream
     git pull upstream dev --rebase
 
-Use the :code:`--rebase` command to avoid merge commits for every upstream pull.
+Use the :code:`--rebase` option to avoid merge commits for every upstream pull.
 If you want to make changes to ExerPy, check out a new branch from your local dev
-branch. Make your changes, commit them, and create a pull request on the oemof/exerpy dev
+branch. Make your changes, commit them, and create a pull request against the oemof/exerpy dev
 branch.
 
 Collaboration with pull requests
@@ -99,10 +101,10 @@ https://guides.github.com/activities/hello-world/
 How to create a pull request
 ----------------------------
 
-* Fork the oemof repository to your own GitHub account.
+* Fork the oemof/exerpy repository to your GitHub account.
 * Change, add or remove code.
 * Commit your changes.
-* Create a pull request and describe what you will do and why. Please use the
+* Create a pull request and describe what you changed and why. Please use the
   pull request template we provide. It will appear when you click on
   "New pull request".
 * Wait for approval.
@@ -112,12 +114,12 @@ How to create a pull request
 Generally, the following steps are required when changing, adding or removing code
 ----------------------------------------------------------------------------------
 
-* Read the :ref:`style_guidlines_label` and :ref:`naming_conventions_label` and
+* Read the :ref:`style_guidelines_label` and :ref:`naming_conventions_label` and
   follow them.
-* Add new tests according to what you have implemented.
+* Add new tests for what you have implemented.
 * Update the documentation (for example, to reflect new features or API changes).
 * Add a What's New entry and your name to the list of contributors.
-* Check that all :ref:`tests_label` still work (see Tests).
+* Check that all :ref:`tests_label` still pass (see Tests).
 
 .. _tests_label:
 
@@ -132,9 +134,9 @@ The tests in ExerPy are divided into two main parts:
 The tests contain code examples that expect a specific outcome. If the outcome
 matches the expectation, the test passes; if it differs, the test
 fails. You can run the tests locally by navigating into your local GitHub clone.
-The command :code:`check` tests PEP guidelines, the command :code:`docs`
+The command :code:`check` checks compliance with the PEP guidelines, the command :code:`docs`
 tests the documentation build, and the command :code:`py3X` runs the
-software tests in the selected Python version.
+software tests with the selected Python version.
 
 .. code:: bash
 
@@ -142,23 +144,22 @@ software tests in the selected Python version.
     python -m tox -e check
     python -m tox -e py311
     python -m tox -e py312
+    python -m tox -e py313
 
-If you want to have a look at the documentation build on your local machine use
-the following command from the local ExerPy clone:
+If you want to have a look at the documentation build on your local machine, run
+the following command in your local ExerPy clone:
 
 .. code:: bash
 
     python -m sphinx docs/ docs/_build
 
 Additionally, all tests will run automatically when you push changes to a
-branch that has a pull request opened.
+branch that has an open pull request.
 
 If you have further questions regarding the tests, we encourage you to reach out to us.
 We look forward to your inquiry.
 
-.. _style_guidlines_label:
-
-Issue-Management
+Issue management
 ^^^^^^^^^^^^^^^^
 
 A good way to communicate with the development team is through issues on GitHub. If you
@@ -169,6 +170,8 @@ development problem you’d like to discuss, please create an issue:
 * Use the appropriate category tags from the list provided
 
 Look at the existing issues to get an idea of how issues are used and structured.
+
+.. _style_guidelines_label:
 
 Style guidelines
 ^^^^^^^^^^^^^^^^
@@ -189,7 +192,7 @@ Code commenting
 
 Code comments include block and inline comments in the source code. They help
 improve understanding of the code and should be used "as much as necessary, as little
-as possible". When writing comments follow the
+as possible". When writing comments, follow the
 `PEP 0008 style guide <https://www.python.org/dev/peps/pep-0008/#comments>`_.
 
 PEP8 (Python Style Guide)
@@ -198,11 +201,12 @@ PEP8 (Python Style Guide)
 * We adhere to `PEP8 <https://www.python.org/dev/peps/pep-0008/>`_ for all code
   produced in the framework.
 
-* We use pylint to check your code. Pylint is integrated into many IDEs and
-  Editors. `Check here <https://pylint.pycqa.org/en/latest/>`_ or ask the
-  maintainer of your IDE or Editor
+* We format the code with `Black <https://black.readthedocs.io>`_ and check it with
+  `Ruff <https://docs.astral.sh/ruff/>`_, both with a line length of 120 characters. Run
+  :code:`black src tests` and :code:`ruff check src tests`, or :code:`python -m tox -e check`,
+  before you open a pull request.
 
-* Some IDEs have PEP8 checkers, which are very helpful, especially for python
+* Some IDEs have PEP8 checkers, which are very helpful, especially for Python
   beginners.
 
 .. _naming_conventions_label:
@@ -210,19 +214,19 @@ PEP8 (Python Style Guide)
 Naming Conventions
 ------------------
 
-* We use plural names for modules if they contain more than one
-  child class (e.g. :code:`import heat_exchangers` AND NOT
-  :code:`import heat_exchanger`). If there are arrays in the code that hold
-  multiple elements they must also be named in the plural.
+* We use singular names for modules and subpackages, even if they contain more
+  than one class (e.g. :code:`heat_exchanger` AND NOT :code:`heat_exchangers`).
+  Variables such as lists or arrays that hold multiple elements are named in
+  the plural.
 
-* Please, follow the naming conventions of
-  `pylint <http://pylint-messages.wikidot.com/messages:c0103>`_
+* Please follow the
+  `naming conventions of PEP 8 <https://peps.python.org/pep-0008/#naming-conventions>`_.
 
-* Use descriptive (“talking”) names
+* Use descriptive names
 
-  * Variables/Objects: Name the after the data they represent
+  * Variables/Objects: Name them after the data they represent
     (power\_line, wind\_speed)
-  * Functions/Method: Name them after what they do: **use verbs**
+  * Functions/Methods: Name them after what they do: **use verbs**
     (get\_wind\_speed, set\_parameter)
 
 
@@ -237,7 +241,7 @@ We mostly follow the Git branching model described by
 
 Differences are:
 
-* Instead of naming the  branch``origin/develop`` we use ``origin/dev``.
+* Instead of naming the branch ``origin/develop``, we use ``origin/dev``.
 * Feature branches are named like ``features/*``
 * Release branches are named like ``releases/*``
 
@@ -245,13 +249,13 @@ Commit message
 --------------
 
 Use this helpful `commit tutorial <https://commit.style/>`_ to
-learn how to write clear and well structured commit messages.
+learn how to write clear and well-structured commit messages.
 
 
 Documentation
 ^^^^^^^^^^^^^
 
-The general implementation-independent documentation, such as installation
+The general implementation-independent documentation, such as the installation
 guide, flow charts, and mathematical models, is written in ReStructuredText (rst).
 The files can be found in the *docs*  folder. For more information on
-ReStructuredText, see: https://docutils.sourceforge.io/rst.html.
+ReStructuredText, see https://docutils.sourceforge.io/rst.html.

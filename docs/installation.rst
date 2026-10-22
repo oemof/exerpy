@@ -4,8 +4,8 @@
 Installation and setup
 ######################
 
-Following you find guidelines for the installation process for Linux and
-Windows. ExerPy is a Python package, thus it requires you to have Python 3
+This page gives guidelines for installing ExerPy on Linux and
+Windows. ExerPy is a Python package, so it requires you to have Python 3
 installed.
 
 **********************
@@ -18,110 +18,142 @@ Installation of ExerPy
 
       **Installing Python 3**
 
-      Most Linux distributions will have Python 3 in their repository. Use the
-      specific software management to install it, if it is not yet installed.
-      If you are using Ubuntu/Debian try executing the following code in your
-      terminal:
+      Most Linux distributions provide Python 3 in their repositories. On Ubuntu or Debian, install it
+      together with its :code:`venv` module by running:
 
       .. code:: console
 
-         sudo apt-get install python3
+         sudo apt-get install python3 python3-venv
 
-      You can also download different versions of Python via
-      https://www.python.org/downloads/.
+      Other versions of Python are available from https://www.python.org/downloads/.
 
-      **Having Python 3 installed**
+      **Installing ExerPy in a virtual environment**
 
-      We recommend installing ExerPy within a virtual Python environment and
-      not into the base, system-wide Python installation. On Linux you can use
-      virtualenv to do so.
+      We recommend installing ExerPy in a virtual environment rather than in the system-wide Python
+      installation. The :code:`venv` module of Python creates one.
 
-      1. Install virtualenv using the package management of your Linux
-         distribution, pip install or install it from source
-         (`see virtualenv documentation <https://virtualenv.pypa.io/en/latest/how-to/install.html>`_)
-      2. Open terminal to create and activate a virtual environment by typing:
+      1. Open a terminal in your project folder, then create and activate a virtual environment named
+         :code:`.venv`:
 
          .. code-block:: console
 
-            virtualenv -p /usr/bin/python3 your_env_name
-            source your_env_name/bin/activate
+            python3 -m venv .venv
+            source .venv/bin/activate
 
-      3. In the active terminal type
-
-         - if you plan to use json input only
+      2. Update pip:
 
          .. code-block:: console
 
-            pip install exerpy
+            python -m pip install --upgrade pip
 
-         - if you plan to use tespy
+      3. Install ExerPy with the extras you need:
 
-         .. code-block:: console
+         - with JSON input only
 
-            pip install exerpy[tespy]
+           .. code-block:: console
 
-      Warning: If you have an older version of virtualenv you should update pip
-      :code:`pip install --upgrade pip`.
+              pip install exerpy
 
-      **Using Conda**
+         - with TESPy models
 
-      Alternatively you can use conda for environment and package management.
-      You can follow the installation instructions for Windows users.
+           .. code-block:: console
+
+              pip install exerpy[tespy]
+
+         - with cost estimates from the correlations of OpenPyTEA
+
+           .. code-block:: console
+
+              pip install exerpy[costs]
+
+         - with Sankey and waterfall diagrams
+
+           .. code-block:: console
+
+              pip install exerpy[viz]
+
+         Several extras can be combined, for example :code:`pip install exerpy[tespy,costs]`.
 
    .. tab-item:: Windows
 
-      For Windows we recommend using conda as package manager. You can download
-      a lightweight open source variant of conda: 'miniforge3'.
+      **Installing Python 3**
 
-      1. Download latest
-         `miniforge3 <https://github.com/conda-forge/miniforge>`__ for Python
-         3.x (64 or 32 bit).
-      2. Install miniforge3
-      3. Open 'miniforge prompt' to manage your virtual environments. You can
-         create a new environment and activate it by
+      Download and install Python 3 from https://www.python.org/downloads/.
 
-         .. code-block:: console
+      **Installing ExerPy in a virtual environment**
 
-            conda create -n exerpy-env python=3.12
-            activate exerpy-env
+      We recommend installing ExerPy in a virtual environment rather than in the system-wide Python
+      installation. The :code:`venv` module of Python creates one.
 
-      4. In the active prompt
-
-         - if you plan to use json input only
+      1. Open a command prompt in your project folder, then create and activate a virtual environment
+         named :code:`.venv`:
 
          .. code-block:: console
 
-            pip install exerpy
+            py -m venv .venv
+            .venv\Scripts\activate
 
-         - if you plan to use tespy
-
-         .. code-block:: console
-
-            pip install exerpy[tespy]
-
-         - if you plan to use ebsilon
+      2. Update pip:
 
          .. code-block:: console
 
-            pip install exerpy[ebsilon]
+            python -m pip install --upgrade pip
 
-         - if you plan to use aspen
+      3. Install ExerPy with the extras you need:
 
-         .. code-block:: console
+         - with JSON input only
 
-            pip install exerpy[aspen]
+           .. code-block:: console
 
-         - if you want to create Sankey and waterfall diagrams
+              pip install exerpy
 
-         .. code-block:: console
+         - with TESPy models
 
-            pip install exerpy[viz]
+           .. code-block:: console
+
+              pip install exerpy[tespy]
+
+         - with Ebsilon Professional models
+
+           .. code-block:: console
+
+              pip install exerpy[ebsilon]
+
+         - with Aspen Plus models
+
+           .. code-block:: console
+
+              pip install exerpy[aspen]
+
+         - with cost estimates from the correlations of OpenPyTEA
+
+           .. code-block:: console
+
+              pip install exerpy[costs]
+
+         - with Sankey and waterfall diagrams
+
+           .. code-block:: console
+
+              pip install exerpy[viz]
+
+         Several extras can be combined, for example :code:`pip install exerpy[tespy,costs]`.
+
+      **Using conda**
+
+      Conda environments work as well. In a conda prompt, create and activate one, then install
+      ExerPy with pip as in step 3:
+
+      .. code-block:: console
+
+         conda create -n exerpy python=3.12
+         conda activate exerpy
 
    .. tab-item:: Developer Version
 
-      If you would like to get access to not yet released features or features
-      under development you can install the developer version. The steps are
-      similar to the steps here, but INSTEAD of installing ExerPy using
+      If you would like access to features that are not yet released or still
+      under development, you can install the developer version. The steps are
+      similar to the ones above, but INSTEAD of installing ExerPy using
 
       .. code-block:: console
 
@@ -135,12 +167,12 @@ Installation of ExerPy
 Additional Setup for Ebsilon Users
 **********************************
 
-To enable ExerPy to access Ebsilon Python program files, you need to set
+To enable ExerPy to access the Ebsilon Python program files, you need to set
 an environment variable named ``EBS`` with the path to your Ebsilon
 Python directory. This allows ExerPy to locate and import the necessary
 Ebsilon modules. This is what you need to do if you are using Windows 11:
 
-   1. Search and click on **Edit the system environment variables**.
+   1. Search for and click on **Edit the system environment variables**.
    2. Click on **Advanced**.
    3. Click on **Environment Variables**.
    4. Under **User variables**, click **New**.
@@ -157,7 +189,7 @@ Additional Setup for Aspen Plus Users
 *************************************
 
 Aspen Plus does not calculate physical exergy by default. Instead, you must
-define it as a user property in each model. Therefore, select the
+define it as a user property in each model. To do so, select the
 :code:`Calculation Options` tab in the :code:`Setup` folder in the
 :code:`Simulation` menu on the left. In the :code:`Calculations` tab, you will
 see two fields titled :code:`Exergy reference environment temperature` and
@@ -173,4 +205,4 @@ Next, select the :code:`Report Options` tab from the :code:`Setup` folder in
 the :code:`Simulation` menu on the left. Select the :code:`Stream` tab on the
 right and click the :code:`Property Sets` button. Move :code:`EXERGYMS` from
 :code:`Available property sets` to :code:`Selected property sets` and confirm.
-Afterward, run the simulation and save it.
+Afterwards, run the simulation and save it.

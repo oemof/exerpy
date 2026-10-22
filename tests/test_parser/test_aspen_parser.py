@@ -176,6 +176,8 @@ def dummy_fluid_property_data():
         "heat": {"SI_unit": "W"},
         "e": {"SI_unit": "J"},
         "n": {"SI_unit": "mol/s"},
+        "v": {"SI_unit": "m3 / s"},
+        "x": {"SI_unit": "-"},
     }
 
 
@@ -260,6 +262,8 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
         r"\Data\Streams\Stream3\Output\HMX_FLOW\MIXED": DummyNode("HMX_FLOW", 250, "W"),
         r"\Data\Streams\Stream3\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL": DummyNode("EXERGYMS", 400, "J"),
         r"\Data\Streams\Stream3\Output\TOT_FLOW": DummyNode("TOT_FLOW", 10, "mol/s"),
+        r"\Data\Streams\Stream3\Output\VOLFLMX\MIXED": DummyNode("VOLFLMX", 0.25, "cum/sec"),
+        r"\Data\Streams\Stream3\Output\MASSVFRA": DummyNode("MASSVFRA", 0.4, ""),
     }
     nodes[r"\Data\Streams\Stream1\Ports\SOURCE"].Elements = DummyCollection([source_elem])
     nodes[r"\Data\Streams\Stream1\Ports\DEST"].Elements = DummyCollection([dest_elem])
@@ -312,6 +316,8 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
     assert conn3["energy_flow"] == 250
     assert conn3["e_PH"] == 400
     assert conn3["n"] == 10
+    assert conn3["v"] == 0.25
+    assert conn3["x"] == 0.4
     assert conn3["molar_composition"].get("Water") == 0.9
     assert conn3["mass_composition"].get("Water") == 0.8
 

@@ -1,0 +1,115 @@
+v0.2.0 (22.10.2026)
++++++++++++++++++++
+
+New Features
+############
+- The purchased equipment cost of a component may be estimated with a cost correlation of OpenPyTEA
+  :cite:`Tamarona2026`. The new module :mod:`exerpy.costing` lists the correlations that cost a
+  class of component, suggests one per class, reads the size from the model, converts it into the
+  units of the correlation and says how it relates to the range the correlation was fitted over. For a size
+  outside the range, the cost is extrapolated from the nearest bound with a scaling exponent, or the
+  component is split into parallel units. The costs are in US dollars of the year of the correlation and are converted with
+  the annual exchange rates of the European Central Bank; the cost index of OpenPyTEA is read at
+  runtime as well. ExerPy itself ships no cost correlation and no cost index. OpenPyTEA is an
+  optional dependency, ``pip install exerpy[costs]``.
+- :func:`~exerpy.costing.sizes` returns every size the model determines for a component, in SI
+  units: the power, the mass flow, the volume flow at the inlet and the pressure ratio of a
+  turbomachine, the power of a motor or a generator, and the heat flow, the heat transfer capacity, the
+  logarithmic mean temperature difference and the area of a heat exchanger, and the heat flow and the
+  live steam mass flow of a steam generator.
+  :func:`~exerpy.costing.size` returns one of them. A user-defined cost equation takes the ones it needs,
+  and :func:`~exerpy.costing.estimate` takes the one that has the dimension of the units of the
+  chosen correlation, a power or a heat flow, an area, a volume flow or a mass flow, so the volume flow of
+  a fan is converted into ACFM without a hand calculation.
+- The area of a heat exchanger follows from its sections: the exchanger is cut at every phase
+  change of either stream, and every section takes its own overall heat transfer coefficient
+  :math:`U`. The coefficients are given per section, or taken from a new data file of published
+  values: for each comparable cell (the exchanger type and construction and the fluid group and phase
+  of each stream), the median of its values with their range, their number and their sources. A
+  section without a comparable cell asks for its coefficient instead of borrowing one from another
+  fluid, and a default that rests on fewer than three independent sources is reported. See
+  :ref:`Component Sizing <component_sizing_label>`.
+- The purchased equipment cost of a component may be scaled from the cost of a reference component of
+  the same type and a different size, with the six-tenths rule or a user-defined exponent, and escalated from the
+  year of the reference with the plant cost index. The size is given, or ``size_by`` names the size
+  the reference refers to and that size is read from the model. See
+  :ref:`Scaling the cost of a reference component <scaled_cost_label>`.
+- :meth:`~exerpy.analyses.ExergyAnalysis.boundary_streams` lists the streams that cross the system
+  boundary, with their direction, and :meth:`~exerpy.analyses.ExergyAnalysis.flows_from_roles` builds
+  the fuel, product and loss definitions from the role of each of them, ``"F"``, ``"P"`` or ``"L"``.
+- :meth:`~exerpy.analyses.EconomicAnalysis.from_dict` reads the cost assumptions from a dictionary
+  with the structure of the file :meth:`~exerpy.analyses.EconomicAnalysis.from_json` reads.
+- A reference year before the first or after the last entry of the plant cost index is bridged with the
+  nominal escalation rate, forward or backward, with a warning saying so;
+  :meth:`~exerpy.analyses.EconomicAnalysis.escalation_factor` returns the factor for a year.
+- A ``SimpleHeatExchanger`` takes the temperature of the source of the heat it takes in as
+  ``T_hot``, or of the consumer of the heat it gives off as ``T_cold``. The heat is then valued at that
+  temperature, as the fuel or the product of the component, and the loss of the heat transfer counts
+  as its exergy destruction. Without them, the heat is valued at the exergy change of the stream, as
+  before. See :ref:`Heat from or to outside the model <heat_boundary_label>`.
+- A new example obtains the purchased equipment costs of the heat pump in four ways (known costs,
+  scaled costs of reference components, user-defined cost equations and the correlations of OpenPyTEA), carries
+  each to the cost rates of the components and combines them. See
+  :ref:`Purchased Equipment Costs from Four Sources <examples_purchase_costs_label>`.
+
+Bug Fixes
+#########
+- The TESPy parser exports the vapour quality of a stream of one fluid, which the sections of a heat
+  exchanger need to place a saturated end.
+- The EBSILON parser exported the heat transfer capacity ``kA`` of a heat exchanger in the unit of
+  the model, which may be kW/K; it now converts it into W/K.
+- The specific volume of a stream was taken from the ``v`` of a TESPy export, which is its volume
+  flow, so a mixture was placed as a gas or a liquid by its volume flow rather than by its specific
+  volume.
+- The sections of a heat exchanger are the same for TESPy, EBSILON and Aspen Plus models. The Aspen
+  parser exports the volume flow and the vapour mass fraction of a stream; a stream whose export has
+  no volume flow takes the phase of its fluid group; the gaseous water EBSILON lists a second time
+  (``H2OG``) no longer hides a flue gas or air; and a stream that is saturated at both ends no longer
+  needs the enthalpy reference of CoolProp.
+
+Documentation
+#############
+- The documentation is regrouped into Get Started, Methods, Examples, Project and Reference, and the
+  examples are sorted into exergy, economic and exergoeconomic analysis, each with an overview page.
+  A table of the five steps of the workflow, from the exergy analysis to the exergoeconomic one,
+  links the methods and the examples.
+- A new page, :ref:`Component Sizing <component_sizing_label>`, explains which sizes a cost function
+  takes, how the area of a heat exchanger is found and where the heat transfer coefficients come
+  from, with a generated table of every value and its sources.
+- The economic analysis page lists where the purchased equipment costs come from and names the symbol of
+  every quantity it introduces.
+- Every example ends with its complete code, read from the script itself, and every example of the
+  economic and the exergoeconomic analysis shows the flowsheet of its plant.
+- The example of the economic analysis of the heat pump stands on its own and carries a purchased
+  equipment cost through every step to its cost rate. The example results are described as what they
+  are, the outcome of placeholder costs, with a guide to reading them.
+- The CGAM example no longer compares its results with those of Kelly (2008): her stream data do not
+  follow the model of the CGAM problem, so the two are not comparable.
+- OpenPyTEA and every source of the heat transfer coefficients are cited.
+- The exergoeconomic analysis page explains how the equation system is built and solved, what
+  changes with the split of the physical exergy and what each error message points to. The exergy
+  analysis page explains how the heat exchanged with the outside of the model is valued, and the API
+  overview covers all five steps of the workflow.
+
+API Changes
+###########
+- The TESPy interface, ``exerpy[tespy]``, requires TESPy 0.11.3 or newer.
+- OpenPyTEA 3.1.0 or newer is required for the cost estimates, through the new extra
+  ``exerpy[costs]``.
+- A purchased equipment cost given to :class:`~exerpy.analyses.EconomicAnalysis` may be a dictionary
+  describing a scaled cost instead of a number.
+- The years of :class:`~exerpy.analyses.EconomicAnalysis` are renamed: ``cost_year``, the year whose
+  price level a cost from a source is given in, is now ``reference_year``, and the former
+  ``reference_year``, the year every cost is carried to, is now ``base_year``. The attribute
+  ``reference_PEC`` is now ``base_PEC``, and :func:`~exerpy.costing.estimate` returns the year of the
+  correlation as ``reference_year``. The same keys apply in the files
+  :meth:`~exerpy.analyses.EconomicAnalysis.from_json` reads.
+
+Other Changes
+#############
+- A continuous integration check fails when a file contains a cost correlation or a table of
+  a plant cost index, so that none enters the repository.
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

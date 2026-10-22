@@ -4,17 +4,21 @@
 Visualization
 *************
 
+.. seealso::
+
+    The method behind this example: :ref:`Exergy Analysis <exergy_analysis_label>`.
+
 ExerPy can visualize the results of a completed exergy analysis as an
 interactive Sankey diagram of all exergy flows and as a waterfall diagram of
 the exergy destruction per component. The plotting libraries are an optional
-dependency, install them with:
+dependency; install them with:
 
 .. code-block:: bash
 
     pip install exerpy[viz]
 
 The examples below build the diagrams from the exported analysis results of
-the three example systems, so no simulator is required to run them, e.g.:
+the three example systems, so no simulator is required to run them. For example:
 
 .. code-block:: bash
 
@@ -32,14 +36,14 @@ gross flows next to the net value. The most important options are:
 - :code:`mode` – level of detail of the material links: :code:`1` shows the
   total exergy flow E per connection, :code:`2` splits each material link into
   physical and chemical exergy (requires chemical exergy), and :code:`3`
-  splits into thermal, mechanical and chemical exergy (requires
+  splits it into thermal, mechanical and chemical exergy (requires
   :code:`split_physical_exergy=True`).
 - :code:`collapse_passthroughs` – hides pure pass-through components
   (by default the :code:`CycleCloser`).
 - :code:`groups` – aggregates several components into a single node and hides
   the connections between them, e.g. to represent a subsystem.
-- :code:`node_colors` – overrides the color of individual component nodes.
-  Link colors are assigned automatically based on the type of flow (power,
+- :code:`node_colors` – overrides the colour of individual component nodes.
+  Link colours are assigned automatically based on the type of flow (power,
   heat, or material by fluid).
 - :code:`output_path` – exports the interactive diagram to an HTML file.
 
@@ -49,7 +53,7 @@ Waterfall diagram
 :code:`plot_exergy_waterfall` (Matplotlib) and
 :code:`plot_exergy_waterfall_plotly` (interactive Plotly variant) display the
 exergy destruction per component as percentages of the total fuel exergy, from
-the exergetic fuel (100 %) down to the exergetic product. The bar colors can
+the exergetic fuel (100 %) down to the exergetic product. The bar colours can
 be customized with the :code:`colors` dict using the keys :code:`"fuel"`,
 :code:`"destruction"`, :code:`"loss"` and :code:`"product"`.
 
@@ -106,6 +110,9 @@ Examples
 
    .. tab-item:: CGAM
 
+        The diagrams show the CGAM process :cite:`Valero1994` of the :ref:`exergy analysis example
+        <examples_cgam_label>`.
+
         1. **Load the results and run the analysis**
 
         .. literalinclude:: /../examples/visualization/cgam_diagrams.py
@@ -126,3 +133,29 @@ Examples
             :language: python
             :start-after: [waterfall_section]
             :end-before: [show_section]
+
+Full code
+=========
+
+.. tab-set::
+
+    .. tab-item:: CCPP
+
+        .. dropdown:: Full code of this example
+
+            .. literalinclude:: /../examples/visualization/ccpp_diagrams.py
+                :language: python
+
+    .. tab-item:: Heat Pump
+
+        .. dropdown:: Full code of this example
+
+            .. literalinclude:: /../examples/visualization/hp_diagrams.py
+                :language: python
+
+    .. tab-item:: CGAM
+
+        .. dropdown:: Full code of this example
+
+            .. literalinclude:: /../examples/visualization/cgam_diagrams.py
+                :language: python

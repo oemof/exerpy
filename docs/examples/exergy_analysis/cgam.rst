@@ -4,8 +4,17 @@
 CGAM Process
 ************
 
-This tutorial demonstrates how to perform an exergy analysis of a CGAM process using ExerPy.
-The analysis is carried out with:
+.. seealso::
+
+    The method behind this example: :ref:`Exergy Analysis <exergy_analysis_label>`.
+
+The CGAM problem is a benchmark for the analysis and optimization of thermal systems, defined by
+Valero et al. :cite:`Valero1994`: a cogeneration plant of a gas turbine with an air preheater and a
+heat recovery steam generator, delivering 30 MW of power and 14 kg/s of saturated steam at 20 bar.
+The models of this example follow the base case of that definition (pressure ratio 10, isentropic
+efficiencies of 0.86, :math:`T_3 = 850` K and :math:`T_4 = 1520` K), with the fluid properties of
+each simulator instead of the ideal gases of the original. The exergy analysis of the plant is
+carried out with:
 
 - Ebsilon
 - Aspen Plus
@@ -29,12 +38,12 @@ The flowsheet of the system is shown below.
 
 .. note::
 
-    The tespy based flowsheet has slight deviations from the show flowsheet,
-    due to not using the identical component definitions. For example, Ebsilon provides a
-    component incorporating drum, recirculation pump and evaporator in a single
-    part, while these are individual components in tespy.
+    The tespy-based flowsheet deviates slightly from the flowsheet shown,
+    because the component definitions are not identical. For example, Ebsilon provides a
+    single component that combines the drum, the recirculation pump and the
+    evaporator, while these are individual components in tespy.
 
-The import of the exerpy dependency is the same for all simulators:
+Importing exerpy is the same for all simulators:
 
 1. **Import Necessary Modules**
 
@@ -54,7 +63,7 @@ The import of the exerpy dependency is the same for all simulators:
         Create an instance of the :code:`ExergyAnalysis` class using the :code:`from_ebsilon` method.
         Since there is a combustion process in the power plant, it is necessary to specify
         the chemical exergy library to use. In this case, we will use the Ahrendts library.
-        You can decided weather to split the physical exergy into its mechanical and thermal shares
+        You can decide whether to split the physical exergy into its mechanical and thermal shares
         by setting the :code:`split_physical_exergy` parameter to :code:`True` or :code:`False`.
 
         .. code-block:: python
@@ -87,55 +96,32 @@ The import of the exerpy dependency is the same for all simulators:
                 "outputs": []
             }
 
-        For this process, the exergetic fuel of the system (:code:`E_F`) is the
-        methane flow (:code:`10`) and air flow (:code:`1`). The exergetic product of the system (:code:`E_P`)
-        consists of the net power output (:code:`E_1`) and the difference between the exergy of the vapour
-        outlet (:code:`9`) and of the water inlet (:code:`8`). The exhaust stream (:code:`7`) represents
+        For this process, the exergetic fuel of the system (:code:`E_F`) consists of
+        the methane flow (:code:`10`) and the air flow (:code:`1`). The exergetic product of the system (:code:`E_P`)
+        consists of the net power output (:code:`E1`) and the difference between the exergy of the vapour
+        outlet (:code:`9`) and that of the water inlet (:code:`8`). The exhaust stream (:code:`7`) represents
         the exergy loss of the system (:code:`E_L`).
 
         .. note::
 
             The dictionary labels must exactly match the connection labels defined in the Ebsilon
             simulation model. By default, Ebsilon assigns generic names to streams
-            (e.g., `"water"`, `"water_1"`). It is strongly recommended to rename the stream labels
-            in Ebsilon using consistent and meaningful labels.
+            (e.g., `"water"`, `"water_1"`). It is strongly recommended to give the streams
+            consistent and meaningful labels in Ebsilon.
 
-            For example: use `"1"`, `"2"`, `"3"` for material connections and `"E1"`, `"E2"`, `"E3"` for
-            electrical connections, `"H1"`, `"H2"`, `"H3"` for heat connections, etc.
+            For example, use `"1"`, `"2"`, `"3"` for material connections, `"E1"`, `"E2"`, `"E3"` for
+            electrical connections, and `"H1"`, `"H2"`, `"H3"` for heat connections.
 
-        .. dropdown:: **Full Example Code:**
+        .. dropdown:: Full code of this example
 
-            .. code-block:: python
-
-                from exerpy import ExergyAnalysis
-
-                model_path = 'cgam.ebs'
-
-                ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts', split_physical_exergy=False)
-
-                fuel = {
-                    "inputs": ['1', '10'],
-                    "outputs": []
-                }
-
-                product = {
-                    "inputs": ['E1', '9'],
-                    "outputs": ['8']
-                }
-
-                loss = {
-                    "inputs": ['7'],
-                    "outputs": []
-                }
-
-                ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-                ean.exergy_results()
+            .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_ebs.py
+                :language: python
 
     .. tab-item:: tespy
 
-        For the tespy model we have prepared the code to run the simulation
+        For the tespy model, the code to run the simulation is provided
         in the dropdown below. To learn how to set up tespy models and what
-        things to be aware of when working with tespy, we kindly refer to the
+        to be aware of when working with tespy, please refer to the
         `online documentation of tespy <https://tespy.readthedocs.io>`__.
 
         .. dropdown:: Code of the tespy model
@@ -146,18 +132,17 @@ The import of the exerpy dependency is the same for all simulators:
 
         2. **Initialize the Exergy Analysis**
 
-        After setting up the model, we set up the :code:`ExergyAnalysis`
-        instances using the :code:`from_tespy` method. It takes the
-        **converged** :code:`tespy.Network` object along with ambient state and
+        After setting up the model, we create the :code:`ExergyAnalysis`
+        instance using the :code:`from_tespy` method. It takes the
+        **converged** :code:`tespy.Network` object along with the ambient state and
         (optionally) the chemical exergy library as inputs.
 
         .. tip::
 
-            TESPy can handle the splitting of physical exergy into its mechanical
-            and thermal shares, therefore :code:`split_phyiscal_exergy` can
-            always be set to :code:`True` when using tespy. In this instance it is
-            set to :code:`False` because ASPEN cannot handle this, and we wanted to
-            cross validate the results of the examples for all three simulators.
+            TESPy provides the thermal and the mechanical shares of the physical exergy, so
+            :code:`split_physical_exergy` can be set to :code:`True`. This example sets it to
+            :code:`False` so that its results can be compared with those of Aspen Plus, which does not
+            provide the split.
 
         .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
             :language: python
@@ -166,19 +151,25 @@ The import of the exerpy dependency is the same for all simulators:
 
         3. **Define the exergy flows crossing the system boundaries**
 
-        For this power plant, the exergetic fuel of the system (:code:`E_F`) is
-        the methane flow (:code:`10`) and air flow (:code:`1`), which are the
+        For this power plant, the exergetic fuel of the system (:code:`E_F`) consists
+        of the methane flow (:code:`10`) and the air flow (:code:`1`), which are the
         inputs to the combustion process. The exhaust stream (:code:`7`)
-        represents the exergy losses of the system (:code:`E_L`). The product
-        exergy (:code:`E_P`) is the power output of the turbine minus the power
-        requirement of the compressor :code:`e3` as well as the difference in
-        total exergy between the flow of water entering the economizer
-        :code:`8`and the saturated steam leaving the drum :code:`9`.
+        represents the exergy loss of the system (:code:`E_L`). The product
+        exergy (:code:`E_P`) consists of the net power output :code:`e3`, i.e.
+        the power output of the turbine minus the power requirement of the
+        compressor, and the difference in total exergy between the saturated
+        steam leaving the drum :code:`9` and the water entering the economizer
+        :code:`8`.
 
         .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
             :language: python
             :start-after: [exergy_analysis_setup]
             :end-before: [exergy_analysis_flows]
+
+        .. dropdown:: Full code of this example
+
+            .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_tespy.py
+                :language: python
 
     .. tab-item:: Aspen Plus
 
@@ -192,9 +183,12 @@ The import of the exerpy dependency is the same for all simulators:
         the chemical exergy library to use. In this case, we will use the Ahrendts library.
 
         .. note::
-            At the moment, it is not possible to split the physical exergy into its mechanical and thermal shares
-            when using Aspen Plus. Therefore, the :code:`split_physical_exergy` parameter should be always set to :code:`False`
-            when using the :code:`from_aspen` method.
+
+            Aspen Plus does not provide the thermal and the mechanical shares of the physical exergy, so
+            :code:`split_physical_exergy` has to be set to :code:`False` with :code:`from_aspen`. The
+            exergoeconomic analysis runs on such a model as well: it then assigns one cost to the
+            physical exergy of each stream (see :ref:`Split Physical Exergy in Exergoeconomics
+            <examples_split_physical_exergy_label>`).
 
         .. code-block:: python
 
@@ -226,51 +220,28 @@ The import of the exerpy dependency is the same for all simulators:
                 "outputs": []
             }
 
-        For this process, the exergetic fuel of the system (:code:`E_F`) is the
-        methane flow (:code:`10`) and air flow (:code:`1`). The exergetic product of the system (:code:`E_P`)
-        consists of the net power output (:code:`E_1`) and the difference between the exergy of the vapour
-        outlet (:code:`9`) and of the water inlet (:code:`8`). The exhaust stream (:code:`7`) represents
+        For this process, the exergetic fuel of the system (:code:`E_F`) consists of
+        the methane flow (:code:`10`) and the air flow (:code:`1`). The exergetic product of the system (:code:`E_P`)
+        consists of the net power output (:code:`E1`) and the difference between the exergy of the vapour
+        outlet (:code:`9`) and that of the water inlet (:code:`8`). The exhaust stream (:code:`7`) represents
         the exergy loss of the system (:code:`E_L`).
 
         .. note::
 
             The dictionary labels must exactly match the connection labels defined in the Aspen
-            simulation model. It is strongly recommended to rename the stream labels
-            in Aspen using consistent and meaningful labels.
+            simulation model. It is strongly recommended to give the streams
+            consistent and meaningful labels in Aspen.
 
-            For example: use `"1"`, `"2"`, `"3"` for material connections and `"E1"`, `"E2"`, `"E3"` for
-            electrical connections, `"H1"`, `"H2"`, `"H3"` for heat connections, etc.
+            For example, use `"1"`, `"2"`, `"3"` for material connections, `"E1"`, `"E2"`, `"E3"` for
+            electrical connections, and `"H1"`, `"H2"`, `"H3"` for heat connections.
 
-        .. dropdown:: **Full Example Code:**
+        .. dropdown:: Full code of this example
 
-            .. code-block:: python
+            .. literalinclude:: /../examples/exergy_analysis/cgam/cgam_aspen.py
+                :language: python
 
-                from exerpy import ExergyAnalysis
-
-                model_path = 'cgam.bkp'
-
-                ean = ExergyAnalysis.from_aspen(model_path, chemExLib='Ahrendts', split_physical_exergy=False)
-
-                fuel = {
-                    "inputs": ['1', '10'],
-                    "outputs": []
-                }
-
-                product = {
-                    "inputs": ['E1', '9'],
-                    "outputs": ['8']
-                }
-
-                loss = {
-                    "inputs": ['7'],
-                    "outputs": []
-                }
-
-                ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-                ean.exergy_results()
-
-Running the exergy analysis and working with the results is now
-independent for all simulators.
+From here on, running the exergy analysis and working with the results is
+independent of the simulator.
 
 4. **Perform the Exergy Analysis**
 

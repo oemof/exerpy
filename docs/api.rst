@@ -2,19 +2,25 @@
 API Documentation
 #################
 
-The ExerPy package offers a flexible, Python-based solution for conducting exergy
-analysis of energy-conversion systems. The current release supports integration with
-three simulation tools: Ebsilon Professional, Aspen Plus, and TESPy, and allows users to extract detailed simulation
-data of components and connections. The framework follows a structured workflow
+The ExerPy package offers a flexible, Python-based solution for conducting exergy, economic
+and exergoeconomic analysis of energy-conversion systems. The current release supports integration with
+three simulation tools (Ebsilon Professional, Aspen Plus, and TESPy) and allows users to extract detailed simulation
+data on components and connections. The framework follows a structured workflow
 that includes data parsing, physical and chemical exergy calculations, and the
-generation of comprehensive exergy analysis results.
+generation of comprehensive exergy analysis results, and continues with the sizes and the costs of
+the components up to the cost of every stream.
 
 This section provides detailed information about the Application Programming
-Interface (API) of ExerPy. The API is divided into three main modules:
+Interface (API) of ExerPy. It follows the steps of the workflow:
 
 1. **Parsing and Data Preparation**
 2. **Exergy Analysis**
-3. **Exergoeconomic Analysis**
+3. **Component Sizing**
+4. **Economic Analysis**
+5. **Exergoeconomic Analysis**
+
+The results of the exergy analysis can also be shown as Sankey and waterfall diagrams, see
+:ref:`the visualization example <examples_visualization_label>`.
 
 
 *************************************
@@ -44,7 +50,7 @@ ExerPy supports parsing models from different simulation tools to extract and pr
     * - `TESPy <https://tespy.readthedocs.io/>`__
       - A versatile Python package for simulating thermal energy systems.
       - Open Source
-      - 0.7.7 or later
+      - 0.11.3 or later
       - Windows, macOS, Linux
 
 .. note::
@@ -75,7 +81,7 @@ For TESPy, the supported components include:
    :annotation:
 
 We are continuously working to expand the list of supported components, so please refer to the latest documentation for updates.
-In case you need to parse a component that is not yet supported, please contact us or open an issue on the GitHub repository.
+If you need to parse a component that is not yet supported, please `contact us <mailto:s.tomasinelli@tu-berlin.de>`__ or open an issue on the GitHub repository.
 
 ======
 Inputs
@@ -102,7 +108,7 @@ Example:
 .. note::
 
     **Profiles (Ebsilon only).** An Ebsilon model can hold several profiles, i.e.
-    operating points of the same plant such as part load or seasonal cases. They form a
+    operating points of the same plant such as part-load or seasonal cases. They form a
     tree: the root profile holds the design case and its children hold the deviations.
     ExerPy simulates and analyses one profile at a time, by default the one the model was
     saved with.
@@ -130,7 +136,7 @@ Example:
             'my_model.ebs', chemExLib='Ahrendts', profile='Part load 50%'
         )
 
-    A part load study is then a loop over the profiles, for instance:
+    A part-load study is then a loop over the profiles, for instance:
 
     .. code-block:: python
 
@@ -155,12 +161,12 @@ The parsing process involves the following key steps:
     All data are converted to SI units for consistency.
 
     3. **Ambient Conditions**: Retrieves or sets ambient conditions (:code:`Tamb` and :code:`pamb`),
-    essential for exergy calculations. These can be sourced from the model or specified
+    which are essential for exergy calculations. These can be sourced from the model or specified
     by the user.
 
     4. **Physical Exergy Calculation**: Imports or calculates mechanical and thermal exergy values
     using the extracted properties. This ensures consistency in fluid property models between
-    the simulation and exergy calculations.
+    the simulation and the exergy calculations.
 
     5. **Chemical Exergy Calculation**: Calculates chemical exergy based on material
     composition, utilizing the Ahrendts reference environment.
@@ -171,9 +177,9 @@ The parsing process involves the following key steps:
 
 It is possible to provide a JSON file containing the connection and component data
 in the appropriate structure and format. This file must include information on the physical
-exergy values (mechanical and thermal), as ExerPy does not calculate them autonomously.
+exergy values (mechanical and thermal), as ExerPy does not calculate them itself.
 In this case, the method :code:`from_json` should be used to load the data. The chemical
-exergy calculation is then performed based on this provided data and the
+exergy calculation is then performed based on the provided data and the
 Ahrendts reference environment.
 
 =======
@@ -203,9 +209,9 @@ Inputs
 The exergy analysis in ExerPy requires three structured inputs, each defined by a dictionary of connection IDs. These inputs represent the exergy flows associated with the fuel, product, and losses in the system. All connections entering or leaving the system must be specified, as they are essential for calculating the exergy balance.
 
 - **Exergy of the fuel** (:code:`E_F`): 
-    - ``inputs``: flows entering the system supplying exergy to the system used to obtain the product (e.g., fuel flow to a combustion chamber or a inlet flow of a hot stream)
+    - ``inputs``: flows entering the system that supply the exergy used to obtain the product (e.g., fuel flow to a combustion chamber or an inlet flow of a hot stream)
 
-    - ``outputs``: streams leaving the system diminishing the fuel exergy (e.g., outlet flow of a cold stream)
+    - ``outputs``: streams leaving the system that reduce the fuel exergy (e.g., outlet flow of a cold stream)
 
 - **Exergy of the product** (:code:`E_P`): 
     - ``inputs``: flows leaving the system counted as useful output (e.g., the power flow from a generator)
@@ -222,7 +228,7 @@ The exergy analysis in ExerPy requires three structured inputs, each defined by 
     **Solar thermal components (Ebsilon only).** The heliostat field, parabolic
     trough and solar tower are currently produced only by the Ebsilon parser
     (:code:`from_ebsilon`); the Aspen and TESPy parsers do not provide solar
-    components. These componente receive their exergy from incoming solar radiation, 
+    components. These components receive their exergy from incoming solar radiation, 
     which the parser represents as a synthetic ``<name>_Q`` heat connection (there 
     is no ordinary inlet stream carrying it). To declare this solar input as fuel, 
     put the **name of the component** — not a connection name — in ``E_F["inputs"]``,
@@ -263,16 +269,95 @@ The results include the following key parameters:
 
     - Fuel exergy (:code:`E_F`) in kW
     - Product exergy (:code:`E_P`) in kW
-    - Destruction exergy (:code:`E_D`) in kW
-    - Loss exergy (:code:`E_L`) in kW
+    - Exergy destruction (:code:`E_D`) in kW
+    - Exergy loss (:code:`E_L`) in kW
     - Exergy efficiency (:code:`epsilon`) in %
     - Exergy destruction ratio (:code:`y` and :code:`y_star`) in %
 
 These values are provided both for each component and for the entire system.
 
 
+*******************
+3. Component Sizing
+*******************
+
+The module :mod:`exerpy.costing` reads the sizes of the components from the analysed plant, for the
+cost functions of the economic analysis: the power, the mass flow, the inlet volume flow and the
+pressure ratio of turbomachines, the power of motors and generators, the heat flow of heat exchangers,
+and the area of a heat exchanger from its sections, with the heat transfer coefficients of the user or
+the defaults of comparable cells. It also gives access to the cost correlations of OpenPyTEA
+:cite:`Tamarona2026`, with ``pip install exerpy[costs]``.
+
+======
+Inputs
+======
+
+- **The analysed plant**: the components of an :code:`ExergyAnalysis`.
+- **For the area of a heat exchanger**, optionally the exchanger type (``exchanger_type``), the
+  coefficients (``U``) and the method (``method``), see :ref:`What to give
+  <sizing_what_to_give_label>`.
+- **For a cost estimate with OpenPyTEA**, the key of the correlation.
+
+=======
+Outputs
+=======
+
+:func:`~exerpy.costing.sizes` returns every size the model determines, in SI units, and
+:func:`~exerpy.costing.estimate` the purchased equipment cost of a correlation with its reference
+year, the size it used and how that size fits the range of the correlation:
+
+.. code-block:: python
+
+    from exerpy import costing
+
+    costing.sizes(ean.components["COMP"])            # {"power": ..., "mass_flow": ..., ...}
+    costing.size(ean.components["EVA"], "area", exchanger_type="finned_tube")
+
+See :ref:`Component Sizing <component_sizing_label>` for the method.
+
+********************
+4. Economic Analysis
+********************
+
+:class:`~exerpy.analyses.EconomicAnalysis` turns the purchased equipment costs of the components into
+their cost rates :math:`\dot{Z}` with the total revenue requirement method :cite:`Bejan1996`, carries
+costs from different years to the base year with a plant cost index, and levelizes the cost of the
+streams entering the plant.
+
+======
+Inputs
+======
+
+- **Purchased equipment costs**: known costs, costs scaled from a reference component, user-defined
+  cost equations or the correlations of OpenPyTEA, see :ref:`Where the purchased equipment costs come
+  from <purchase_equipment_costs_label>`.
+- **Economic parameters**: the effective rate of return, the lifetime, the operating hours, the
+  installation factor and the maintenance share; optionally the reference years, the base year, the
+  plant cost index, the costs of the entering streams, the escalation rate and the currency.
+
+The same inputs can be given in a JSON file, read with
+:meth:`~exerpy.analyses.EconomicAnalysis.from_json`.
+
+=======
+Outputs
+=======
+
+:meth:`~exerpy.analyses.EconomicAnalysis.economic_results` returns the cost rates of the components
+and the levelized costs of the plant, and :meth:`~exerpy.analyses.EconomicAnalysis.compute_costs` the
+cost dictionary of the exergoeconomic analysis:
+
+.. code-block:: python
+
+    from exerpy import EconomicAnalysis
+
+    economic = EconomicAnalysis.from_json("costs.json")
+    economic.economic_results(ean)
+    costs = economic.compute_costs(ean)              # input of the exergoeconomic analysis
+
+See :ref:`Economic Analysis <economic_analysis_label>` for the method.
+
 ****************************
-3. Exergoeconomic Analysis
+5. Exergoeconomic Analysis
 ****************************
 
 The exergoeconomic analysis module extends exergy analysis by allocating monetary costs to all exergy
@@ -285,7 +370,7 @@ to determine cost rates and specific costs for every connection and component.
     (:code:`C^T`) and one for its mechanical exergy (:code:`C^M`). With :code:`False` it carries a
     single cost rate for its physical exergy (:code:`C^PH`) instead, which is what Aspen Plus models
     have to use. The split resolves the fuel and the product of a component more finely, so the two
-    do not give the same specific costs. Below the ambient temperature the split is needed to charge
+    settings do not give the same specific costs. Below the ambient temperature the split is needed to charge
     the cold exergy of a stream to the product of the component producing it; without it such a
     component either keeps the cold exergy in its outlet stream or turns dissipative, and a warning
     says so. The two settings are compared on the CGAM process in
@@ -303,9 +388,12 @@ The exergoeconomic analysis requires the following inputs:
 - **Cost dictionary**: A dictionary containing:
 
   - **Component investment costs**: :code:`"<component_name>_Z"` in currency/h (mandatory for all
-    components except CycleCloser and PowerBus)
+    components except CycleCloser, PowerBus and Splitter)
   - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
     entering the system boundary)
+
+  Both can be typed in, as below, or obtained from the economic analysis with
+  :meth:`~exerpy.analyses.EconomicAnalysis.compute_costs`.
 
 .. code-block:: python
 

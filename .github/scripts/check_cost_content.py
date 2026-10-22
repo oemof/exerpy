@@ -13,7 +13,7 @@ INDEX_NAME = "ce" + "pci"  # the commercial index is not named anywhere else in 
 
 BLOCKED_PATH = re.compile(r"(^|/)(cost_estimation|cost_correlations|cost_library)(/|$)")
 BLOCKED_TEXT = re.compile(
-    rf"{INDEX_NAME}|TurtonCostEstimator|_COMP_COST|_MOTOR_COST|_PHX_COST|_DEFAULT_CI_RATIOS|\bPEC_W\b",
+    rf"{INDEX_NAME}|TurtonCostEstimator|\b(?:_COMP_COST|_MOTOR_COST|_PHX_COST|_DEFAULT_CI_RATIOS|PEC_W)\b",
     re.IGNORECASE,
 )
 # A power law with literal coefficients, e.g. "PEC = 15526 * (A / 42) ** 0.8".

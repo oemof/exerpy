@@ -74,26 +74,26 @@ built on, so nothing else has to be changed:
     :header: "Component", ":math:`\dot{C}_\mathrm{F}` split", ":math:`\dot{C}_\mathrm{F}` no split", ":math:`\dot{C}_\mathrm{P}` split", ":math:`\dot{C}_\mathrm{P}` no split", ":math:`\dot{C}_\mathrm{D}` split", ":math:`\dot{C}_\mathrm{D}` no split", ":math:`\dot{Z}`", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` split", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` no split"
     :widths: 12 10 10 10 10 10 10 8 10 10
 
-    "CC", "1220.96", "1175.07", "1297.55", "1254.47", "367.67", "353.85", "4.40", "372.07", "358.25"
-    "AC", "856.59", "832.74", "919.57", "895.95", "60.66", "58.97", "56.99", "117.65", "115.96"
-    "GEN", "866.41", "842.29", "866.41", "842.29", "0.00", "0.00", "0.00", "0.00", "0.00"
-    "APH", "411.94", "419.97", "431.50", "439.82", "63.29", "66.10", "12.26", "75.55", "78.36"
-    "EV", "371.29", "391.36", "395.84", "416.42", "112.38", "118.45", "11.48", "123.85", "129.93"
-    "PH", "101.65", "105.81", "n/a", "n/a", "101.65", "105.81", "5.45", "107.10", "111.26"
-    "EXP", "1666.30", "1617.99", "1723.00", "1675.02", "79.63", "77.32", "48.16", "127.79", "125.48"
-    "TOT", "1183.91", "1183.91", "1322.65", "1322.65", "548.78", "548.78", "138.74", "687.52", "687.52"
+    "CC", "1218.04", "1175.07", "1222.44", "1179.47", "366.79", "353.85", "4.40", "371.19", "358.25"
+    "AC", "797.57", "773.78", "854.56", "830.77", "56.48", "54.80", "56.99", "113.47", "111.79"
+    "GEN", "806.72", "782.66", "806.72", "782.66", "0.00", "0.00", "0.00", "0.00", "0.00"
+    "APH", "385.34", "391.49", "397.60", "403.75", "59.20", "61.62", "12.26", "71.46", "73.88"
+    "EV", "347.40", "364.82", "358.87", "376.29", "105.15", "110.42", "11.48", "116.62", "121.90"
+    "PH", "95.08", "98.64", "100.54", "104.09", "44.36", "46.01", "5.45", "49.81", "51.47"
+    "EXP", "1556.13", "1508.27", "1604.29", "1556.43", "74.36", "72.08", "48.16", "122.52", "120.24"
+    "TOT", "1183.90", "1183.90", "1322.64", "1322.64", "548.78", "548.78", "138.74", "687.52", "687.52"
 
 .. csv-table:: Specific costs in USD/GJ and exergoeconomic indicators in %
     :header: "Component", ":math:`c_\mathrm{F}` split", ":math:`c_\mathrm{F}` no split", ":math:`c_\mathrm{P}` split", ":math:`c_\mathrm{P}` no split", ":math:`f` split", ":math:`f` no split", ":math:`r` split", ":math:`r` no split"
     :widths: 12 11 11 11 11 11 11 11 11
 
-    "CC", "4.034", "3.883", "6.135", "5.931", "1.183", "1.228", "52.065", "52.757"
-    "AC", "8.022", "7.799", "9.269", "9.031", "48.439", "49.145", "15.535", "15.791"
-    "GEN", "8.022", "7.799", "8.022", "7.799", "0.000", "0.000", "0.000", "0.000"
-    "APH", "6.868", "7.173", "8.500", "8.916", "16.228", "15.646", "23.762", "24.286"
-    "EV", "6.806", "7.173", "10.405", "10.946", "9.266", "8.833", "52.889", "52.589"
-    "PH", "14.773", "15.377", "n/a", "n/a", "5.092", "4.902", "n/a", "n/a"
-    "EXP", "7.388", "7.173", "8.022", "7.799", "37.687", "38.380", "8.592", "8.720"
+    "CC", "4.025", "3.883", "5.780", "5.577", "1.185", "1.228", "43.605", "43.624"
+    "AC", "7.470", "7.247", "8.613", "8.374", "50.223", "50.980", "15.312", "15.548"
+    "GEN", "7.470", "7.247", "7.470", "7.247", "0.000", "0.000", "0.000", "0.000"
+    "APH", "6.425", "6.687", "7.833", "8.185", "17.156", "16.595", "21.911", "22.395"
+    "EV", "6.368", "6.687", "9.433", "9.891", "9.840", "9.415", "48.141", "47.915"
+    "PH", "6.446", "6.687", "12.775", "13.227", "10.950", "10.597", "98.192", "97.804"
+    "EXP", "6.899", "6.687", "7.470", "7.247", "39.306", "40.054", "8.269", "8.372"
     "TOT", "3.862", "3.862", "8.581", "8.581", "20.180", "20.180", "122.165", "122.165"
 
 The investment cost :math:`\dot{Z}` is an input and identical in both runs, and so is the exergy
@@ -124,7 +124,7 @@ pressure loss of the cold stream from its temperature rise:
 
 Without the split the pressure loss of the air, 398 kW, is no longer charged as fuel; it is netted
 against the temperature rise inside the product instead. Fuel and product both shrink by that
-amount, the exergy destruction stays the same, and the product becomes 4.7 % more expensive because
+amount, the exergy destruction stays the same, and the product becomes 4.5 % more expensive because
 the same cost is carried by less product.
 
 **The cost of the inlet streams changes.** The evaporator and the gas turbine have the same fuel and
@@ -132,13 +132,13 @@ the same product in both runs, but their specific costs still differ. With the s
 equations price the thermal and the mechanical exergy of a stream separately, and the exhaust gas
 leaving a component has a different mix of the two than the stream entering it. The cost that leaves
 with the exhaust gas is therefore not the same, which is why the deviation grows along the flue gas
-path and reaches about 5 % in the components at its end, the evaporator and the economizer.
+path and reaches about 5 % in the evaporator.
 
 Together the two effects change the order in which the components would be addressed for
 improvement. Ranked by :math:`\dot{C}_\mathrm{D} + \dot{Z}`, the combustion chamber leads in both
 runs by a wide margin, but the second and third places change hands: with the split the gas turbine
-comes before the evaporator (127.79 versus 123.85 USD/h); without it the evaporator comes before
-the gas turbine (129.93 versus 125.48 USD/h).
+comes before the evaporator (122.52 versus 116.62 USD/h); without it the evaporator comes before
+the gas turbine (121.90 versus 120.24 USD/h).
 
 4. **The system itself is not affected**
 
@@ -151,8 +151,8 @@ the gas turbine (129.93 versus 125.48 USD/h).
     :header: "", "split", "no split"
     :widths: 20 20 20
 
-    ":math:`\dot{C}_\mathrm{F}`", "1183.91", "1183.91"
-    ":math:`\dot{C}_\mathrm{P}`", "1322.65", "1322.65"
+    ":math:`\dot{C}_\mathrm{F}`", "1183.90", "1183.90"
+    ":math:`\dot{C}_\mathrm{P}`", "1322.64", "1322.64"
     ":math:`\dot{Z}`", "138.74", "138.74"
 
 The cost entering the plant and the cost leaving it with the product are the same either way. The

@@ -15,7 +15,7 @@ examples = sorted((REPO_ROOT / "examples").glob("**/*tespy.py"))
 # Maximum acceptable relative deviation between the tespy results and the
 # results of the other simulators. The observed deviations are all around or
 # below 1 %, see the validation notebooks next to the example scripts.
-RELATIVE_TOLERANCE = 0.02
+RELATIVE_TOLERANCE = 0.0105
 
 
 def _relative_differences(path1, path2):

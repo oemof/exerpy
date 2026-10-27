@@ -1,4 +1,7 @@
+import msgspec
 import numpy as np
+
+from exerpy.quantities import Name
 
 
 def component_registry(cls):
@@ -59,6 +62,15 @@ class Component:
     --------
     exerpy.components : Module containing all available components for exergy analysis
     """
+
+    class Input(msgspec.Struct, kw_only=True):
+        """Keys of the component's entry in the input that ExerPy reads.
+
+        A subclass that reads further keys extends its parent's ``Input``. The keys
+        not declared here are still passed on, but not validated.
+        """
+
+        name: Name
 
     def __init__(self, **kwargs):
         r"""Initialize the component with given parameters."""

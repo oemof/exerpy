@@ -32,6 +32,8 @@ jobs:
         pip install tox tox-gh-actions
     - name: Test with tox
       run: tox
+    - name: Test import
+      run: tox -e minimal
 
     # - name: Check test coverage
     #   run: coverage report -m --fail-under=${{ matrix.vcs == 'bzr' && 84 || 85 }}

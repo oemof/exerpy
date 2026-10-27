@@ -1,0 +1,12 @@
+v0.2.1 (unreleased)
++++++++++++++++++++
+
+Bug Fixes
+#########
+- The EBSILON parser raises an error when the calculation of a model fails, instead of parsing the
+  results of an earlier calculation that the model still holds. Every message of the solver is
+  logged with its error code and object, also when it has no description (closes #53).
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

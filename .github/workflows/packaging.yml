@@ -43,7 +43,7 @@ jobs:
               exit 1
             fi
           done
-          echo "OK – no blocked paths found"
+          echo "OK - no blocked paths found"
         done
     - uses: actions/upload-artifact@v4
       with:

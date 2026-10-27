@@ -53,6 +53,7 @@ dependencies = [
     "pandas",
     "numpy",
     "CoolProp",
+    "tabulate",
 ]
 license = {text = "MIT"}
 

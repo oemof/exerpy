@@ -15,8 +15,9 @@ loss = {"inputs": ["C2"], "outputs": ["C1"]}
 
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/solar_thermal/solar_tower_ebs.json")
+df_component_results.to_csv("examples/exergy_analysis/solar_thermal/solar_tower_components_ebsilon.csv")
 
 # Placeholder investment cost rates in EUR/h; revise later with a proper cost estimation.
 eco = ExergoeconomicAnalysis(ean, currency="EUR")

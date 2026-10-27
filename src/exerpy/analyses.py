@@ -240,8 +240,10 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
-        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
-        # is treated as dissipative, unless its dissipative behavior was set explicitly.
+        # A heat exchanger whose product is declared a loss (an outlet listed in E_L that carries
+        # its product, e.g. the cooling water of a condenser) is treated as dissipative, unless its
+        # dissipative behavior was set explicitly. A fuel-side outlet in E_L, such as the flue gas
+        # of an economizer going to the stack, leaves the exchanger productive.
         loss_conn_names = set()
         for key in ("inputs", "outputs"):
             loss_conn_names.update(E_L.get(key, []))
@@ -254,8 +256,10 @@ class ExergyAnalysis:
                 continue
             if getattr(source, "dissipative", None) is not None:
                 continue
+            if conn.get("source_connector") not in source._product_outlets(self.Tamb):
+                continue
             source.dissipative = True
-            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+            logger.info(f"HeatExchanger {source.name} marked dissipative: product outlet '{label}' is in E_L.")
 
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.

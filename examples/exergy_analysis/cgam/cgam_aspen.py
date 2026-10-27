@@ -20,5 +20,6 @@ product = {"inputs": ["E1", "9"], "outputs": ["8"]}
 loss = {"inputs": ["7"], "outputs": []}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/cgam/cgam_aspen.json")
+df_component_results.to_csv("examples/exergy_analysis/cgam/cgam_components_aspen.csv")

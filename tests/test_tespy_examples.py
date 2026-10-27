@@ -9,8 +9,8 @@ import pytest
 from exerpy import ExergyAnalysis
 from exerpy.analyses import _load_json
 
-path = os.path.join(os.path.dirname(__file__), "..", "examples")
-examples = sorted(pathlib.Path(path).glob("**/*tespy.py"))
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+examples = sorted((REPO_ROOT / "examples").glob("**/*tespy.py"))
 
 # Maximum acceptable relative deviation between the tespy results and the
 # results of the other simulators. The observed deviations are all around or
@@ -54,16 +54,23 @@ def _relative_differences(path1, path2):
 
 
 @pytest.mark.parametrize("script", examples, ids=lambda script: script.stem)
-def test_tespy_model_execution(script):
-    runpy.run_path(script)
+def test_tespy_model_execution(script, tmp_path, monkeypatch):
+    # The scripts write their results to paths relative to the repository root,
+    # so mirror that folder structure inside tmp_path and run from there.
+    relative_dir = script.parent.relative_to(REPO_ROOT)
+    (tmp_path / relative_dir).mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
 
-    tespy_json = script.with_suffix(".json")
-    assert tespy_json.is_file(), f"Expected the script {script.name} to export its results to " f"{tespy_json.name}."
+    runpy.run_path(str(script))
 
+    tespy_json = tmp_path / relative_dir / script.with_suffix(".json").name
+    assert tespy_json.is_file(), f"Expected the script {script.name} to export its results to {tespy_json.name}."
+
+    # The reference results of the other simulators stay in the repository.
     reference_jsons = [
         reference
         for suffix in ("_ebs.json", "_aspen.json")
-        if (reference := tespy_json.with_name(tespy_json.name.replace("_tespy.json", suffix))).is_file()
+        if (reference := script.with_name(script.stem.replace("_tespy", "") + suffix)).is_file()
     ]
     assert reference_jsons, f"No reference results of other simulators found next to {script.name}."
 

@@ -494,7 +494,9 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None):
+    def from_json(
+        cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True
+    ):
         """
         Create an ExergyAnalysis instance from a JSON file.
 
@@ -508,6 +510,12 @@ class ExergyAnalysis:
             Ambient pressure in Pa. If None, extracted from JSON.
         chemExLib : str, optional
             Name of chemical exergy library to use. Default is None.
+        split_physical_exergy : bool, optional
+            Split physical exergy into thermal and mechanical parts. If None, read
+            from the JSON settings or detected from the data.
+        validate : bool, default=True
+            Check the file against the input schema of :mod:`exerpy.schema` before
+            the analysis is set up. All problems found are reported at once.
 
         Returns
         -------
@@ -519,11 +527,19 @@ class ExergyAnalysis:
         FileNotFoundError
             If JSON file does not exist.
         ValueError
-            If JSON structure is invalid or missing required data.
+            If JSON structure is invalid or missing required data. With
+            ``validate=True`` this is an :class:`exerpy.schema.InputValidationError`,
+            whose ``issues`` attribute lists each problem with its location.
         JSONDecodeError
             If JSON file is malformed.
         """
         data = _load_json(json_path)
+        if validate:
+            from . import schema as input_schema
+
+            input_schema.validate(
+                data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+            )
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )

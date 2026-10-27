@@ -2466,9 +2466,9 @@ class ExergoeconomicAnalysis:
         df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
         # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
-        df_mat1.dropna(axis=1, how="all", inplace=True)
-        df_mat2.dropna(axis=1, how="all", inplace=True)
-        df_non_mat.dropna(axis=1, how="all", inplace=True)
+        df_mat1 = df_mat1.dropna(axis=1, how="all")
+        df_mat2 = df_mat2.dropna(axis=1, how="all")
+        df_non_mat = df_non_mat.dropna(axis=1, how="all")
 
         # -------------------------
         # Print the four tables if requested.

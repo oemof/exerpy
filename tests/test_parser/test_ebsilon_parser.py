@@ -236,10 +236,67 @@ def test_simulate_model(parser):
     mock_calc_errors = Mock()
     mock_calc_errors.Count = 0
     parser.model = Mock()
+    parser.model.SimulateNew.return_value = 0
     parser.model.CalculationErrors = mock_calc_errors
 
     parser.simulate_model()
     parser.model.SimulateNew.assert_called_once()
+
+
+def _solver_error(level, code=None, obj=None, description=""):
+    """Mock of an Ebsilon solver message (an item of ``CalculationErrors``)."""
+    error = Mock(Level=level, Code=code, HasCode=code is not None, HasObject=obj is not None, Description=description)
+    if obj is not None:
+        error.Object.Name = obj
+    return error
+
+
+@pytest.fixture
+def offline_parser():
+    """Parser with a mocked model whose calculation status can be set, usable without Ebsilon."""
+    with (
+        patch("exerpy.parser.from_ebsilon.ebsilon_parser.is_ebsilon_available", return_value=True),
+        patch("exerpy.parser.from_ebsilon.utils.__ebsilon_available__", True),
+    ):
+        parser = EbsilonModelParser("dummy_path.ebs")
+        parser.model = Mock()
+
+        def set_calculation(status, errors):
+            parser.model.SimulateNew.return_value = status
+            parser.model.CalculationErrors.Count = len(errors)
+            parser.model.CalculationErrors.Item.side_effect = lambda i: errors[i - 1]
+
+        parser.set_calculation = set_calculation
+        yield parser
+
+
+@pytest.mark.parametrize("status", [3, 4, 5, 6, 9, 12])
+def test_simulate_model_failed_calculation_raises(offline_parser, status):
+    """A failed calculation raises instead of leaving the results of an earlier one to be parsed."""
+    offline_parser.set_calculation(status, [_solver_error(2, code=2204, obj="13")])
+
+    with pytest.raises(RuntimeError, match="object '13'.*not parsed"):
+        offline_parser.simulate_model()
+
+
+@pytest.mark.parametrize("status", [0, 1, 2])
+def test_simulate_model_successful_calculation_logs_messages(offline_parser, status, caplog):
+    """Successful calculations pass; messages without a description are logged with code and object."""
+    offline_parser.set_calculation(
+        status,
+        [
+            _solver_error(1, code=2206, obj="17", description="   0.000000"),
+            _solver_error(0, code=2585, obj="GEN1", description="QAPP cannot be calculated"),
+        ],
+    )
+
+    with caplog.at_level("INFO", logger="exerpy"):
+        offline_parser.simulate_model()
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "code 2206" in warnings[0] and "object '17'" in warnings[0]
+    assert any("QAPP cannot be calculated (code 2585, object 'GEN1')" in r.message for r in caplog.records)
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")

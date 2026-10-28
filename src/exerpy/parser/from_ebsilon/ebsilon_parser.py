@@ -26,6 +26,7 @@ from .utils import require_ebsilon
 # Import Ebsilon classes if available
 if __ebsilon_available__:
     from EbsOpen import EpCalculationResultStatus2
+    from EbsOpen import EpErrorCode
     from EbsOpen import EpFluidType
     from EbsOpen import EpGasTable
     from EbsOpen import EpSteamTable
@@ -36,6 +37,7 @@ else:
     EpSteamTable = EpSteamTableStub
     EpGasTable = EpGasTableStub
     EpCalculationResultStatus2 = EpCalculationResultStatus2Stub
+    EpErrorCode = None
     EpThermoLiquidType = None
 
 from .ebsilon_config import composition_params
@@ -60,6 +62,44 @@ SG_HEAT_CONNECTOR = 3  # connector carrying the heat flow between zone and main 
 MEASURING_POINT = 46
 REFERENCE_PRESSURE = 13
 REFERENCE_TEMPERATURE = 26
+
+# Calculation statuses whose results are valid: successful, with comments, with warnings
+SUCCESSFUL_CALCULATION = (0, 1, 2)
+# Levels of the solver messages (EpErrorLevel); lower levels are comments
+ERROR_LEVEL = 2
+WARNING_LEVEL = 1
+
+
+def _enum_name(enum, value):
+    """Name of an Ebsilon enum member, or None if the enum or the value is unknown."""
+    try:
+        return enum(value).name
+    except Exception:
+        return None
+
+
+def _solver_message(error):
+    """
+    Readable text of an Ebsilon solver message, with its error code and object.
+
+    Some messages have no description or only a residual as description; they are named
+    after their error code instead.
+    """
+    text = str(error.Description).strip()
+    try:
+        float(text)
+        text = ""
+    except ValueError:
+        pass
+    code = error.Code if error.HasCode else None
+    if not text and code is not None:
+        name = _enum_name(EpErrorCode, code)
+        text = name.split("__", 1)[-1].replace("_", " ") if name else ""
+    details = [f"code {code}"] if code is not None else []
+    if error.HasObject:
+        details.append(f"object '{error.Object.Name}'")
+    text = text or "no description"
+    return f"{text} ({', '.join(details)})" if details else text
 
 
 def _thermoliquid_name(pipe_cast):
@@ -256,34 +296,39 @@ class EbsilonModelParser:
     @require_ebsilon
     def simulate_model(self):
         """
-        Simulates the Ebsilon model and logs any calculation errors.
+        Simulates the Ebsilon model and logs the messages of the solver.
+
+        A failed calculation leaves the results of an earlier one in the model, so it is not
+        parsed: errors, comments and warnings are logged, and a failed status raises an error.
 
         Raises:
-            Exception: If model simulation fails.
+            RuntimeError: If the calculation does not end successfully, i.e. with a status other
+                than successful, successful with comments or successful with warnings.
         """
-        try:
-            # Prepare to collect calculation errors
-            calc_errors = self.model.CalculationErrors
-            # Run the simulation
-            self.model.SimulateNew()
-            error_count = calc_errors.Count
-            logger.info(f"Simulation completed with {error_count} solver message(s).")
-            # Log only solver messages that carry an actual description; Ebsilon also
-            # returns rows whose description is empty or a bare number (no information).
-            if error_count > 0:
-                for i in range(1, error_count + 1):
-                    desc = str(calc_errors.Item(i).Description).strip()
-                    if not desc:
-                        continue
-                    try:
-                        float(desc)
-                        continue  # purely numeric row, nothing actionable
-                    except ValueError:
-                        pass
-                    logger.warning(f"Ebsilon solver warning {i}: {desc}")
-        except Exception as e:
-            logger.error(f"Failed during simulation: {e}")
-            raise
+        status = self.model.SimulateNew()
+        calc_errors = self.model.CalculationErrors
+        errors = []
+        for i in range(1, calc_errors.Count + 1):
+            error = calc_errors.Item(i)
+            message = _solver_message(error)
+            if error.Level == ERROR_LEVEL:
+                errors.append(message)
+                logger.error(f"Ebsilon solver error: {message}")
+            elif error.Level == WARNING_LEVEL:
+                logger.warning(f"Ebsilon solver warning: {message}")
+            else:
+                logger.info(f"Ebsilon solver comment: {message}")
+
+        status_name = (_enum_name(EpCalculationResultStatus2, status) or str(status)).removeprefix(
+            "epCalculationResultStatus2"
+        )
+        logger.info(f"Simulation ended with status {status_name} and {calc_errors.Count} solver message(s).")
+        if status not in SUCCESSFUL_CALCULATION:
+            raise RuntimeError(
+                f"The Ebsilon calculation of {self.model_path} ended with status {status_name}"
+                + (f": {'; '.join(errors)}" if errors else "")
+                + ". The model still holds the results of an earlier calculation, so it is not parsed."
+            )
 
     @require_ebsilon
     def parse_model(self):

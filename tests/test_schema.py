@@ -144,7 +144,7 @@ def test_fields_exerpy_does_not_read_are_ignored(data):
     comp = data["components"]["Turbine"]["GT"]
     comp.update({"eta_s": "not a number", "type_index": [], "P": -1e9, "mul_signs": None})
     conn = data["connections"]["1"]
-    conn.update({"T_unit": "°C", "s": "n/a", "name": "other", "fluid_type_id": {}, "E": "?"})
+    conn.update({"s": "n/a", "name": "other", "fluid_type_id": {}, "E": "?"})
     data["system_results"] = "anything"
     assert errors(data) == []
     assert warnings(data) == []

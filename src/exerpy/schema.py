@@ -11,7 +11,8 @@ exports also carry what the simulators report besides (efficiencies, units, flui
 results of an earlier analysis, ...); ExerPy ignores those, and so does the validation.
 Each field below notes where ExerPy uses it.
 
-Validation happens in two passes:
+The values are first converted to SI units with :func:`exerpy.units.to_SI`; a unit that is
+unknown or of the wrong kind is an error. Validation then happens in two passes:
 
 1. **Structural**, done by ``msgspec`` while decoding: required keys, types, the
    ``kind`` tag of each connection and physical bounds (positive temperatures, mass
@@ -48,6 +49,7 @@ from msgspec import Meta
 from msgspec import Struct
 from msgspec import UnsetType
 
+from . import units
 from .components.component import Component
 from .components.component import component_registry
 from .logger import logger
@@ -390,19 +392,22 @@ def check(
 
     Parameters are those of :func:`validate`.
     """
-    if isinstance(data, dict):
+    if not isinstance(data, dict):
         try:
-            buf = msgspec.json.encode(data, enc_hook=_enc_hook)
-        except (TypeError, NotImplementedError, OverflowError) as exc:
-            return None, [Issue("error", "$", f"data is not JSON-serialisable: {exc}")]
-    else:
-        buf = data.encode() if isinstance(data, str) else data
+            data = _decode_any(data.encode() if isinstance(data, str) else data)
+        except msgspec.DecodeError as exc:
+            return None, [Issue("error", "$", f"malformed JSON: {exc}")]
+    data, problems = units.to_SI(data)
+    if problems:
+        return None, [Issue("error", path, message) for path, message in problems]
+    try:
+        buf = msgspec.json.encode(data, enc_hook=_enc_hook)
+    except (TypeError, NotImplementedError, OverflowError) as exc:
+        return None, [Issue("error", "$", f"data is not JSON-serialisable: {exc}")]
     try:
         env = _decode_envelope(buf)
     except msgspec.ValidationError as exc:
         return None, [_structural_issue(exc)]
-    except msgspec.DecodeError as exc:
-        return None, [Issue("error", "$", f"malformed JSON: {exc}")]
 
     structural: list[Issue] = []
     components: dict[str, dict[str, Component.Input]] = {}
@@ -463,8 +468,8 @@ def validate(
     Returns
     -------
     ExerpyInput
-        The validated document. Unknown keys are not part of it; the analysis keeps
-        working on the original dictionary.
+        The validated document, in SI units. Unknown keys are not part of it; the
+        analysis keeps working on the original dictionary.
 
     Raises
     ------

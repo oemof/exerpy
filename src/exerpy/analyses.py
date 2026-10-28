@@ -388,10 +388,8 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = to_exerpy(model, Tamb, pamb)
-        if validate:
-            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb, pamb, chemExLib, split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
@@ -435,15 +433,8 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
-        if validate:
-            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
-            required_component_fields=["name", "type"],
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate, required_component_fields=["name", "type"]
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
@@ -495,14 +486,13 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
-        if validate:
-            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
             data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
+            Tamb,
+            pamb,
+            chemExLib,
+            split_physical_exergy,
+            validate,
             required_component_fields=["name", "type", "type_index"],
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
@@ -511,6 +501,9 @@ class ExergyAnalysis:
     def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True):
         """
         Create an ExergyAnalysis instance from a JSON file.
+
+        A value given with a unit, as ``"T": 15.0, "T_unit": "degC"``, is converted to SI; a value
+        without a unit is taken as SI, see :mod:`exerpy.units`.
 
         Parameters
         ----------
@@ -539,17 +532,16 @@ class ExergyAnalysis:
         FileNotFoundError
             If JSON file does not exist.
         ValueError
-            If JSON structure is invalid or missing required data. With
-            ``validate=True`` this is an :class:`exerpy.schema.InputValidationError`,
-            whose ``issues`` attribute lists each problem with its location.
+            If JSON structure is invalid or missing required data. For a unit that is
+            unknown or of the wrong kind, and with ``validate=True`` for any problem, this is
+            an :class:`exerpy.schema.InputValidationError`, whose ``issues`` attribute lists
+            each problem with its location.
         JSONDecodeError
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        if validate:
-            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
@@ -1261,11 +1253,19 @@ def _load_json(json_path):
         return json.load(file)
 
 
-def _validate(data, Tamb, pamb, chemExLib, split_physical_exergy):
-    """Check the input with :func:`exerpy.schema.validate`, which reports all problems at once."""
+def _prepare(data, Tamb, pamb, chemExLib, split_physical_exergy, validate, **kwargs):
+    """Convert the input to SI units, check it with :func:`exerpy.schema.validate` and process it."""
     from . import schema
+    from . import units
 
-    schema.validate(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy)
+    data, problems = units.to_SI(data)
+    if problems:
+        raise schema.InputValidationError([schema.Issue("error", path, message) for path, message in problems])
+    if validate:
+        schema.validate(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy)
+    return _process_json(
+        data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy, **kwargs
+    )
 
 
 def _process_json(

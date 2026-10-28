@@ -176,8 +176,9 @@ The parsing process involves the following key steps:
     file for subsequent analysis.
 
 It is possible to provide a JSON file containing the connection and component data
-in the appropriate structure and format. This file must include information on the physical
-exergy values (mechanical and thermal), as ExerPy does not calculate them itself.
+in the format described in :ref:`JSON format <json_format_label>`. This file must include
+information on the physical exergy values (mechanical and thermal), as ExerPy does not calculate
+them itself.
 In this case, the method :code:`from_json` should be used to load the data. The chemical
 exergy calculation is then performed based on the provided data and the
 Ahrendts reference environment.
@@ -452,4 +453,5 @@ API References
     api/costing.rst
     api/functions.rst
     api/parser.rst
+    api/schema.rst
     api/visualization.rst

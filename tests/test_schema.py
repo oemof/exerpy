@@ -252,6 +252,16 @@ def test_all_semantic_errors_reported_together(data):
     assert "3 error(s)" in str(exc.value)
 
 
+def test_units_are_checked_not_converted(data):
+    data["connections"]["1"].update({"T": 15.0, "T_unit": "degC", "p_unit": "K", "m_unit": 5})
+    assert errors(data) == [
+        ("$.connections['1'].m_unit", "unit must be a string, got 5"),
+        ("$.connections['1'].p_unit", "unit 'K' cannot be converted to 'Pa'"),
+    ]
+    data["connections"]["1"].update({"p_unit": "bar", "m_unit": "t / h"})
+    assert validate(data).connections["1"].T == 15.0
+
+
 # --- warnings ------------------------------------------------------------------------
 
 

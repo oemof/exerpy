@@ -11,7 +11,8 @@ exports also carry what the simulators report besides (efficiencies, units, flui
 results of an earlier analysis, ...); ExerPy ignores those, and so does the validation.
 Each field below notes where ExerPy uses it.
 
-Validation happens in two passes:
+The validation does not convert units. Its bounds hold in SI, so ExerPy converts the values
+with :func:`exerpy.units.to_SI` before it validates them. Validation happens in two passes:
 
 1. **Structural**, done by ``msgspec`` while decoding: required keys, types, the
    ``kind`` tag of each connection and physical bounds (positive temperatures, mass
@@ -19,8 +20,9 @@ Validation happens in two passes:
 2. **Semantic**, done by :func:`validate` on the decoded structs: rules that span
    several fields or sections and so cannot be written as a type, e.g. that each
    component type is registered, that no two streams enter the same inlet of a
-   component, or that ``split_physical_exergy`` has the ``e_T``/``e_M`` values it
-   needs.
+   component, that ``split_physical_exergy`` has the ``e_T``/``e_M`` values it
+   needs, or that each unit given (``"T_unit": "degC"``) is known and of the right
+   kind. A value without a unit is in SI.
 
 All problems are collected and reported together.
 
@@ -48,6 +50,7 @@ from msgspec import Meta
 from msgspec import Struct
 from msgspec import UnsetType
 
+from . import units
 from .components.component import Component
 from .components.component import component_registry
 from .logger import logger
@@ -314,6 +317,21 @@ def _semantic_issues(
     return issues
 
 
+def _unit_issues(data: dict) -> list[Issue]:
+    """Each unit given for a value of :data:`exerpy.units.SI_UNITS` has to be known and of the right kind."""
+    issues: list[Issue] = []
+    for entry, path in units.entries(data):
+        for key, si in units.SI_UNITS.items():
+            unit = entry.get(f"{key}_unit")
+            if unit is None:
+                continue
+            try:
+                units.check_unit(unit, si)
+            except ValueError as exc:
+                issues.append(Issue("error", f"{path}.{key}_unit", str(exc)))
+    return issues
+
+
 # ---------------------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------------------
@@ -436,6 +454,7 @@ def check(
         settings=env.settings,
     )
     issues = _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy)
+    issues += _unit_issues(data if isinstance(data, dict) else _decode_any(buf))
     return (None if any(i.severity == "error" for i in issues) else model), issues
 
 

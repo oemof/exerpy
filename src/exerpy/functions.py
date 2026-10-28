@@ -706,8 +706,8 @@ fluid_property_data = {
     },
     "x": {
         "text": "vapor mass fraction",
-        "SI_unit": "-",
-        "units": {"1": 1, "-": 1, "%": 1e-2, "ppm": 1e-6},
+        "SI_unit": "dimensionless",
+        "units": {"dimensionless": 1, "1": 1, "-": 1, "%": 1e-2, "ppm": 1e-6},
         "latex_eq": r"0 = h - h\left(p, x_\mathrm{spec}\right)",
         "documentation": {"float_fmt": "{:,.2f}"},
     },

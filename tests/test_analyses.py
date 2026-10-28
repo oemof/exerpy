@@ -680,9 +680,14 @@ def test_export_to_json(tmp_path, mock_component_data, mock_connection_data):
     assert ambient["Tamb"] == 298.15
     assert ambient["pamb"] == 101325
 
-    # Optionally, verify that the components and connections match the original inputs.
-    assert data["components"] == mock_component_data
-    assert data["connections"] == mock_connection_data
+    # The components and connections are the original inputs, each value with its unit.
+    without_units = lambda entry: {k: v for k, v in entry.items() if not k.endswith("_unit")}  # noqa: E731
+    for name, conn in data["connections"].items():
+        assert without_units(conn) == mock_connection_data[name]
+    turbine = data["components"]["MockTurbine"]["T1"]
+    assert turbine["eta_s_unit"] == "dimensionless"
+    assert turbine["exergy_results"]["E_D_unit"] == "W"
+    assert data["connections"]["1"]["T_unit"] == "K"
 
 
 def test_from_json_with_chemical_exergy(json_file, monkeypatch):

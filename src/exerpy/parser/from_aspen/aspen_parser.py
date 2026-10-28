@@ -4,6 +4,7 @@ import os
 from exerpy.functions import convert_to_SI
 from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.units import add_units
 
 from .aspen_config import connector_mappings
 from .aspen_config import grouped_components
@@ -386,6 +387,7 @@ class AspenModelParser:
                                 {
                                     "eta_el": 1 / factor,
                                     "multiplier factor": factor,
+                                    "multiplier factor_unit": "dimensionless",
                                     "type": "Motor",
                                     "P_el": elec_power,
                                     "P_el_unit": fluid_property_data["power"]["SI_unit"],
@@ -846,11 +848,13 @@ class AspenModelParser:
             "pamb": self.pamb,
             "pamb_unit": fluid_property_data["p"]["SI_unit"],
         }
-        return {
-            "components": sorted_components,
-            "connections": sorted_connections,
-            "ambient_conditions": ambient_conditions,
-        }
+        return add_units(
+            {
+                "components": sorted_components,
+                "connections": sorted_connections,
+                "ambient_conditions": ambient_conditions,
+            }
+        )
 
     def write_to_json(self, output_path):
         """

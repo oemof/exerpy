@@ -10,7 +10,9 @@ from exerpy import ExergyAnalysis
 from exerpy.schema import InputValidationError
 from exerpy.schema import check
 from exerpy.units import SI_UNITS
+from exerpy.units import add_units
 from exerpy.units import convert
+from exerpy.units import from_SI
 from exerpy.units import registry
 from exerpy.units import to_SI
 
@@ -44,9 +46,9 @@ def data():
 def in_other_units(data):
     data = copy.deepcopy(data)
     for entry in [data["ambient_conditions"], *data["connections"].values()]:
-        for key, (unit, from_SI) in OTHER_UNITS.items():
+        for key, (unit, to_unit) in OTHER_UNITS.items():
             if isinstance(entry.get(key), float):
-                entry[key] = from_SI(entry[key])
+                entry[key] = to_unit(entry[key])
                 entry[f"{key}_unit"] = unit
     return data
 
@@ -204,3 +206,62 @@ def test_export_is_in_SI(tmp_path, data):
     conn = exported["connections"]["1"]
     assert conn["p"] == pytest.approx(data["connections"]["1"]["p"])
     assert (conn["p_unit"], conn["m_unit"], conn["s_unit"]) == ("Pa", "kg / s", "J / kgK")
+
+
+def test_export_has_a_unit_for_every_value(tmp_path, data, values_without_unit):
+    ean = analysed(data, tmp_path / "si.json")
+    ean.export_to_json(str(tmp_path / "export.json"))
+    exported = json.loads((tmp_path / "export.json").read_text())
+    assert values_without_unit(exported) == []
+    assert exported["components"]["Turbine"]["GT"]["exergy_results"]["epsilon_unit"] == "dimensionless"
+    assert exported["system_results"]["E_D_unit"] == "W"
+    assert exported["connections"]["1"]["E_PH_unit"] == "W"
+
+
+def test_add_units_keeps_given_units():
+    data = {"connections": {"1": {"T": 300.0, "p": 1.0, "p_unit": "bar", "label": 3}}}
+    assert add_units(data)["connections"]["1"] == {"T": 300.0, "T_unit": "K", "p": 1.0, "p_unit": "bar", "label": 3}
+
+
+def test_from_SI():
+    data = {
+        "ambient_conditions": {"Tamb": 288.15},
+        "connections": {"1": {"T": 373.15, "p": 2e5, "m": 1.0}},
+        "components": {"Turbine": {"GT": {"name": "GT", "exergy_results": {"E_D": 2e6, "E_P": None}}}},
+        "system_results": {"E_D": 5e6},
+    }
+    converted = from_SI(data, {"T": "degC", "Tamb": "degC", "p": "bar", "E_D": "MW", "E_P": "MW"})
+    assert converted["ambient_conditions"] == {"Tamb": pytest.approx(15.0), "Tamb_unit": "degC"}
+    conn = converted["connections"]["1"]
+    assert (conn["T"], conn["T_unit"], conn["p"], conn["p_unit"]) == (pytest.approx(100.0), "degC", 2.0, "bar")
+    assert (conn["m"], conn["m_unit"]) == (1.0, "kg / s")
+    results = converted["components"]["Turbine"]["GT"]["exergy_results"]
+    assert results == {"E_D": 2.0, "E_D_unit": "MW", "E_P": None, "E_P_unit": "MW"}
+    assert converted["system_results"]["E_D"] == 5.0
+    assert data["connections"]["1"]["T"] == 373.15  # the input is left as it is
+
+
+@pytest.mark.parametrize(
+    "units, message",
+    [({"temperature": "degC"}, "no unit is known for 'temperature'"), ({"T": "bar"}, "unit of 'T': unit 'K' cannot")],
+)
+def test_from_SI_bad_units(units, message):
+    with pytest.raises(ValueError, match=message):
+        from_SI({"connections": {}}, units)
+
+
+def test_export_in_other_units_reads_back(tmp_path, data):
+    si = analysed(data, tmp_path / "si.json")
+    units = {"T": "degC", "Tamb": "degC", "p": "bar", "m": "t / h", "h": "kJ / kg", "E": "kW", "E_D": "kW"}
+    si.export_to_json(str(tmp_path / "export.json"), units=units)
+    exported = json.loads((tmp_path / "export.json").read_text())
+    conn = exported["connections"]["1"]
+    assert conn["T"] == pytest.approx(data["connections"]["1"]["T"] - 273.15)
+    assert conn["T_unit"] == "degC"
+    assert conn["m_unit"] == "t / h"
+    assert exported["system_results"]["E_D"] == pytest.approx(si.E_D / 1e3)
+    assert exported["system_results"]["E_D_unit"] == "kW"
+    again = ExergyAnalysis.from_json(str(tmp_path / "export.json"))
+    again.analyse(**FLOWS)
+    assert pytest.approx(si.E_D, rel=1e-9) == again.E_D
+    assert again.connections["1"]["T"] == pytest.approx(data["connections"]["1"]["T"])

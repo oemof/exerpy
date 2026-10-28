@@ -13,6 +13,7 @@ from typing import Any
 from exerpy.functions import convert_to_SI
 from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.units import add_units
 
 from . import __ebsilon_available__
 from . import is_ebsilon_available
@@ -1386,17 +1387,19 @@ class EbsilonModelParser:
         }
         # Sort connections by their names
         sorted_connections = dict(sorted(self.connections_data.items()))
-        # Return data including ambient conditions
-        return {
-            "components": sorted_components,
-            "connections": sorted_connections,
-            "ambient_conditions": {
-                "Tamb": self.Tamb,
-                "Tamb_unit": fluid_property_data["T"]["SI_unit"],
-                "pamb": self.pamb,
-                "pamb_unit": fluid_property_data["p"]["SI_unit"],
-            },
-        }
+        # Return data including ambient conditions, with the unit of every value
+        return add_units(
+            {
+                "components": sorted_components,
+                "connections": sorted_connections,
+                "ambient_conditions": {
+                    "Tamb": self.Tamb,
+                    "Tamb_unit": fluid_property_data["T"]["SI_unit"],
+                    "pamb": self.pamb,
+                    "pamb_unit": fluid_property_data["p"]["SI_unit"],
+                },
+            }
+        )
 
     def write_to_json(self, output_path: str):
         """

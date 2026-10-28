@@ -19,6 +19,9 @@ from .components.nodes.splitter import Splitter
 from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
+from .units import add_units
+from .units import from_SI
+from .units import to_SI
 
 
 class ExergyAnalysis:
@@ -911,14 +914,19 @@ class ExergyAnalysis:
         print(f"Exergetic Loss: {exergetic_loss_percent:.2f}%")
         print(f"Exergetic Product (epsilon): {epsilon_total:.2f}%")
 
-    def export_to_json(self, output_path):
+    def export_to_json(self, output_path, units=None):
         """
         Export the model to a JSON file.
+
+        Every value is written with its unit, in SI unless ``units`` asks for another one.
 
         Parameters
         ----------
         output_path : str
             Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a key in, e.g. ``{"T": "degC", "p": "bar", "E_D": "kW"}``; the keys are
+            those of :data:`exerpy.units.SI_UNITS`. :meth:`from_json` reads the file back in SI.
 
         Returns
         -------
@@ -932,6 +940,8 @@ class ExergyAnalysis:
         NaN values are converted to null for valid JSON output.
         """
         data = self._serialize()
+        if units:
+            data = from_SI(data, units)
         with open(output_path, "w") as json_file:
             json.dump(data, json_file, indent=4)
             logger.info(f"Model exported to JSON file: {output_path}.")
@@ -976,7 +986,7 @@ class ExergyAnalysis:
             "epsilon": _nan_to_none(getattr(self, "epsilon", None)),
         }
 
-        return export
+        return add_units(export)
 
     def _resolve_heat_connection_names(self, ex_flow):
         """
@@ -1256,9 +1266,8 @@ def _load_json(json_path):
 def _prepare(data, Tamb, pamb, chemExLib, split_physical_exergy, validate, **kwargs):
     """Convert the input to SI units, check it with :func:`exerpy.schema.validate` and process it."""
     from . import schema
-    from . import units
 
-    data, problems = units.to_SI(data)
+    data, problems = to_SI(data)
     if problems:
         raise schema.InputValidationError([schema.Issue("error", path, message) for path, message in problems])
     if validate:

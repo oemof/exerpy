@@ -6,10 +6,10 @@ the TESPy, Aspen and EBSILON parsers) is described here as ``msgspec`` structs.
 The schema covers only the fields ExerPy reads. The keys of each component type are
 declared next to the code that reads them, as the ``Input`` struct nested in the
 component class (see :class:`exerpy.components.component.Component`); this module
-collects them from the component registry, so custom components are covered too. The exports also carry what the
-simulators report besides (efficiencies, units, fluid ids, results of an earlier
-analysis, ...); ExerPy ignores those, and so does the validation. Each field below
-notes where ExerPy uses it.
+collects them from the component registry, so custom components are covered too. The
+exports also carry what the simulators report besides (efficiencies, units, fluid ids,
+results of an earlier analysis, ...); ExerPy ignores those, and so does the validation.
+Each field below notes where ExerPy uses it.
 
 Validation happens in two passes:
 
@@ -126,7 +126,7 @@ class MaterialConnection(_ConnectionBase, tag="material"):
     e_CH: SpecificExergy | None | UnsetType = UNSET
     mass_composition: Composition | UnsetType = UNSET
     molar_composition: Composition | UnsetType = UNSET
-    # exerpy.costing: vapour quality and specific / volume flow for equipment sizing.
+    # exerpy.costing: vapour quality and volume flow for equipment sizing.
     x: float | None | UnsetType = UNSET
     v: float | None | UnsetType = UNSET
     VM: float | None | UnsetType = UNSET

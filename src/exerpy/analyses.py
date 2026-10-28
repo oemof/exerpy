@@ -352,7 +352,7 @@ class ExergyAnalysis:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
-    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from a tespy network or
         a tespy network export structure.
@@ -367,6 +367,8 @@ class ExergyAnalysis:
             Ambient pressure for analysis, default is None.
         chemExLib : str, optional
             Name of the library for chemical exergy tables.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -386,13 +388,15 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = to_exerpy(model, Tamb, pamb)
+        if validate:
+            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb, pamb, chemExLib, split_physical_exergy
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from an Aspen model file.
 
@@ -408,6 +412,8 @@ class ExergyAnalysis:
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -429,6 +435,8 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
+        if validate:
+            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
@@ -440,7 +448,9 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
+    def from_ebsilon(
+        cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None, validate=True
+    ):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -460,6 +470,8 @@ class ExergyAnalysis:
             Name or id of the profile (operating point) to simulate, e.g. a part load case.
             Defaults to the profile the model was saved with. Use
             :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -483,6 +495,8 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
+        if validate:
+            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data,
             Tamb=Tamb,
@@ -494,9 +508,7 @@ class ExergyAnalysis:
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(
-        cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True
-    ):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True):
         """
         Create an ExergyAnalysis instance from a JSON file.
 
@@ -535,11 +547,7 @@ class ExergyAnalysis:
         """
         data = _load_json(json_path)
         if validate:
-            from . import schema as input_schema
-
-            input_schema.validate(
-                data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
-            )
+            _validate(data, Tamb, pamb, chemExLib, split_physical_exergy)
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
         )
@@ -1251,6 +1259,13 @@ def _load_json(json_path):
     # Load and validate JSON
     with open(json_path) as file:
         return json.load(file)
+
+
+def _validate(data, Tamb, pamb, chemExLib, split_physical_exergy):
+    """Check the input with :func:`exerpy.schema.validate`, which reports all problems at once."""
+    from . import schema
+
+    schema.validate(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy)
 
 
 def _process_json(

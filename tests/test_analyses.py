@@ -285,7 +285,9 @@ def test_from_json_missing_composition(tmp_path):
     with open(json_path, "w") as f:
         json.dump(data, f)
 
-    with pytest.raises(ValueError, match=r"chemExLib='Ahrendts' needs mass_composition .* - at `\$\.connections\['1'\]`"):
+    with pytest.raises(
+        ValueError, match=r"chemExLib='Ahrendts' needs mass_composition .* - at `\$\.connections\['1'\]`"
+    ):
         ExergyAnalysis.from_json(str(json_path), chemExLib="Ahrendts")
 
 

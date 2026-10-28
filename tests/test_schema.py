@@ -300,3 +300,25 @@ def test_from_json_validation_error_is_value_error(tmp_path):
     path.write_text("{}")
     with pytest.raises(ValueError):
         ExergyAnalysis.from_json(str(path))
+
+
+def test_parser_output_is_validated(monkeypatch, data):
+    """The models read from a simulator are checked like a JSON file."""
+    from tespy.networks import Network
+
+    from exerpy.parser.from_aspen import aspen_parser
+    from exerpy.parser.from_ebsilon import ebsilon_parser
+    from exerpy.parser.from_tespy import tespy_parser
+
+    data["connections"]["1"]["m"] = -1.0
+    parsed = lambda *args, **kwargs: copy.deepcopy(data)  # noqa: E731
+    monkeypatch.setattr(aspen_parser, "run_aspen", parsed)
+    monkeypatch.setattr(ebsilon_parser, "run_ebsilon", parsed)
+    monkeypatch.setattr(tespy_parser, "to_exerpy", parsed)
+    for factory, model in (
+        (ExergyAnalysis.from_aspen, "model.bkp"),
+        (ExergyAnalysis.from_ebsilon, "model.ebs"),
+        (ExergyAnalysis.from_tespy, Network()),
+    ):
+        with pytest.raises(InputValidationError, match=r"\$\.connections\['1'\]\.m"):
+            factory(model, split_physical_exergy=False)

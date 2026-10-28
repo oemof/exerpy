@@ -54,6 +54,7 @@ dependencies = [
     "numpy",
     "CoolProp",
     "tabulate",
+    "msgspec>=0.19",
 ]
 license = {text = "MIT"}
 

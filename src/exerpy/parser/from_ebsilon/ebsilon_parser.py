@@ -118,6 +118,19 @@ def _thermoliquid_name(pipe_cast):
         return "ThermoLiquid"
 
 
+def _mass_composition(pipe_cast):
+    """Return the mass fractions of a pipe without H2OG and H2OL, the gaseous and liquid parts of H2O."""
+    composition = {
+        param.lstrip("X"): getattr(pipe_cast, param).Value
+        for param in composition_params
+        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+    }
+    if "H2O" in composition:
+        composition.pop("H2OG", None)
+        composition.pop("H2OL", None)
+    return composition
+
+
 class EbsilonModelParser:
     """
     A class to parse Ebsilon models, simulate them, extract data, and write to JSON.
@@ -550,11 +563,7 @@ class EbsilonModelParser:
                     # It may be a mixutre, but it is handled as a pure substance in ExerPy.
                     connection_data["mass_composition"] = {_thermoliquid_name(pipe_cast): 1}
                 else:
-                    connection_data["mass_composition"] = {
-                        param.lstrip("X"): getattr(pipe_cast, param).Value
-                        for param in composition_params
-                        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
-                    }
+                    connection_data["mass_composition"] = _mass_composition(pipe_cast)
 
             # HEAT AND POWER CONNECTIONS from Logic "fluids"
             if (pipe_cast.Kind - 1000) in logic_fluids:

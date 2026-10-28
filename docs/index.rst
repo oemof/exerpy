@@ -43,5 +43,6 @@
     :hidden:
 
     api
+    JSON format <json_format>
     whats_new
     zliterature

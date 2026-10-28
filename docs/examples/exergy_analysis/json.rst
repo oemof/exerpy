@@ -7,6 +7,7 @@ Custom JSON Example
 .. seealso::
 
     The method behind this example: :ref:`Exergy Analysis <exergy_analysis_label>`.
+    Every value the file can hold, and how ExerPy checks it: :ref:`JSON format <json_format_label>`.
 
 ExerPy can also analyse data from simulation software other than the directly
 supported Ebsilon Professional, Aspen Plus, and TESPy. This guide explains how to

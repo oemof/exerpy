@@ -11,8 +11,8 @@ exports also carry what the simulators report besides (efficiencies, units, flui
 results of an earlier analysis, ...); ExerPy ignores those, and so does the validation.
 Each field below notes where ExerPy uses it.
 
-The values are first converted to SI units with :func:`exerpy.units.to_SI`; a unit that is
-unknown or of the wrong kind is an error. Validation then happens in two passes:
+The validation does not convert units. Its bounds hold in SI, so ExerPy converts the values
+with :func:`exerpy.units.to_SI` before it validates them. Validation happens in two passes:
 
 1. **Structural**, done by ``msgspec`` while decoding: required keys, types, the
    ``kind`` tag of each connection and physical bounds (positive temperatures, mass
@@ -20,8 +20,9 @@ unknown or of the wrong kind is an error. Validation then happens in two passes:
 2. **Semantic**, done by :func:`validate` on the decoded structs: rules that span
    several fields or sections and so cannot be written as a type, e.g. that each
    component type is registered, that no two streams enter the same inlet of a
-   component, or that ``split_physical_exergy`` has the ``e_T``/``e_M`` values it
-   needs.
+   component, that ``split_physical_exergy`` has the ``e_T``/``e_M`` values it
+   needs, or that each unit given (``"T_unit": "degC"``) is known and of the right
+   kind. A value without a unit is in SI.
 
 All problems are collected and reported together.
 
@@ -316,6 +317,21 @@ def _semantic_issues(
     return issues
 
 
+def _unit_issues(data: dict) -> list[Issue]:
+    """Each unit given for a value of :data:`exerpy.units.SI_UNITS` has to be known and of the right kind."""
+    issues: list[Issue] = []
+    for entry, path in units.entries(data):
+        for key, si in units.SI_UNITS.items():
+            unit = entry.get(f"{key}_unit")
+            if unit is None:
+                continue
+            try:
+                units.check_unit(unit, si)
+            except ValueError as exc:
+                issues.append(Issue("error", f"{path}.{key}_unit", str(exc)))
+    return issues
+
+
 # ---------------------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------------------
@@ -392,22 +408,19 @@ def check(
 
     Parameters are those of :func:`validate`.
     """
-    if not isinstance(data, dict):
+    if isinstance(data, dict):
         try:
-            data = _decode_any(data.encode() if isinstance(data, str) else data)
-        except msgspec.DecodeError as exc:
-            return None, [Issue("error", "$", f"malformed JSON: {exc}")]
-    data, problems = units.to_SI(data)
-    if problems:
-        return None, [Issue("error", path, message) for path, message in problems]
-    try:
-        buf = msgspec.json.encode(data, enc_hook=_enc_hook)
-    except (TypeError, NotImplementedError, OverflowError) as exc:
-        return None, [Issue("error", "$", f"data is not JSON-serialisable: {exc}")]
+            buf = msgspec.json.encode(data, enc_hook=_enc_hook)
+        except (TypeError, NotImplementedError, OverflowError) as exc:
+            return None, [Issue("error", "$", f"data is not JSON-serialisable: {exc}")]
+    else:
+        buf = data.encode() if isinstance(data, str) else data
     try:
         env = _decode_envelope(buf)
     except msgspec.ValidationError as exc:
         return None, [_structural_issue(exc)]
+    except msgspec.DecodeError as exc:
+        return None, [Issue("error", "$", f"malformed JSON: {exc}")]
 
     structural: list[Issue] = []
     components: dict[str, dict[str, Component.Input]] = {}
@@ -441,6 +454,7 @@ def check(
         settings=env.settings,
     )
     issues = _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy)
+    issues += _unit_issues(data if isinstance(data, dict) else _decode_any(buf))
     return (None if any(i.severity == "error" for i in issues) else model), issues
 
 
@@ -468,8 +482,8 @@ def validate(
     Returns
     -------
     ExerpyInput
-        The validated document, in SI units. Unknown keys are not part of it; the
-        analysis keeps working on the original dictionary.
+        The validated document. Unknown keys are not part of it; the analysis keeps
+        working on the original dictionary.
 
     Raises
     ------

@@ -144,7 +144,7 @@ def test_fields_exerpy_does_not_read_are_ignored(data):
     comp = data["components"]["Turbine"]["GT"]
     comp.update({"eta_s": "not a number", "type_index": [], "P": -1e9, "mul_signs": None})
     conn = data["connections"]["1"]
-    conn.update({"s": "n/a", "name": "other", "fluid_type_id": {}, "E": "?"})
+    conn.update({"T_unit": "°C", "s": "n/a", "name": "other", "fluid_type_id": {}, "E": "?"})
     data["system_results"] = "anything"
     assert errors(data) == []
     assert warnings(data) == []
@@ -250,6 +250,16 @@ def test_all_semantic_errors_reported_together(data):
         validate(data)
     assert len([i for i in exc.value.issues if i.severity == "error"]) == 3
     assert "3 error(s)" in str(exc.value)
+
+
+def test_units_are_checked_not_converted(data):
+    data["connections"]["1"].update({"T": 15.0, "T_unit": "degC", "p_unit": "K", "m_unit": 5})
+    assert errors(data) == [
+        ("$.connections['1'].m_unit", "unit must be a string, got 5"),
+        ("$.connections['1'].p_unit", "unit 'K' cannot be converted to 'Pa'"),
+    ]
+    data["connections"]["1"].update({"p_unit": "bar", "m_unit": "t / h"})
+    assert validate(data).connections["1"].T == 15.0
 
 
 # --- warnings ------------------------------------------------------------------------

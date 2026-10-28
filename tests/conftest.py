@@ -10,7 +10,7 @@ how they are started. The tox environments set MPLBACKEND=Agg for the same reaso
 import matplotlib
 import pytest
 
-from exerpy.units import _entries
+from exerpy.units import entries
 
 matplotlib.use("Agg")
 
@@ -33,7 +33,7 @@ def values_without_unit():
     def find(data):
         return [
             f"{path}.{key}"
-            for entry, path in _entries(data)
+            for entry, path in entries(data)
             for key, value in entry.items()
             if isinstance(value, int | float)
             and not isinstance(value, bool)

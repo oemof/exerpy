@@ -106,6 +106,13 @@ def _conversion(from_unit, to_unit):
     return factor, offset
 
 
+def check_unit(unit, to_unit):
+    """Raise ``ValueError`` if ``unit`` is not a string, unknown or not convertible to ``to_unit``."""
+    if not isinstance(unit, str):
+        raise ValueError(f"unit must be a string, got {unit!r}")
+    _conversion(unit, to_unit)
+
+
 def convert(value, from_unit, to_unit):
     """Convert ``value`` from ``from_unit`` to ``to_unit``; raise ``ValueError`` for a bad unit.
 
@@ -158,8 +165,8 @@ def _dicts(section):
     )
 
 
-def _entries(data):
-    """Yield every dictionary of values in a document, with its path."""
+def entries(data):
+    """Yield every dictionary of values in a document, with its JSONPath-like path."""
     if isinstance(data.get("ambient_conditions"), dict):
         yield data["ambient_conditions"], "$.ambient_conditions"
     for name, conn in _dicts(data.get("connections")):
@@ -208,7 +215,7 @@ def to_SI(data):
     if not isinstance(data, dict):
         return data, problems
     data = copy.deepcopy(data)
-    for entry, path in _entries(data):
+    for entry, path in entries(data):
         _convert_entry(entry, path, problems)
     return data, problems
 
@@ -216,7 +223,7 @@ def to_SI(data):
 def add_units(data):
     """Return a copy of a document in SI units in which every value of :data:`SI_UNITS` has its unit."""
     data = copy.deepcopy(data)
-    for entry, _ in _entries(data):
+    for entry, _ in entries(data):
         for key, si in SI_UNITS.items():
             if key in entry and entry.get(f"{key}_unit") is None:
                 entry[f"{key}_unit"] = si
@@ -247,7 +254,7 @@ def from_SI(data, units):
         except ValueError as exc:
             raise ValueError(f"unit of {key!r}: {exc}") from None
     data = add_units(data)
-    for entry, _ in _entries(data):
+    for entry, _ in entries(data):
         for key, unit in units.items():
             if key in entry:
                 if _is_number(entry[key]):

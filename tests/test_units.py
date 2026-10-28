@@ -10,7 +10,6 @@ from exerpy import EconomicAnalysis
 from exerpy import ExergoeconomicAnalysis
 from exerpy import ExergyAnalysis
 from exerpy.schema import InputValidationError
-from exerpy.schema import check
 from exerpy.units import SI_UNITS
 from exerpy.units import add_units
 from exerpy.units import convert
@@ -178,20 +177,21 @@ def test_all_bad_units_reported_together(data):
     data["ambient_conditions"]["Tamb_unit"] = "bar"
     data["connections"]["1"]["m_unit"] = "kg"
     data["connections"]["2"]["p_unit"] = 5
-    _, issues = check(data)
-    assert {i.path for i in issues} == {
+    _, problems = to_SI(data)
+    assert {path for path, _ in problems} == {
         "$.ambient_conditions.Tamb_unit",
         "$.connections['1'].m_unit",
         "$.connections['2'].p_unit",
     }
 
 
-def test_validation_sees_SI_values(data):
-    """A temperature below 0 °C is valid, since the schema checks it in K."""
+def test_temperature_below_zero_celsius(tmp_path, data):
+    """The analysis converts before it validates, so the bound T > 0 holds in K."""
     data["connections"]["1"].update({"T": -10.0, "T_unit": "degC"})
-    model, issues = check(data)
-    assert model is not None, issues
-    assert pytest.approx(263.15) == model.connections["1"].T
+    path = tmp_path / "cold.json"
+    path.write_text(json.dumps(data))
+    ean = ExergyAnalysis.from_json(str(path), split_physical_exergy=False)
+    assert ean.connections["1"]["T"] == pytest.approx(263.15)
 
 
 def test_bad_unit_raises_without_validation(tmp_path, data):

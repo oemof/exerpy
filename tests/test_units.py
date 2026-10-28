@@ -6,17 +6,33 @@ import os
 
 import pytest
 
+from exerpy import EconomicAnalysis
+from exerpy import ExergoeconomicAnalysis
 from exerpy import ExergyAnalysis
 from exerpy.schema import InputValidationError
 from exerpy.schema import check
 from exerpy.units import SI_UNITS
 from exerpy.units import add_units
 from exerpy.units import convert
+from exerpy.units import convert_cost
 from exerpy.units import from_SI
 from exerpy.units import registry
 from exerpy.units import to_SI
 
 EXAMPLE = os.path.join(os.path.dirname(__file__), "..", "examples", "exergy_analysis", "json_example", "example.json")
+CGAM = os.path.join(os.path.dirname(__file__), "..", "examples", "exergoeconomic_analysis", "cgam", "cgam.json")
+CGAM_COSTS = {
+    "AC_Z": 56.99,
+    "CC_Z": 4.40,
+    "EXP_Z": 48.16,
+    "APH_Z": 12.26,
+    "EV_Z": 11.476,
+    "PH_Z": 5.454,
+    "GEN_Z": 0.0,
+    "1_c": 0.0,
+    "10_c": 3.8635,
+    "8_c": 0.0,
+}
 FLOWS = {
     "E_F": {"inputs": ["1", "3"], "outputs": []},
     "E_P": {"inputs": ["E1"], "outputs": []},
@@ -265,3 +281,93 @@ def test_export_in_other_units_reads_back(tmp_path, data):
     again.analyse(**FLOWS)
     assert pytest.approx(si.E_D, rel=1e-9) == again.E_D
     assert again.connections["1"]["T"] == pytest.approx(data["connections"]["1"]["T"])
+
+
+def cgam_costs(costs):
+    ean = ExergyAnalysis.from_json(CGAM)
+    ean.analyse(
+        E_F={"inputs": ["10", "1", "8"], "outputs": []},
+        E_P={"inputs": ["E1", "9"], "outputs": []},
+        E_L={"inputs": ["7"], "outputs": []},
+    )
+    eco = ExergoeconomicAnalysis(ean, currency="USD")
+    eco.run(costs)
+    return eco
+
+
+@pytest.mark.parametrize(
+    "value, from_unit, to_unit, expected",
+    [(36.0, "EUR / MWh", "EUR / GJ", 10.0), (1.0, "kEUR / h", "EUR / h", 1000.0), (1.0, "EUR / s", "EUR / h", 3600.0)],
+)
+def test_convert_cost(value, from_unit, to_unit, expected):
+    assert convert_cost(value, from_unit, to_unit, "EUR") == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    "from_unit, message",
+    [
+        ("USD / MWh", "cost unit 'USD / MWh' is not in EUR"),
+        ("EUR / kg", "unit 'EUR / kg' cannot be converted to 'EUR / GJ'"),
+        ("EUR / blorp", "unknown unit 'EUR / blorp'"),
+        ("EUR / a", "a cost per year depends on the operating hours"),
+    ],
+)
+def test_convert_cost_bad_unit(from_unit, message):
+    with pytest.raises(ValueError, match=message):
+        convert_cost(1.0, from_unit, "EUR / GJ", "EUR")
+
+
+def test_cost_units_in_run():
+    reference = cgam_costs(CGAM_COSTS).system_costs
+    costs = dict(CGAM_COSTS, AC_Z=56.99 / 3600, AC_Z_unit="USD / s", **{"10_c": 3.8635 * 3.6, "10_c_unit": "USD / MWh"})
+    converted = cgam_costs(costs).system_costs
+    for key, value in reference.items():
+        assert pytest.approx(value, rel=1e-12) == converted[key]
+
+
+@pytest.mark.parametrize(
+    "unit_key, unit, message",
+    [
+        ("10_c_unit", "EUR / MWh", "'10_c_unit': cost unit 'EUR / MWh' is not in USD"),
+        ("AC_Z_unit", "USD / a", "per year"),
+    ],
+)
+def test_bad_cost_unit_in_run(unit_key, unit, message):
+    with pytest.raises(ValueError, match=message):
+        cgam_costs(dict(CGAM_COSTS, **{unit_key: unit}))
+
+
+def test_fuel_cost_unit_in_economic_analysis():
+    assumptions = {"PEC": {"AC": 1e5}, "i_eff": 0.1, "n": 20, "tau": 8000, "f_tci": 1.0, "omc_share": 0.01}
+    economic = EconomicAnalysis(**assumptions, fuel_costs={"10": {"c": 108.0, "c_unit": "EUR / MWh"}})
+    assert economic.fuel_costs["10"] == {"c": pytest.approx(30.0)}
+    with pytest.raises(ValueError, match="stream '10'.*not in EUR"):
+        EconomicAnalysis(**assumptions, fuel_costs={"10": {"c": 108.0, "c_unit": "USD / MWh"}})
+
+
+def test_exergoeconomic_export(tmp_path, values_without_unit):
+    eco = cgam_costs(CGAM_COSTS)
+    eco.export_to_json(str(tmp_path / "costs.json"), units={"E_D": "kW"})
+    exported = json.loads((tmp_path / "costs.json").read_text())
+    assert values_without_unit(exported) == []
+    assert not any("CostVar_index" in conn for conn in exported["connections"].values())
+    conn = exported["connections"]["10"]
+    assert (conn["c_TOT"], conn["c_TOT_unit"], conn["C_TOT_unit"]) == (pytest.approx(3.8635), "USD / GJ", "USD / h")
+    compressor = exported["components"]["Compressor"]["AC"]["exergoeconomic_results"]
+    assert (compressor["Z"], compressor["Z_unit"], compressor["f_unit"]) == (
+        pytest.approx(56.99),
+        "USD / h",
+        "dimensionless",
+    )
+    assert exported["components"]["Compressor"]["AC"]["exergy_results"]["E_D_unit"] == "kW"
+    assert exported["system_costs"]["Z"] == pytest.approx(eco.system_costs["Z"])
+    assert exported["system_costs"]["Z_unit"] == "USD / h"
+
+
+def test_exergy_export_leaves_out_the_costs(tmp_path):
+    eco = cgam_costs(CGAM_COSTS)
+    eco.exergy_analysis.export_to_json(str(tmp_path / "exergy.json"))
+    exported = json.loads((tmp_path / "exergy.json").read_text())
+    assert not any(
+        key in conn for conn in exported["connections"].values() for key in ("CostVar_index", "C_TOT", "c_T")
+    )

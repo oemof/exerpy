@@ -11,6 +11,8 @@ from exerpy.logger import logger
 SCALING_EXPONENT = 0.6
 # Keys of a purchased equipment cost scaled from a reference component.
 SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger_type", "U"}
+# Keys an exergoeconomic analysis adds to a connection, in currency/J and currency/s.
+COST_KEYS = {"CostVar_index", *(f"{c}_{label}" for c in "cC" for label in ("T", "M", "PH", "CH", "TOT"))}
 
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
@@ -20,6 +22,7 @@ from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
 from .units import add_units
+from .units import convert_cost
 from .units import from_SI
 from .units import to_SI
 
@@ -960,7 +963,11 @@ class ExergyAnalysis:
         """
         export = {}
         export["components"] = self._component_data
-        export["connections"] = self._connection_data
+        # The costs of an exergoeconomic analysis are written by its own export.
+        export["connections"] = {
+            name: {key: value for key, value in conn.items() if key not in COST_KEYS}
+            for name, conn in self._connection_data.items()
+        }
         export["ambient_conditions"] = {"Tamb": self.Tamb, "Tamb_unit": "K", "pamb": self.pamb, "pamb_unit": "Pa"}
         export["settings"] = {"split_physical_exergy": self.split_physical_exergy, "chemExLib": self.chemExLib}
 
@@ -1579,11 +1586,14 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            Another unit in the currency of the analysis may be given next to a value, as
+            ``"<connection_name>_c_unit": "EUR / MWh"`` or ``"<component_name>_Z_unit": "EUR / s"``.
 
         Raises
         ------
         ValueError
-            If a component cost is missing or if a required input connection cost is not provided.
+            If a component cost is missing or if a required input connection cost is not provided,
+            or if a unit is unknown, of the wrong kind or in another currency.
 
         Notes
         -----
@@ -1606,7 +1616,7 @@ class ExergoeconomicAnalysis:
                     )
                 continue
             if cost_key in Exe_Eco_Costs:
-                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
+                comp.Z_costs = self._user_cost(Exe_Eco_Costs, cost_key, "h") / 3600  # currency/h to currency/s
             else:
                 raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
@@ -1637,7 +1647,7 @@ class ExergoeconomicAnalysis:
             # Assign cost if provided.
             if cost_key in Exe_Eco_Costs:
                 # Convert cost from currency/GJ to currency/J.
-                c_TOT = Exe_Eco_Costs[cost_key] * 1e-9
+                c_TOT = self._user_cost(Exe_Eco_Costs, cost_key, "GJ") * 1e-9
                 conn["c_TOT"] = c_TOT
 
                 if kind == "material":
@@ -1656,6 +1666,16 @@ class ExergoeconomicAnalysis:
 
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
+
+    def _user_cost(self, costs, key, per):
+        """The cost ``costs[key]`` in currency per ``per``, converted from its unit if one is given."""
+        unit = costs.get(f"{key}_unit")
+        if unit is None:
+            return costs[key]
+        try:
+            return convert_cost(costs[key], unit, f"{self.currency} / {per}", self.currency)
+        except ValueError as exc:
+            raise ValueError(f"'{key}_unit': {exc}") from None
 
     def construct_matrix(self):
         """
@@ -2156,6 +2176,55 @@ class ExergoeconomicAnalysis:
         self.assign_user_costs(Exe_Eco_Costs)
         self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
         logger.info("Exergoeconomic analysis completed successfully.")
+
+    def export_to_json(self, output_path, units=None):
+        """
+        Export the model with its exergy and cost results to a JSON file.
+
+        Every value is written with its unit: the costs in currency/h, the specific costs in
+        currency/GJ and the other values in SI, unless ``units`` asks for another one.
+
+        Parameters
+        ----------
+        output_path : str
+            Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a value other than a cost in, see :meth:`ExergyAnalysis.export_to_json`.
+        """
+        rate, specific = f"{self.currency} / h", f"{self.currency} / GJ"
+        data = self.exergy_analysis._serialize()
+        for name, conn in data["connections"].items():
+            for label in ("T", "M", "PH", "CH", "TOT"):
+                for key, factor, unit in ((f"C_{label}", 3600, rate), (f"c_{label}", 1e9, specific)):
+                    if self.connections[name].get(key) is not None:
+                        conn[key] = _nan_to_none(float(self.connections[name][key]) * factor)
+                        conn[f"{key}_unit"] = unit
+        component_costs = (
+            ("C_F", "C_F", 3600, rate),
+            ("C_P", "C_P", 3600, rate),
+            ("C_D", "C_D", 3600, rate),
+            ("Z", "Z_costs", 3600, rate),
+            ("c_F", "c_F", 1e9, specific),
+            ("c_P", "c_P", 1e9, specific),
+            ("r", "r", 1, "dimensionless"),
+            ("f", "f", 1, "dimensionless"),
+        )
+        for comps in data["components"].values():
+            for name, comp_data in comps.items():
+                results = {}
+                for key, attribute, factor, unit in component_costs:
+                    value = getattr(self.components[name], attribute, None)
+                    results[key] = None if value is None else _nan_to_none(float(value) * factor)
+                    results[f"{key}_unit"] = unit
+                comp_data["exergoeconomic_results"] = results
+        data["system_costs"] = {}
+        for key, value in self.system_costs.items():
+            data["system_costs"].update({key: _nan_to_none(value), f"{key}_unit": rate})
+        if units:
+            data = from_SI(data, units)
+        with open(output_path, "w") as json_file:
+            json.dump(data, json_file, indent=4)
+            logger.info(f"Model and exergoeconomic results exported to JSON file: {output_path}.")
 
     def print_equations(self):
         """
@@ -2754,7 +2823,8 @@ class EconomicAnalysis:
     fuel_costs : dict, optional
         Specific cost of every stream entering the plant, as
         ``{"<connection>": {"c": value, "r_n": rate, "basis": "exergy" | "energy"}}``. ``c`` is in
-        currency per GJ at the price level of the base year, ``r_n`` is the nominal escalation
+        currency per GJ at the price level of the base year, or in the unit ``c_unit`` in the same
+        currency, e.g. ``"EUR / MWh"``; ``r_n`` is the nominal escalation
         rate of that cost per year and defaults to that of the operating and maintenance cost,
         and ``basis`` says whether ``c`` is per unit of exergy (the default) or per unit of energy.
         A cost on the energy basis is converted with the flows of the stream, which are read from the
@@ -2874,6 +2944,11 @@ class EconomicAnalysis:
                 raise ValueError(
                     f"The cost basis of stream '{name}' is neither 'exergy' nor 'energy': {spec['basis']}."
                 )
+            if spec.get("c_unit") is not None:
+                try:
+                    spec["c"] = convert_cost(spec["c"], spec.pop("c_unit"), f"{currency} / GJ", currency)
+                except ValueError as exc:
+                    raise ValueError(f"The cost unit of stream '{name}': {exc}") from None
 
     @staticmethod
     def _scaled_cost(name, spec, exergy_analysis=None):

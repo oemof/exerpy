@@ -8,12 +8,14 @@ value and unit. An export writes the unit of every value, in SI or in the units 
 
 Units are read by pint, e.g. ``"degC"``, ``"bar"``, ``"kJ / kg"``, ``"t / h"`` or
 ``"kilogram / second"``; ``"m2"``, ``"m3"``, ``"kgK"`` and ``"-"`` are understood as well.
-:func:`convert` converts a value between any two units.
+:func:`convert` converts a value between any two units, :func:`convert_cost` a cost in the currency
+of an exergoeconomic analysis.
 """
 
 import copy
 import functools
 import numbers
+import re
 
 import pint
 
@@ -74,7 +76,7 @@ _ALIASES = {"-": "dimensionless"}
 def registry():
     """The pint unit registry, created on first use."""
     ureg = pint.UnitRegistry()
-    for definition in ("m3 = m ** 3", "m2 = m ** 2", "kgK = kg * K", "molK = mol * K"):
+    for definition in ("m3 = m ** 3", "m2 = m ** 2", "kgK = kg * K", "molK = mol * K", "currency = [currency]"):
         ureg.define(definition)
     return ureg
 
@@ -114,6 +116,38 @@ def convert(value, from_unit, to_unit):
     return value * factor + offset
 
 
+def convert_cost(value, from_unit, to_unit, currency):
+    """Convert a cost between two units in ``currency``, e.g. from ``"EUR / MWh"`` to ``"EUR / GJ"``.
+
+    Only the part per time or per energy is converted, never one currency into another. A cost per
+    day or longer is not converted, since a cost rate per operating hour depends on the operating
+    hours.
+
+    >>> convert_cost(36.0, "EUR / MWh", "EUR / GJ", "EUR")
+    10.0
+    """
+    ureg = registry()
+    code = re.compile(rf"{re.escape(currency)}(?![A-Za-z])")
+    if not code.search(from_unit):
+        raise ValueError(f"cost unit {from_unit!r} is not in {currency}, the currency of the analysis")
+    from_unit, to_unit = (code.sub("currency", unit) for unit in (from_unit, to_unit))
+    try:
+        parts = ureg.Quantity(1.0, from_unit).unit_items()
+    except Exception:
+        raise ValueError(f"unknown unit {from_unit.replace('currency', currency)!r}") from None
+    for name, exponent in parts:
+        is_time = ureg.Unit(name).dimensionality == ureg.Unit("h").dimensionality
+        if exponent < 0 and is_time and ureg.Quantity(1.0, name).m_as("h") >= 24:
+            raise ValueError(
+                f"a cost per {name} depends on the operating hours; give it per hour, or derive it "
+                f"from the annual costs with EconomicAnalysis"
+            )
+    try:
+        return convert(value, from_unit, to_unit)
+    except ValueError as exc:
+        raise ValueError(str(exc).replace("currency", currency)) from None
+
+
 def _is_number(value):
     return isinstance(value, numbers.Real) and not isinstance(value, bool)
 
@@ -134,11 +168,12 @@ def _entries(data):
         for name, comp in _dicts(instances):
             path = f"$.components[{ctype!r}][{name!r}]"
             yield comp, path
-            for section in ("parameters", "exergy_results"):
+            for section in ("parameters", "exergy_results", "exergoeconomic_results"):
                 if isinstance(comp.get(section), dict):
                     yield comp[section], f"{path}.{section}"
-    if isinstance(data.get("system_results"), dict):
-        yield data["system_results"], "$.system_results"
+    for section in ("system_results", "system_costs"):
+        if isinstance(data.get(section), dict):
+            yield data[section], f"$.{section}"
 
 
 def _convert_entry(entry, path, problems):

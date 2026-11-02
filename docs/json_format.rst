@@ -140,30 +140,80 @@ file are not needed.
 Units
 *****
 
-ExerPy reads all values in SI units:
+A value can be given in any unit. Write the unit next to it, under the same key with ``_unit``
+added:
+
+.. code-block:: json
+
+    {"T": 15.0, "T_unit": "degC", "p": 1.013, "p_unit": "bar", "m": 36.0, "m_unit": "t / h"}
+
+ExerPy converts every such value to SI before the analysis. A value without a unit is taken as SI.
+The units are read with `pint <https://pint.readthedocs.io/>`__, so the usual names and symbols
+work, for example ``degC``, ``bar``, ``kJ / kg``, ``kJ / kgK``, ``t / h``, ``kW``, ``MW`` or
+``%``. The spellings of older ExerPy files, such as ``J / kgK``, ``m3 / s`` or ``-``, are read as
+well. A unit that ExerPy does not know, or a unit of the wrong kind such as a pressure in ``K``,
+stops the analysis with an error that names its place in the file.
+
+These values are converted, wherever they appear in a component, its ``parameters`` or a
+connection:
 
 .. list-table::
     :header-rows: 1
-    :widths: 50 50
+    :widths: 60 40
 
     * - Value
-      - Unit
+      - SI unit
     * - ``T``, ``Tamb``, ``T_hot``, ``T_cold``
       - K
     * - ``p``, ``pamb``
       - Pa
     * - ``m``
       - kg/s
+    * - ``n``
+      - mol/s
     * - ``h``, ``e_PH``, ``e_T``, ``e_M``, ``e_CH``
       - J/kg
-    * - ``energy_flow``, ``Q_Solar``
+    * - ``s``
+      - J/(kg K)
+    * - ``energy_flow``, ``E``, ``E_PH``, ``E_T``, ``E_M``, ``E_CH``, ``Q``, ``P``, ``Q_Solar``
       - W
     * - ``kA``
       - W/K
-    * - ``v``
+    * - ``A``
+      - m²
+    * - ``v``, ``VM``
       - m³/s
-    * - ``x``, mass and molar fractions
+    * - ``x``, ``eta_s``, ``eta_mech``, ``eta_el``, ``eta_cc``, ``lamb``
       - dimensionless
+
+All other values keep the value and unit they have. Mass and molar fractions have no unit.
+
+*********
+Exporting
+*********
+
+:meth:`~exerpy.analyses.ExergyAnalysis.export_to_json` writes every value with its unit, in SI
+unless asked otherwise. It adds the ``exergy_results`` of every component and the
+``system_results`` of the plant. Pass ``units`` to write some values in other units:
+
+.. code-block:: python
+
+    ean.export_to_json("results.json", units={"T": "degC", "p": "bar", "E_D": "kW"})
+
+``from_json`` reads such a file back in SI.
+
+After an exergoeconomic analysis, the export of
+:class:`~exerpy.analyses.ExergoeconomicAnalysis` writes the same file with the costs added:
+
+.. code-block:: python
+
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(costs)
+    eco.export_to_json("costs.json")
+
+It holds the cost rates ``C_T``, ``C_M``, ``C_PH``, ``C_CH`` and ``C_TOT`` of every stream in
+currency/h, the specific costs ``c_T`` to ``c_TOT`` in currency/GJ, the ``exergoeconomic_results``
+of every component and the ``system_costs`` of the plant, again each with its unit.
 
 **********
 Validation
@@ -173,9 +223,11 @@ Validation
 ``from_ebsilon`` and ``from_aspen`` are checked in the same way. The check has two steps:
 
 1. **Structure**: missing values, values of the wrong type, unknown component types, two streams
-   entering the same port, and missing ``e_T`` and ``e_M`` when the physical exergy is split.
-2. **Values**, once the structure is valid: temperatures and pressures above zero, mass flows
-   that are not negative, and mass and molar fractions between 0 and 1.
+   entering the same port, missing ``e_T`` and ``e_M`` when the physical exergy is split, and
+   units that are unknown or of the wrong kind.
+2. **Values**, once the structure is valid and the values are converted to SI: temperatures and
+   pressures above zero, mass flows that are not negative, and mass and molar fractions between
+   0 and 1. A temperature of -10 °C therefore passes, as 263.15 K.
 
 ExerPy reports all problems of a step together, each with its place in the file:
 
@@ -185,22 +237,28 @@ ExerPy reports all problems of a step together, each with its place in the file:
       - error: Expected a value >= 0, got -1.0 - at `$.connections['1'].m`
       - error: Expected a value > 0, got -10.0 - at `$.connections['2'].T`
 
-The error is a :class:`~exerpy.schema.InputValidationError`, a ``ValueError`` whose ``issues``
+The error is an :class:`~exerpy.schema.InputValidationError`, a ``ValueError`` whose ``issues``
 attribute lists every problem. Some findings are only warnings and are logged, for example mass
 fractions that do not add up to one or a connection that is not attached to any component. Pass
 ``validate=False`` to skip the check.
 
-A file can also be checked without running an analysis:
+A file can also be checked without running an analysis, in the same order as ``from_json``:
 
 .. code-block:: python
 
-    from exerpy.schema import validate
+    import json
 
-    with open("my_model.json", "rb") as file:
-        validate(file.read())
+    from exerpy.schema import validate_structure
+    from exerpy.schema import validate_values
+    from exerpy.units import to_SI
 
-:func:`~exerpy.schema.validate_structure` and :func:`~exerpy.schema.validate_values` run one
-step each.
+    with open("my_model.json") as file:
+        data = json.load(file)
+    validate_structure(data)
+    data, _ = to_SI(data)
+    validate_values(data)
+
+:func:`~exerpy.schema.validate` runs both steps at once, for a file that is already in SI.
 
 A custom component declares the values it reads in a nested ``Input`` class, see
 :class:`~exerpy.components.component.Component`. The check then covers it as well.

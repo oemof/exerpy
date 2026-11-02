@@ -132,7 +132,7 @@ class MaterialConnection(_ConnectionBase, tag="material"):
     e_PH: SpecificExergy
     # Read by some components (h: power and heat balances; p: valves) and by costing.
     # Required for every stream, so a component never finds them missing.
-    h: Annotated[float, Meta(description="Specific enthalpy in J/kg")]
+    h: Annotated[float, Meta(description="Specific enthalpy, in J/kg unless a unit is given")]
     p: Pressure
     # Needed with split_physical_exergy.
     e_T: SpecificExergy | None | UnsetType = UNSET
@@ -150,7 +150,7 @@ class MaterialConnection(_ConnectionBase, tag="material"):
 class PowerConnection(_ConnectionBase, tag="power"):
     """Mechanical or electrical power; its exergy equals ``energy_flow``."""
 
-    energy_flow: Annotated[float, Meta(description="Power in W")]
+    energy_flow: Annotated[float, Meta(description="Power, in W unless a unit is given")]
 
 
 class HeatConnection(_ConnectionBase, tag="heat"):

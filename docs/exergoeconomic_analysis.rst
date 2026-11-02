@@ -431,6 +431,11 @@ The cost dictionary passed to :code:`run()` requires two types of entries:
       - currency/GJ
       - Specific cost for each input stream crossing the system boundary
 
+A value can also be given in another unit, as long as it is in the currency of the analysis, e.g.
+:code:`"10_c": 90.0, "10_c_unit": "EUR / MWh"` or :code:`"COMP_Z": 0.0222, "COMP_Z_unit": "EUR / s"`.
+A cost per day or per year is not accepted: turning it into a cost per hour of operation needs the
+operating hours, which :class:`~exerpy.analyses.EconomicAnalysis` takes into account.
+
 **Mandatory costs:**
 
 - All components must have a :code:`_Z` cost, except the :code:`CycleCloser`, the :code:`PowerBus`

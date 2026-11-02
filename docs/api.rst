@@ -277,6 +277,9 @@ The results include the following key parameters:
 
 These values are provided both for each component and for the entire system.
 
+:code:`ean.export_to_json("results.json")` saves the model and these results, every value with its
+unit. See :ref:`JSON format <json_format_label>` for the format and for exporting in other units.
+
 
 *******************
 3. Component Sizing
@@ -393,6 +396,9 @@ The exergoeconomic analysis requires the following inputs:
   - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
     entering the system boundary)
 
+  Another unit in the same currency can be given next to a value, e.g.
+  :code:`"10_c_unit": "EUR / MWh"`.
+
   Both can be typed in, as below, or obtained from the economic analysis with
   :meth:`~exerpy.analyses.EconomicAnalysis.compute_costs`.
 
@@ -433,6 +439,9 @@ The results include:
 - **Non-material connection costs**: Total cost rate (:code:`C_TOT`) and specific cost (:code:`c_TOT`)
   for power and heat streams
 
+:code:`eco.export_to_json("costs.json")` saves the model with the costs of every stream and
+component, each with its unit.
+
 Additionally, the :code:`evaluate_results` method identifies the components with the highest
 cost improvement potential:
 
@@ -454,4 +463,5 @@ API References
     api/functions.rst
     api/parser.rst
     api/schema.rst
+    api/units.rst
     api/visualization.rst

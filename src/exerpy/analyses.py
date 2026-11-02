@@ -1275,14 +1275,18 @@ def _load_json(json_path):
 
 
 def _prepare(data, Tamb, pamb, chemExLib, split_physical_exergy, validate, **kwargs):
-    """Convert the input to SI units, check it with :func:`exerpy.schema.validate` and process it."""
+    """Check the structure of the input, convert it to SI units, check its values and process it."""
     from . import schema
 
+    if validate:
+        schema.validate_structure(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        )
     data, problems = to_SI(data)
     if problems:
         raise schema.InputValidationError([schema.Issue("error", path, message) for path, message in problems])
     if validate:
-        schema.validate(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy)
+        schema.validate_values(data, Tamb=Tamb, pamb=pamb)
     return _process_json(
         data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy, **kwargs
     )

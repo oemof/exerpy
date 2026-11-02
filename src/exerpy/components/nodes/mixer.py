@@ -1,8 +1,11 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
+from exerpy.quantities import Branches
 
 
 @component_registry
@@ -90,6 +93,9 @@ class Mixer(Component):
         \end{cases}
 
     """
+
+    class Input(Component.Input, kw_only=True):
+        num_branches: Branches | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""Initialize mixer component with given parameters."""

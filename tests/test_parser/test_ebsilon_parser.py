@@ -22,6 +22,7 @@ from exerpy.parser.from_ebsilon import __ebsilon_path__
 from exerpy.parser.from_ebsilon.ebsilon_config import connector_mapping
 from exerpy.parser.from_ebsilon.ebsilon_config import grouped_components
 from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
+from exerpy.parser.from_ebsilon.ebsilon_parser import _mass_composition
 from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
 
 
@@ -981,3 +982,20 @@ def test_initialize_model_activates_profile():
         parser.initialize_model()
 
     mock_model.ActivateProfile.assert_called_once_with("Part load")
+
+
+def test_mass_composition_drops_gaseous_water():
+    """H2OG and H2OL repeat the gaseous and liquid parts of H2O, so they are dropped."""
+
+    class Pipe:
+        XN2 = Mock(Value=0.75)
+        XO2 = Mock(Value=0.23)
+        XH2O = Mock(Value=0.02)
+        XH2OG = Mock(Value=0.015)
+        XH2OL = Mock(Value=0.005)
+        XCO2 = Mock(Value=0)
+
+    assert _mass_composition(Pipe()) == {"N2": 0.75, "O2": 0.23, "H2O": 0.02}
+
+    del Pipe.XH2O
+    assert _mass_composition(Pipe())["H2OG"] == 0.015

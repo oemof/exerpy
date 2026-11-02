@@ -1,8 +1,27 @@
 v0.2.1 (unreleased)
 +++++++++++++++++++
 
+New Features
+############
+- ExerPy checks the input of an analysis before it starts, first its structure and then the
+  ranges of its values. This covers JSON files read with ``from_json`` and the models parsed from
+  TESPy, EBSILON and Aspen. The problems of each step are reported together, each with its place in
+  the file, e.g. ``$.connections['1'].m``. The format is described
+  in :ref:`JSON format <json_format_label>`, and :func:`~exerpy.schema.json_schema` returns it as a
+  JSON Schema (#48).
+
+API Changes
+###########
+- ``from_json``, ``from_tespy``, ``from_ebsilon`` and ``from_aspen`` check the input by default.
+  Every material stream needs ``m``, ``T``, ``p``, ``h`` and ``e_PH``, so an older hand-written
+  file may need more values than before. Pass ``validate=False`` to skip the check.
+- ExerPy depends on ``msgspec``.
+
 Bug Fixes
 #########
+- The EBSILON parser no longer lists the gaseous and liquid parts of the water, ``H2OG`` and
+  ``H2OL``, next to the total ``H2O``. The mass fractions of a stream now add up to one. The
+  results do not change.
 - The EBSILON parser raises an error when the calculation of a model fails, instead of parsing the
   results of an earlier calculation that the model still holds. Every message of the solver is
   logged with its error code and object, also when it has no description (closes #53).
@@ -15,3 +34,4 @@ Bug Fixes
 Contributors
 ############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)

@@ -1,9 +1,12 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.quantities import Branches
 
 from . import T_SUN
 
@@ -41,6 +44,11 @@ class ParabolicTrough(Component):
     outl : dict
         Outlet connections, including the heat-transfer-fluid stream.
     """
+
+    class Input(Component.Input, kw_only=True):
+        # Incident solar heat per branch in W.
+        Q_Solar: float | None | UnsetType = UNSET
+        num_branches: Branches | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""

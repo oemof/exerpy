@@ -1,4 +1,6 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
@@ -42,6 +44,10 @@ class Heliostatfield(Component):
         Heat outlet connections: the heat delivered to the receiver and the incoming solar
         heat (both carry heat, no mass flow).
     """
+
+    class Input(Component.Input, kw_only=True):
+        # Incident solar heat in W.
+        Q_Solar: float | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""

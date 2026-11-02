@@ -82,7 +82,9 @@ def mock_connection_data():
             "target_connector": 0,
             "T": 298.15,
             "p": 101325,
+            "h": 298.4e3,
             "m": 100,
+            "e_PH": 0.0,
             "E": 50000,
             "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
@@ -94,7 +96,9 @@ def mock_connection_data():
             "target_connector": 0,
             "T": 500,
             "p": 500000,
+            "h": 503.3e3,
             "m": 100,
+            "e_PH": 50.0,
             "E": 5000,
             "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
@@ -264,7 +268,16 @@ def test_from_json_missing_composition(tmp_path):
     data = {
         "components": {"MockTurbine": {"T1": {"name": "T1", "type": "MockTurbine", "type_index": 23, "eta_s": 0.9}}},
         "connections": {
-            "1": {"kind": "material", "source_component": None, "target_component": "T1", "T": 298.15, "p": 101325}
+            "1": {
+                "kind": "material",
+                "source_component": None,
+                "target_component": "T1",
+                "m": 1.0,
+                "T": 298.15,
+                "p": 101325,
+                "h": 298.4e3,
+                "e_PH": 0.0,
+            }
         },
         "ambient_conditions": {"Tamb": 298.15, "pamb": 101325},
     }
@@ -272,7 +285,9 @@ def test_from_json_missing_composition(tmp_path):
     with open(json_path, "w") as f:
         json.dump(data, f)
 
-    with pytest.raises(ValueError, match="Material stream '1' missing mass_composition"):
+    with pytest.raises(
+        ValueError, match=r"chemExLib='Ahrendts' needs mass_composition .* - at `\$\.connections\['1'\]`"
+    ):
         ExergyAnalysis.from_json(str(json_path), chemExLib="Ahrendts")
 
 
@@ -301,7 +316,7 @@ def test_from_json_missing_sections(tmp_path):
     with open(json_path, "w") as f:
         json.dump(incomplete_data, f)
 
-    with pytest.raises(ValueError, match="Missing required sections"):
+    with pytest.raises(ValueError, match="missing required field `connections`"):
         ExergyAnalysis.from_json(str(json_path))
 
 
@@ -316,7 +331,7 @@ def test_from_json_invalid_component_structure(tmp_path):
     with open(json_path, "w") as f:
         json.dump(invalid_data, f)
 
-    with pytest.raises(ValueError, match="must contain dictionary"):
+    with pytest.raises(ValueError, match=r"Expected `object`, got `array` - at `\$\.components\['InvalidComponent'\]`"):
         ExergyAnalysis.from_json(str(json_path))
 
 

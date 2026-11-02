@@ -15,8 +15,9 @@ loss = {"inputs": ["C2"], "outputs": ["C1"]}
 
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/solar_thermal/parabolic_ebs.json")
+df_component_results.to_csv("examples/exergy_analysis/solar_thermal/parabolic_components_ebsilon.csv")
 
 # The same placeholder investment cost rates as parabolic_tespy.py, so the two models of this
 # plant can be compared; revise later with a proper cost estimation.

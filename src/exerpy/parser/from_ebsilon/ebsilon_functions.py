@@ -17,7 +17,7 @@ else:
     EpSteamTable = EpSteamTableStub
     EpGasTable = EpGasTableStub
 
-from exerpy.functions import convert_to_SI
+from exerpy.units import convert_to_SI
 
 from .ebsilon_config import substance_mapping
 from .ebsilon_config import unit_id_to_string
@@ -179,7 +179,7 @@ def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
     float
         The mechanical exergy component (in J/kg).
     """
-    eM = convert_to_SI("e", pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(
+    eM = convert_to_SI("e_PH", pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(
         app, pipe, pressure, Tamb, pamb
     )
 

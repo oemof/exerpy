@@ -9,19 +9,41 @@ New Features
   the file, e.g. ``$.connections['1'].m``. The format is described
   in :ref:`JSON format <json_format_label>`, and :func:`~exerpy.schema.json_schema` returns it as a
   JSON Schema (#48).
+- A value in the input can carry its unit, e.g. ``"T": 15.0, "T_unit": "degC"``. ExerPy converts it
+  to SI with pint before the analysis, and a value without a unit is taken as SI. An unknown unit or
+  a unit of the wrong kind is an error that names its place in the file (closes #48).
+- Every export writes the unit of each value.
+  :meth:`~exerpy.analyses.ExergyAnalysis.export_to_json` takes ``units`` to write values in other
+  units, and :func:`exerpy.units.convert` converts a value between any two units.
+- The costs of the exergoeconomic analysis can carry a unit as well, e.g.
+  ``"10_c_unit": "EUR / MWh"`` in the cost dictionary or ``c_unit`` in ``fuel_costs``. The new
+  :meth:`~exerpy.analyses.ExergoeconomicAnalysis.export_to_json` saves the costs of the streams, the
+  components and the plant, each with its unit.
 
 API Changes
 ###########
 - ``from_json``, ``from_tespy``, ``from_ebsilon`` and ``from_aspen`` check the input by default.
   Every material stream needs ``m``, ``T``, ``p``, ``h`` and ``e_PH``, so an older hand-written
   file may need more values than before. Pass ``validate=False`` to skip the check.
-- ExerPy depends on ``msgspec``.
+- ExerPy depends on ``msgspec`` and ``pint``.
+- The TESPy parser writes the values in the units of the network, together with these units.
+  Dimensionless values are written with the unit ``dimensionless`` instead of ``-``.
+- :meth:`~exerpy.analyses.ExergyAnalysis.export_to_json` no longer writes the internal cost values
+  that an exergoeconomic analysis adds to the streams.
+  :meth:`~exerpy.analyses.ExergoeconomicAnalysis.export_to_json` writes the costs instead.
+- ``exerpy.functions.convert_to_SI`` and ``exerpy.functions.fluid_property_data`` are removed. The
+  EBSILON and Aspen parsers convert their values with :func:`exerpy.units.convert_to_SI`, which uses
+  pint and also reads the unit spellings of the simulators, e.g. ``C`` or ``kJ/kg-K``. The SI unit
+  of each value is listed in :data:`exerpy.units.SI_UNITS`.
 
 Bug Fixes
 #########
 - The EBSILON parser no longer lists the gaseous and liquid parts of the water, ``H2OG`` and
   ``H2OL``, next to the total ``H2O``. The mass fractions of a stream now add up to one. The
   results do not change.
+- Molar flows given in ``kmol/min`` or ``kmol/h`` by EBSILON or Aspen were converted with a factor
+  that was wrong by 10⁶. An enthalpy, entropy or exergy per mole is now an error instead of being
+  read as a value per kg. The examples are not affected.
 - The EBSILON parser raises an error when the calculation of a model fails, instead of parsing the
   results of an earlier calculation that the model still holds. Every message of the solver is
   logged with its error code and object, also when it has no description (closes #53).

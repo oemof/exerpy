@@ -7,7 +7,9 @@ the ``system_results``. A value without a unit is taken as SI. Keys ExerPy does 
 value and unit. An export writes the unit of every value, in SI or in the units asked for.
 
 Units are read by pint, e.g. ``"degC"``, ``"bar"``, ``"kJ / kg"``, ``"t / h"`` or
-``"kilogram / second"``; ``"m2"``, ``"m3"``, ``"kgK"`` and ``"-"`` are understood as well.
+``"kilogram / second"``; ``"m2"``, ``"m3"``, ``"kgK"`` and ``"-"`` are understood as well, and so
+are the spellings of the simulators, e.g. ``"C"``, ``"kJ/kg-K"`` or ``"cum/sec"``.
+:func:`convert_to_SI` converts a value a simulator reports to the SI unit of its key.
 :func:`convert` converts a value between any two units, :func:`convert_cost` a cost in the currency
 of an exergoeconomic analysis.
 """
@@ -18,6 +20,8 @@ import numbers
 import re
 
 import pint
+
+from exerpy.logger import logger
 
 #: SI unit of each key ExerPy reads or writes.
 SI_UNITS = {
@@ -69,14 +73,32 @@ SI_UNITS = {
     "y_star": "dimensionless",
 }
 
-_ALIASES = {"-": "dimensionless"}
+# Spellings that pint reads differently or not at all, e.g. "C" as coulomb
+_ALIASES = {"-": "dimensionless", "C": "degC", "F": "degF", "R": "degR"}
+
+
+def _pint_spelling(unit):
+    """The spelling of ``unit`` that pint reads, e.g. ``"kJ/kgK"`` for ``"kJ/kg-K"`` or ``"cm**2"`` for ``"cm2"``."""
+    unit = re.sub(r"(kg|mol)-K\b", r"\1K", _ALIASES.get(unit, unit))
+    # a digit right after a unit is its power: cm2 is (cm)**2, not centi-(m2)
+    return re.sub(r"(?<=[A-Za-z])([23])\b", r"**\1", unit)
 
 
 @functools.cache
 def registry():
     """The pint unit registry, created on first use."""
     ureg = pint.UnitRegistry()
-    for definition in ("m3 = m ** 3", "m2 = m ** 2", "kgK = kg * K", "molK = mol * K", "currency = [currency]"):
+    definitions = (
+        "m3 = m ** 3",
+        "m2 = m ** 2",
+        "cum = m ** 3",
+        "cuft = ft ** 3",
+        "kgK = kg * K",
+        "molK = mol * K",
+        "kmolK = kmol * K",
+        "currency = [currency]",
+    )
+    for definition in definitions:
         ureg.define(definition)
     return ureg
 
@@ -84,8 +106,7 @@ def registry():
 @functools.cache
 def _conversion(from_unit, to_unit):
     """Factor and offset that convert a value from ``from_unit`` to ``to_unit``."""
-    from_unit = _ALIASES.get(from_unit, from_unit)
-    to_unit = _ALIASES.get(to_unit, to_unit)
+    from_unit, to_unit = _pint_spelling(from_unit), _pint_spelling(to_unit)
     if from_unit == to_unit:
         return 1.0, 0.0
     ureg = registry()
@@ -121,6 +142,23 @@ def convert(value, from_unit, to_unit):
     """
     factor, offset = _conversion(from_unit, to_unit)
     return value * factor + offset
+
+
+def convert_to_SI(key, value, unit):
+    """Convert a value a simulator reports in ``unit`` to the SI unit of ``key``, see :data:`SI_UNITS`.
+
+    ``None`` stays ``None``. A value whose unit the simulator does not report (``"Unknown"``) is
+    returned as it is, with a warning.
+
+    >>> convert_to_SI("T", 15.0, "C"), convert_to_SI("s", 1.0, "kJ/kg-K")
+    (288.15, 1000.0)
+    """
+    if value is None:
+        return None
+    if unit == "Unknown":
+        logger.warning(f"The unit of {key!r} is unknown, so the value {value} is taken as it is.")
+        return value
+    return convert(value, unit, SI_UNITS[key])
 
 
 def convert_cost(value, from_unit, to_unit, currency):

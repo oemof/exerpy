@@ -14,6 +14,7 @@ from exerpy.units import SI_UNITS
 from exerpy.units import add_units
 from exerpy.units import convert
 from exerpy.units import convert_cost
+from exerpy.units import convert_to_SI
 from exerpy.units import from_SI
 from exerpy.units import registry
 from exerpy.units import to_SI
@@ -160,7 +161,6 @@ def test_keys_exerpy_does_not_read_keep_their_unit():
     "unit, fragment",
     [
         ("Pa", "unit 'Pa' cannot be converted to 'K'"),
-        ("C", "write 'degC' for degrees Celsius"),
         ("deg C", "write 'degC' for degrees Celsius"),
         ("blorps", "unknown unit 'blorps'"),
     ],
@@ -371,3 +371,54 @@ def test_exergy_export_leaves_out_the_costs(tmp_path):
     assert not any(
         key in conn for conn in exported["connections"].values() for key in ("CostVar_index", "C_TOT", "c_T")
     )
+
+
+# Values as Ebsilon and Aspen report them, with the result of the former conversion table
+@pytest.mark.parametrize(
+    "key, value, unit, expected",
+    [
+        ("P", 493809.79091901844, "kW", 493809790.91901845),
+        ("Q", 728145.5987103253, "W", 728145.5987103253),
+        ("Q", 251827.73162879315, "kW", 251827731.62879315),
+        ("T", 15.0, "C", 288.15),
+        ("T", 77.0, "F", 298.15),
+        ("VM", 522.8563284675353, "m3 / s", 522.8563284675353),
+        ("e_PH", 2.09141149e-11, "J/kg", 2.09141149e-11),
+        ("e_PH", 407.48722384831217, "kJ / kg", 407487.22384831216),
+        ("h", -98689.1941, "J/kg", -98689.1941),
+        ("h", 15.156141760290673, "kJ / kg", 15156.141760290673),
+        ("h", 0.239, "kcal/kg", 999.976),
+        ("kA", 635.6919754947751, "kW / K", 635691.9754947751),
+        ("m", 637.8686583780697, "kg / s", 637.8686583780697),
+        ("m", 638.111869, "kg/sec", 638.111869),
+        ("m", 3600.0, "kg/h", 1.0),
+        ("n", 22.1159899, "kmol/sec", 22115.9899),
+        ("n", 60.0, "kmol/min", 1000.0),
+        ("p", 1.013, "bar", 101299.99999999999),
+        ("s", 127.914091, "J/kg-K", 127.914091),
+        ("s", 0.239, "kJ/kg-K", 239.0),
+        ("s", 6.869754951010218, "kJ / kgK", 6869.754951010217),
+        ("v", 523.049533, "cum/sec", 523.049533),
+        ("v", 3.6, "cuft/hr", 0.028316846592 / 1000),
+        ("x", 0.872395886262507, "1", 0.872395886262507),
+        ("A", 1.0, "cm2", 1e-4),
+        ("A", 1.0, "mm2", 1e-6),
+    ],
+)
+def test_convert_to_SI(key, value, unit, expected):
+    assert convert_to_SI(key, value, unit) == pytest.approx(expected, rel=1e-12)
+
+
+def test_convert_to_SI_without_value_or_unit(caplog):
+    assert convert_to_SI("T", None, "K") is None
+    assert convert_to_SI("T", 300.0, "Unknown") == 300.0
+    assert "The unit of 'T' is unknown" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "key, unit, message",
+    [("T", "invalid_unit", "unknown unit 'invalid_unit'"), ("h", "kJ/kmol", "cannot be converted to 'J / kg'")],
+)
+def test_convert_to_SI_bad_unit(key, unit, message):
+    with pytest.raises(ValueError, match=message):
+        convert_to_SI(key, 1.0, unit)

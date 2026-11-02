@@ -80,7 +80,9 @@ ExerPy requires the JSON file to have the following format:
                 "e_CH": 1200,
                 "e_CH_unit": "J / kg",
                 "E_PH": 45000,
+                "E_PH_unit": "W",
                 "E_CH": 15000,
+                "E_CH_unit": "W",
                 "E": 60000,
                 "E_unit": "W"
             },

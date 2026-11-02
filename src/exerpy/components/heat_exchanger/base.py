@@ -116,6 +116,14 @@ class HeatExchanger(Component):
         # Case 7: Unrecognized
         return 7
 
+    def _product_outlets(self, T0):
+        """Outlets (0 hot, 1 cold) that carry the exergy product in the temperature case of the exchanger.
+
+        Above T0 the product is the heated cold stream, below T0 the cooled hot stream; the
+        dissipative case 6 has none.
+        """
+        return {1: {1}, 2: {0}, 3: {0, 1}, 4: {0}, 5: {1}}.get(self._temperature_case(T0), set())
+
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
         Compute the exergy balance of the heat exchanger.

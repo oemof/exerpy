@@ -6,6 +6,11 @@ Bug Fixes
 - The EBSILON parser raises an error when the calculation of a model fails, instead of parsing the
   results of an earlier calculation that the model still holds. Every message of the solver is
   logged with its error code and object, also when it has no description (closes #53).
+- A heat exchanger is treated as dissipative only when the outlet listed in ``E_L`` carries its
+  product, such as the cooling water of a condenser. A fuel-side outlet in ``E_L``, such as the flue
+  gas of an economizer going to the stack, no longer makes it dissipative. The economizers of the
+  CCPP and CGAM examples have an exergetic efficiency again, and the cost results of the CGAM
+  exergoeconomic example change accordingly (closes #55).
 
 Contributors
 ############

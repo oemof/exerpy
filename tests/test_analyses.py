@@ -537,6 +537,30 @@ def test_heatexchanger_explicit_productive_overrides_E_L():
     assert not np.isnan(hx.E_P)
 
 
+def test_heatexchanger_fuel_outlet_in_E_L_stays_productive():
+    """A hot outlet in E_L above T0 is the rest of the fuel, e.g. the flue gas of an economizer going to the stack."""
+    component_data, connection_data = _hex_network()
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"inputs": ["4"], "outputs": ["3"]}, E_L={"inputs": ["2"]})
+    hx = analysis.components["HX1"]
+    assert hx.dissipative is None
+    assert hx.is_dissipative is False
+    assert np.isclose(hx.E_P, 3000)
+
+
+def test_heatexchanger_cooled_outlet_below_T0_in_E_L_is_dissipative():
+    """Below T0 the cooled hot stream is the product, e.g. the air leaving a heat pump evaporator."""
+    component_data, connection_data = _hex_network()
+    for label, T in {"1": 310, "2": 290, "3": 280, "4": 295}.items():
+        connection_data[label]["T"] = T
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"inputs": ["4"], "outputs": ["3"]}, E_L={"inputs": ["2"]})
+    hx = analysis.components["HX1"]
+    assert hx._temperature_case(300) == 4
+    assert hx.dissipative is True
+    assert np.isnan(hx.E_P)
+
+
 def test_multiple_inputs_outputs(mock_component_data):
     """
     Test analysis when multiple fuel and product streams (both inputs and outputs) are present.

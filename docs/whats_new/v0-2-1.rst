@@ -3,9 +3,10 @@ v0.2.1 (unreleased)
 
 New Features
 ############
-- ExerPy checks the input of an analysis before it starts. This covers JSON files read with
-  ``from_json`` and the models parsed from TESPy, EBSILON and Aspen. All problems are reported
-  together, each with its place in the file, e.g. ``$.connections['1'].m``. The format is described
+- ExerPy checks the input of an analysis before it starts, first its structure and then the
+  ranges of its values. This covers JSON files read with ``from_json`` and the models parsed from
+  TESPy, EBSILON and Aspen. The problems of each step are reported together, each with its place in
+  the file, e.g. ``$.connections['1'].m``. The format is described
   in :ref:`JSON format <json_format_label>`, and :func:`~exerpy.schema.json_schema` returns it as a
   JSON Schema (#48).
 

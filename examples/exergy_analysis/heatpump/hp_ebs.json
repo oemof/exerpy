@@ -28,13 +28,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 894048.3594866064,
                     "E_P": 768233.8170160002,
                     "E_D": 125814.54247060628,
                     "epsilon": 0.8592754618521381,
                     "y": 0.07746981967153845,
-                    "y_star": 0.11052532159623932
+                    "y_star": 0.11052532159623932,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             },
             "FAN": {
@@ -64,13 +78,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 705572.9082743665,
                     "E_P": 600692.3595125908,
                     "E_D": 104880.54876177572,
                     "epsilon": 0.8513540591881793,
                     "y": 0.06457979371919585,
-                    "y_star": 0.09213526634882863
+                    "y_star": 0.09213526634882863,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         },
@@ -102,13 +130,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": null,
                     "E_P": null,
                     "E_D": null,
                     "epsilon": null,
                     "y": null,
-                    "y_star": null
+                    "y_star": null,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         },
@@ -140,13 +182,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 575358.4854857209,
                     "E_P": 483864.5206878093,
                     "E_D": 91493.96479791164,
                     "epsilon": 0.8409792032168051,
                     "y": 0.056337056231669375,
-                    "y_star": 0.08037544535653911
+                    "y_star": 0.08037544535653911,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             },
             "EVA": {
@@ -176,13 +232,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 647197.0523326987,
                     "E_P": null,
                     "E_D": 647197.0523326987,
                     "epsilon": null,
                     "y": 0.3985090908539373,
-                    "y_star": 0.5685484439282638
+                    "y_star": 0.5685484439282638,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         },
@@ -214,13 +284,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 716317.6733745032,
                     "E_P": 705572.9082743665,
                     "E_D": 10744.765100136632,
                     "epsilon": 0.9850000000006713,
                     "y": 0.006616047703031586,
-                    "y_star": 0.009439040947481077
+                    "y_star": 0.009439040947481077,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             },
             "MOT2": {
@@ -250,13 +334,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 907663.3091226985,
                     "E_P": 894048.3594866064,
                     "E_D": 13614.94963609206,
                     "epsilon": 0.9850000000008245,
                     "y": 0.008383352770142193,
-                    "y_star": 0.011960435236628056
+                    "y_star": 0.011960435236628056,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             },
             "MOT3": {
@@ -286,13 +384,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 64.91052336982855,
                     "E_P": 63.93686551928113,
                     "E_D": 0.9736578505474256,
                     "epsilon": 0.985,
                     "y": 5.995260692642831e-07,
-                    "y_star": 8.553371092344025e-07
+                    "y_star": 8.553371092344025e-07,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         },
@@ -324,13 +436,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 63.93686551928113,
                     "E_P": 53.36749123442132,
                     "E_D": 10.569374284859805,
                     "epsilon": 0.834690452855052,
                     "y": 6.508051484432974e-06,
-                    "y_star": 9.284963955403419e-06
+                    "y_star": 9.284963955403419e-06,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         },
@@ -362,13 +488,27 @@
                 "QEFF": null,
                 "RQINC": null,
                 "num_branches": null,
+                "Q_Solar_unit": "W",
+                "QEFF_unit": "W",
+                "RQINC_unit": "W",
+                "eta_s_unit": "dimensionless",
+                "eta_mech_unit": "dimensionless",
+                "eta_el_unit": "dimensionless",
+                "eta_cc_unit": "dimensionless",
+                "lamb_unit": "dimensionless",
                 "exergy_results": {
                     "E_F": 144574.92379500673,
                     "E_P": null,
                     "E_D": 144574.92379500673,
                     "epsilon": null,
                     "y": 0.08902145217467412,
-                    "y_star": 0.1270059059422967
+                    "y_star": 0.1270059059422967,
+                    "E_F_unit": "W",
+                    "E_P_unit": "W",
+                    "E_D_unit": "W",
+                    "epsilon_unit": "dimensionless",
+                    "y_unit": "dimensionless",
+                    "y_star_unit": "dimensionless"
                 }
             }
         }
@@ -398,7 +538,7 @@
             "e_PH": 1.254818471352337e-08,
             "e_PH_unit": "J / kg",
             "x": 1.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 202.0138403857364,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -409,7 +549,8 @@
             },
             "E_PH": 3.159353502808702e-06,
             "E": 3.159353502808702e-06,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "12": {
             "name": "12",
@@ -435,7 +576,7 @@
             "e_PH": 2385.8041452154184,
             "e_PH_unit": "J / kg",
             "x": 1.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 198.135408762473,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -446,7 +587,8 @@
             },
             "E_PH": 600692.3595157501,
             "E": 600692.3595157501,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "13": {
             "name": "13",
@@ -472,7 +614,7 @@
             "e_PH": 7.13214193136924,
             "e_PH_unit": "J / kg",
             "x": 1.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 200.58693697725604,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -483,7 +625,8 @@
             },
             "E_PH": 1795.7145282646661,
             "E": 1795.7145282646661,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "21": {
             "name": "21",
@@ -509,7 +652,7 @@
             "e_PH": 23740.416457882846,
             "e_PH_unit": "J / kg",
             "x": 0.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.010225569900103116,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -517,7 +660,8 @@
             },
             "E_PH": 237404.16457882847,
             "E": 237404.16457882847,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "22": {
             "name": "22",
@@ -543,7 +687,7 @@
             "e_PH": 23745.753207006288,
             "e_PH_unit": "J / kg",
             "x": 0.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.010225550117860395,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -551,7 +695,8 @@
             },
             "E_PH": 237457.53207006288,
             "E": 237457.53207006288,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "23": {
             "name": "23",
@@ -577,7 +722,7 @@
             "e_PH": 72132.20527578722,
             "e_PH_unit": "J / kg",
             "x": 0.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.01060155872264439,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -585,7 +730,8 @@
             },
             "E_PH": 721322.0527578722,
             "E": 721322.0527578722,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "30": {
             "name": "30",
@@ -611,7 +757,7 @@
             "e_PH": 10550.100564663595,
             "e_PH_unit": "J / kg",
             "x": 0.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.009226659590497887,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -619,7 +765,8 @@
             },
             "E_PH": 116626.28097818894,
             "E": 116626.28097818894,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "31": {
             "name": "31",
@@ -645,7 +792,7 @@
             "e_PH": 10550.100529402542,
             "e_PH_unit": "J / kg",
             "x": 0.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.009226659587123081,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -653,7 +800,8 @@
             },
             "E_PH": 116626.28058820503,
             "E": 116626.28058820503,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "32": {
             "name": "32",
@@ -679,7 +827,7 @@
             "e_PH": -2528.2551583144796,
             "e_PH_unit": "J / kg",
             "x": 0.48316209342456634,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 1.4822816504088991,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -687,7 +835,8 @@
             },
             "E_PH": -27948.643206825924,
             "E": -27948.643206825924,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "33": {
             "name": "33",
@@ -713,7 +862,7 @@
             "e_PH": -6897.546115138283,
             "e_PH_unit": "J / kg",
             "x": 1.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 3.4153685154047566,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -721,7 +870,8 @@
             },
             "E_PH": -76249.05055203932,
             "E": -76249.05055203932,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "34": {
             "name": "34",
@@ -747,7 +897,7 @@
             "e_PH": 62597.45928767063,
             "e_PH_unit": "J / kg",
             "x": 1.0,
-            "x_unit": "-",
+            "x_unit": "dimensionless",
             "VM": 0.07594874352348799,
             "VM_unit": "m3 / s",
             "mass_composition": {
@@ -755,7 +905,8 @@
             },
             "E_PH": 691984.7664639099,
             "E": 691984.7664639099,
-            "E_unit": "W"
+            "E_unit": "W",
+            "E_PH_unit": "W"
         },
         "E1": {
             "name": "E1",
@@ -921,6 +1072,11 @@
         "E_P": 483917.88817904366,
         "E_D": 1138332.2903164227,
         "E_L": 1795.7145251053125,
-        "epsilon": 0.2979705747594375
+        "epsilon": 0.2979705747594375,
+        "E_F_unit": "W",
+        "E_P_unit": "W",
+        "E_D_unit": "W",
+        "E_L_unit": "W",
+        "epsilon_unit": "dimensionless"
     }
 }

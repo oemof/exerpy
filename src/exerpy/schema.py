@@ -11,20 +11,24 @@ exports also carry what the simulators report besides (efficiencies, units, flui
 results of an earlier analysis, ...); ExerPy ignores those, and so does the validation.
 Each field below notes where ExerPy uses it.
 
-The validation does not convert units. Its bounds hold in SI, so ExerPy converts the values
-with :func:`exerpy.units.to_SI` before it validates them. Validation happens in two passes:
+Validation happens in two steps, which can also be run on their own:
 
-1. **Structural**, done by ``msgspec`` while decoding: required keys, types, the
-   ``kind`` tag of each connection and physical bounds (positive temperatures, mass
-   fractions in [0, 1], ...).
-2. **Semantic**, done by :func:`validate` on the decoded structs: rules that span
-   several fields or sections and so cannot be written as a type, e.g. that each
-   component type is registered, that no two streams enter the same inlet of a
-   component, that ``split_physical_exergy`` has the ``e_T``/``e_M`` values it
-   needs, or that each unit given (``"T_unit": "degC"``) is known and of the right
-   kind. A value without a unit is in SI.
+1. **Structure** (:func:`check_structure`), on the input as it is written. While
+   decoding, ``msgspec`` checks the required keys, the types and the ``kind`` tag of
+   each connection. On the decoded structs follow the rules that span several fields
+   or sections, e.g. that each component type is registered, that no two streams
+   enter the same inlet of a component, that ``split_physical_exergy`` has the
+   ``e_T``/``e_M`` values it needs, or that each unit given (``"T_unit": "degC"``) is
+   known and of the right kind. A value without a unit is in SI.
+2. **Values** (:func:`check_values`): each value lies in its reasonable range, e.g.
+   positive temperatures and pressures or mass fractions between 0 and 1. The ranges
+   are the :class:`~exerpy.quantities.Limit` of the types and hold in SI units.
 
-All problems are collected and reported together.
+The validation does not convert units. Before an analysis, ExerPy converts the values
+with :func:`exerpy.units.to_SI` between the two steps.
+
+The problems of a step are collected and reported together. The values are checked
+once the structure is valid.
 
 Example
 -------
@@ -39,10 +43,13 @@ The JSON Schema of the format is returned by :func:`json_schema`.
 from __future__ import annotations
 
 import functools
+import types
 from typing import Annotated
 from typing import Any
 from typing import Literal
 from typing import Union
+from typing import get_args
+from typing import get_origin
 
 import msgspec
 from msgspec import UNSET
@@ -57,6 +64,7 @@ from .logger import logger
 from .quantities import Composition
 from .quantities import ConnectorIndex
 from .quantities import Fraction
+from .quantities import Limit
 from .quantities import MassFlow
 from .quantities import Pressure
 from .quantities import SpecificExergy
@@ -74,9 +82,13 @@ __all__ = [
     "PowerConnection",
     "Settings",
     "check",
+    "check_structure",
+    "check_values",
     "input_struct",
     "json_schema",
     "validate",
+    "validate_structure",
+    "validate_values",
 ]
 
 # ---------------------------------------------------------------------------------------
@@ -290,11 +302,6 @@ def _semantic_issues(
                     )
         if isinstance(conn, MaterialConnection):
             material[key] = conn
-            for field in ("mass_composition", "molar_composition"):
-                comp_ = getattr(conn, field)
-                if comp_ is not UNSET and comp_ and abs(sum(comp_.values()) - 1) > _COMPOSITION_TOL:
-                    hint = " (H2O and H2OG are both listed)" if {"H2O", "H2OG"} <= comp_.keys() else ""
-                    warn(cpath + f".{field}", f"fractions sum to {sum(comp_.values()):.4f}, not 1{hint}")
 
     for cname in sorted(analysed - attached):
         warn(_p("components", _key(owner[cname]), _key(cname)), "component has no connections")
@@ -329,6 +336,74 @@ def _unit_issues(data: dict) -> list[Issue]:
                 units.check_unit(unit, si)
             except ValueError as exc:
                 issues.append(Issue("error", f"{path}.{key}_unit", str(exc)))
+    return issues
+
+
+# ---------------------------------------------------------------------------------------
+# Value checks
+# ---------------------------------------------------------------------------------------
+
+
+def _limits(annotation: Any) -> tuple[Limit | None, Limit | None]:
+    """The :class:`Limit` of a field, and that of its values if the field is a dict."""
+    own = item = None
+    union = get_origin(annotation) in (Union, types.UnionType)
+    for arg in get_args(annotation) if union else (annotation,):
+        if get_origin(arg) is Annotated:
+            own = own or next((m for m in arg.__metadata__ if isinstance(m, Limit)), None)
+        elif get_origin(arg) is dict:
+            item = item or _limits(get_args(arg)[1])[0]
+    return own, item
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def _limit_issues(struct: Struct, path: str) -> list[Issue]:
+    """An error for each value of ``struct`` outside the :class:`Limit` of its type."""
+    found: list[tuple[str, Limit, float]] = []
+    for field in msgspec.structs.fields(type(struct)):
+        value = getattr(struct, field.name)
+        own, item = _limits(field.type)
+        if own is not None and _is_number(value):
+            found.append((f"{path}.{field.encode_name}", own, value))
+        if item is not None and isinstance(value, dict):
+            found += [(f"{path}.{field.encode_name}{_key(k)}", item, v) for k, v in value.items() if _is_number(v)]
+    issues = []
+    for value_path, limit, value in found:
+        bound = limit.violation(value)
+        if bound is not None:
+            issues.append(Issue("error", value_path, f"Expected a value {bound}, got {value!r}"))
+    return issues
+
+
+def _value_issues(model: ExerpyInput, Tamb: float | None, pamb: float | None) -> list[Issue]:
+    # An ambient value passed as an argument replaces the one in the input.
+    overridden = {
+        f"{_p('ambient_conditions')}.{name}" for name, value in (("Tamb", Tamb), ("pamb", pamb)) if value is not None
+    }
+    issues = [i for i in _limit_issues(model.ambient_conditions, _p("ambient_conditions")) if i.path not in overridden]
+    for name, value, quantity in (("Tamb", Tamb, Temperature), ("pamb", pamb, Pressure)):
+        bound = None if value is None else _limits(quantity)[0].violation(value)
+        if bound is not None:
+            issues.append(Issue("error", f"argument {name}", f"Expected a value {bound}, got {value!r}"))
+    for ctype, instances in model.components.items():
+        for cname, comp in instances.items():
+            issues += _limit_issues(comp, _p("components", _key(ctype), _key(cname)))
+    for key, conn in model.connections.items():
+        cpath = _p("connections", _key(key))
+        issues += _limit_issues(conn, cpath)
+        if isinstance(conn, MaterialConnection):
+            for field in ("mass_composition", "molar_composition"):
+                comp_ = getattr(conn, field)
+                if comp_ is not UNSET and comp_ and abs(sum(comp_.values()) - 1) > _COMPOSITION_TOL:
+                    hint = " (H2O and H2OG are both listed)" if {"H2O", "H2OG"} <= comp_.keys() else ""
+                    issues.append(
+                        Issue(
+                            "warning", cpath + f".{field}", f"fractions sum to {sum(comp_.values()):.4f}, not 1{hint}"
+                        )
+                    )
     return issues
 
 
@@ -396,18 +471,8 @@ def _structural_issue(exc: msgspec.ValidationError, prefix: str = "$", raw: msgs
     return Issue("error", prefix + tail, msg)
 
 
-def check(
-    data: bytes | str | dict,
-    *,
-    Tamb: float | None = None,
-    pamb: float | None = None,
-    chemExLib: str | None = None,
-    split_physical_exergy: bool | None = None,
-) -> tuple[ExerpyInput | None, list[Issue]]:
-    """Validate without raising: return the model (``None`` if invalid) and all issues.
-
-    Parameters are those of :func:`validate`.
-    """
+def _decode(data: bytes | str | dict) -> tuple[ExerpyInput | None, list[Issue]]:
+    """Decode the input into typed structs; ``None`` and the errors if it does not fit."""
     if isinstance(data, dict):
         try:
             buf = msgspec.json.encode(data, enc_hook=_enc_hook)
@@ -447,15 +512,120 @@ def check(
     if structural:
         return None, structural
 
-    model = ExerpyInput(
-        components=components,
-        connections=connections,
-        ambient_conditions=env.ambient_conditions,
-        settings=env.settings,
+    return (
+        ExerpyInput(
+            components=components,
+            connections=connections,
+            ambient_conditions=env.ambient_conditions,
+            settings=env.settings,
+        ),
+        [],
     )
-    issues = _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy)
-    issues += _unit_issues(data if isinstance(data, dict) else _decode_any(buf))
-    return (None if any(i.severity == "error" for i in issues) else model), issues
+
+
+def _result(model: ExerpyInput | None, issues: list[Issue]) -> tuple[ExerpyInput | None, list[Issue]]:
+    return (None if model is None or any(i.severity == "error" for i in issues) else model), issues
+
+
+def check_structure(
+    data: bytes | str | dict,
+    *,
+    Tamb: float | None = None,
+    pamb: float | None = None,
+    chemExLib: str | None = None,
+    split_physical_exergy: bool | None = None,
+) -> tuple[ExerpyInput | None, list[Issue]]:
+    """Check the structure of the input without raising, see :func:`validate_structure`.
+
+    Returns the model (``None`` if invalid) and all issues.
+    """
+    model, issues = _decode(data)
+    if model is None:
+        return None, issues
+    raw = data if isinstance(data, dict) else _decode_any(data.encode() if isinstance(data, str) else data)
+    return _result(model, _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy) + _unit_issues(raw))
+
+
+def check_values(
+    data: bytes | str | dict, *, Tamb: float | None = None, pamb: float | None = None
+) -> tuple[ExerpyInput | None, list[Issue]]:
+    """Check the values of the input without raising, see :func:`validate_values`.
+
+    Returns the model (``None`` if invalid) and all issues.
+    """
+    model, issues = _decode(data)
+    if model is None:
+        return None, issues
+    return _result(model, _value_issues(model, Tamb, pamb))
+
+
+def check(
+    data: bytes | str | dict,
+    *,
+    Tamb: float | None = None,
+    pamb: float | None = None,
+    chemExLib: str | None = None,
+    split_physical_exergy: bool | None = None,
+) -> tuple[ExerpyInput | None, list[Issue]]:
+    """Check the structure and then the values without raising, see :func:`validate`.
+
+    Returns the model (``None`` if invalid) and all issues.
+    """
+    model, issues = check_structure(
+        data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+    )
+    if model is None:
+        return None, issues
+    return _result(model, issues + _value_issues(model, Tamb, pamb))
+
+
+def _raise_or_log(model: ExerpyInput | None, issues: list[Issue], log_warnings: bool) -> ExerpyInput:
+    if model is None:
+        raise InputValidationError(issues)
+    if log_warnings:
+        for issue in issues:
+            logger.warning(str(issue))
+    return model
+
+
+def validate_structure(
+    data: bytes | str | dict,
+    *,
+    Tamb: float | None = None,
+    pamb: float | None = None,
+    chemExLib: str | None = None,
+    split_physical_exergy: bool | None = None,
+    log_warnings: bool = True,
+) -> ExerpyInput:
+    """Validate the structure of an ExerPy input document, as it is written.
+
+    Checks the required keys, the types, the ``kind`` of each connection, the component
+    types and names, the ports, the values the settings need, and the units. The values themselves
+    are checked by :func:`validate_values`. Parameters, return value and errors are those
+    of :func:`validate`.
+    """
+    model, issues = check_structure(
+        data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+    )
+    return _raise_or_log(model, issues, log_warnings)
+
+
+def validate_values(
+    data: bytes | str | dict,
+    *,
+    Tamb: float | None = None,
+    pamb: float | None = None,
+    log_warnings: bool = True,
+) -> ExerpyInput:
+    """Validate that each value of an ExerPy input document lies in its reasonable range.
+
+    The ranges are the :class:`~exerpy.quantities.Limit` of the types and hold in SI
+    units, e.g. positive temperatures and pressures or mass fractions between 0 and 1.
+    Mass fractions that do not add up to one give a warning. Parameters, return value and
+    errors are those of :func:`validate`; the document has to have a valid structure.
+    """
+    model, issues = check_values(data, Tamb=Tamb, pamb=pamb)
+    return _raise_or_log(model, issues, log_warnings)
 
 
 def validate(
@@ -468,6 +638,8 @@ def validate(
     log_warnings: bool = True,
 ) -> ExerpyInput:
     """Validate an ExerPy input document and return it as typed structs.
+
+    Runs :func:`validate_structure` and, if the structure is valid, :func:`validate_values`.
 
     Parameters
     ----------
@@ -491,12 +663,7 @@ def validate(
         A subclass of ``ValueError``. ``issues`` lists every finding, warnings included.
     """
     model, issues = check(data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy)
-    if model is None:
-        raise InputValidationError(issues)
-    if log_warnings:
-        for issue in issues:
-            logger.warning(str(issue))
-    return model
+    return _raise_or_log(model, issues, log_warnings)
 
 
 def json_schema() -> dict:

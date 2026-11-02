@@ -13,14 +13,20 @@ from exerpy import ExergyAnalysis
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.components.heat_exchanger.base import HeatExchanger
+from exerpy.quantities import Branches
+from exerpy.quantities import Temperature
 from exerpy.schema import ExerpyInput
 from exerpy.schema import InputValidationError
 from exerpy.schema import MaterialConnection
 from exerpy.schema import PowerConnection
 from exerpy.schema import check
+from exerpy.schema import check_structure
+from exerpy.schema import check_values
 from exerpy.schema import input_struct
 from exerpy.schema import json_schema
 from exerpy.schema import validate
+from exerpy.schema import validate_structure
+from exerpy.schema import validate_values
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), "..", "examples", "exergy_analysis")
 EXAMPLE_FILES = sorted(glob.glob(os.path.join(EXAMPLES, "**", "*.json"), recursive=True))
@@ -189,12 +195,12 @@ def test_unknown_chemexlib(data):
 
 
 def test_structural_errors_of_all_connections_reported(data):
-    data["connections"]["1"]["m"] = -1.0
+    data["connections"]["1"]["T"] = "hot"
     data["connections"]["E1"]["energy_flow"] = "lots"
     data["components"]["HeatExchanger"] = {"HX": {"name": "HX", "dissipative": "yes"}}
     paths = {p for p, _ in errors(data)}
     assert paths == {
-        "$.connections['1'].m",
+        "$.connections['1'].T",
         "$.connections['E1'].energy_flow",
         "$.components['HeatExchanger']['HX'].dissipative",
     }
@@ -252,6 +258,70 @@ def test_all_semantic_errors_reported_together(data):
     assert "3 error(s)" in str(exc.value)
 
 
+# --- two steps: structure, then values ----------------------------------------------
+
+
+def test_structure_does_not_check_values(data):
+    data["connections"]["1"].update({"m": -1.0, "T": -10.0})
+    data["connections"]["1"]["mass_composition"]["N2"] = 1.5
+    model, issues = check_structure(data)
+    assert model is not None and issues == []
+    _, issues = check_values(data)
+    assert {(i.path, i.message) for i in issues if i.severity == "error"} == {
+        ("$.connections['1'].m", "Expected a value >= 0, got -1.0"),
+        ("$.connections['1'].T", "Expected a value > 0, got -10.0"),
+        ("$.connections['1'].mass_composition['N2']", "Expected a value <= 1, got 1.5"),
+    }
+
+
+def test_values_are_checked_once_the_structure_is_valid(data):
+    data["connections"]["1"]["m"] = -1.0
+    data["connections"]["2"]["T"] = "hot"
+    assert [p for p, _ in errors(data)] == ["$.connections['2'].T"]
+    data["connections"]["2"]["T"] = 300.0
+    assert [p for p, _ in errors(data)] == ["$.connections['1'].m"]
+
+
+def test_validate_runs_both_steps(data):
+    data["connections"]["1"]["m"] = -1.0
+    assert validate_structure(data).connections["1"].m == -1.0
+    for validate_function in (validate_values, validate):
+        with pytest.raises(InputValidationError, match=r"\$\.connections\['1'\]\.m"):
+            validate_function(data)
+
+
+def test_ambient_argument_replaces_the_value_of_the_input(data):
+    data["ambient_conditions"]["Tamb"] = -5.0
+    assert_error(data, "$.ambient_conditions.Tamb", "> 0")
+    assert not errors(data, Tamb=298.15)
+    assert_error(data, "argument pamb", "> 0", Tamb=298.15, pamb=0.0)
+
+
+def test_limits_of_a_custom_component(data):
+    """A custom component that uses the shared types gets their limits."""
+
+    class Custom(Component):
+        class Input(Component.Input, kw_only=True):
+            T_hot: Temperature
+            branches: Branches | None = None
+
+    component_registry(Custom)
+    try:
+        data["components"]["Custom"] = {"X": {"name": "X", "T_hot": 0.0, "branches": -2.0}}
+        found = {p for p, _ in errors(data)}
+        assert found == {"$.components['Custom']['X'].T_hot", "$.components['Custom']['X'].branches"}
+    finally:
+        del component_registry.items["Custom"]
+
+
+def test_json_schema_has_no_limits():
+    """The limits hold in SI units, so the schema of the file as written leaves them out."""
+    material = json_schema()["$defs"]["MaterialConnection"]["properties"]
+    for name in ("T", "p", "m"):
+        assert not {"minimum", "exclusiveMinimum"} & set(material[name]), name
+    assert material["source_connector"]["anyOf"][0]["minimum"] == 0
+
+
 def test_units_are_checked_not_converted(data):
     data["connections"]["1"].update({"T": 15.0, "T_unit": "degC", "p_unit": "K", "m_unit": 5})
     assert errors(data) == [
@@ -260,6 +330,14 @@ def test_units_are_checked_not_converted(data):
     ]
     data["connections"]["1"].update({"p_unit": "bar", "m_unit": "t / h"})
     assert validate(data).connections["1"].T == 15.0
+
+
+def test_units_are_checked_with_the_structure(data):
+    data["connections"]["1"]["p_unit"] = "K"
+    model, issues = check_structure(data)
+    assert model is None
+    assert [i.path for i in issues] == ["$.connections['1'].p_unit"]
+    assert check_values(data)[0] is not None  # the value step does not look at units
 
 
 # --- warnings ------------------------------------------------------------------------

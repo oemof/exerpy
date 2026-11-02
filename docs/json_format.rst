@@ -170,16 +170,20 @@ Validation
 **********
 
 ``from_json`` checks the file before the analysis starts. The models parsed with ``from_tespy``,
-``from_ebsilon`` and ``from_aspen`` are checked in the same way. The check finds for example
-missing values, values of the wrong type, negative mass flows, unknown component types, two
-streams entering the same port, and missing ``e_T`` and ``e_M`` when the physical exergy is
-split. ExerPy reports all problems together, each with its place in the file:
+``from_ebsilon`` and ``from_aspen`` are checked in the same way. The check has two steps:
+
+1. **Structure**: missing values, values of the wrong type, unknown component types, two streams
+   entering the same port, and missing ``e_T`` and ``e_M`` when the physical exergy is split.
+2. **Values**, once the structure is valid: temperatures and pressures above zero, mass flows
+   that are not negative, and mass and molar fractions between 0 and 1.
+
+ExerPy reports all problems of a step together, each with its place in the file:
 
 .. code-block:: text
 
     Invalid ExerPy input (2 error(s)):
-      - error: Expected `float` >= 0.0 - at `$.connections['1'].m`
-      - error: Object missing required field `h` - at `$.connections['2']`
+      - error: Expected a value >= 0, got -1.0 - at `$.connections['1'].m`
+      - error: Expected a value > 0, got -10.0 - at `$.connections['2'].T`
 
 The error is a :class:`~exerpy.schema.InputValidationError`, a ``ValueError`` whose ``issues``
 attribute lists every problem. Some findings are only warnings and are logged, for example mass
@@ -195,6 +199,9 @@ A file can also be checked without running an analysis:
     with open("my_model.json", "rb") as file:
         validate(file.read())
 
+:func:`~exerpy.schema.validate_structure` and :func:`~exerpy.schema.validate_values` run one
+step each.
+
 A custom component declares the values it reads in a nested ``Input`` class, see
 :class:`~exerpy.components.component.Component`. The check then covers it as well.
 
@@ -204,7 +211,8 @@ JSON Schema
 
 :func:`~exerpy.schema.json_schema` returns the format as a `JSON Schema
 <https://json-schema.org/>`__. Saved to a file, it lets an editor such as VS Code complete and
-check a model while you write it:
+check a model while you write it. The schema describes the structure. The ranges of the values
+are checked by ExerPy only.
 
 .. code-block:: python
 

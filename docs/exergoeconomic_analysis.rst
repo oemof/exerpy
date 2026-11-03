@@ -293,8 +293,8 @@ separately; without it, the physical exergy is costed as a whole.
   balances are met either way, but the specific costs of streams and components differ, see
   :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
 - **Below the ambient temperature** only the split credits the cold exergy of a stream to the product
-  of the component that produces it. Models that cannot provide the split, such as those from Aspen
-  Plus, are analysed without it.
+  of the component that produces it. Models whose streams lack the thermal and mechanical shares,
+  such as a JSON input with the physical exergy only, are analysed without it.
 
 *************************************************
 Getting started with exergoeconomic analysis
@@ -325,8 +325,8 @@ well, see :ref:`Heat from or to outside the model <heat_boundary_label>`.
 
     With :code:`split_physical_exergy=True`, the cost of a material stream is allocated to its
     thermal and its mechanical exergy separately; with :code:`False`, it is allocated to its physical
-    exergy as a whole. Both are supported, so models that cannot provide the split, such as those parsed
-    from Aspen Plus, can be analysed as well. The two conventions do not give the same specific
+    exergy as a whole. Both are supported, so models whose streams lack the thermal and mechanical
+    shares can be analysed as well. The two conventions do not give the same specific
     costs; see :ref:`What changes with the split <exergoeconomic_system_label>` and
     :ref:`Split Physical Exergy in Exergoeconomics <examples_split_physical_exergy_label>`.
 

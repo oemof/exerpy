@@ -111,7 +111,7 @@ nw.print_results()
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
-ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=False)
+ean = ExergyAnalysis.from_tespy(nw, Tamb, pamb, split_physical_exergy=True)
 # [exergy_analysis_setup]
 fuel = {"inputs": ["e1"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}

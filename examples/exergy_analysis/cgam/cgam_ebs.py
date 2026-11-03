@@ -13,7 +13,7 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "cgam.ebs")
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
-ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib="Ahrendts", split_physical_exergy=False)
+ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib="Ahrendts", split_physical_exergy=True)
 
 fuel = {"inputs": ["1", "10"], "outputs": []}
 product = {"inputs": ["E1", "9"], "outputs": ["8"]}

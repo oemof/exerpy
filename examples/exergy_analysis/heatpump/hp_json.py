@@ -13,7 +13,7 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "hp_ebs.jso
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
-ean = ExergyAnalysis.from_json(model_path, split_physical_exergy=False)
+ean = ExergyAnalysis.from_json(model_path, split_physical_exergy=True)
 
 fuel = {"inputs": ["E1", "E2", "E3"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}

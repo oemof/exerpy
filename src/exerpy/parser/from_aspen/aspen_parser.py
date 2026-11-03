@@ -508,78 +508,21 @@ class AspenModelParser:
                     factor_node = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Input\FACTOR")
                     factor = factor_node.Value if factor_node is not None else None
                     if factor is not None:
-                        if factor < 1:
+                        if self.mult_block_type(block_name, factor) == "Generator":
                             component_data.update({"eta_el": factor, "type": "Generator"})
-                        elif factor > 1:
-                            elec_power_node = self.aspen.Tree.FindNode(
-                                rf"\Data\Blocks\{block_name}\Ports\WS(OUT)"
-                            ).Elements(0)
-                            elec_power_name = elec_power_node.Name
-                            if elec_power_name in self.connections_data:
-                                elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
-                            else:
-                                logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                elec_power = None
-                            brake_power_node = self.aspen.Tree.FindNode(
-                                rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
-                            ).Elements(0)
-                            brake_power_name = brake_power_node.Name
-                            if brake_power_name in self.connections_data:
-                                brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
-                            else:
-                                logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                brake_power = None
+                        else:
                             component_data.update(
                                 {
                                     "eta_el": 1 / factor,
                                     "multiplier factor": factor,
                                     "multiplier factor_unit": "dimensionless",
                                     "type": "Motor",
-                                    "P_el": elec_power,
+                                    "P_el": self.port_power(block_name, "WS(OUT)"),
                                     "P_el_unit": SI_UNITS["P"],
-                                    "P_mech": brake_power,
+                                    "P_mech": self.port_power(block_name, "WS(IN)"),
                                     "P_mech_unit": SI_UNITS["P"],
                                 }
                             )
-                        else:  # factor == 1
-                            choice = (
-                                input(
-                                    f"Multiplier Block '{block_name}' has factor = 1. Enter 'G' if it is a Generator or 'M' for Motor: "
-                                )
-                                .strip()
-                                .upper()
-                            )
-                            if choice == "M":
-                                elec_power_node = self.aspen.Tree.FindNode(
-                                    rf"\Data\Blocks\{block_name}\Ports\WS(OUT)"
-                                ).Elements(0)
-                                elec_power_name = elec_power_node.Name
-                                if elec_power_name in self.connections_data:
-                                    elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
-                                else:
-                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                    elec_power = None
-                                brake_power_node = self.aspen.Tree.FindNode(
-                                    rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
-                                ).Elements(0)
-                                brake_power_name = brake_power_node.Name
-                                if brake_power_name in self.connections_data:
-                                    brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
-                                else:
-                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                    brake_power = None
-                                component_data.update(
-                                    {
-                                        "eta_el": factor,
-                                        "type": "Motor",
-                                        "P_el": elec_power,
-                                        "P_el_unit": SI_UNITS["P"],
-                                        "P_mech": brake_power,
-                                        "P_mech_unit": SI_UNITS["P"],
-                                    }
-                                )
-                            else:
-                                component_data.update({"eta_el": factor, "type": "Generator"})
 
             # Create a connection for the heat flows of the SimpleHeatExchanger blocks
             if component_type == "Heater":
@@ -678,6 +621,55 @@ class AspenModelParser:
 
             # Assign connectors
             self.assign_connectors(component_data, block_name)
+
+    def mult_block_type(self, block_name, factor):
+        """
+        Decides whether a multiplier block on work streams is a generator or a motor.
+
+        The work stream entering the block comes from its machine. Aspen reports its power as negative if the
+        machine produces it, as a turbine does for a generator, and as positive if the machine consumes it, as a
+        compressor or a pump does for a motor. Without this sign, a factor below 1 means a generator and a
+        factor above 1 a motor.
+
+        Returns:
+            str: "Generator" or "Motor".
+        """
+        port = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\WS(IN)")
+        signs = set()
+        if port is not None:
+            signs = {
+                self.connections_data[element.Name].get("_aspen_power_sign")
+                for element in port.Elements
+                if element.Name in self.connections_data
+            } - {None}
+        if len(signs) == 1:
+            block_type = "Generator" if signs.pop() < 0 else "Motor"
+            if (block_type == "Generator" and factor > 1) or (block_type == "Motor" and factor < 1):
+                logger.warning(
+                    f"Multiplier block {block_name} is a {block_type.lower()} by the sign of its power, but its "
+                    f"factor {factor} gives an efficiency above 1."
+                )
+            return block_type
+        if factor == 1:
+            logger.warning(
+                f"Multiplier block {block_name} has the factor 1 and no inlet work stream with a known power, so "
+                f"it is taken as a generator."
+            )
+        return "Generator" if factor <= 1 else "Motor"
+
+    def port_power(self, block_name, port):
+        """
+        Returns the power of the first work stream at a port of a block, or None if there is none.
+        """
+        port_node = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port}")
+        if port_node is None or port_node.Elements.Count == 0:
+            logger.warning(f"No {port} port found for block {block_name}")
+            return None
+        stream_name = port_node.Elements(0).Name
+        if stream_name not in self.connections_data:
+            logger.warning(f"The work stream {stream_name} at the {port} port of block {block_name} is unknown")
+            return None
+        return abs(self.connections_data[stream_name]["energy_flow"])
 
     def assign_connectors(self, component_data, block_name):
         """

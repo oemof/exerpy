@@ -62,6 +62,10 @@ Bug Fixes
   IAPWS-IF97 steam table, the FDBR gas table and no real gas correction. It now uses the fluid data
   of each stream. With a real gas correction in the model, e_T of methane at the ambient
   temperature was -4.4 kJ/kg instead of 0.
+- The Aspen parser recognizes a multiplier block on work streams as a generator or a motor from the
+  sign of the power entering it, which a turbine produces and a compressor or pump consumes. It no
+  longer asks for a block with the factor 1, which stopped scripts without a terminal, such as the
+  CGAM example (closes #61).
 
 Other Changes
 #############

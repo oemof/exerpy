@@ -26,11 +26,9 @@ KEYS = ("m", "T", "p", "h", "s", "e_PH", "e_T", "e_M", "e_CH")
 
 @pytest.mark.parametrize("simulator", ["aspen", "ebsilon"])
 @pytest.mark.parametrize("model", list(MODELS))
-def test_parser_reproduces_stored_results(model, simulator, monkeypatch):
+def test_parser_reproduces_stored_results(model, simulator):
     folder, chemExLib = MODELS[model]
     base = os.path.join(_EXAMPLES, folder)
-    # the Aspen parser asks whether a multiplier block with factor 1, as in the CGAM model, is a generator
-    monkeypatch.setattr("builtins.input", lambda prompt="": "G")
     if simulator == "aspen":
         parsed = ExergyAnalysis.from_aspen(
             os.path.join(base, f"{model}.bkp"), chemExLib=chemExLib, split_physical_exergy=True

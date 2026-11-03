@@ -508,6 +508,88 @@ def test_group_component(monkeypatch):
     assert "Comp1" in parser.components_data.get("GroupA", {})
 
 
+# --- Tests for multiplier blocks ---
+
+
+def mult_block_parser(factor, inlet_power=None):
+    """
+    A parser with the multiplier block M1 between the work stream W1 of a machine and the work stream E1.
+
+    ``inlet_power`` is the power of W1 as Aspen reports it, negative if the machine produces it. Without it,
+    M1 has no work streams.
+    """
+    block = DummyBlockNode("M1", "WORK", "Mult")
+    blocks = DummyNode("Blocks")
+    blocks.Elements = DummyCollection([block])
+    nodes = {
+        r"\Data\Blocks": blocks,
+        r"\Data\Blocks\M1": block,
+        r"\Data\Blocks\M1\Input\FACTOR": DummyNode("FACTOR", factor),
+    }
+    parser = AspenModelParser("dummy_model.bkp")
+    parser.connections_data = {}
+    if inlet_power is not None:
+        for port, stream, power in (("WS(IN)", "W1", inlet_power), ("WS(OUT)", "E1", inlet_power * factor)):
+            nodes[rf"\Data\Blocks\M1\Ports\{port}"] = DummyNode(port)
+            nodes[rf"\Data\Blocks\M1\Ports\{port}"].Elements = DummyCollection([DummyNode(stream)])
+            parser.connections_data[stream] = {
+                "kind": "power",
+                "energy_flow": abs(power),
+                "_aspen_power_sign": 1 if power >= 0 else -1,
+            }
+    parser.aspen = DummyAspen(DummyTree(nodes))
+    return parser
+
+
+def parsed_mult_block(parser):
+    parser.parse_blocks()
+    return next(comp for group in parser.components_data.values() for name, comp in group.items() if name == "M1")
+
+
+@pytest.mark.parametrize(
+    "factor, inlet_power, block_type",
+    [(1.0, -30e6, "Generator"), (0.985, -2.5e8, "Generator"), (1.015, 7e5, "Motor"), (1.0, 7e5, "Motor")],
+)
+def test_mult_block_type_from_power_sign(factor, inlet_power, block_type, caplog):
+    """
+    Test that the sign of the inlet power decides whether a multiplier block is a generator or a motor.
+
+    The first three cases are those of the examples: the CGAM generator with the factor 1, the CCPP
+    generators and the heat pump motors.
+    """
+    comp = parsed_mult_block(mult_block_parser(factor, inlet_power))
+
+    assert comp["type"] == block_type
+    if block_type == "Generator":
+        assert comp["eta_el"] == pytest.approx(factor)
+    else:
+        assert comp["eta_el"] == pytest.approx(1 / factor)
+        assert comp["P_mech"] == pytest.approx(abs(inlet_power))
+        assert comp["P_el"] == pytest.approx(abs(inlet_power) * factor)
+    assert caplog.text == ""
+
+
+def test_mult_block_factor_contradicts_power_sign(caplog):
+    """
+    Test the warning for a multiplier block on consumed power whose factor gives an efficiency above 1.
+    """
+    comp = parsed_mult_block(mult_block_parser(0.985, 7e5))
+
+    assert comp["type"] == "Motor"
+    assert "efficiency above 1" in caplog.text
+
+
+@pytest.mark.parametrize("factor, block_type", [(0.985, "Generator"), (1.015, "Motor"), (1.0, "Generator")])
+def test_mult_block_type_without_inlet_power(factor, block_type, caplog):
+    """
+    Test that the factor decides for a multiplier block without work streams, and a factor of 1 gives a warning.
+    """
+    comp = parsed_mult_block(mult_block_parser(factor))
+
+    assert comp["type"] == block_type
+    assert ("taken as a generator" in caplog.text) == (factor == 1.0)
+
+
 # --- Integration Test for parse_model ---
 
 

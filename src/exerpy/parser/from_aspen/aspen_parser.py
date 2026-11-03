@@ -1,9 +1,13 @@
+import itertools
 import json
 import os
 
 from exerpy.logger import logger
+from exerpy.parser import STATE_CHECK_STEP
+from exerpy.parser import state_between
 from exerpy.units import SI_UNITS
 from exerpy.units import add_units
+from exerpy.units import convert
 from exerpy.units import convert_to_SI
 
 from .aspen_config import connector_mappings
@@ -66,6 +70,9 @@ class AspenModelParser:
 
             # Parse blocks (components)
             self.parse_blocks()
+
+            if self.split_physical_exergy:
+                self.split_physical_exergy_of_streams()
 
         except Exception as e:
             logger.error(f"Error while parsing the model: {e}")
@@ -289,6 +296,145 @@ class AspenModelParser:
 
             # Store connection data
             self.connections_data[stream_name] = connection_data
+
+    def split_physical_exergy_of_streams(self):
+        """
+        Splits the physical exergy of the material streams into a thermal part e_T and a mechanical part e_M.
+
+        A Generic property analysis per stream flashes the stream's composition with the stream's property method
+        at the ambient temperature T0 and the stream's pressure p. Then e_T = h - h(T0, p) - T0 * (s - s(T0, p))
+        and e_M = e_PH - e_T. The analysis also evaluates the stream just below and above its own temperature, to
+        check that these properties reproduce the stream's h and s. The analyses exist in memory only and take one
+        run of the Aspen engine; the model file stays unchanged.
+        """
+        streams = [name for name, conn in self.connections_data.items() if conn["kind"] == "material"]
+        if not streams:
+            return
+        try:
+            analyses = self.add_ambient_temperature_analyses(streams)
+            self.aspen.SuppressDialogs = 1
+            self.aspen.Engine.Run2()
+        except Exception as e:
+            logger.warning(f"The physical exergy of the streams could not be split: {e}")
+            return
+
+        for stream, (analysis, rows) in analyses.items():
+            conn = self.connections_data[stream]
+            (T_A, h_A, s_A), *own_state = self.analysis_states(analysis, stream, rows)
+            if None in (conn["h"], conn["s"], h_A, s_A):
+                logger.warning(f"No thermal and mechanical exergy for stream {stream}.")
+                continue
+            if T_A is not None and abs(T_A - self.Tamb) > 1e-3:
+                logger.warning(f"Aspen evaluated stream {stream} at {T_A} K instead of Tamb = {self.Tamb} K.")
+                continue
+            if own_state and not state_between(conn["h"], conn["s"], *(state[1:] for state in own_state)):
+                logger.warning(
+                    f"The thermal and mechanical exergy of stream {stream} may be wrong: the property data used for "
+                    f"the split do not reproduce the stream's enthalpy and entropy."
+                )
+            conn["e_T"] = conn["h"] - h_A - self.Tamb * (conn["s"] - s_A)
+            conn["e_T_unit"] = SI_UNITS["e_T"]
+            if conn["e_PH"] is not None:
+                conn["e_M"] = conn["e_PH"] - conn["e_T"]
+                conn["e_M_unit"] = SI_UNITS["e_M"]
+
+    def add_ambient_temperature_analyses(self, streams):
+        """
+        Adds a prop-set with h and s and, for each stream, a Generic analysis at the stream's pressure and at T0
+        and the stream's temperature minus and plus :data:`exerpy.parser.STATE_CHECK_STEP`.
+
+        Returns:
+            dict: Name of the analysis and its number of temperatures for each stream.
+        """
+        tree = self.aspen.Tree
+        prop_sets = tree.FindNode(r"\Data\Properties\Prop-Sets")
+        prop_set = self.free_names(prop_sets, "EXPYHS", 1)[0]
+        prop_sets.Elements.Add(prop_set)
+        units = tree.FindNode(rf"\Data\Properties\Prop-Sets\{prop_set}\Input\UNITS")
+        for i, prop in enumerate(("HMX", "SMX")):
+            units.Elements.InsertRow(0, i)
+            units.Elements.SetLabel(0, i, False, prop)
+        self.set_rows(rf"\Data\Properties\Prop-Sets\{prop_set}\Input\PHASE", ["T"])
+
+        folder = tree.FindNode(r"\Data\Properties\Analysis")
+        ref_temp = tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_TEMP")
+        analyses = {}
+        for stream, name in zip(streams, self.free_names(folder, "EXPY", len(streams)), strict=True):
+            folder.Elements.Add(f"{name}!GENERIC")
+            base = rf"\Data\Properties\Analysis\{name}\Input"
+            tree.FindNode(base + r"\OPT_COMP").Value = "STREAM"
+            tree.FindNode(base + r"\SID").Value = stream
+            self.set_rows(base + r"\VARNAME", ["TEMP"])
+            # the temperature list takes the input unit of REF_TEMP; the results are checked against Tamb
+            temperatures = [ref_temp.Value]
+            T = self.connections_data[stream]["T"]
+            if T is not None:
+                temperatures += [
+                    convert(T + step, SI_UNITS["T"], ref_temp.UnitString)
+                    for step in (-STATE_CHECK_STEP, STATE_CHECK_STEP)
+                ]
+            self.set_rows(base + r"\LIST\#0", temperatures)
+            pres = tree.FindNode(base + r"\PRES")
+            p_out = tree.FindNode(rf"\Data\Streams\{stream}\Output\PRES_OUT\MIXED")
+            if pres.UnitString == p_out.UnitString:
+                pres.Value = p_out.Value
+            else:
+                pres.Value = convert(self.connections_data[stream]["p"], SI_UNITS["p"], pres.UnitString)
+            self.set_rows(base + r"\PROPERTIES", [prop_set])
+            analyses[stream] = (name, len(temperatures))
+        return analyses
+
+    def analysis_states(self, analysis, stream, rows):
+        """
+        Reads the temperature and h and s per kg of the first ``rows`` rows of the analysis of a stream.
+
+        Returns:
+            list: (T in K, h in J/kg, s in J/kgK) of each row; a value without a result in Aspen is None.
+        """
+        tree = self.aspen.Tree
+        out = rf"\Data\Properties\Analysis\{analysis}\Output\PROP_DATA"
+        mw = tree.FindNode(rf"\Data\Streams\{stream}\Output\MW")
+        molar_mass = mw.Value * 1e-3 if mw is not None and mw.Value else None
+        states = []
+        for row in range(1, rows + 1):
+            temp = tree.FindNode(out + rf"\TEMP\{row}")
+            T = None if temp is None or temp.Value is None else convert_to_SI("T", temp.Value, temp.UnitString)
+            h, s = (
+                self.per_kg(out + rf"\{prop}\TOTAL\{row}", key, molar_mass)
+                for prop, key in (("HMX", "h"), ("SMX", "s"))
+            )
+            states.append((T, h, s))
+        return states
+
+    def per_kg(self, path, key, molar_mass):
+        """
+        Reads a value per kg or per mol and returns it in the SI unit of ``key``, per kg.
+
+        Parameters:
+            molar_mass (float): Molar mass in kg/mol, to convert a value per mol.
+        """
+        node = self.aspen.Tree.FindNode(path)
+        if node is None or node.Value is None:
+            return None
+        try:
+            return convert_to_SI(key, node.Value, node.UnitString)
+        except ValueError:
+            if molar_mass is None:
+                return None
+            return convert(node.Value, node.UnitString, SI_UNITS[key].replace("kg", "mol")) / molar_mass
+
+    def set_rows(self, path, values):
+        """Inserts rows with ``values`` into the list at ``path``."""
+        elements = self.aspen.Tree.FindNode(path).Elements
+        for i, value in enumerate(values):
+            elements.InsertRow(0, i)
+            elements.Item(i).Value = value
+
+    @staticmethod
+    def free_names(folder, stem, count):
+        """Returns ``count`` IDs ``stem1``, ``stem2``, ... that no element of ``folder`` uses yet."""
+        taken = {element.Name for element in folder.Elements}
+        return list(itertools.islice((f"{stem}{k}" for k in itertools.count(1) if f"{stem}{k}" not in taken), count))
 
     def parse_blocks(self):
         """

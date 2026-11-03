@@ -14,13 +14,18 @@ The test suite verifies:
 - Connector assignment for Mixer, Splitter, Combustion Chamber, and generic components
 - Component grouping and overall sorted data output
 - Complete Aspen model processing workflow via run_aspen
+- Splitting of the physical exergy with Generic property analyses
 - Error handling for a missing model file
 """
 
+import math
+from unittest.mock import Mock
 from unittest.mock import patch
 
 import pytest
 
+import exerpy.parser.from_aspen.aspen_parser as ap
+from exerpy.parser import STATE_CHECK_STEP
 from exerpy.parser.from_aspen.aspen_parser import AspenModelParser
 from exerpy.parser.from_aspen.aspen_parser import run_aspen
 
@@ -144,16 +149,21 @@ class DummyBlockNode(DummyNode):
 
 
 @pytest.fixture
-def dummy_convert_to_SI():
+def dummy_convert_to_SI(monkeypatch):
     """
-    Dummy conversion function to bypass unit conversion complexity.
+    Dummy conversion function to bypass unit conversion complexity, patched into the parser for one test.
 
     Returns
     -------
     function
-        A lambda function that returns the numeric value without conversion.
+        A function that returns the numeric value without conversion.
     """
-    return lambda phys, value, unit_str: value
+
+    def dummy(phys, value, unit_str):
+        return value
+
+    monkeypatch.setattr(ap, "convert_to_SI", dummy)
+    return dummy
 
 
 # --- Fixture to setup a parser with a dummy Aspen COM object (ambient only) ---
@@ -172,10 +182,6 @@ def parser_with_dummy_aspen(dummy_convert_to_SI):
     AspenModelParser
         Parser instance with injected dummy Aspen object.
     """
-    import exerpy.parser.from_aspen.aspen_parser as ap
-
-    ap.convert_to_SI = dummy_convert_to_SI
-
     nodes = {
         r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", 300, "K"),
         r"\Data\Setup\Sim-Options\Input\REF_PRES": DummyNode("REF_PRES", 101325, "Pa"),
@@ -204,10 +210,6 @@ def test_parse_streams(dummy_convert_to_SI):
     - Material stream: retrieves temperature, pressure, enthalpy, entropy, mass flow,
       energy flow, exergy, total flow, and fluid composition.
     """
-    import exerpy.parser.from_aspen.aspen_parser as ap
-
-    ap.convert_to_SI = dummy_convert_to_SI
-
     stream1 = DummyNode("Stream1")
     stream2 = DummyNode("Stream2")
     stream3 = DummyNode("Stream3")
@@ -298,7 +300,7 @@ def test_parse_streams(dummy_convert_to_SI):
 # --- Tests for parse_blocks and component grouping ---
 
 
-def test_parse_blocks_and_grouping(dummy_convert_to_SI):
+def test_parse_blocks_and_grouping(dummy_convert_to_SI, monkeypatch):
     """
     Test parsing of blocks (components) and grouping of components.
 
@@ -313,15 +315,11 @@ def test_parse_blocks_and_grouping(dummy_convert_to_SI):
     - Components are parsed and grouped.
     - Additional connections (like heater heat connection and pump motor connections) are created.
     """
-    import exerpy.parser.from_aspen.aspen_parser as ap
-
-    ap.convert_to_SI = dummy_convert_to_SI
-
     # Patch grouped_components and connector_mappings.
     dummy_grouped = {"GroupA": ["Heater", "Pump", "Mult", "Compressor", "Turbine"], "GroupB": ["Other"]}
     dummy_connector_mappings = {}
-    ap.grouped_components = dummy_grouped
-    ap.connector_mappings = dummy_connector_mappings
+    monkeypatch.setattr(ap, "grouped_components", dummy_grouped)
+    monkeypatch.setattr(ap, "connector_mappings", dummy_connector_mappings)
 
     blocks_parent = DummyNode("Blocks")
     # Heater block: Block1.
@@ -494,7 +492,7 @@ def test_assign_generic_connectors():
     assert connections_data["StreamGeneric"].get("target_connector") == 5
 
 
-def test_group_component():
+def test_group_component(monkeypatch):
     """
     Test the group_component function for proper grouping of components.
 
@@ -503,9 +501,7 @@ def test_group_component():
     - The component is stored under the correct group based on its type.
     """
     dummy_grouped = {"GroupA": ["TypeA"], "GroupB": ["TypeB"]}
-    import exerpy.parser.from_aspen.aspen_parser as ap
-
-    ap.grouped_components = dummy_grouped
+    monkeypatch.setattr(ap, "grouped_components", dummy_grouped)
     parser = AspenModelParser("dummy.apw")
     component_data = {"name": "Comp1", "type": "TypeA"}
     parser.group_component(component_data, "Comp1")
@@ -515,17 +511,15 @@ def test_group_component():
 # --- Integration Test for parse_model ---
 
 
-def test_parse_model_integration(dummy_convert_to_SI):
+@pytest.mark.parametrize("split", [True, False])
+def test_parse_model_integration(dummy_convert_to_SI, split):
     """
     Test the full parse_model function integration.
 
     This test simulates an Aspen tree that includes ambient conditions, streams, and blocks.
-    Verifies that parse_model correctly calls ambient, stream, and block parsing.
+    Verifies that parse_model correctly calls ambient, stream, and block parsing, and splits
+    the physical exergy only if asked to.
     """
-    import exerpy.parser.from_aspen.aspen_parser as ap
-
-    ap.convert_to_SI = dummy_convert_to_SI
-
     nodes = {
         r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", 290, "K"),
         r"\Data\Setup\Sim-Options\Input\REF_PRES": DummyNode("REF_PRES", 100000, "Pa"),
@@ -543,14 +537,200 @@ def test_parse_model_integration(dummy_convert_to_SI):
 
     tree = DummyTree(nodes)
     dummy_aspen = DummyAspen(tree)
-    parser = AspenModelParser("dummy_model.apw")
+    parser = AspenModelParser("dummy_model.apw", split_physical_exergy=split)
     parser.aspen = dummy_aspen
 
-    parser.parse_model()
+    with patch.object(AspenModelParser, "split_physical_exergy_of_streams") as split_streams:
+        parser.parse_model()
+
+    assert split_streams.called == split
 
     assert parser.Tamb == 290
     assert parser.pamb == 100000
     assert "StreamX" in parser.connections_data
+
+
+# --- Tests for the split of the physical exergy ---
+
+
+class DummyRows(DummyCollection):
+    """Rows of an Aspen folder or list node, with the methods the parser calls to add objects and rows."""
+
+    def Add(self, name):
+        self.append(DummyNode(name.split("!")[0]))
+
+    def InsertRow(self, dimension, index):
+        self.insert(index, DummyNode())
+
+    def SetLabel(self, dimension, index, flag, label):
+        self[index].Name = label
+
+    def Item(self, index):
+        return self[index]
+
+
+class DummyModel:
+    """
+    Aspen model whose engine evaluates the Generic property analyses the parser adds.
+
+    Each stream's fluid has h = h0 + cp * (T - 300 K) and s = s0 + cp * ln(T / 300 K) at every pressure.
+
+    Parameters
+    ----------
+    nodes : dict
+        Nodes of the model tree; the input nodes of the added prop-set and analyses are created on access.
+    fluids : dict
+        h0 in kJ/kmol, s0 and cp in kJ/kmol-K of each stream.
+    pres_unit : str
+        Unit of the pressure input of an analysis.
+    """
+
+    def __init__(self, nodes, fluids, pres_unit):
+        self.nodes = nodes
+        self.fluids = fluids
+        self.pres_unit = pres_unit
+        self.Tree = self
+        self.Engine = self
+        self.runs = 0
+
+    def FindNode(self, path):
+        if path not in self.nodes and r"\EXPY" in path and r"\Input" in path:
+            self.nodes[path] = DummyNode(path.rsplit("\\", 1)[-1], unit=self.pres_unit if path.endswith("PRES") else "")
+            self.nodes[path].Elements = DummyRows()
+        return self.nodes.get(path)
+
+    def Run2(self):
+        self.runs += 1
+        for analysis in self.nodes[r"\Data\Properties\Analysis"].Elements:
+            base = rf"\Data\Properties\Analysis\{analysis.Name}"
+            stream = self.FindNode(base + r"\Input\SID").Value
+            if stream is None:
+                continue
+            h0, s0, cp = self.fluids[stream]
+            out = base + r"\Output\PROP_DATA"
+            for row, item in enumerate(self.FindNode(base + r"\Input\LIST\#0").Elements, start=1):
+                T = item.Value
+                self.nodes[out + rf"\TEMP\{row}"] = DummyNode(str(row), T, "K")
+                self.nodes[out + rf"\HMX\TOTAL\{row}"] = DummyNode(str(row), h0 + cp * (T - 300.0), "kJ/kmol")
+                self.nodes[out + rf"\SMX\TOTAL\{row}"] = DummyNode(str(row), s0 + cp * math.log(T / 300.0), "kJ/kmol-K")
+
+
+# S1 at 400 K: h0 = 1800 kJ/kmol / 18 kg/kmol = 100 kJ/kg, s0 = 6.3 kJ/kmol-K / 18 kg/kmol = 350 J/kgK, cp = 1 kJ/kgK
+H_S1 = 100e3 + 1e3 * (400.0 - 300.0)
+S_S1 = 350.0 + 1e3 * math.log(400.0 / 300.0)
+
+
+def split_model(pres_unit="bar", analyses=(), ref_temp=(300.0, "K"), h=H_S1, T=400.0):
+    """A parser with one material stream S1 and one power stream, and its Aspen model."""
+    prop_sets = DummyNode("Prop-Sets")
+    prop_sets.Elements = DummyRows()
+    folder = DummyNode("Analysis")
+    folder.Elements = DummyRows(DummyNode(name) for name in analyses)
+    nodes = {
+        r"\Data\Properties\Prop-Sets": prop_sets,
+        r"\Data\Properties\Analysis": folder,
+        r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", *ref_temp),
+        r"\Data\Streams\S1\Output\PRES_OUT\MIXED": DummyNode("PRES_OUT", 2.0, "bar"),
+        r"\Data\Streams\S1\Output\MW": DummyNode("MW", 18.0),
+    }
+    model = DummyModel(nodes, {"S1": (1800.0, 6.3, 18.0)}, pres_unit)
+    parser = AspenModelParser("dummy_model.bkp")
+    parser.aspen = model
+    parser.Tamb = 300.0
+    parser.connections_data = {
+        "S1": {"kind": "material", "T": T, "p": 2e5, "h": h, "s": S_S1, "e_PH": 100e3},
+        "W1": {"kind": "power", "energy_flow": 1e3},
+    }
+    return parser, model
+
+
+@pytest.mark.parametrize("pres_unit, pres", [("bar", 2.0), ("kPa", 200.0)])
+def test_split_physical_exergy(pres_unit, pres, caplog):
+    """
+    Test the split of the physical exergy with a Generic analysis per material stream.
+
+    Verifies
+    --------
+    - e_T = h - h(T0, p) - T0 * (s - s(T0, p)) from the analysis' molar results, and e_M = e_PH - e_T.
+    - The prop-set and the analysis get IDs that the model does not use yet.
+    - The analysis evaluates the stream at its pressure, in the unit of the pressure input, at T0 and just
+      below and above the stream's temperature, and the stream passes this check.
+    """
+    parser, model = split_model(pres_unit, analyses=["EXPY1"])
+
+    parser.split_physical_exergy_of_streams()
+
+    conn = parser.connections_data["S1"]
+    assert conn["e_T"] == pytest.approx(H_S1 - 100e3 - 300.0 * (S_S1 - 350.0))
+    assert conn["e_M"] == pytest.approx(100e3 - conn["e_T"])
+    assert conn["e_T_unit"] == conn["e_M_unit"] == "J / kg"
+    assert "e_T" not in parser.connections_data["W1"]
+    assert model.runs == 1
+    assert "may be wrong" not in caplog.text
+
+    prop_set = r"\Data\Properties\Prop-Sets\EXPYHS1\Input"
+    assert [row.Name for row in model.nodes[prop_set + r"\UNITS"].Elements] == ["HMX", "SMX"]
+    assert model.nodes[prop_set + r"\PHASE"].Elements.Item(0).Value == "T"
+    analysis = r"\Data\Properties\Analysis\EXPY2\Input"
+    assert model.nodes[analysis + r"\OPT_COMP"].Value == "STREAM"
+    assert model.nodes[analysis + r"\SID"].Value == "S1"
+    assert model.nodes[analysis + r"\VARNAME"].Elements.Item(0).Value == "TEMP"
+    temperatures = [row.Value for row in model.nodes[analysis + r"\LIST\#0"].Elements]
+    assert temperatures == pytest.approx([300.0, 400.0 - STATE_CHECK_STEP, 400.0 + STATE_CHECK_STEP])
+    assert model.nodes[analysis + r"\PRES"].Value == pytest.approx(pres)
+    assert model.nodes[analysis + r"\PROPERTIES"].Elements.Item(0).Value == "EXPYHS1"
+
+
+def test_split_physical_exergy_state_not_reproduced(caplog):
+    """
+    Test the warning for a stream whose enthalpy the property data of the split do not reproduce.
+    """
+    parser, _ = split_model(h=H_S1 + 1e3)
+
+    parser.split_physical_exergy_of_streams()
+
+    assert "The thermal and mechanical exergy of stream S1 may be wrong" in caplog.text
+    assert "e_T" in parser.connections_data["S1"]
+
+
+def test_split_physical_exergy_without_temperature(caplog):
+    """
+    Test that a stream without a temperature is evaluated at T0 only and not checked.
+    """
+    parser, model = split_model(T=None)
+
+    parser.split_physical_exergy_of_streams()
+
+    assert len(model.nodes[r"\Data\Properties\Analysis\EXPY1\Input\LIST\#0"].Elements) == 1
+    assert "e_T" in parser.connections_data["S1"]
+    assert "may be wrong" not in caplog.text
+
+
+def test_split_physical_exergy_wrong_temperature(caplog):
+    """
+    Test that a stream evaluated at another temperature than T0 gets no thermal and mechanical exergy.
+
+    The temperature list of an analysis takes REF_TEMP's value; here Aspen reads it in another unit.
+    """
+    parser, _ = split_model(ref_temp=(26.85, "C"))
+
+    parser.split_physical_exergy_of_streams()
+
+    assert "e_T" not in parser.connections_data["S1"]
+    assert "instead of Tamb" in caplog.text
+
+
+def test_split_physical_exergy_engine_error(caplog):
+    """
+    Test that a failing engine run leaves the streams without split and logs the reason.
+    """
+    parser, model = split_model()
+    model.Run2 = Mock(side_effect=RuntimeError("no license"))
+
+    parser.split_physical_exergy_of_streams()
+
+    assert "e_T" not in parser.connections_data["S1"]
+    assert "could not be split: no license" in caplog.text
 
 
 # --- run_aspen Tests ---

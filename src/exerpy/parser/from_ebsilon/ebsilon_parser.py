@@ -388,6 +388,7 @@ class EbsilonModelParser:
         """
         from .ebsilon_functions import calc_eM
         from .ebsilon_functions import calc_eT
+        from .ebsilon_functions import state_reproduced
 
         # Cast the pipe to the correct type
         pipe_cast = self.oc.CastToPipe(obj)
@@ -534,6 +535,13 @@ class EbsilonModelParser:
 
                 # Add the mechanical and thermal specific exergies unless the flag is set to False
                 if self.split_physical_exergy:
+                    if connection_data["T"] is not None and not state_reproduced(
+                        self.app, pipe_cast, connection_data["p"], connection_data["T"]
+                    ):
+                        logger.warning(
+                            f"The thermal and mechanical exergy of stream {pipe_cast.Name} may be wrong: the property "
+                            f"data used for the split do not reproduce the stream's enthalpy and entropy."
+                        )
                     e_T_value = calc_eT(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
                     e_M_value = calc_eM(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
 

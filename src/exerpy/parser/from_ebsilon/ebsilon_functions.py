@@ -1,49 +1,34 @@
 from typing import Any
 
-from CoolProp.CoolProp import PropsSI as CP
-
 from exerpy.logger import logger
-
-from . import __ebsilon_available__
-from .utils import EpGasTableStub
-from .utils import EpSteamTableStub
-from .utils import require_ebsilon
-
-# Import Ebsilon classes if available
-if __ebsilon_available__:
-    from EbsOpen import EpGasTable
-    from EbsOpen import EpSteamTable
-else:
-    EpSteamTable = EpSteamTableStub
-    EpGasTable = EpGasTableStub
-
+from exerpy.parser import STATE_CHECK_STEP
+from exerpy.parser import state_between
 from exerpy.units import convert_to_SI
 
-from .ebsilon_config import substance_mapping
 from .ebsilon_config import unit_id_to_string
+from .utils import require_ebsilon
 
 
 @require_ebsilon
 def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperature: float) -> float | None:
     """
-    Calculate a thermodynamic property (enthalpy or entropy) for a given stream based on pressure and temperature.
+    Calculate the enthalpy or entropy of a stream at a given pressure and temperature.
 
-    This method takes pressure and temperature values and calculates the specified property for any fluid stream.
-    It automatically handles the composition of the stream by setting up appropriate fluid properties and analysis
-    parameters based on the stream's fluid type and composition.
+    The calculation uses the stream's own fluid data, so the composition and the property data of the
+    model (steam table, gas table, real gas correction) are those Ebsilon uses for the stream itself.
 
     Parameters
     ----------
     app : Ebsilon application instance
-        The Ebsilon application used for creating fluid and analysis objects.
+        The Ebsilon application.
     pipe : Stream object
-        The stream object containing fluid and composition information.
+        The stream whose fluid is evaluated.
     property : str
         The thermodynamic property to calculate, either 'H' for enthalpy or 'S' for entropy.
     pressure : float
-        The pressure value (in bar).
+        The pressure value (in Pa).
     temperature : float
-        The temperature value (in °C).
+        The temperature value (in K).
 
     Returns
     -------
@@ -58,46 +43,11 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
     Exception
         Logs an error and returns None if any other exception occurs during property calculation.
     """
-
-    # Create a new FluidData object
-    fd = app.NewFluidData()
-
-    # Retrieve the fluid type from the stream
-    fd.FluidType = pipe.Kind - 1000
-
-    if fd.FluidType == 3 or fd.FluidType == 4:  # steam or water
-        t_sat = CP("T", "P", pressure, "Q", 0, "water")
-        if temperature > t_sat:
-            fd.FluidType = 3  # steam
-            fd.SteamTable = EpSteamTable.epSteamTableFromSuperiorModel
-            fdAnalysis = app.NewFluidAnalysis()
-        else:
-            fd.FluidType = 4  # water
-            fdAnalysis = app.NewFluidAnalysis()
-
-    elif fd.FluidType == 15 or fd.FluidType == 16 or fd.FluidType == 17 or fd.FluidType == 20:  # 2PhaseLiquid
-        fd.Medium = pipe.FMED.Value
-        fdAnalysis = app.NewFluidAnalysis()
-
-    else:  # flue gas, air etc.
-        fd.GasTable = EpGasTable.epGasTableFromSuperiorModel
-
-        # Set up the fluid analysis based on stream composition
-        fdAnalysis = app.NewFluidAnalysis()
-
-        # Iterate through the substance_mapping and get the corresponding value from the pipe
-        for substance_key, ep_substance_id in substance_mapping.items():
-            fraction = getattr(pipe, substance_key).Value  # Dynamically access the fraction
-            if fraction > 0:  # Only set substances with non-zero fractions
-                fdAnalysis.SetSubstance(ep_substance_id, fraction)
-
-    # Set the analysis in the FluidData object
-    fd.SetAnalysis(fdAnalysis)
-
-    # Validate property input
     if property not in ["S", "H"]:
         logger.error('Invalid property selected. You can choose between "H" (enthalpy) and "S" (entropy).')
         return None
+
+    fd = pipe.FluidData()
 
     try:
         # Calculate the property based on the input property type
@@ -184,6 +134,37 @@ def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
     )
 
     return eM
+
+
+@require_ebsilon
+def state_reproduced(app: Any, pipe: Any, pressure: float, temperature: float) -> bool:
+    """
+    Check that :func:`calc_X_from_PT` reproduces the enthalpy and entropy of the stream at its own state.
+
+    Parameters
+    ----------
+    app : Ebsilon application instance
+        The Ebsilon application.
+    pipe : Stream object
+        The stream to check.
+    pressure : float
+        The stream's pressure (in Pa).
+    temperature : float
+        The stream's temperature (in K).
+
+    Returns
+    -------
+    bool
+        Whether the stream's enthalpy and entropy lie between their values at its pressure and its
+        temperature minus and plus :data:`exerpy.parser.STATE_CHECK_STEP`, see :func:`exerpy.parser.state_between`.
+    """
+    h = convert_to_SI("h", pipe.H.Value, unit_id_to_string.get(pipe.H.Dimension, "Unknown"))
+    s = convert_to_SI("s", pipe.S.Value, unit_id_to_string.get(pipe.S.Dimension, "Unknown"))
+    below, above = (
+        tuple(calc_X_from_PT(app, pipe, prop, pressure, T) for prop in ("H", "S"))
+        for T in (temperature - STATE_CHECK_STEP, temperature + STATE_CHECK_STEP)
+    )
+    return state_between(h, s, below, above)
 
 
 def calc_eph_from_min(pipe: Any, Tamb: float) -> float | None:

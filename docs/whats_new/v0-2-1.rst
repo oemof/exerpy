@@ -76,6 +76,11 @@ Other Changes
   example plants with the results based on EBSILON. ``tests/test_simulators.py`` runs the EBSILON
   and Aspen parsers on the example models if ``EXERPY_SIMULATOR_TESTS=1``.
 
+Other Changes
+#############
+- ExerPy is tested on Python 3.11 to 3.15, and the package metadata lists these versions. The
+  GitHub Actions use their current versions (closes #50).
+
 Contributors
 ############
 - Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)

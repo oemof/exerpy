@@ -322,6 +322,24 @@ def test_json_schema_has_no_limits():
     assert material["source_connector"]["anyOf"][0]["minimum"] == 0
 
 
+def test_units_are_checked_not_converted(data):
+    data["connections"]["1"].update({"T": 15.0, "T_unit": "degC", "p_unit": "K", "m_unit": 5})
+    assert errors(data) == [
+        ("$.connections['1'].m_unit", "unit must be a string, got 5"),
+        ("$.connections['1'].p_unit", "unit 'K' cannot be converted to 'Pa'"),
+    ]
+    data["connections"]["1"].update({"p_unit": "bar", "m_unit": "t / h"})
+    assert validate(data).connections["1"].T == 15.0
+
+
+def test_units_are_checked_with_the_structure(data):
+    data["connections"]["1"]["p_unit"] = "K"
+    model, issues = check_structure(data)
+    assert model is None
+    assert [i.path for i in issues] == ["$.connections['1'].p_unit"]
+    assert check_values(data)[0] is not None  # the value step does not look at units
+
+
 # --- warnings ------------------------------------------------------------------------
 
 

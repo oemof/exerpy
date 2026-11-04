@@ -1,9 +1,10 @@
 import json
 import os
 
-from exerpy.functions import convert_to_SI
-from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.units import SI_UNITS
+from exerpy.units import add_units
+from exerpy.units import convert_to_SI
 
 from .aspen_config import connector_mappings
 from .aspen_config import grouped_components
@@ -106,7 +107,7 @@ class AspenModelParser:
                 power_node = self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT")
                 if power_node is not None:
                     raw_power = power_node.Value
-                    connection_data["energy_flow"] = convert_to_SI("power", abs(raw_power), power_node.UnitString)
+                    connection_data["energy_flow"] = convert_to_SI("energy_flow", abs(raw_power), power_node.UnitString)
                     # Store the sign of the raw Aspen value for direction determination
                     # in custom connector assignment functions (e.g., Turbine)
                     connection_data["_aspen_power_sign"] = 1 if raw_power >= 0 else -1
@@ -116,7 +117,7 @@ class AspenModelParser:
                 connection_data["kind"] = "heat"
                 connection_data["energy_flow"] = (
                     convert_to_SI(
-                        "power",
+                        "energy_flow",
                         abs(self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\QCALC").Value),
                         self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\QCALC").UnitString,
                     )
@@ -142,7 +143,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "T_unit": fluid_property_data["T"]["SI_unit"],
+                        "T_unit": SI_UNITS["T"],
                         "p": (
                             convert_to_SI(
                                 "p",
@@ -155,7 +156,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "p_unit": fluid_property_data["p"]["SI_unit"],
+                        "p_unit": SI_UNITS["p"],
                         "h": (
                             convert_to_SI(
                                 "h",
@@ -168,7 +169,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "h_unit": fluid_property_data["h"]["SI_unit"],
+                        "h_unit": SI_UNITS["h"],
                         "s": (
                             convert_to_SI(
                                 "s",
@@ -181,7 +182,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "s_unit": fluid_property_data["s"]["SI_unit"],
+                        "s_unit": SI_UNITS["s"],
                         "m": (
                             convert_to_SI(
                                 "m",
@@ -194,7 +195,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "m_unit": fluid_property_data["m"]["SI_unit"],
+                        "m_unit": SI_UNITS["m"],
                         "v": (
                             convert_to_SI(
                                 "v",
@@ -207,17 +208,17 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "v_unit": fluid_property_data["v"]["SI_unit"],
+                        "v_unit": SI_UNITS["v"],
                         # Vapour mass fraction; Aspen states it for mixtures as well.
                         "x": (
                             self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA").Value
                             if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA") is not None
                             else None
                         ),
-                        "x_unit": fluid_property_data["x"]["SI_unit"],
+                        "x_unit": SI_UNITS["x"],
                         "energy_flow": (
                             convert_to_SI(
-                                "power",
+                                "energy_flow",
                                 abs(
                                     self.aspen.Tree.FindNode(
                                         rf"\Data\Streams\{stream_name}\Output\HMX_FLOW\MIXED"
@@ -231,10 +232,10 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                         "e_PH": (
                             convert_to_SI(
-                                "e",
+                                "e_PH",
                                 self.aspen.Tree.FindNode(
                                     rf"\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL"
                                 ).Value,
@@ -248,7 +249,7 @@ class AspenModelParser:
                             is not None
                             else (logger.warning(f"e_PH node not found for stream {stream_name}"), None)[1]
                         ),
-                        "e_PH_unit": fluid_property_data["e"]["SI_unit"],
+                        "e_PH_unit": SI_UNITS["e_PH"],
                         "n": (
                             convert_to_SI(
                                 "n",
@@ -258,7 +259,7 @@ class AspenModelParser:
                             if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\TOT_FLOW") is not None
                             else None
                         ),
-                        "n_unit": fluid_property_data["n"]["SI_unit"],
+                        "n_unit": SI_UNITS["n"],
                         "mass_composition": {},
                         "molar_composition": {},
                     }
@@ -326,24 +327,24 @@ class AspenModelParser:
                 ),
                 "Q": (
                     convert_to_SI(
-                        "heat",
+                        "Q",
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET").Value,
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET").UnitString,
                     )
                     if self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET") is not None
                     else None
                 ),
-                "Q_unit": fluid_property_data["heat"]["SI_unit"],
+                "Q_unit": SI_UNITS["Q"],
                 "P": (
                     convert_to_SI(
-                        "power",
+                        "P",
                         abs(self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER").Value),
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER").UnitString,
                     )
                     if self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER") is not None
                     else None
                 ),
-                "P_unit": fluid_property_data["power"]["SI_unit"],
+                "P_unit": SI_UNITS["P"],
             }
 
             # Override component type based on model_type
@@ -386,11 +387,12 @@ class AspenModelParser:
                                 {
                                     "eta_el": 1 / factor,
                                     "multiplier factor": factor,
+                                    "multiplier factor_unit": "dimensionless",
                                     "type": "Motor",
                                     "P_el": elec_power,
-                                    "P_el_unit": fluid_property_data["power"]["SI_unit"],
+                                    "P_el_unit": SI_UNITS["P"],
                                     "P_mech": brake_power,
-                                    "P_mech_unit": fluid_property_data["power"]["SI_unit"],
+                                    "P_mech_unit": SI_UNITS["P"],
                                 }
                             )
                         else:  # factor == 1
@@ -425,9 +427,9 @@ class AspenModelParser:
                                         "eta_el": factor,
                                         "type": "Motor",
                                         "P_el": elec_power,
-                                        "P_el_unit": fluid_property_data["power"]["SI_unit"],
+                                        "P_el_unit": SI_UNITS["P"],
                                         "P_mech": brake_power,
-                                        "P_mech_unit": fluid_property_data["power"]["SI_unit"],
+                                        "P_mech_unit": SI_UNITS["P"],
                                     }
                                 )
                             else:
@@ -446,7 +448,7 @@ class AspenModelParser:
                     "energy_flow": abs(
                         component_data["Q"]
                     ),  # the user defines in the balances if the heat flow is positive or negative
-                    "energy_flow_unit": fluid_property_data["heat"]["SI_unit"],
+                    "energy_flow_unit": SI_UNITS["energy_flow"],
                 }
 
                 # Store the heat connection
@@ -462,7 +464,7 @@ class AspenModelParser:
                 elec_power = (
                     abs(
                         convert_to_SI(
-                            "power",
+                            "P",
                             elec_power_node.Value,
                             elec_power_node.UnitString,
                         )
@@ -474,7 +476,7 @@ class AspenModelParser:
                 brake_power = (
                     abs(
                         convert_to_SI(
-                            "power",
+                            "P",
                             brake_power_node.Value,
                             brake_power_node.UnitString,
                         )
@@ -489,9 +491,9 @@ class AspenModelParser:
                     "name": motor_name,
                     "type": "Motor",
                     "P_el": elec_power,
-                    "P_el_unit": fluid_property_data["power"]["SI_unit"],
+                    "P_el_unit": SI_UNITS["P"],
                     "P_mech": brake_power,
-                    "P_mech_unit": fluid_property_data["power"]["SI_unit"],
+                    "P_mech_unit": SI_UNITS["P"],
                     "eta_el": (eff_driv if eff_driv is not None else None),
                 }
 
@@ -509,7 +511,7 @@ class AspenModelParser:
                         "target_component": motor_name,
                         "target_connector": 0,
                         "energy_flow": motor_data["P_el"],
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                     }
 
                     mech_connection_name = f"{block_name}_MECH"
@@ -521,7 +523,7 @@ class AspenModelParser:
                         "target_component": block_name,
                         "target_connector": 1,
                         "energy_flow": motor_data["P_mech"],
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                     }
 
                     # Store the motor connection
@@ -807,7 +809,7 @@ class AspenModelParser:
         try:
             # Parse ambient temperature (Tamb)
             temp_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_TEMP")
-            self.Tamb = convert_to_SI("T", temp_node.Value, temp_node.UnitString) if temp_node is not None else None
+            self.Tamb = convert_to_SI("Tamb", temp_node.Value, temp_node.UnitString) if temp_node is not None else None
 
             if self.Tamb is None:
                 raise ValueError(
@@ -816,7 +818,7 @@ class AspenModelParser:
 
             # Parse ambient pressure (pamb)
             pres_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_PRES")
-            self.pamb = convert_to_SI("p", pres_node.Value, pres_node.UnitString) if pres_node is not None else None
+            self.pamb = convert_to_SI("pamb", pres_node.Value, pres_node.UnitString) if pres_node is not None else None
 
             if self.pamb is None:
                 raise ValueError(
@@ -842,15 +844,17 @@ class AspenModelParser:
         }
         ambient_conditions = {
             "Tamb": self.Tamb,
-            "Tamb_unit": fluid_property_data["T"]["SI_unit"],
+            "Tamb_unit": SI_UNITS["Tamb"],
             "pamb": self.pamb,
-            "pamb_unit": fluid_property_data["p"]["SI_unit"],
+            "pamb_unit": SI_UNITS["pamb"],
         }
-        return {
-            "components": sorted_components,
-            "connections": sorted_connections,
-            "ambient_conditions": ambient_conditions,
-        }
+        return add_units(
+            {
+                "components": sorted_components,
+                "connections": sorted_connections,
+                "ambient_conditions": ambient_conditions,
+            }
+        )
 
     def write_to_json(self, output_path):
         """

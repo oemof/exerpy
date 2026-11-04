@@ -57,6 +57,7 @@ dependencies = [
     "CoolProp",
     "tabulate",
     "msgspec>=0.19",
+    "pint",
 ]
 license = {text = "MIT"}
 

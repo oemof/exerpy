@@ -156,36 +156,11 @@ def dummy_convert_to_SI():
     return lambda phys, value, unit_str: value
 
 
-@pytest.fixture
-def dummy_fluid_property_data():
-    """
-    Dummy fluid property data for testing.
-
-    Returns
-    -------
-    dict
-        Dictionary mapping fluid property keys to their SI unit representation.
-    """
-    return {
-        "T": {"SI_unit": "K"},
-        "p": {"SI_unit": "Pa"},
-        "h": {"SI_unit": "J/kg"},
-        "s": {"SI_unit": "J/kgK"},
-        "m": {"SI_unit": "kg"},
-        "power": {"SI_unit": "W"},
-        "heat": {"SI_unit": "W"},
-        "e": {"SI_unit": "J"},
-        "n": {"SI_unit": "mol/s"},
-        "v": {"SI_unit": "m3 / s"},
-        "x": {"SI_unit": "-"},
-    }
-
-
 # --- Fixture to setup a parser with a dummy Aspen COM object (ambient only) ---
 
 
 @pytest.fixture
-def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
+def parser_with_dummy_aspen(dummy_convert_to_SI):
     """
     Fixture that returns an AspenModelParser instance with a dummy Aspen COM object.
 
@@ -200,7 +175,6 @@ def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
     import exerpy.parser.from_aspen.aspen_parser as ap
 
     ap.convert_to_SI = dummy_convert_to_SI
-    ap.fluid_property_data = dummy_fluid_property_data
 
     nodes = {
         r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", 300, "K"),
@@ -219,7 +193,7 @@ def parser_with_dummy_aspen(dummy_convert_to_SI, dummy_fluid_property_data):
 # --- Tests for parse_streams ---
 
 
-def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
+def test_parse_streams(dummy_convert_to_SI):
     """
     Test the parsing of streams (connections) from the Aspen model.
 
@@ -233,7 +207,6 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
     import exerpy.parser.from_aspen.aspen_parser as ap
 
     ap.convert_to_SI = dummy_convert_to_SI
-    ap.fluid_property_data = dummy_fluid_property_data
 
     stream1 = DummyNode("Stream1")
     stream2 = DummyNode("Stream2")
@@ -325,7 +298,7 @@ def test_parse_streams(dummy_convert_to_SI, dummy_fluid_property_data):
 # --- Tests for parse_blocks and component grouping ---
 
 
-def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_data):
+def test_parse_blocks_and_grouping(dummy_convert_to_SI):
     """
     Test parsing of blocks (components) and grouping of components.
 
@@ -343,7 +316,6 @@ def test_parse_blocks_and_grouping(dummy_convert_to_SI, dummy_fluid_property_dat
     import exerpy.parser.from_aspen.aspen_parser as ap
 
     ap.convert_to_SI = dummy_convert_to_SI
-    ap.fluid_property_data = dummy_fluid_property_data
 
     # Patch grouped_components and connector_mappings.
     dummy_grouped = {"GroupA": ["Heater", "Pump", "Mult", "Compressor", "Turbine"], "GroupB": ["Other"]}
@@ -543,7 +515,7 @@ def test_group_component():
 # --- Integration Test for parse_model ---
 
 
-def test_parse_model_integration(dummy_convert_to_SI, dummy_fluid_property_data):
+def test_parse_model_integration(dummy_convert_to_SI):
     """
     Test the full parse_model function integration.
 
@@ -553,7 +525,6 @@ def test_parse_model_integration(dummy_convert_to_SI, dummy_fluid_property_data)
     import exerpy.parser.from_aspen.aspen_parser as ap
 
     ap.convert_to_SI = dummy_convert_to_SI
-    ap.fluid_property_data = dummy_fluid_property_data
 
     nodes = {
         r"\Data\Setup\Sim-Options\Input\REF_TEMP": DummyNode("REF_TEMP", 290, "K"),

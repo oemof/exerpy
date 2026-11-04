@@ -4,8 +4,8 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
-from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.units import SI_UNITS
 
 from . import T_SUN
 
@@ -171,7 +171,7 @@ class Heliostatfield(Component):
                     conn["E"] = self.E_F
                 else:
                     conn["E"] = self.E_P
-                conn["E_unit"] = fluid_property_data["heat"]["SI_unit"]
+                conn["E_unit"] = SI_UNITS["E"]
         except (KeyError, TypeError) as e:
             logger.warning(f"Could not write back exergy to connection for Heliostat '{self.name}': {e}")
 

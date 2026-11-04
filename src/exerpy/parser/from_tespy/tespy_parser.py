@@ -43,6 +43,7 @@ def to_exerpy(nw: Network, Tamb: float, pamb: float) -> dict:
             component = {"name": c.label, "type": comp_type, "parameters": parameters}
             if key == "ParabolicTrough":
                 component["Q_Solar"] = _incident_radiation(c)
+                component["Q_Solar_unit"] = "W"
                 component["num_branches"] = 1
             component_json[key][c.label] = component
 
@@ -92,12 +93,21 @@ def _connection_to_exerpy(c: Connection, pamb: float, Tamb: float) -> dict:
     connection_json[c.label].update({"mass_composition": c.fluid.val})
     connection_json[c.label].update({"kind": "material"})
     for param in ["m", "T", "p", "h", "s", "v"]:
-        connection_json[c.label].update({param: c.get_attr(param).val_SI})
-    connection_json[c.label].update({"e_T": c.ex_therm, "e_M": c.ex_mech, "e_PH": c.ex_physical})
+        connection_json[c.label].update({param: c.get_attr(param).val, f"{param}_unit": c.get_attr(param).unit})
+    connection_json[c.label].update(
+        {
+            "e_T": c.ex_therm,
+            "e_M": c.ex_mech,
+            "e_PH": c.ex_physical,
+            "e_T_unit": "joule / kilogram",
+            "e_M_unit": "joule / kilogram",
+            "e_PH_unit": "joule / kilogram",
+        }
+    )
     # The vapour quality is known for a pure fluid only.
-    quality = getattr(getattr(c, "x", None), "val_SI", None)
-    if quality is not None and not np.isnan(quality):
-        connection_json[c.label]["x"] = float(quality)
+    quality = getattr(c, "x", None)
+    if quality is not None and quality.val is not None and not np.isnan(quality.val):
+        connection_json[c.label].update({"x": float(quality.val), "x_unit": quality.unit})
 
     return connection_json
 
@@ -159,7 +169,7 @@ def _powerconnection_to_exerpy(c: PowerConnection, pamb: float, Tamb: float) -> 
     }
     kind = "heat" if c.source_id == "heat" or c.target_id == "heat" else "power"
 
-    connection_json[c.label].update({"kind": kind, "energy_flow": c.E.val_SI})
+    connection_json[c.label].update({"kind": kind, "energy_flow": c.E.val, "energy_flow_unit": c.E.unit})
 
     return connection_json
 

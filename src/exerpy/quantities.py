@@ -3,7 +3,8 @@
 The types are shared by the component ``Input`` structs and by :mod:`exerpy.schema`.
 Their description goes into the JSON Schema. Their :class:`Limit` is the range of a
 reasonable value in SI units. It is checked by :func:`exerpy.schema.check_values`, not
-while the structure of the input is read.
+while the structure of the input is read, so a value may be given in another unit (see
+:mod:`exerpy.units`).
 """
 
 from dataclasses import dataclass
@@ -32,11 +33,11 @@ class Limit:
 
 
 Name = Annotated[str, Meta(min_length=1)]
-Temperature = Annotated[float, Meta(description="Absolute temperature in K"), Limit(gt=0)]
-Pressure = Annotated[float, Meta(description="Absolute pressure in Pa"), Limit(gt=0)]
-MassFlow = Annotated[float, Meta(description="Mass flow in kg/s"), Limit(ge=0)]
+Temperature = Annotated[float, Meta(description="Absolute temperature, in K unless a unit is given"), Limit(gt=0)]
+Pressure = Annotated[float, Meta(description="Absolute pressure, in Pa unless a unit is given"), Limit(gt=0)]
+MassFlow = Annotated[float, Meta(description="Mass flow, in kg/s unless a unit is given"), Limit(ge=0)]
 Fraction = Annotated[float, Meta(description="Mass or molar fraction"), Limit(ge=0, le=1)]
 ConnectorIndex = Annotated[int, Meta(ge=0, description="0-based port index on the component")]
-SpecificExergy = Annotated[float, Meta(description="Specific exergy in J/kg")]
+SpecificExergy = Annotated[float, Meta(description="Specific exergy, in J/kg unless a unit is given")]
 Branches = Annotated[float, Meta(description="Number of identical parallel branches"), Limit(gt=0)]
 Composition = dict[str, Fraction]

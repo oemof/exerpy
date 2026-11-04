@@ -17,11 +17,15 @@ Validation happens in two steps, which can also be run on their own:
    decoding, ``msgspec`` checks the required keys, the types and the ``kind`` tag of
    each connection. On the decoded structs follow the rules that span several fields
    or sections, e.g. that each component type is registered, that no two streams
-   enter the same inlet of a component, or that ``split_physical_exergy`` has the
-   ``e_T``/``e_M`` values it needs.
+   enter the same inlet of a component, that ``split_physical_exergy`` has the
+   ``e_T``/``e_M`` values it needs, or that each unit given (``"T_unit": "degC"``) is
+   known and of the right kind. A value without a unit is in SI.
 2. **Values** (:func:`check_values`): each value lies in its reasonable range, e.g.
    positive temperatures and pressures or mass fractions between 0 and 1. The ranges
    are the :class:`~exerpy.quantities.Limit` of the types and hold in SI units.
+
+The validation does not convert units. Before an analysis, ExerPy converts the values
+with :func:`exerpy.units.to_SI` between the two steps.
 
 The problems of a step are collected and reported together. The values are checked
 once the structure is valid.
@@ -53,6 +57,7 @@ from msgspec import Meta
 from msgspec import Struct
 from msgspec import UnsetType
 
+from . import units
 from .components.component import Component
 from .components.component import component_registry
 from .logger import logger
@@ -127,7 +132,7 @@ class MaterialConnection(_ConnectionBase, tag="material"):
     e_PH: SpecificExergy
     # Read by some components (h: power and heat balances; p: valves) and by costing.
     # Required for every stream, so a component never finds them missing.
-    h: Annotated[float, Meta(description="Specific enthalpy in J/kg")]
+    h: Annotated[float, Meta(description="Specific enthalpy, in J/kg unless a unit is given")]
     p: Pressure
     # Needed with split_physical_exergy.
     e_T: SpecificExergy | None | UnsetType = UNSET
@@ -145,7 +150,7 @@ class MaterialConnection(_ConnectionBase, tag="material"):
 class PowerConnection(_ConnectionBase, tag="power"):
     """Mechanical or electrical power; its exergy equals ``energy_flow``."""
 
-    energy_flow: Annotated[float, Meta(description="Power in W")]
+    energy_flow: Annotated[float, Meta(description="Power, in W unless a unit is given")]
 
 
 class HeatConnection(_ConnectionBase, tag="heat"):
@@ -316,6 +321,21 @@ def _semantic_issues(
             if c.mass_composition is UNSET:
                 err(_p("connections", _key(k)), f"chemExLib={lib!r} needs mass_composition to compute e_CH")
 
+    return issues
+
+
+def _unit_issues(data: dict) -> list[Issue]:
+    """Each unit given for a value of :data:`exerpy.units.SI_UNITS` has to be known and of the right kind."""
+    issues: list[Issue] = []
+    for entry, path in units.entries(data):
+        for key, si in units.SI_UNITS.items():
+            unit = entry.get(f"{key}_unit")
+            if unit is None:
+                continue
+            try:
+                units.check_unit(unit, si)
+            except ValueError as exc:
+                issues.append(Issue("error", f"{path}.{key}_unit", str(exc)))
     return issues
 
 
@@ -522,7 +542,8 @@ def check_structure(
     model, issues = _decode(data)
     if model is None:
         return None, issues
-    return _result(model, _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy))
+    raw = data if isinstance(data, dict) else _decode_any(data.encode() if isinstance(data, str) else data)
+    return _result(model, _semantic_issues(model, Tamb, pamb, chemExLib, split_physical_exergy) + _unit_issues(raw))
 
 
 def check_values(
@@ -579,7 +600,7 @@ def validate_structure(
     """Validate the structure of an ExerPy input document, as it is written.
 
     Checks the required keys, the types, the ``kind`` of each connection, the component
-    types and names, the ports, and the values the settings need. The values themselves
+    types and names, the ports, the values the settings need, and the units. The values themselves
     are checked by :func:`validate_values`. Parameters, return value and errors are those
     of :func:`validate`.
     """

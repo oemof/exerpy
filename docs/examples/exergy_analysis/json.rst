@@ -80,7 +80,9 @@ ExerPy requires the JSON file to have the following format:
                 "e_CH": 1200,
                 "e_CH_unit": "J / kg",
                 "E_PH": 45000,
+                "E_PH_unit": "W",
                 "E_CH": 15000,
+                "E_CH_unit": "W",
                 "E": 60000,
                 "E_unit": "W"
             },
@@ -113,9 +115,10 @@ Please ensure the following:
 - If you want to use the chemical exergy library of Ahrendts, pass
   :code:`chemExLib="Ahrendts"` to :code:`from_json`.
 - Ambient conditions (:code:`Tamb` and :code:`pamb`) must be provided in the
-  JSON file.
-- The units for all parameters should be SI units (K, Pa, kg/s, W) for
-  consistency.
+  JSON file or passed to :code:`from_json`.
+- Every value can be given in its own unit, e.g. :code:`"T": 15.0, "T_unit": "degC"`.
+  ExerPy converts it to SI before the analysis. A value without a unit is taken as SI. See
+  :ref:`JSON format <json_format_label>` for the units ExerPy understands.
 
 
 

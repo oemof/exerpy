@@ -78,8 +78,8 @@ _ALIASES = {"-": "dimensionless", "C": "degC", "F": "degF", "R": "degR"}
 
 
 def _pint_spelling(unit):
-    """The spelling of ``unit`` that pint reads, e.g. ``"kJ/kgK"`` for ``"kJ/kg-K"`` or ``"cm**2"`` for ``"cm2"``."""
-    unit = re.sub(r"(kg|mol)-K\b", r"\1K", _ALIASES.get(unit, unit))
+    """The spelling of ``unit`` that pint reads, e.g. ``"kJ/(kg * K)"`` for ``"kJ/kg-K"`` or ``"cm**2"`` for ``"cm2"``."""
+    unit = re.sub(r"\b(kg|k?mol)-?K\b", r"(\1 * K)", _ALIASES.get(unit, unit))
     # a digit right after a unit is its power: cm2 is (cm)**2, not centi-(m2)
     return re.sub(r"(?<=[A-Za-z])([23])\b", r"**\1", unit)
 
@@ -88,17 +88,9 @@ def _pint_spelling(unit):
 def registry():
     """The pint unit registry, created on first use."""
     ureg = pint.UnitRegistry()
-    definitions = (
-        "m3 = m ** 3",
-        "m2 = m ** 2",
-        "cum = m ** 3",
-        "cuft = ft ** 3",
-        "kgK = kg * K",
-        "molK = mol * K",
-        "kmolK = kmol * K",
-        "currency = [currency]",
-    )
-    for definition in definitions:
+    # shorthands like "m3" are expanded before pint reads them; as units, pint would read "cm3" as 0.01 m**3
+    ureg.preprocessors.append(_pint_spelling)
+    for definition in ("cum = m ** 3", "cuft = ft ** 3", "currency = [currency]"):
         ureg.define(definition)
     return ureg
 

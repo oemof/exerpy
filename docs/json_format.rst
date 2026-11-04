@@ -227,7 +227,7 @@ Validation
    units that are unknown or of the wrong kind.
 2. **Values**, once the structure is valid and the values are converted to SI: temperatures and
    pressures above zero, mass flows that are not negative, and mass and molar fractions between
-   0 and 1. A temperature of -10 °C therefore passes, as 263.15 K.
+   0 and 1.
 
 ExerPy reports all problems of a step together, each with its place in the file:
 

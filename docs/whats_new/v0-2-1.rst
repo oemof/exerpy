@@ -77,6 +77,7 @@ Other Changes
   and Aspen parsers on the example models if ``EXERPY_SIMULATOR_TESTS=1``.
 - ExerPy is tested on Python 3.11 to 3.15, and the package metadata lists these versions. The
   GitHub Actions use their current versions (closes #50).
+- The default heat transfer coefficients were checked against the sources.
 
 Contributors
 ############

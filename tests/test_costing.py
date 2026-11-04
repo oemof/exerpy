@@ -219,6 +219,12 @@ class TestHeatExchangers:
         groups.add("ammonia-water (absorption)")
         for cell in costing.U_CELLS:
             assert set(cell["sources"]) <= set(costing.U_SOURCES)
+            assert {costing._HEAT_TRANSFER["source_origins"][s] for s in cell["sources"]} <= {
+                "measured",
+                "calculated",
+                "manufacturer",
+                "handbook",
+            }
             assert {cell["hot_fluid"], cell["cold_fluid"]} <= groups
             assert cell["exchanger_type"] in costing.EXCHANGER_TYPES
             assert cell["range"][0] <= cell["U"] <= cell["range"][1]

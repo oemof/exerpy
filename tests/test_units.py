@@ -116,6 +116,22 @@ def test_convert_bad_unit(from_unit, to_unit, message):
         convert(1.0, from_unit, to_unit)
 
 
+@pytest.mark.parametrize(
+    "unit, si, expected",
+    [
+        ("cm3", "m3", 1e-6),
+        ("dm3 / s", "m3 / s", 1e-3),
+        ("ft2", "m2", 0.09290304),
+        ("kJ/kmolK", "J / molK", 1.0),
+        ("kJ/kg-K", "J / kgK", 1e3),
+    ],
+)
+def test_shorthands(unit, si, expected):
+    # the registry reads the shorthands as well, also outside convert
+    assert convert(1.0, unit, si) == pytest.approx(expected, rel=1e-12)
+    assert registry().Quantity(1.0, unit).m_as(si) == pytest.approx(expected, rel=1e-12)
+
+
 def test_si_units_are_readable():
     for si in SI_UNITS.values():
         registry().Unit(si)

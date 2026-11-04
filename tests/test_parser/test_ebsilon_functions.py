@@ -19,6 +19,7 @@ from exerpy.parser.from_ebsilon.ebsilon_config import substance_mapping
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eM
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eT
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_X_from_PT
+from exerpy.parser.from_ebsilon.ebsilon_functions import state_reproduced
 
 
 @pytest.fixture
@@ -79,28 +80,23 @@ def mock_pipe():
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
-def test_calc_X_from_PT_steam(mock_app, mock_pipe):
+def test_calc_X_from_PT_uses_fluid_data_of_pipe(mock_app, mock_pipe):
     """
-    Test property calculation for steam fluid type.
-
-    Parameters
-    ----------
-    mock_app : Mock
-        Mock Ebsilon application object
-    mock_pipe : Mock
-        Mock pipe object configured for steam
+    Test that the property is calculated with the stream's own fluid data.
 
     Verifies
     --------
-    - Fluid data object creation
-    - Fluid analysis execution
-    - Analysis setting in fluid data
+    - The pipe's FluidData evaluates the property, no new fluid data are set up.
+    - Pressure and temperature are passed in bar and degrees Celsius, the enthalpy is returned in J/kg.
     """
-    calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 400)
+    fluid_data = mock_pipe.FluidData.return_value
+    fluid_data.PropertyH_OF_PT.return_value = 1000.0
 
-    assert mock_app.NewFluidData.called
-    assert mock_app.NewFluidAnalysis.called
-    assert mock_app.NewFluidData.return_value.SetAnalysis.called
+    result = calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 400)
+
+    assert result == pytest.approx(1e6)
+    assert fluid_data.PropertyH_OF_PT.call_args.args == pytest.approx((1.0, 400 - 273.15))
+    assert not mock_app.NewFluidData.called
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
@@ -124,37 +120,13 @@ def test_calc_X_from_PT_invalid_property(mock_app, mock_pipe):
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
-def test_calc_X_from_PT_flue_gas(mock_app, mock_pipe):
+def test_calc_X_from_PT_entropy(mock_app, mock_pipe):
     """
-    Test property calculation for flue gas with composition.
-
-    Parameters
-    ----------
-    mock_app : Mock
-        Mock Ebsilon application object
-    mock_pipe : Mock
-        Mock pipe object configured for flue gas
-
-    Verifies
-    --------
-    - Gas mixture composition handling
-    - Substance fraction setting
-    - Property calculation completion
+    Test that the entropy is returned in J/kgK.
     """
-    mock_pipe.Kind = 1001  # Flue gas type
+    mock_pipe.FluidData.return_value.PropertyS_OF_PT.return_value = 6.5
 
-    # Configure air composition
-    mock_pipe.XO2.Value = 0.21
-    mock_pipe.XN2.Value = 0.79
-
-    fluid_data = mock_app.NewFluidData.return_value
-    fluid_data.PropertyH_OF_PT.return_value = 1000.0
-
-    result = calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 400)
-
-    analysis = mock_app.NewFluidAnalysis.return_value
-    assert analysis.SetSubstance.call_count >= 2
-    assert result is not None
+    assert calc_X_from_PT(mock_app, mock_pipe, "S", 1e5, 400) == pytest.approx(6500.0)
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
@@ -229,28 +201,21 @@ def test_error_handling_in_property_calc(mock_app, mock_pipe):
     - None return value on error
     - System stability maintenance
     """
-    mock_app.NewFluidData.return_value.PropertyH_OF_PT.side_effect = Exception("Test error")
+    mock_pipe.FluidData.return_value.PropertyH_OF_PT.side_effect = Exception("Test error")
 
     result = calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 400)
     assert result is None
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
-def test_calc_X_from_PT_water(monkeypatch, mock_app, mock_pipe):
+def test_calc_X_from_PT_failed_calculation(mock_app, mock_pipe):
     """
-    Test calc_X_from_PT for water conditions.
-    We simulate a condition where the saturation temperature is high so that the water branch is taken.
+    Test that Ebsilon's value -999 for a failed calculation raises a ValueError.
     """
-    # Override CP so that t_sat is high (e.g., 400 K)
-    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.CP", lambda *args, **kwargs: 400)
-    # Set a return value for PropertyH_OF_PT so that the calculation succeeds.
-    mock_app.NewFluidData.return_value.PropertyH_OF_PT.return_value = 1000.0  # kJ/kg
-    # Call the function with a temperature (in °C) that, after subtracting 273.15, is lower than 400.
-    # (Remember: calc_X_from_PT subtracts 273.15 from the given temperature.)
-    result = calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 300)
-    # We expect a valid number (1000 * 1e3 = 1e6 J/kg).
-    assert result is not None
-    assert result == pytest.approx(1e6, rel=1e-2)
+    mock_pipe.FluidData.return_value.PropertyH_OF_PT.return_value = -999.0
+
+    with pytest.raises(ValueError, match="-999"):
+        calc_X_from_PT(mock_app, mock_pipe, "H", 1e5, 400)
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
@@ -329,3 +294,22 @@ def test_calc_eM_error(monkeypatch, mock_app, mock_pipe):
     )
     with pytest.raises(Exception, match="Test error in eT"):
         calc_eM(mock_app, mock_pipe, 1e5, 300, 101325)
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+@pytest.mark.parametrize("shift, reproduced", [(0.0, True), (100.0, False)])
+def test_state_reproduced(monkeypatch, mock_app, mock_pipe, shift, reproduced):
+    """
+    Test the check that the property calculation reproduces the stream's own enthalpy and entropy.
+
+    The stream is at 400 K with h = 2000 J/kg and s = 4 J/kgK. The property calculation gives
+    h = 2000 J/kg + shift + 1 kJ/kgK * (T - 400 K) and s = 4 J/kgK + 1 kJ/kgK * (T - 400 K) / 400 K.
+    """
+
+    def dummy_calc_X_from_PT(app, pipe, prop, pressure, temperature):
+        dT = temperature - 400.0
+        return {"H": 2000.0 + shift + 1e3 * dT, "S": 4.0 + 1e3 * dT / 400.0}[prop]
+
+    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT", dummy_calc_X_from_PT)
+
+    assert state_reproduced(mock_app, mock_pipe, 1e5, 400.0) is reproduced

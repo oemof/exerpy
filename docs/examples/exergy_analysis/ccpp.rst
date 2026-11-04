@@ -68,7 +68,7 @@ Importing exerpy is the same for all simulators:
 
             model_path = 'ccpp.ebs'
 
-            ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts', split_physical_exergy=False)
+            ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib='Ahrendts', split_physical_exergy=True)
 
         3. **Define the exergy flows crossing the system boundaries**
 
@@ -140,9 +140,7 @@ Importing exerpy is the same for all simulators:
         .. tip::
 
             TESPy provides the thermal and the mechanical shares of the physical exergy, so
-            :code:`split_physical_exergy` can be set to :code:`True`. This example sets it to
-            :code:`False` so that its results can be compared with those of Aspen Plus, which does not
-            provide the split.
+            :code:`split_physical_exergy` can be set to :code:`True`, as in this example.
 
         .. literalinclude:: /../examples/exergy_analysis/ccpp/ccpp_tespy.py
             :language: python
@@ -183,17 +181,17 @@ Importing exerpy is the same for all simulators:
 
         .. note::
 
-            Aspen Plus does not provide the thermal and the mechanical shares of the physical exergy, so
-            :code:`split_physical_exergy` has to be set to :code:`False` with :code:`from_aspen`. The
-            exergoeconomic analysis runs on such a model as well: it then assigns one cost to the
-            physical exergy of each stream (see :ref:`Split Physical Exergy in Exergoeconomics
-            <examples_split_physical_exergy_label>`).
+            Aspen Plus reports the physical exergy of a stream, but not its thermal and mechanical
+            shares. For the split, ExerPy adds a property analysis for each stream to the model in
+            memory and runs the simulation once. The analysis evaluates the stream at the ambient
+            temperature and its own pressure, with the property method of the stream. The model file
+            stays unchanged.
 
         .. code-block:: python
 
             model_path = 'ccpp.bkp'
 
-            ean = ExergyAnalysis.from_aspen(model_path, chemExLib='Ahrendts', split_physical_exergy=False)
+            ean = ExergyAnalysis.from_aspen(model_path, chemExLib='Ahrendts', split_physical_exergy=True)
 
         3. **Define the exergy flows crossing the system boundaries**
 

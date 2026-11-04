@@ -19,6 +19,12 @@ New Features
   ``"10_c_unit": "EUR / MWh"`` in the cost dictionary or ``c_unit`` in ``fuel_costs``. The new
   :meth:`~exerpy.analyses.ExergoeconomicAnalysis.export_to_json` saves the costs of the streams, the
   components and the plant, each with its unit.
+- The Aspen parser splits the physical exergy into its thermal and mechanical part with
+  ``split_physical_exergy=True``, as the EBSILON parser does. For each stream, it adds a property
+  analysis at the ambient temperature and the stream's pressure to the model in memory and runs the
+  simulation once. The model file stays unchanged.
+- With the split, the EBSILON and Aspen parsers check that the property data of the split reproduce
+  the enthalpy and entropy of each stream, and warn if they do not.
 
 API Changes
 ###########
@@ -52,9 +58,23 @@ Bug Fixes
   gas of an economizer going to the stack, no longer makes it dissipative. The economizers of the
   CCPP and CGAM examples have an exergetic efficiency again, and the cost results of the CGAM
   exergoeconomic example change accordingly (closes #55).
+- The EBSILON parser split the physical exergy with other property data than the model: the
+  IAPWS-IF97 steam table, the FDBR gas table and no real gas correction. It now uses the fluid data
+  of each stream. With a real gas correction in the model, e_T of methane at the ambient
+  temperature was -4.4 kJ/kg instead of 0.
+- The Aspen parser recognizes a multiplier block on work streams as a generator or a motor from the
+  sign of the power entering it, which a turbine produces and a compressor or pump consumes. It no
+  longer asks for a block with the factor 1, which stopped scripts without a terminal, such as the
+  CGAM example (closes #61).
 
 Other Changes
 #############
+- The examples split the physical exergy with all three simulators. The gases of the CCPP and CGAM
+  models are real gases in Aspen Plus (REFPROP) and EBSILON (Lee-Kesler-Plöcker correction), as in
+  TESPy.
+- The tests compare the exergy destruction of each component and the exergetic efficiency of the
+  example plants with the results based on EBSILON. ``tests/test_simulators.py`` runs the EBSILON
+  and Aspen parsers on the example models if ``EXERPY_SIMULATOR_TESTS=1``.
 - ExerPy is tested on Python 3.11 to 3.15, and the package metadata lists these versions. The
   GitHub Actions use their current versions (closes #50).
 

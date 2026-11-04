@@ -205,7 +205,7 @@ nw.print_results()
 p0 = 101300
 T0 = 288.15
 
-ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=False)
+ean = ExergyAnalysis.from_tespy(nw, T0, p0, chemExLib="Ahrendts", split_physical_exergy=True)
 # [exergy_analysis_setup]
 fuel = {"inputs": ["1", "3"], "outputs": []}
 product = {"inputs": ["e15", "h1"], "outputs": []}

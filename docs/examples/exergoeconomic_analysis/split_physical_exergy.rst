@@ -21,10 +21,10 @@ and the costs follow the CGAM problem :cite:`Valero1994`; see :ref:`the cost bas
 
 .. note::
 
-    Models that cannot provide the split, such as the ones exported from Aspen Plus, are analysed
-    with :code:`split_physical_exergy=False`. Where the split is available, it is the more
-    informative of the two, and below the ambient temperature it is the only one that credits the
-    cold exergy of a stream to the product of the component producing it.
+    Models whose streams lack the thermal and mechanical shares, such as a JSON input with the
+    physical exergy only, are analysed with :code:`split_physical_exergy=False`. Where the split is
+    available, it is the more informative of the two, and below the ambient temperature it is the
+    only one that credits the cold exergy of a stream to the product of the component producing it.
 
 The flowsheet below names the components and the streams used throughout this example.
 

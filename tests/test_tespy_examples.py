@@ -49,7 +49,11 @@ def _relative_differences(path1, path2):
     # inf means that sim2 has 0 value, comparison does not make sense there
     # and sometimes there seem to be NaN values in the dataframes, those are
     # removed as well
-    return ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
+    diff = ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
+    # exergies near the ambient state are close to zero, so differences below 1 J/kg are round-off
+    exergies = [column for column in columns if column.startswith("e_")]
+    diff[exergies] = diff[exergies].mask((df_sim1 - df_sim2)[exergies].abs() < 1.0, 0)
+    return diff
 
 
 @pytest.mark.parametrize("script", examples, ids=lambda script: script.stem)

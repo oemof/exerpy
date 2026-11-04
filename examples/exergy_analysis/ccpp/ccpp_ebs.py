@@ -13,7 +13,7 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ccpp.ebs")
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
-ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib="Ahrendts", split_physical_exergy=False)
+ean = ExergyAnalysis.from_ebsilon(model_path, chemExLib="Ahrendts", split_physical_exergy=True)
 
 fuel = {"inputs": ["1", "3"], "outputs": []}
 product = {"inputs": ["ETOT", "H1"], "outputs": []}

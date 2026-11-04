@@ -18,9 +18,15 @@ def _heat_transfer_tables():
     ) as f:
         data = json.load(f)
     cells = data["cells"]
+    origins = data["source_origins"]
 
     def spread(low, high):
         return f"{low:g}" if low == high else f"{low:g} to {high:g}"
+
+    def cite_by_origin(keys):
+        kinds = ("measured", "calculated", "manufacturer", "handbook")
+        groups = [(kind, [k for k in keys if origins[k] == kind]) for kind in kinds]
+        return "; ".join(f"{kind} :cite:`{','.join(group)}`" for kind, group in groups if group)
 
     sources = {s for cell in cells for s in cell["sources"]}
     lines = [
@@ -29,7 +35,9 @@ def _heat_transfer_tables():
         f"The file holds {len(cells)} cells from {len(sources)} sources. "
         f"{sum(c['n_sources'] >= 3 for c in cells)} of them rest on three or more independent sources, "
         f"{sum(c['n_sources'] == 2 for c in cells)} on two and {sum(c['n_sources'] == 1 for c in cells)} on one. "
-        "Where two cells share the exchanger type, the phases and the fluids, the one marked *default* is used.",
+        "Where two cells share the exchanger type, the phases and the fluids, the one marked *default* is used. "
+        "The origin says how a source obtained its values: *measured*, *calculated* with a design model or "
+        "correlations, *manufacturer* data, or typical values of a *handbook*.",
         "",
     ]
     for kind, name in data["exchanger_types"].items():
@@ -42,12 +50,12 @@ def _heat_transfer_tables():
         lines += [
             f".. csv-table:: {name}, :math:`U` in W/(m² K)",
             '    :header: "Hot stream", "Cold stream", ":math:`U`", "Published range", '
-            '"Values / sources", "Sources", "Construction and area basis", "Cell"',
-            "    :widths: 14 14 7 11 9 16 21 8",
+            '"Values / sources", "Sources and origin", "Construction and area basis", "Cell"',
+            "    :widths: 13 13 7 11 9 20 19 8",
             "",
         ]
         for c in rows:
-            cite = ":cite:`" + ",".join(c["sources"]) + "`"
+            cite = cite_by_origin(c["sources"])
             label = c["cell"] + (" default" if c["default"] and _shared(c, cells) else "")
             lines.append(
                 f'    "{c["hot_fluid"]}, {c["hot"]}", "{c["cold_fluid"]}, {c["cold"]}", "{c["U"]:g}", '

@@ -1,8 +1,11 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
+from exerpy.quantities import Temperature
 
 
 @component_registry
@@ -73,6 +76,10 @@ class SteamGenerator(Component):
     injection. The heat source of a steam generator is usually outside of the model, so its
     temperature is not known from the streams and has to be given as ``T_hot``.
     """
+
+    class Input(Component.Input, kw_only=True):
+        # Temperature of the heat source, when the heat input is not a stream.
+        T_hot: Temperature | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""

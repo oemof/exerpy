@@ -11,6 +11,8 @@ from exerpy.logger import logger
 SCALING_EXPONENT = 0.6
 # Keys of a purchased equipment cost scaled from a reference component.
 SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger_type", "U"}
+# Keys an exergoeconomic analysis adds to a connection, in currency/J and currency/s.
+COST_KEYS = {"CostVar_index", *(f"{c}_{label}" for c in "cC" for label in ("T", "M", "PH", "CH", "TOT"))}
 
 from .components.component import component_registry
 from .components.helpers.cycle_closer import CycleCloser
@@ -19,6 +21,10 @@ from .components.nodes.splitter import Splitter
 from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
+from .units import add_units
+from .units import convert_cost
+from .units import from_SI
+from .units import to_SI
 
 
 class ExergyAnalysis:
@@ -240,8 +246,10 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
-        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
-        # is treated as dissipative, unless its dissipative behavior was set explicitly.
+        # A heat exchanger whose product is declared a loss (an outlet listed in E_L that carries
+        # its product, e.g. the cooling water of a condenser) is treated as dissipative, unless its
+        # dissipative behavior was set explicitly. A fuel-side outlet in E_L, such as the flue gas
+        # of an economizer going to the stack, leaves the exchanger productive.
         loss_conn_names = set()
         for key in ("inputs", "outputs"):
             loss_conn_names.update(E_L.get(key, []))
@@ -254,8 +262,10 @@ class ExergyAnalysis:
                 continue
             if getattr(source, "dissipative", None) is not None:
                 continue
+            if conn.get("source_connector") not in source._product_outlets(self.Tamb):
+                continue
             source.dissipative = True
-            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+            logger.info(f"HeatExchanger {source.name} marked dissipative: product outlet '{label}' is in E_L.")
 
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.
@@ -352,7 +362,7 @@ class ExergyAnalysis:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
-    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from a tespy network or
         a tespy network export structure.
@@ -367,6 +377,8 @@ class ExergyAnalysis:
             Ambient pressure for analysis, default is None.
         chemExLib : str, optional
             Name of the library for chemical exergy tables.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -386,13 +398,13 @@ class ExergyAnalysis:
             raise TypeError(msg)
 
         data = to_exerpy(model, Tamb, pamb)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb, pamb, chemExLib, split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from an Aspen model file.
 
@@ -408,6 +420,8 @@ class ExergyAnalysis:
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -429,18 +443,15 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
-            required_component_fields=["name", "type"],
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate, required_component_fields=["name", "type"]
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
+    def from_ebsilon(
+        cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None, validate=True
+    ):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -460,6 +471,8 @@ class ExergyAnalysis:
             Name or id of the profile (operating point) to simulate, e.g. a part load case.
             Defaults to the profile the model was saved with. Use
             :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -483,20 +496,24 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
             data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
+            Tamb,
+            pamb,
+            chemExLib,
+            split_physical_exergy,
+            validate,
             required_component_fields=["name", "type", "type_index"],
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True):
         """
         Create an ExergyAnalysis instance from a JSON file.
+
+        A value given with a unit, as ``"T": 15.0, "T_unit": "degC"``, is converted to SI; a value
+        without a unit is taken as SI, see :mod:`exerpy.units`.
 
         Parameters
         ----------
@@ -508,6 +525,12 @@ class ExergyAnalysis:
             Ambient pressure in Pa. If None, extracted from JSON.
         chemExLib : str, optional
             Name of chemical exergy library to use. Default is None.
+        split_physical_exergy : bool, optional
+            Split physical exergy into thermal and mechanical parts. If None, read
+            from the JSON settings or detected from the data.
+        validate : bool, default=True
+            Check the file against the input schema of :mod:`exerpy.schema` before
+            the analysis is set up. All problems found are reported at once.
 
         Returns
         -------
@@ -519,13 +542,16 @@ class ExergyAnalysis:
         FileNotFoundError
             If JSON file does not exist.
         ValueError
-            If JSON structure is invalid or missing required data.
+            If JSON structure is invalid or missing required data. For a unit that is
+            unknown or of the wrong kind, and with ``validate=True`` for any problem, this is
+            an :class:`exerpy.schema.InputValidationError`, whose ``issues`` attribute lists
+            each problem with its location.
         JSONDecodeError
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
@@ -895,14 +921,19 @@ class ExergyAnalysis:
         print(f"Exergetic Loss: {exergetic_loss_percent:.2f}%")
         print(f"Exergetic Product (epsilon): {epsilon_total:.2f}%")
 
-    def export_to_json(self, output_path):
+    def export_to_json(self, output_path, units=None):
         """
         Export the model to a JSON file.
+
+        Every value is written with its unit, in SI unless ``units`` asks for another one.
 
         Parameters
         ----------
         output_path : str
             Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a key in, e.g. ``{"T": "degC", "p": "bar", "E_D": "kW"}``; the keys are
+            those of :data:`exerpy.units.SI_UNITS`. :meth:`from_json` reads the file back in SI.
 
         Returns
         -------
@@ -916,6 +947,8 @@ class ExergyAnalysis:
         NaN values are converted to null for valid JSON output.
         """
         data = self._serialize()
+        if units:
+            data = from_SI(data, units)
         with open(output_path, "w") as json_file:
             json.dump(data, json_file, indent=4)
             logger.info(f"Model exported to JSON file: {output_path}.")
@@ -934,7 +967,11 @@ class ExergyAnalysis:
         """
         export = {}
         export["components"] = self._component_data
-        export["connections"] = self._connection_data
+        # The costs of an exergoeconomic analysis are written by its own export.
+        export["connections"] = {
+            name: {key: value for key, value in conn.items() if key not in COST_KEYS}
+            for name, conn in self._connection_data.items()
+        }
         export["ambient_conditions"] = {"Tamb": self.Tamb, "Tamb_unit": "K", "pamb": self.pamb, "pamb_unit": "Pa"}
         export["settings"] = {"split_physical_exergy": self.split_physical_exergy, "chemExLib": self.chemExLib}
 
@@ -960,7 +997,7 @@ class ExergyAnalysis:
             "epsilon": _nan_to_none(getattr(self, "epsilon", None)),
         }
 
-        return export
+        return add_units(export)
 
     def _resolve_heat_connection_names(self, ex_flow):
         """
@@ -1235,6 +1272,24 @@ def _load_json(json_path):
     # Load and validate JSON
     with open(json_path) as file:
         return json.load(file)
+
+
+def _prepare(data, Tamb, pamb, chemExLib, split_physical_exergy, validate, **kwargs):
+    """Check the structure of the input, convert it to SI units, check its values and process it."""
+    from . import schema
+
+    if validate:
+        schema.validate_structure(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        )
+    data, problems = to_SI(data)
+    if problems:
+        raise schema.InputValidationError([schema.Issue("error", path, message) for path, message in problems])
+    if validate:
+        schema.validate_values(data, Tamb=Tamb, pamb=pamb)
+    return _process_json(
+        data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy, **kwargs
+    )
 
 
 def _process_json(
@@ -1539,11 +1594,14 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            Another unit in the currency of the analysis may be given next to a value, as
+            ``"<connection_name>_c_unit": "EUR / MWh"`` or ``"<component_name>_Z_unit": "EUR / s"``.
 
         Raises
         ------
         ValueError
-            If a component cost is missing or if a required input connection cost is not provided.
+            If a component cost is missing or if a required input connection cost is not provided,
+            or if a unit is unknown, of the wrong kind or in another currency.
 
         Notes
         -----
@@ -1566,7 +1624,7 @@ class ExergoeconomicAnalysis:
                     )
                 continue
             if cost_key in Exe_Eco_Costs:
-                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
+                comp.Z_costs = self._user_cost(Exe_Eco_Costs, cost_key, "h") / 3600  # currency/h to currency/s
             else:
                 raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
@@ -1597,7 +1655,7 @@ class ExergoeconomicAnalysis:
             # Assign cost if provided.
             if cost_key in Exe_Eco_Costs:
                 # Convert cost from currency/GJ to currency/J.
-                c_TOT = Exe_Eco_Costs[cost_key] * 1e-9
+                c_TOT = self._user_cost(Exe_Eco_Costs, cost_key, "GJ") * 1e-9
                 conn["c_TOT"] = c_TOT
 
                 if kind == "material":
@@ -1616,6 +1674,16 @@ class ExergoeconomicAnalysis:
 
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
+
+    def _user_cost(self, costs, key, per):
+        """The cost ``costs[key]`` in currency per ``per``, converted from its unit if one is given."""
+        unit = costs.get(f"{key}_unit")
+        if unit is None:
+            return costs[key]
+        try:
+            return convert_cost(costs[key], unit, f"{self.currency} / {per}", self.currency)
+        except ValueError as exc:
+            raise ValueError(f"'{key}_unit': {exc}") from None
 
     def construct_matrix(self):
         """
@@ -2117,6 +2185,55 @@ class ExergoeconomicAnalysis:
         self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
         logger.info("Exergoeconomic analysis completed successfully.")
 
+    def export_to_json(self, output_path, units=None):
+        """
+        Export the model with its exergy and cost results to a JSON file.
+
+        Every value is written with its unit: the costs in currency/h, the specific costs in
+        currency/GJ and the other values in SI, unless ``units`` asks for another one.
+
+        Parameters
+        ----------
+        output_path : str
+            Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a value other than a cost in, see :meth:`ExergyAnalysis.export_to_json`.
+        """
+        rate, specific = f"{self.currency} / h", f"{self.currency} / GJ"
+        data = self.exergy_analysis._serialize()
+        for name, conn in data["connections"].items():
+            for label in ("T", "M", "PH", "CH", "TOT"):
+                for key, factor, unit in ((f"C_{label}", 3600, rate), (f"c_{label}", 1e9, specific)):
+                    if self.connections[name].get(key) is not None:
+                        conn[key] = _nan_to_none(float(self.connections[name][key]) * factor)
+                        conn[f"{key}_unit"] = unit
+        component_costs = (
+            ("C_F", "C_F", 3600, rate),
+            ("C_P", "C_P", 3600, rate),
+            ("C_D", "C_D", 3600, rate),
+            ("Z", "Z_costs", 3600, rate),
+            ("c_F", "c_F", 1e9, specific),
+            ("c_P", "c_P", 1e9, specific),
+            ("r", "r", 1, "dimensionless"),
+            ("f", "f", 1, "dimensionless"),
+        )
+        for comps in data["components"].values():
+            for name, comp_data in comps.items():
+                results = {}
+                for key, attribute, factor, unit in component_costs:
+                    value = getattr(self.components[name], attribute, None)
+                    results[key] = None if value is None else _nan_to_none(float(value) * factor)
+                    results[f"{key}_unit"] = unit
+                comp_data["exergoeconomic_results"] = results
+        data["system_costs"] = {}
+        for key, value in self.system_costs.items():
+            data["system_costs"].update({key: _nan_to_none(value), f"{key}_unit": rate})
+        if units:
+            data = from_SI(data, units)
+        with open(output_path, "w") as json_file:
+            json.dump(data, json_file, indent=4)
+            logger.info(f"Model and exergoeconomic results exported to JSON file: {output_path}.")
+
     def print_equations(self):
         """
         Get mapping of equation indices to equation descriptions.
@@ -2466,9 +2583,9 @@ class ExergoeconomicAnalysis:
         df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
         # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
-        df_mat1.dropna(axis=1, how="all", inplace=True)
-        df_mat2.dropna(axis=1, how="all", inplace=True)
-        df_non_mat.dropna(axis=1, how="all", inplace=True)
+        df_mat1 = df_mat1.dropna(axis=1, how="all")
+        df_mat2 = df_mat2.dropna(axis=1, how="all")
+        df_non_mat = df_non_mat.dropna(axis=1, how="all")
 
         # -------------------------
         # Print the four tables if requested.
@@ -2714,7 +2831,8 @@ class EconomicAnalysis:
     fuel_costs : dict, optional
         Specific cost of every stream entering the plant, as
         ``{"<connection>": {"c": value, "r_n": rate, "basis": "exergy" | "energy"}}``. ``c`` is in
-        currency per GJ at the price level of the base year, ``r_n`` is the nominal escalation
+        currency per GJ at the price level of the base year, or in the unit ``c_unit`` in the same
+        currency, e.g. ``"EUR / MWh"``; ``r_n`` is the nominal escalation
         rate of that cost per year and defaults to that of the operating and maintenance cost,
         and ``basis`` says whether ``c`` is per unit of exergy (the default) or per unit of energy.
         A cost on the energy basis is converted with the flows of the stream, which are read from the
@@ -2834,6 +2952,11 @@ class EconomicAnalysis:
                 raise ValueError(
                     f"The cost basis of stream '{name}' is neither 'exergy' nor 'energy': {spec['basis']}."
                 )
+            if spec.get("c_unit") is not None:
+                try:
+                    spec["c"] = convert_cost(spec["c"], spec.pop("c_unit"), f"{currency} / GJ", currency)
+                except ValueError as exc:
+                    raise ValueError(f"The cost unit of stream '{name}': {exc}") from None
 
     @staticmethod
     def _scaled_cost(name, spec, exergy_analysis=None):

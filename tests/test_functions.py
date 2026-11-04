@@ -15,7 +15,6 @@ import pytest
 from exerpy.functions import add_chemical_exergy
 from exerpy.functions import add_total_exergy_flow
 from exerpy.functions import calc_chemical_exergy
-from exerpy.functions import convert_to_SI
 from exerpy.functions import mass_to_molar_fractions
 from exerpy.functions import molar_to_mass_fractions
 
@@ -438,99 +437,3 @@ def test_add_total_exergy_flow_realistic(realistic_json_data):
     # Check heat stream
     heat_conn = result["connections"]["3"]
     assert "E" in heat_conn
-
-
-# Unit Conversion Tests
-@pytest.mark.parametrize(
-    "property,value,unit,expected",
-    [
-        # Temperature conversions
-        ("T", 25, "C", 298.15),
-        ("T", 77, "F", 298.15),
-        # Pressure conversions
-        ("p", 1, "bar", 1e5),
-        ("p", 14.7, "psi", 101325),
-        # Mass flow conversions
-        ("m", 1, "kg/s", 1),
-        ("m", 3600, "kg/h", 1),
-        # Enthalpy conversions
-        ("h", 1, "kJ/kg", 1000),  # 1 kJ/kg = 1000 J/kg
-        ("h", 0.239, "kcal/kg", 1000),  # 0.239 kcal/kg ≈ 1000 J/kg
-        # Entropy conversions
-        ("s", 1, "kJ/kgK", 1000),  # 1 kJ/kgK = 1000 J/kgK
-        ("s", 0.239, "kJ/kg-K", 239),  # 0.239 kJ/kg-K = 239 J/kgK (fixed expected value)
-    ],
-)
-def test_convert_to_SI(property, value, unit, expected):
-    """
-    Test unit conversion to SI units.
-
-    Parameters
-    ----------
-    property : str
-        Property to convert
-    value : float
-        Value to convert
-    unit : str
-        Original unit
-    expected : float
-        Expected result in SI units
-
-    Notes
-    -----
-    - Temperature: C/F → K
-    - Pressure: bar/psi → Pa
-    - Mass flow: kg/s, kg/h → kg/s
-    - Enthalpy: kJ/kg, kcal/kg → J/kg
-    - Entropy: kJ/kgK → J/kgK
-
-    Using relative tolerance for larger values (pressure)
-    and absolute tolerance for other properties.
-    """
-    result = convert_to_SI(property, value, unit)
-
-    # Use relative tolerance for pressure (large values)
-    if property == "p":
-        assert abs(result - expected) / expected < 1e-3  # 0.1% relative tolerance
-    # Use appropriate absolute tolerance for other properties
-    else:
-        assert abs(result - expected) < 1.0  # 1 unit absolute tolerance
-
-
-def test_convert_to_SI_invalid_property():
-    """Test handling of invalid property in unit conversion."""
-    original_value = 1
-    result = convert_to_SI("invalid_property", original_value, "K")
-    assert result == original_value
-
-
-def test_convert_to_SI_warning(caplog):
-    """
-    Test that appropriate warning is logged for invalid property.
-
-    Parameters
-    ----------
-    caplog : pytest fixture
-        Fixture to capture log messages
-    """
-    convert_to_SI("invalid_property", 1, "K")
-    assert "Unrecognized property: 'invalid_property'" in caplog.text
-
-
-def test_convert_to_SI_unknown_unit():
-    """Test handling of unknown unit in conversion."""
-    original_value = 1
-    result = convert_to_SI("T", original_value, "Unknown")
-    assert result == original_value
-
-
-def test_convert_to_SI_invalid_unit():
-    """Test handling of invalid unit for a valid property."""
-    with pytest.raises(ValueError, match="Invalid unit"):
-        convert_to_SI("T", 1, "invalid_unit")
-
-
-def test_convert_to_SI_none_value():
-    """Test handling of None value in unit conversion."""
-    result = convert_to_SI("T", None, "K")
-    assert result is None

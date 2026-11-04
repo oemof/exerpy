@@ -287,21 +287,25 @@ Where the default values come from
 :cite:`Perry2008`, Towler and Sinnott :cite:`Towler2013` and the VDI Heat Atlas
 :cite:`Roetzel2010,MuellerSteinhagen2010`, the worked examples of Ganapathy for boilers and heat
 recovery steam generators :cite:`Ganapathy2003`, and studies of heat pumps, organic Rankine cycles,
-feedwater heaters, condensers, concentrated solar power plants and supercritical CO2 cycles. 108 of
-them form the 59 cells ExerPy uses; the others fit no cell, such as generic or refinery fluids, or
+feedwater heaters, condensers, concentrated solar power plants and supercritical CO2 cycles. 107 of
+them form the 58 cells ExerPy uses; the others fit no cell, such as generic or refinery fluids, or
 rest on weaker evidence, such as secondary citations or model assumptions. Only values of the same
 cell are combined:
 
 - **A cell** holds the values for one exchanger type and construction (a brazed chevron plate is not
   a flat-channel plate, a heat recovery steam generator bundle is not an air coil), one fluid group
   and phase of the hot and of the cold stream, and one area basis. It holds values of one zone of an
-  exchanger, such as the condensing zone; averages over a whole exchanger with several zones are
-  kept apart and not used as defaults.
+  exchanger, such as the condensing zone; averages over a whole exchanger with several zones and
+  local values at a single point are kept apart and not used as defaults.
 - **The default** of a cell is the median of its values. A value is the one a source reports, the
   midpoint of a range it reports, or the median of the values it tabulates for one design. The
   tables give the range of the published values as well, and the number of independent sources: the
   same study, design or laboratory counts once, and a value one source took from another does not
   count again.
+- **The origin** of every source is given as well: values measured on a test rig or a plant,
+  calculated with a design model or correlations, stated by a manufacturer, or typical values of a
+  handbook. The tables cite the first source of a value; the handbooks give their typical values
+  from practice without naming an origin. Values a study assumed without a basis are not used.
 - **Where two cells** share the exchanger type, the phases and the fluid groups but differ in
   construction or area basis, one of them is the default: the one with more independent sources; on
   a tie, the one with more values; then the one with a stated area basis. For superheated steam on

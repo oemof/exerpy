@@ -577,6 +577,8 @@ overrides it, so only what differs has to be written out. In the file above :cod
 plant-wide maintenance share :math:`\mathrm{omc} = 0.015` and :code:`VAL` takes both the plant-wide
 installation factor :math:`f_\mathrm{TCI} = 4.5` and that share. A component may be a plain number instead of an object, and so may an entry of
 :code:`fuel_costs`; both are then read as the cost with everything else left at its default.
+A stream cost is in currency/GJ unless the entry names another unit in the same currency, e.g.
+:code:`"e1": {"c": 108.0, "c_unit": "EUR / MWh"}`.
 
 Where every component shares the same assumptions, the file collapses to a list of costs: leave out
 :code:`reference_year`, :code:`base_year` and :code:`cost_index`, and nothing is escalated.

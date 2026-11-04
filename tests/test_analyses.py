@@ -82,7 +82,9 @@ def mock_connection_data():
             "target_connector": 0,
             "T": 298.15,
             "p": 101325,
+            "h": 298.4e3,
             "m": 100,
+            "e_PH": 0.0,
             "E": 50000,
             "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
@@ -94,7 +96,9 @@ def mock_connection_data():
             "target_connector": 0,
             "T": 500,
             "p": 500000,
+            "h": 503.3e3,
             "m": 100,
+            "e_PH": 50.0,
             "E": 5000,
             "mass_composition": {"N2": 0.79, "O2": 0.21},  # Added composition
         },
@@ -264,7 +268,16 @@ def test_from_json_missing_composition(tmp_path):
     data = {
         "components": {"MockTurbine": {"T1": {"name": "T1", "type": "MockTurbine", "type_index": 23, "eta_s": 0.9}}},
         "connections": {
-            "1": {"kind": "material", "source_component": None, "target_component": "T1", "T": 298.15, "p": 101325}
+            "1": {
+                "kind": "material",
+                "source_component": None,
+                "target_component": "T1",
+                "m": 1.0,
+                "T": 298.15,
+                "p": 101325,
+                "h": 298.4e3,
+                "e_PH": 0.0,
+            }
         },
         "ambient_conditions": {"Tamb": 298.15, "pamb": 101325},
     }
@@ -272,7 +285,9 @@ def test_from_json_missing_composition(tmp_path):
     with open(json_path, "w") as f:
         json.dump(data, f)
 
-    with pytest.raises(ValueError, match="Material stream '1' missing mass_composition"):
+    with pytest.raises(
+        ValueError, match=r"chemExLib='Ahrendts' needs mass_composition .* - at `\$\.connections\['1'\]`"
+    ):
         ExergyAnalysis.from_json(str(json_path), chemExLib="Ahrendts")
 
 
@@ -301,7 +316,7 @@ def test_from_json_missing_sections(tmp_path):
     with open(json_path, "w") as f:
         json.dump(incomplete_data, f)
 
-    with pytest.raises(ValueError, match="Missing required sections"):
+    with pytest.raises(ValueError, match="missing required field `connections`"):
         ExergyAnalysis.from_json(str(json_path))
 
 
@@ -316,7 +331,7 @@ def test_from_json_invalid_component_structure(tmp_path):
     with open(json_path, "w") as f:
         json.dump(invalid_data, f)
 
-    with pytest.raises(ValueError, match="must contain dictionary"):
+    with pytest.raises(ValueError, match=r"Expected `object`, got `array` - at `\$\.components\['InvalidComponent'\]`"):
         ExergyAnalysis.from_json(str(json_path))
 
 
@@ -537,6 +552,30 @@ def test_heatexchanger_explicit_productive_overrides_E_L():
     assert not np.isnan(hx.E_P)
 
 
+def test_heatexchanger_fuel_outlet_in_E_L_stays_productive():
+    """A hot outlet in E_L above T0 is the rest of the fuel, e.g. the flue gas of an economizer going to the stack."""
+    component_data, connection_data = _hex_network()
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"inputs": ["4"], "outputs": ["3"]}, E_L={"inputs": ["2"]})
+    hx = analysis.components["HX1"]
+    assert hx.dissipative is None
+    assert hx.is_dissipative is False
+    assert np.isclose(hx.E_P, 3000)
+
+
+def test_heatexchanger_cooled_outlet_below_T0_in_E_L_is_dissipative():
+    """Below T0 the cooled hot stream is the product, e.g. the air leaving a heat pump evaporator."""
+    component_data, connection_data = _hex_network()
+    for label, T in {"1": 310, "2": 290, "3": 280, "4": 295}.items():
+        connection_data[label]["T"] = T
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"inputs": ["4"], "outputs": ["3"]}, E_L={"inputs": ["2"]})
+    hx = analysis.components["HX1"]
+    assert hx._temperature_case(300) == 4
+    assert hx.dissipative is True
+    assert np.isnan(hx.E_P)
+
+
 def test_multiple_inputs_outputs(mock_component_data):
     """
     Test analysis when multiple fuel and product streams (both inputs and outputs) are present.
@@ -665,9 +704,14 @@ def test_export_to_json(tmp_path, mock_component_data, mock_connection_data):
     assert ambient["Tamb"] == 298.15
     assert ambient["pamb"] == 101325
 
-    # Optionally, verify that the components and connections match the original inputs.
-    assert data["components"] == mock_component_data
-    assert data["connections"] == mock_connection_data
+    # The components and connections are the original inputs, each value with its unit.
+    without_units = lambda entry: {k: v for k, v in entry.items() if not k.endswith("_unit")}  # noqa: E731
+    for name, conn in data["connections"].items():
+        assert without_units(conn) == mock_connection_data[name]
+    turbine = data["components"]["MockTurbine"]["T1"]
+    assert turbine["eta_s_unit"] == "dimensionless"
+    assert turbine["exergy_results"]["E_D_unit"] == "W"
+    assert data["connections"]["1"]["T_unit"] == "K"
 
 
 def test_from_json_with_chemical_exergy(json_file, monkeypatch):

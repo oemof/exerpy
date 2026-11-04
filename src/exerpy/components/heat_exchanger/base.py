@@ -1,4 +1,8 @@
+from typing import Any
+
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
@@ -47,6 +51,14 @@ class HeatExchanger(Component):
     Ex_C_col : dict
         Custom cost coefficients collection passed via `kwargs`.
     """
+
+    class Input(Component.Input, kw_only=True):
+        # True forces dissipative, False productive treatment; left out or null, it is
+        # decided from the temperature case or the E_L specification.
+        dissipative: bool | None | UnsetType = UNSET
+        # Heat exchanger sizing in exerpy.costing: kA directly or as parameters["kA"].
+        kA: float | None | UnsetType = UNSET
+        parameters: dict[str, Any] | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""
@@ -115,6 +127,14 @@ class HeatExchanger(Component):
             return 6
         # Case 7: Unrecognized
         return 7
+
+    def _product_outlets(self, T0):
+        """Outlets (0 hot, 1 cold) that carry the exergy product in the temperature case of the exchanger.
+
+        Above T0 the product is the heated cold stream, below T0 the cooled hot stream; the
+        dissipative case 6 has none.
+        """
+        return {1: {1}, 2: {0}, 3: {0, 1}, 4: {0}, 5: {1}}.get(self._temperature_case(T0), set())
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""

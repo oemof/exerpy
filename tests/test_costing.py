@@ -1,5 +1,6 @@
 """Purchased equipment costs from the correlations of OpenPyTEA."""
 
+import json
 import os
 import runpy
 
@@ -137,9 +138,14 @@ class TestHeatExchangers:
         assert design["kA_source"] == "simulation"
         assert design["kA"] == pytest.approx(design["Q"] / design["dT_lm"], rel=0.02)
 
-    def test_a_capacity_exported_in_kilowatts_per_kelvin_is_recognised(self):
+    def test_a_capacity_exported_in_kilowatts_per_kelvin_is_recognised(self, tmp_path):
         """Older EBSILON exports state kA in kW/K under a W/K label; the heat flow tells."""
-        ean = ExergyAnalysis.from_json(HEATPUMP_EBSILON)
+        with open(HEATPUMP_EBSILON) as f:
+            data = json.load(f)
+        data["components"]["HeatExchanger"]["COND"]["kA"] /= 1e3
+        older_export = tmp_path / "hp_ebs_kA_in_kW.json"
+        older_export.write_text(json.dumps(data))
+        ean = ExergyAnalysis.from_json(str(older_export))
         cond = ean.components["COND"]
         assert cond.kA < 1000
         design = costing.heat_exchanger(cond)
@@ -213,6 +219,12 @@ class TestHeatExchangers:
         groups.add("ammonia-water (absorption)")
         for cell in costing.U_CELLS:
             assert set(cell["sources"]) <= set(costing.U_SOURCES)
+            assert {costing._HEAT_TRANSFER["source_origins"][s] for s in cell["sources"]} <= {
+                "measured",
+                "calculated",
+                "manufacturer",
+                "handbook",
+            }
             assert {cell["hot_fluid"], cell["cold_fluid"]} <= groups
             assert cell["exchanger_type"] in costing.EXCHANGER_TYPES
             assert cell["range"][0] <= cell["U"] <= cell["range"][1]

@@ -1,5 +1,5 @@
 {
- "description": "Overall heat transfer coefficients for a first estimate of heat exchanger areas, per comparable cell: exchanger type and construction, fluid group and phase of the hot and the cold stream, area basis. U is the median of the representative values of a cell (a reported value, the midpoint of a reported range or the median of tabulated values), range the lowest and the highest published value, n_sources the number of independent sources. Where two cells share exchanger type, phases and fluids, the one marked default is used. Only cells of one zone are listed; whole-exchanger averages over several zones, generic fluid groups, refinery streams, model assumptions and secondary citations are left out.",
+ "description": "Overall heat transfer coefficients for a first estimate of heat exchanger areas, per comparable cell: exchanger type and construction, fluid group and phase of the hot and the cold stream, area basis. U is the median of the representative values of a cell (a reported value, the midpoint of a reported range or the median of tabulated values), range the lowest and the highest published value, n_sources the number of independent sources. Where two cells share exchanger type, phases and fluids, the one marked default is used. Only cells of one zone are listed; whole-exchanger averages over several zones, generic fluid groups, refinery streams, model assumptions and secondary citations are left out. source_origins says how each source obtained its values: measured, calculated with a design model or correlations, typical values of a handbook, or stated by a manufacturer.",
  "unit": "W/(m2 K)",
  "phases": [
   "liquid",
@@ -41,7 +41,6 @@
   "AlfaLaval": "Alfa Laval (n.d.)",
   "Ganapathy2003": "Ganapathy (2003)",
   "GonzalezGomez2017": "Gonzalez-Gomez et al. (2017)",
-  "He2024": "He et al. (2024)",
   "Ibrahim2014": "Ibrahim and Badawy (2014)",
   "Jensen2015": "Jensen et al. (2015)",
   "Jeong2020": "Jeong et al. (2020)",
@@ -58,6 +57,27 @@
   "Valencia2019": "Valencia et al. (2019)",
   "Vodeniktov2023": "Vodeniktov et al. (2023)",
   "Zendehboudi2021": "Zendehboudi et al. (2021)"
+ },
+ "source_origins": {
+  "AlfaLaval": "manufacturer",
+  "Ganapathy2003": "calculated",
+  "GonzalezGomez2017": "calculated",
+  "Ibrahim2014": "calculated",
+  "Jensen2015": "calculated",
+  "Jeong2020": "calculated",
+  "Juhola2025": "measured",
+  "Juhola2026": "measured",
+  "Kelly2006": "calculated",
+  "Marchionni2019": "calculated",
+  "MuellerSteinhagen2010": "handbook",
+  "Ommen2015": "calculated",
+  "Perry2008": "handbook",
+  "Roetzel2010": "handbook",
+  "Shah2019": "calculated",
+  "Towler2013": "handbook",
+  "Valencia2019": "calculated",
+  "Vodeniktov2023": "measured",
+  "Zendehboudi2021": "measured"
  },
  "cells": [
   {
@@ -80,7 +100,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "4 values from Perry2008 (handbook). Services: air, N2 etc. (compressed) to water or brine; air, N2 etc. (atmospheric) to water or brine; air, N2 (compressed) to water or brine. Fouling: included (0.00088 m² K/W in total). 4 values are midpoints of published ranges. The source gives one value for two fluids, so it counts for both fluid groups."
+   "note": "4 values from Perry2008 (handbook). Services: air, N2 etc. (compressed) to water or brine; air, N2 etc. (atmospheric) to water or brine; air, N2 (compressed) to water or brine. Pressures on the hot side: compressed (pressure not given), atmospheric. Fouling: included (0.00088 m² K/W in total). 4 values are midpoints of published ranges. The source gives one value for two fluids, so it counts for both fluid groups."
   },
   {
    "cell": "C002",
@@ -102,7 +122,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "4 values from Perry2008 (handbook). Services: air, N2 etc. (compressed) to water or brine; air, N2 etc. (atmospheric) to water or brine; air, N2 (compressed) to water or brine. Fouling: included (0.00088 m² K/W in total). 4 values are midpoints of published ranges. The source gives one value for two fluids, so it counts for both fluid groups."
+   "note": "4 values from Perry2008 (handbook). Services: air, N2 etc. (compressed) to water or brine; air, N2 etc. (atmospheric) to water or brine; air, N2 (compressed) to water or brine. Pressures on the hot side: compressed (pressure not given), atmospheric. Fouling: included (0.00088 m² K/W in total). 4 values are midpoints of published ranges. The source gives one value for two fluids, so it counts for both fluid groups."
   },
   {
    "cell": "C003",
@@ -235,7 +255,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "2 values from GonzalezGomez2017 (design calculation). Service: molten nitrate salt to thermal oil (synthetic heat transfer fluid). Designs: oil-to-salt heat exchanger, TEMA-F shells in series (Design 1: molten salt shell side (velocity 0.55 m/s), oil tube side (velocity 1.50 m/s)); oil-to-salt heat exchanger, TEMA-F shells in series (Design 2: oil shell side (velocity 0.81 m/s), molten salt tube side (velocity 1.00 m/s)). Flows on the hot side: 0.55 m/s (shell), 1.00 m/s (tube). Flows on the cold side: 1.50 m/s (tube), 0.81 m/s (shell). Fouling: included (2.6e-4 m² K/W on the tube side and 8.8e-5 m² K/W on the shell side)."
+   "note": "2 values from GonzalezGomez2017 (design calculation). Service: molten nitrate salt to thermal oil (synthetic heat transfer fluid). Designs: oil-to-salt heat exchanger, TEMA-F shells in series (Design 1: molten salt shell side (velocity 0.55 m/s), oil tube side (velocity 1.50 m/s)); oil-to-salt heat exchanger, TEMA-F shells in series (Design 2: oil shell side (velocity 0.81 m/s), molten salt tube side (velocity 1.00 m/s)). Flows on the hot side: 0.55 m/s (shell), 1.00 m/s (tube). Flows on the cold side: 1.50 m/s (tube), 0.81 m/s (shell). Fouling: included (2.6e-4 m² K/W on the tube side and 8.8e-5 m² K/W on the shell side; 8.8e-5 m² K/W on the tube side and 2.6e-4 m² K/W on the shell side)."
   },
   {
    "cell": "C009",
@@ -335,7 +355,7 @@
    "hot_fluid": "thermal oil",
    "cold": "two-phase",
    "cold_fluid": "water/steam",
-   "U": 1184.2,
+   "U": 1149.7,
    "range": [
     929.3,
     1439.2
@@ -375,7 +395,7 @@
   {
    "cell": "C015",
    "exchanger_type": "shell_and_tube",
-   "construction": "U-tube FWH, unbaffled condensing zone (residual superheat)",
+   "construction": "FWH, unbaffled condensing zone (residual superheat)",
    "hot": "gas",
    "hot_fluid": "water/steam",
    "cold": "liquid",
@@ -458,7 +478,7 @@
    ],
    "area_basis": "not stated",
    "default": false,
-   "note": "One value, from AlfaLaval (manufacturer). Service: water to water. Fouling: not stated. The value is the midpoint of a published range."
+   "note": "One value, from AlfaLaval (manufacturer). Service: water to water. Fouling: clean surface. The value is the midpoint of a published range."
   },
   {
    "cell": "C019",
@@ -482,7 +502,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "5 values from Towler2013 (handbook), Perry2008 (handbook) and Shah2019 (design calculation). Services: water to water; demineralized water to water; jacket water to water; drain (condensate) to feedwater. Designs: shell-and-tube heat exchanger water-water; tubular exchanger (shell side / tube side as listed); closed high-pressure feedwater heater, U-tube shell-and-tube, three zones (desuperheating, condensing, drain subcooling). Fouling: included (0.00018 m² K/W in total; 0.00035 m² K/W in total; 0.00053 m² K/W in total; the HEI fouling resistances) for 4 values; not stated for 1 value. 4 values are midpoints of published ranges."
+   "note": "5 values from Towler2013 (handbook), Perry2008 (handbook) and Shah2019 (design calculation). Services: water to water; demineralized water to water; jacket water to water; drain (condensate) to feedwater. Designs: shell-and-tube heat exchanger water-water; tubular exchanger (shell side / tube side as listed); closed high-pressure feedwater heater, shell-and-tube (tube form not stated), three zones (desuperheating, condensing, drain subcooling). Fouling: included (0.00018 m² K/W in total; 0.00035 m² K/W in total; 0.00053 m² K/W in total; the HEI fouling resistances) for 4 values; not stated for 1 value. 4 values are midpoints of published ranges."
   },
   {
    "cell": "C020",
@@ -526,7 +546,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "3 values from Perry2008 (handbook). Services: steam to propane, butane, etc.; steam to propane; steam to butane. Designs: tubular exchanger (shell side / tube side as listed); steam-heated reboiler (refinery service). Fouling: included (0.00026 m² K/W in total; 0.00018 m² K/W in total). 1 value is the midpoint of a published range."
+   "note": "3 values from Perry2008 (handbook). Services: steam to propane, butane, etc.; steam to propane; steam to butane. Designs: tubular exchanger (shell side / tube side as listed); steam-heated reboiler (refinery service). Fouling: included (0.00026 m² K/W in total; 0.00018 m² K/W (boiling hydrocarbon stream only; steam side not stated)). 1 value is the midpoint of a published range."
   },
   {
    "cell": "C022",
@@ -550,7 +570,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "4 values from Towler2013 (handbook), Perry2008 (handbook) and Shah2019 (design calculation). Services: steam to water; aqueous vapours to water; steam to feed water; condensing extraction steam to feedwater. Designs: shell-and-tube heater; shell-and-tube condenser; tubular exchanger (shell side / tube side as listed); closed high-pressure feedwater heater, U-tube shell-and-tube, three zones (desuperheating, condensing, drain subcooling). Fouling: included (0.00009 m² K/W in total; the HEI fouling resistances) for 2 values; not stated for 2 values. 3 values are midpoints of published ranges."
+   "note": "4 values from Towler2013 (handbook), Perry2008 (handbook) and Shah2019 (design calculation). Services: steam to water; aqueous vapours to water; steam to feed water; condensing extraction steam to feedwater. Designs: shell-and-tube heater; shell-and-tube condenser; tubular exchanger (shell side / tube side as listed); closed high-pressure feedwater heater, shell-and-tube (tube form not stated), three zones (desuperheating, condensing, drain subcooling). Fouling: included (0.00009 m² K/W in total; the HEI fouling resistances) for 2 values; not stated for 2 values. 3 values are midpoints of published ranges."
   },
   {
    "cell": "C023",
@@ -582,10 +602,10 @@
    "hot_fluid": "CO2",
    "cold": "liquid",
    "cold_fluid": "water/steam",
-   "U": 1471.0,
+   "U": 1238.5,
    "range": [
-    859.6,
-    2058.7
+    721.5,
+    2160.8
    ],
    "n_values": 3,
    "n_sources": 1,
@@ -682,7 +702,7 @@
    ],
    "area_basis": "plate heat-transfer area incl. enlargement factor",
    "default": true,
-   "note": "One value, from Jensen2015 (design calculation). Service: ammonia-water rich solution to ammonia-water lean solution. Fouling: not stated."
+   "note": "One value, from Jensen2015 (design calculation). Service: ammonia-water rich solution to ammonia-water lean solution. Fouling: clean surface."
   },
   {
    "cell": "C029",
@@ -704,7 +724,7 @@
    ],
    "area_basis": "plate heat-transfer area incl. enlargement factor",
    "default": true,
-   "note": "One value, from Jensen2015 (design calculation). Service: ammonia-water mixture to water. Fouling: not stated."
+   "note": "One value, from Jensen2015 (design calculation). Service: ammonia-water mixture to water. Fouling: clean surface."
   },
   {
    "cell": "C030",
@@ -792,7 +812,7 @@
    ],
    "area_basis": "plate heat-transfer area incl. enlargement factor",
    "default": true,
-   "note": "One value, from Jensen2015 (design calculation). Service: water to ammonia-water mixture. Fouling: not stated."
+   "note": "One value, from Jensen2015 (design calculation). Service: water to ammonia-water mixture. Fouling: clean surface."
   },
   {
    "cell": "C034",
@@ -816,7 +836,7 @@
    ],
    "area_basis": "plate area (definition not stated)",
    "default": true,
-   "note": "4 values from Towler2013 (handbook), Perry2008 (handbook) and AlfaLaval (manufacturer). Services: process water to process water; process water to cooling water; water to water. Designs: gasketed-plate exchanger; gasketed plate-and-frame (typical rough-sizing values); gasketed plate heat exchanger, water/water. Fouling: a design margin of the manufacturer for 1 value; not stated for 3 values. 4 values are midpoints of published ranges."
+   "note": "4 values from Towler2013 (handbook), Perry2008 (handbook) and AlfaLaval (manufacturer). Services: process water to process water; process water to cooling water; water to water. Designs: gasketed-plate exchanger; gasketed plate-and-frame (typical rough-sizing values); gasketed plate heat exchanger, water/water. Fouling: clean surface for 1 value; not stated for 3 values. 4 values are midpoints of published ranges."
   },
   {
    "cell": "C035",
@@ -1015,7 +1035,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "4 values from Ganapathy2003 (design calculation). Services: flue gas (CO2 7, H2O 12, N2 75, O2 6 vol%) to boiling water; clean incinerator flue gas (CO2 6, H2O 12 vol%) to boiling water (in tubes); clean incinerator flue gas to boiling water (in tubes); gas turbine exhaust gas to boiling water. Designs: waste-heat boiler evaporator bank, bare 2 in outer diameter tubes in-line, transverse pitch 4 in, longitudinal pitch over diameter 1.5; 2 in outer diameter bare tubes, in-line; water-tube boiler evaporator, bare 2 × 1.773 in carbon steel tubes, 24 wide, 4 in square in-line; 2 in outer diameter bare tubes, in-line, 4 in pitch; boiler of example Q8.14 at off-design; 2 in outer diameter bare tubes; bare-tube boiler alternative for the duty of example Q8.20 (124 rows deep); 2 in outer diameter bare tubes. Flows on the hot side: 8.1 kg/(m² s), 5.7 kg/(m² s), 6.5 kg/(m² s). Pressures on the cold side: 150 psig (11.4 bar absolute), 200 psig (14.8 bar absolute). Fouling: included (0.001 h ft² °F/Btu on each side) for 2 values; not stated for 2 values."
+   "note": "4 values from Ganapathy2003 (design calculation). Services: flue gas (CO2 7, H2O 12, N2 75, O2 6 vol%) to boiling water; clean incinerator flue gas (CO2 7, H2O 12, N2 75, O2 6 vol%) to boiling water (in tubes); clean incinerator flue gas to boiling water (in tubes); gas turbine exhaust gas to boiling water. Designs: waste-heat boiler evaporator bank, bare 2 in outer diameter tubes in-line, transverse pitch 4 in, longitudinal pitch over diameter 1.5; 2 in outer diameter bare tubes, in-line; water-tube boiler evaporator, bare 2 × 1.773 in carbon steel tubes, 24 wide, 4 in square in-line; 2 in outer diameter bare tubes, in-line, 4 in pitch; boiler of example Q8.14 at off-design; 2 in outer diameter bare tubes; bare-tube boiler alternative for the duty of example Q8.20 (124 rows deep); 2 in outer diameter bare tubes. Flows on the hot side: 8.1 kg/(m² s), 5.7 kg/(m² s), 6.5 kg/(m² s). Pressures on the cold side: 150 psig (11.4 bar absolute), 200 psig (14.8 bar absolute). Fouling: included (0.001 h ft² °F/Btu on each side) for 2 values; not stated for 2 values."
   },
   {
    "cell": "C044",
@@ -1191,29 +1211,7 @@
    ],
    "area_basis": "not stated",
    "default": true,
-   "note": "3 values from Marchionni2019 (manufacturer). Service: CO2 (R744) to CO2 (R744). Flows on the hot side: m = 1.57 kg/s (flow rate), m = 2.09 kg/s (flow rate), m = 2.62 kg/s (flow rate). Fouling: clean surface."
-  },
-  {
-   "cell": "C052",
-   "exchanger_type": "printed_circuit",
-   "construction": "straight-channel PCHE",
-   "hot": "liquid",
-   "hot_fluid": "molten salt",
-   "cold": "two-phase",
-   "cold_fluid": "water/steam",
-   "U": 4376.0,
-   "range": [
-    3828.0,
-    4923.0
-   ],
-   "n_values": 1,
-   "n_sources": 1,
-   "sources": [
-    "He2024"
-   ],
-   "area_basis": "not stated",
-   "default": true,
-   "note": "One value, from He2024 (design calculation). Service: Hitec molten salt to water/steam. Fouling: not stated. The value is the midpoint of a published range."
+   "note": "3 values from Marchionni2019 (correlation model). Service: CO2 (R744) to CO2 (R744). Flows on the hot side: m = 1.57 kg/s (flow rate), m = 2.09 kg/s (flow rate), m = 2.62 kg/s (flow rate). Fouling: clean surface."
   },
   {
    "cell": "C053",
@@ -1223,7 +1221,7 @@
    "hot_fluid": "water/steam",
    "cold": "liquid",
    "cold_fluid": "water/steam",
-   "U": 2250.0,
+   "U": 2237.0,
    "range": [
     1220.0,
     4500.0
@@ -1248,7 +1246,7 @@
    "cold_fluid": "water/steam",
    "U": 2750.0,
    "range": [
-    1450.0,
+    1440.0,
     4600.0
    ],
    "n_values": 3,
@@ -1259,7 +1257,7 @@
    ],
    "area_basis": "tube outside area",
    "default": true,
-   "note": "3 values from Roetzel2010 (handbook) and Vodeniktov2023 (measurement). Services: steam to cooling water; exhaust steam (degraded vacuum) to cooling water (network return water, about 61 °C inlet). Designs: steam-turbine condenser, thin brass tubes; 3588 tubes 22 × 1 mm, 90/10 cupronickel, two-pass divided water box. Fouling: the range spans clean to fouled surfaces for 1 value; exchanger in service, fouling not quantified for 2 values. 3 values are midpoints of published ranges. 2 of the values were read from figures."
+   "note": "3 values from Roetzel2010 (handbook) and Vodeniktov2023 (measurement). Services: steam to cooling water; exhaust steam (degraded vacuum) to cooling water from the cooling pond (avg inlet 61.2 °C). Designs: steam-turbine condenser, thin brass tubes; 3588 tubes 22 × 1 mm, 90/10 cupronickel, two-pass divided water box. Fouling: the range spans clean to fouled surfaces for 1 value; exchanger in service, fouling not quantified for 2 values. 3 values are midpoints of published ranges. 2 of the values were read from figures."
   },
   {
    "cell": "C060",
@@ -1335,10 +1333,10 @@
    "hot_fluid": "air",
    "cold": "liquid",
    "cold_fluid": "glycol/brine",
-   "U": 41.6,
+   "U": 42.3,
    "range": [
     37.0,
-    46.2
+    47.6
    ],
    "n_values": 3,
    "n_sources": 1,

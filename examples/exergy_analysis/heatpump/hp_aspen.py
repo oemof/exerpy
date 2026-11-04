@@ -13,12 +13,13 @@ model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "hp.bkp"))
 # ----------------------------------------------------------------------------------------------------------------------
 # 2. Exergy analysis
 # ----------------------------------------------------------------------------------------------------------------------
-ean = ExergyAnalysis.from_aspen(model_path, split_physical_exergy=False)
+ean = ExergyAnalysis.from_aspen(model_path, split_physical_exergy=True)
 
 fuel = {"inputs": ["E1", "E2", "E3"], "outputs": []}
 product = {"inputs": ["23"], "outputs": ["21"]}
 loss = {"inputs": ["13"], "outputs": ["11"]}
 
 ean.analyse(E_F=fuel, E_P=product, E_L=loss)
-ean.exergy_results()
+df_component_results, _, _ = ean.exergy_results()
 ean.export_to_json("examples/exergy_analysis/heatpump/hp_aspen.json")
+df_component_results.to_csv("examples/exergy_analysis/heatpump/hp_components_aspen.csv")

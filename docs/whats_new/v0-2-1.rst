@@ -1,0 +1,93 @@
+v0.2.1 (04.11.2026)
++++++++++++++++++++
+
+New Features
+############
+- ExerPy checks the input of an analysis before it starts, first its structure and then the
+  ranges of its values. This covers JSON files read with ``from_json`` and the models parsed from
+  TESPy, EBSILON and Aspen. The problems of each step are reported together, each with its place in
+  the file, e.g. ``$.connections['1'].m``. The format is described
+  in :ref:`JSON format <json_format_label>`, and :func:`~exerpy.schema.json_schema` returns it as a
+  JSON Schema (#48).
+- A value in the input can carry its unit, e.g. ``"T": 15.0, "T_unit": "degC"``. ExerPy converts it
+  to SI with pint before the analysis, and a value without a unit is taken as SI. An unknown unit or
+  a unit of the wrong kind is an error that names its place in the file (closes #48).
+- Every export writes the unit of each value.
+  :meth:`~exerpy.analyses.ExergyAnalysis.export_to_json` takes ``units`` to write values in other
+  units, and :func:`exerpy.units.convert` converts a value between any two units.
+- The costs of the exergoeconomic analysis can carry a unit as well, e.g.
+  ``"10_c_unit": "EUR / MWh"`` in the cost dictionary or ``c_unit`` in ``fuel_costs``. The new
+  :meth:`~exerpy.analyses.ExergoeconomicAnalysis.export_to_json` saves the costs of the streams, the
+  components and the plant, each with its unit.
+- The Aspen parser splits the physical exergy into its thermal and mechanical part with
+  ``split_physical_exergy=True``, as the EBSILON parser does. For each stream, it adds a property
+  analysis at the ambient temperature and the stream's pressure to the model in memory and runs the
+  simulation once. The model file stays unchanged.
+- With the split, the EBSILON and Aspen parsers check that the property data of the split reproduce
+  the enthalpy and entropy of each stream, and warn if they do not.
+
+API Changes
+###########
+- ``from_json``, ``from_tespy``, ``from_ebsilon`` and ``from_aspen`` check the input by default.
+  Every material stream needs ``m``, ``T``, ``p``, ``h`` and ``e_PH``, so an older hand-written
+  file may need more values than before. Pass ``validate=False`` to skip the check.
+- ExerPy depends on ``msgspec`` and ``pint``.
+- The TESPy parser writes the values in the units of the network, together with these units.
+  Dimensionless values are written with the unit ``dimensionless`` instead of ``-``.
+- :meth:`~exerpy.analyses.ExergyAnalysis.export_to_json` no longer writes the internal cost values
+  that an exergoeconomic analysis adds to the streams.
+  :meth:`~exerpy.analyses.ExergoeconomicAnalysis.export_to_json` writes the costs instead.
+- ``exerpy.functions.convert_to_SI`` and ``exerpy.functions.fluid_property_data`` are removed. The
+  EBSILON and Aspen parsers convert their values with :func:`exerpy.units.convert_to_SI`, which uses
+  pint and also reads the unit spellings of the simulators, e.g. ``C`` or ``kJ/kg-K``. The SI unit
+  of each value is listed in :data:`exerpy.units.SI_UNITS`.
+
+Bug Fixes
+#########
+- The EBSILON parser no longer lists the gaseous and liquid parts of the water, ``H2OG`` and
+  ``H2OL``, next to the total ``H2O``. The mass fractions of a stream now add up to one. The
+  results do not change.
+- Molar flows given in ``kmol/min`` or ``kmol/h`` by EBSILON or Aspen were converted with a factor
+  that was wrong by 10⁶. An enthalpy, entropy or exergy per mole is now an error instead of being
+  read as a value per kg. The examples are not affected.
+- The EBSILON parser raises an error when the calculation of a model fails, instead of parsing the
+  results of an earlier calculation that the model still holds. Every message of the solver is
+  logged with its error code and object, also when it has no description (closes #53).
+- A heat exchanger is treated as dissipative only when the outlet listed in ``E_L`` carries its
+  product, such as the cooling water of a condenser. A fuel-side outlet in ``E_L``, such as the flue
+  gas of an economizer going to the stack, no longer makes it dissipative. The economizers of the
+  CCPP and CGAM examples have an exergetic efficiency again, and the cost results of the CGAM
+  exergoeconomic example change accordingly (closes #55).
+- The EBSILON parser split the physical exergy with other property data than the model: the
+  IAPWS-IF97 steam table, the FDBR gas table and no real gas correction. It now uses the fluid data
+  of each stream. With a real gas correction in the model, e_T of methane at the ambient
+  temperature was -4.4 kJ/kg instead of 0.
+- The Aspen parser recognizes a multiplier block on work streams as a generator or a motor from the
+  sign of the power entering it, which a turbine produces and a compressor or pump consumes. It no
+  longer asks for a block with the factor 1, which stopped scripts without a terminal, such as the
+  CGAM example (closes #61).
+- ``tabulate`` was missing from the dependencies, so the result tables failed in a fresh
+  installation. The CI now also imports ExerPy with its dependencies only (closes #43).
+
+Other Changes
+#############
+- The examples split the physical exergy with all three simulators. The gases of the CCPP and CGAM
+  models are real gases in Aspen Plus (REFPROP) and EBSILON (Lee-Kesler-Plöcker correction), as in
+  TESPy.
+- The tests compare the exergy destruction of each component and the exergetic efficiency of the
+  example plants with the results based on EBSILON. ``tests/test_simulators.py`` runs the EBSILON
+  and Aspen parsers on the example models if ``EXERPY_SIMULATOR_TESTS=1``.
+- ExerPy is tested on Python 3.11 to 3.15, and the package metadata lists these versions. The
+  GitHub Actions use their current versions (closes #50).
+- The default heat transfer coefficients were checked against the sources.
+- The examples were run again with all three simulators. Their validation notebooks compare the
+  exergy destruction of each component and the exergetic efficiency of the plant with the results
+  based on EBSILON (closes #44).
+- The motor of the Aspen heat pump example has the efficiency of 0.985, as in the other models.
+- The tests of the TESPy examples run in a temporary folder and no longer overwrite the example
+  results in the repository (closes #49).
+
+Contributors
+############
+- Sergio Tomasinelli (`@sertomas <https://github.com/sertomas>`__)
+- Francesco Witte (`@fwitte <https://github.com/fwitte>`__)

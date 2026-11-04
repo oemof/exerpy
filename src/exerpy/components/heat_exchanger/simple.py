@@ -1,8 +1,11 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
+from exerpy.quantities import Temperature
 
 
 @component_registry
@@ -59,6 +62,13 @@ class SimpleHeatExchanger(Component):
     Without them, the heat is valued at the exergy change of the stream itself, and the loss of the
     heat transfer to or from the outside lies outside the component.
     """
+
+    class Input(Component.Input, kw_only=True):
+        # True marks the heat release as a loss: no exergy product.
+        dissipative: bool | None | UnsetType = UNSET
+        # Temperature of the heat source (heat input) or consumer (heat release).
+        T_hot: Temperature | None | UnsetType = UNSET
+        T_cold: Temperature | None | UnsetType = UNSET
 
     def __init__(self, **kwargs):
         r"""

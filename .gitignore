@@ -26,10 +26,13 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# we do not want the lock file to be commited if .venv is inside package
+uv.lock
+
 # Vscode
 .vscode/
 
-# Aspen 
+# Aspen
 *.def
 *.ads
 *.his

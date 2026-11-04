@@ -18,7 +18,7 @@ individual components as well as entire processes. This shows where and why exer
 lost, which helps to improve efficiency, reduce costs and support sustainable energy use. On top of
 the exergy analysis, an exergoeconomic analysis assigns costs to every stream and component.
 
-This release has been tested with TESPy 0.11.3, Ebsilon Professional 17 and Aspen Plus 14.5.
+This release has been tested with TESPy 0.11.3, Ebsilon Professional 18 and Aspen Plus 14.5.
 
 ExerPy is part of the Open Energy Modelling Framework `oemof <https://oemof.org/>`_.
 
@@ -141,7 +141,7 @@ following BibTeX entry:
          title = {{ExerPy}: Exergy Analysis in Python},
          note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou},
          url = {https://github.com/oemof/exerpy},
-         version = {0.2.0},
+         version = {0.2.1},
          year = {2026}
     }
 

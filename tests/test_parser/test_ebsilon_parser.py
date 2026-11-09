@@ -16,11 +16,14 @@ import json
 from unittest.mock import Mock
 from unittest.mock import patch
 
+import CoolProp.CoolProp as CP
 import pytest
 
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+from exerpy.parser.from_ebsilon.ebsilon_config import composition_params
 from exerpy.parser.from_ebsilon.ebsilon_config import connector_mapping
 from exerpy.parser.from_ebsilon.ebsilon_config import grouped_components
+from exerpy.parser.from_ebsilon.ebsilon_config import two_phase_fluids_mapping
 from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
 from exerpy.parser.from_ebsilon.ebsilon_parser import _mass_composition
 from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
@@ -999,3 +1002,76 @@ def test_mass_composition_drops_gaseous_water():
 
     del Pipe.XH2O
     assert _mass_composition(Pipe())["H2OG"] == 0.015
+
+
+def test_mass_composition_names_species():
+    """Species get the names CoolProp knows, and the liquid share of a species is no mass fraction."""
+
+    class Pipe:
+        XCH4 = Mock(Value=0.6)
+        XETH = Mock(Value=0.1)
+        XKR = Mock(Value=0.1)
+        XXE = Mock(Value=0.05)
+        XNO2 = Mock(Value=0.05)
+        XH2O = Mock(Value=0.1)
+        XL_H2O = Mock(Value=0.633)
+        XI = Mock(Value=0.2)
+
+    assert _mass_composition(Pipe()) == {
+        "CH4": 0.6,
+        "Ethane": 0.1,
+        "Krypton": 0.1,
+        "Xenon": 0.05,
+        "NO2": 0.05,
+        "H2O": 0.1,
+    }
+
+
+def test_composition_params_species_names():
+    """Each species has its own name, and all but the listed ones are known to CoolProp."""
+    no_coolprop = {
+        *("1,2-Butadiene", "1,3-Butadiene", "1-Pentene", "2,2-Dimethylbutane", "2,3-Dimethylbutane"),
+        *("3-Methylpentane", "Acetylene", "Ash", "Gaseous ash", "C", "Ca", "CaCO3", "CaO", "CaSO4"),
+        *("cis-Decalin", "CH3SH", "Cl", "CS2", "Ethylcyclohexane", "Ethylcyclopentane", "H", "Bound water"),
+        *("H2OG", "H2OL", "HCN", "Ca(OH)2", "Methylcyclohexane", "Methylcyclopentane", "Mg", "MgCO3", "MgO"),
+        *("N", "NO", "NO2", "O", "Propadiene", "S", "trans-Decalin"),
+    }
+    species = [name for name in composition_params.values() if name is not None]
+    assert len(species) == len(set(species))
+
+    unknown = set()
+    for name in species:
+        try:
+            CP.PropsSI("M", name)
+        except ValueError:
+            unknown.add(name)
+    assert unknown <= no_coolprop
+
+
+@pytest.mark.parametrize(
+    "fmed",
+    [
+        -4,
+        -5,
+        -25,
+        -27,
+        -1008,
+        -1023,
+        -1030,
+        -1031,
+        -1032,
+        -1033,
+        -1034,
+        -1038,
+        -1048,
+        -1085,
+        -1133,
+        -1136,
+        -1138,
+        -1139,
+    ],
+)
+def test_two_phase_fluids_with_chemical_exergy_carry_coolprop_names(fmed):
+    """Pure hydrocarbons and noble gases are named as CoolProp does, so the library finds them."""
+    (name,) = two_phase_fluids_mapping[fmed]
+    CP.PropsSI("M", name)

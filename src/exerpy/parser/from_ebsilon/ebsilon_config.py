@@ -343,8 +343,8 @@ two_phase_fluids_mapping = {
     -1: {"NH3": 1},  # LIBNH3_NH3
     -2: {"H2O": 1},  # LIBICE_H2O
     -3: {"CO2": 1},  # LIBCO2_CO2
-    -4: {"N-Butane": 1},  # LIBBUTAN_N_NBUTAN
-    -5: {"Iso-Butane": 1},  # LIBBUTAN_ISO_IBUT
+    -4: {"n-Butane": 1},  # LIBBUTAN_N_NBUTAN
+    -5: {"IsoButane": 1},  # LIBBUTAN_ISO_IBUT
     -6: {"Methanol": 1},  # LIBCH3OH_METHL
     -7: {"Ethanol": 1},  # LIBC2H5OH_ETHL
     -8: {"D4": 1},  # LIBD4_D4
@@ -364,9 +364,9 @@ two_phase_fluids_mapping = {
     -22: {"Air": 1},  # LIBREALAIR_AIR_Lemmon
     -23: {"Acetone": 1},  # LIBC3H6O_ACETONE
     -24: {"Cyclopentane": 1},  # LIBC5H10_CYCPENT
-    -25: {"Iso-Pentane": 1},  # LIBC5H12_ISO_IPENT
+    -25: {"Isopentane": 1},  # LIBC5H12_ISO_IPENT
     -26: {"Neopentane": 1},  # LIBC5H12_NEO_NEOPENT
-    -27: {"Iso-Hexane": 1},  # LIBC6H14_IHEX
+    -27: {"Isohexane": 1},  # LIBC6H14_IHEX
     -28: {"Toluene": 1},  # LIBC7H8_TOLUEN
     -29: {"Nonane": 1},  # LIBC9H20_NON
     -30: {"Decane": 1},  # LIBC10H22_DEC
@@ -387,7 +387,7 @@ two_phase_fluids_mapping = {
     -1005: {"Benzene": 1},  # REFPROP_BENZENE
     -1006: {"Butane": 1},  # REFPROP_BUT
     -1007: {"Dodecane": 1},  # REFPROP_DODEC
-    -1008: {"2-Butene": 1},  # REFPROP_C2BUTEN
+    -1008: {"cis-2-Butene": 1},  # REFPROP_C2BUTEN
     -1009: {"C4F10": 1},  # REFPROP_C4F10
     -1010: {"C5F12": 1},  # REFPROP_C5F12
     -1011: {"CF3I": 1},  # REFPROP_CF3I
@@ -402,22 +402,22 @@ two_phase_fluids_mapping = {
     -1020: {"DME": 1},  # REFPROP_DME
     -1021: {"Ethane": 1},  # REFPROP_ETH
     -1022: {"Ethanol": 1},  # REFPROP_ETHL
-    -1023: {"Ethene": 1},  # REFPROP_ETHEN
+    -1023: {"Ethylene": 1},  # REFPROP_ETHEN
     -1024: {"Fluorine": 1},  # REFPROP_FLUORINE
     -1025: {"H2S": 1},  # REFPROP_H2S
     -1026: {"HE": 1},  # REFPROP_HE
     -1027: {"Heptane": 1},  # REFPROP_HEPT
     -1028: {"Hexane": 1},  # REFPROP_HEX
     -1029: {"H2": 1},  # REFPROP_H2
-    -1030: {"Iso-Butene": 1},  # REFPROP_IBUTEN
-    -1031: {"Iso-Hexane": 1},  # REFPROP_IHEX
-    -1032: {"Iso-Pentane": 1},  # REFPROP_IPENT
-    -1033: {"Iso-Butane": 1},  # REFPROP_IBUT
-    -1034: {"Kr": 1},  # REFPROP_KR
+    -1030: {"Isobutene": 1},  # REFPROP_IBUTEN
+    -1031: {"Isohexane": 1},  # REFPROP_IHEX
+    -1032: {"Isopentane": 1},  # REFPROP_IPENT
+    -1033: {"IsoButane": 1},  # REFPROP_IBUT
+    -1034: {"Krypton": 1},  # REFPROP_KR
     -1035: {"CH4": 1},  # REFPROP_CH4
     -1036: {"Methanol": 1},  # REFPROP_METHL
     -1037: {"N2O": 1},  # REFPROP_N2O
-    -1038: {"NE": 1},  # REFPROP_NE
+    -1038: {"Neon": 1},  # REFPROP_NE
     -1039: {"Neopentane": 1},  # REFPROP_NEOPENT
     -1040: {"NF3": 1},  # REFPROP_NF3
     -1041: {"N2": 1},  # REFPROP_N2
@@ -427,7 +427,7 @@ two_phase_fluids_mapping = {
     -1045: {"Parahydrogen": 1},  # REFPROP_PARAHYD
     -1046: {"Pentane": 1},  # REFPROP_PENT
     -1047: {"Propane": 1},  # REFPROP_PROP
-    -1048: {"Propene": 1},  # REFPROP_PROPEN
+    -1048: {"Propylene": 1},  # REFPROP_PROPEN
     -1049: {"Propyne": 1},  # REFPROP_PROPYNE
     -1050: {"R11": 1},  # REFPROP_R11
     -1051: {"R113": 1},  # REFPROP_R113
@@ -464,7 +464,7 @@ two_phase_fluids_mapping = {
     -1082: {"RC318": 1},  # REFPROP_RC318
     -1083: {"SF6": 1},  # REFPROP_SF6
     -1084: {"SO2": 1},  # REFPROP_SO2
-    -1085: {"T2Butene": 1},  # REFPROP_T2BUTEN
+    -1085: {"trans-2-Butene": 1},  # REFPROP_T2BUTEN
     -1086: {"Toluene": 1},  # REFPROP_TOLUEN
     -1087: {"H2O": 1},  # REFPROP_H2O
     -1088: {"XE": 1},  # REFPROP_XE
@@ -511,13 +511,13 @@ two_phase_fluids_mapping = {
     -1130: {"UD_20": 1},  # REFPROP_REFPROP_UD_20
     -1131: {"C11": 1},  # REFPROP_C11
     -1132: {"DEE": 1},  # REFPROP_DEE
-    -1133: {"EBenzene": 1},  # REFPROP_EBENZ
+    -1133: {"EthylBenzene": 1},  # REFPROP_EBENZ
     -1134: {"HCL": 1},  # REFPROP_HCL
     -1135: {"IOctane": 1},  # REFPROP_IOCTANE
-    -1136: {"MXYlene": 1},  # REFPROP_MXYLENE
+    -1136: {"m-Xylene": 1},  # REFPROP_MXYLENE
     -1137: {"Novec649": 1},  # REFPROP_NOVEC649
-    -1138: {"Oxylene": 1},  # REFPROP_OXYLEN
-    -1139: {"PXylene": 1},  # REFPROP_PXYLENE
+    -1138: {"o-Xylene": 1},  # REFPROP_OXYLEN
+    -1139: {"p-Xylene": 1},  # REFPROP_PXYLENE
     -1140: {"R1216": 1},  # REFPROP_R1216
     -1141: {"R1233ZD": 1},  # REFPROP_R1233ZD
     -1142: {"R40": 1},  # REFPROP_R40
@@ -811,98 +811,99 @@ unit_id_to_string = {
 }
 
 
-# List of fluid composition materials to include in the JSON file
-composition_params = [
-    "X12BUTADIEN",
-    "X13BUTADIEN",
-    "X1BUTEN",
-    "X1PENTEN",
-    "X22DMBUT",
-    "X23DMBUT",
-    "X3MPENT",
-    "XACET",
-    "XAIR",
-    "XAR",
-    "XASH",
-    "XASHG",
-    "XBENZ",
-    "XBUT",
-    "XC",
-    "XC2BUTEN",
-    "XCA",
-    "XCACO3",
-    "XCAO",
-    "XCASO4",
-    "XCDECALIN",
-    "XCH3SH",
-    "XCH4",
-    "XCL",
-    "XCO",
-    "XCO2",
-    "XCOS",
-    "XCS2",
-    "XCYCHEX",
-    "XCYCPENT",
-    "XDEC",
-    "XDODEC",
-    "XEBENZ",
-    "XECYCHEX",
-    "XECYCPENT",
-    "XETH",
-    "XETHEN",
-    "XETHL",
-    "XH",
-    "XH2",
-    "XH2O",
-    "XH2OB",
-    "XH2OG",
-    "XH2OL",
-    "XH2S",
-    "XHCL",
-    "XHCN",
-    "XHE",
-    "XHEPT",
-    "XHEX",
-    "XI",
-    "XIBUT",
-    "XIBUTEN",
-    "XIHEX",
-    "XIPENT",
-    "XKR",
-    "XLIME",
-    "XL_CO2",
-    "XL_H2O",
-    "XL_NH3",
-    "XMCYCHEX",
-    "XMCYCPENT",
-    "XMETHL",
-    "XMG",
-    "XMGCO3",
-    "XMGO",
-    "XN",
-    "XN2",
-    "XN2O",
-    "XNE",
-    "XNEOPENT",
-    "XNH3",
-    "XNO",
-    "XNO2",
-    "XNON",
-    "XO",
-    "XO2",
-    "XOCT",
-    "XOXYLEN",
-    "XPENT",
-    "XPROP",
-    "XPROPADIEN",
-    "XPROPEN",
-    "XS",
-    "XSO2",
-    "XT2BUTEN",
-    "XTDECALIN",
-    "XTOLUEN",
-    "XXE",
-]
+# Mass fractions of a stream's composition in EBSILON and the species names they are stored under: CoolProp
+# names where CoolProp knows the species. None marks the parameters that are no mass fractions of the stream.
+composition_params = {
+    "X12BUTADIEN": "1,2-Butadiene",
+    "X13BUTADIEN": "1,3-Butadiene",
+    "X1BUTEN": "1-Butene",
+    "X1PENTEN": "1-Pentene",
+    "X22DMBUT": "2,2-Dimethylbutane",
+    "X23DMBUT": "2,3-Dimethylbutane",
+    "X3MPENT": "3-Methylpentane",
+    "XACET": "Acetylene",
+    "XAIR": "AIR",
+    "XAR": "AR",
+    "XASH": "Ash",
+    "XASHG": "Gaseous ash",
+    "XBENZ": "Benzene",
+    "XBUT": "n-Butane",
+    "XC": "C",
+    "XC2BUTEN": "cis-2-Butene",
+    "XCA": "Ca",
+    "XCACO3": "CaCO3",
+    "XCAO": "CaO",
+    "XCASO4": "CaSO4",
+    "XCDECALIN": "cis-Decalin",
+    "XCH3SH": "CH3SH",
+    "XCH4": "CH4",
+    "XCL": "Cl",
+    "XCO": "CO",
+    "XCO2": "CO2",
+    "XCOS": "COS",
+    "XCS2": "CS2",
+    "XCYCHEX": "CycloHexane",
+    "XCYCPENT": "Cyclopentane",
+    "XDEC": "n-Decane",
+    "XDODEC": "n-Dodecane",
+    "XEBENZ": "EthylBenzene",
+    "XECYCHEX": "Ethylcyclohexane",
+    "XECYCPENT": "Ethylcyclopentane",
+    "XETH": "Ethane",
+    "XETHEN": "Ethylene",
+    "XETHL": "Ethanol",
+    "XH": "H",
+    "XH2": "H2",
+    "XH2O": "H2O",
+    "XH2OB": "Bound water",  # water bound in coal or oil
+    "XH2OG": "H2OG",  # gaseous part of XH2O
+    "XH2OL": "H2OL",  # liquid part of XH2O
+    "XH2S": "H2S",
+    "XHCL": "HCL",
+    "XHCN": "HCN",
+    "XHE": "HE",
+    "XHEPT": "n-Heptane",
+    "XHEX": "n-Hexane",
+    "XI": None,  # share of refrigerant, anti-freeze or water of binary mixtures and humid air
+    "XIBUT": "IsoButane",
+    "XIBUTEN": "IsoButene",
+    "XIHEX": "Isohexane",
+    "XIPENT": "Isopentane",
+    "XKR": "Krypton",
+    "XLIME": "Ca(OH)2",
+    "XL_CO2": None,  # liquid share of XCO2
+    "XL_H2O": None,  # liquid share of XH2O
+    "XL_NH3": None,  # liquid share of XNH3
+    "XMCYCHEX": "Methylcyclohexane",
+    "XMCYCPENT": "Methylcyclopentane",
+    "XMETHL": "Methanol",
+    "XMG": "Mg",
+    "XMGCO3": "MgCO3",
+    "XMGO": "MgO",
+    "XN": "N",
+    "XN2": "N2",
+    "XN2O": "N2O",
+    "XNE": "Neon",
+    "XNEOPENT": "Neopentane",
+    "XNH3": "NH3",
+    "XNO": "NO",
+    "XNO2": "NO2",
+    "XNON": "n-Nonane",
+    "XO": "O",
+    "XO2": "O2",
+    "XOCT": "n-Octane",
+    "XOXYLEN": "o-Xylene",
+    "XPENT": "n-Pentane",
+    "XPROP": "Propane",
+    "XPROPADIEN": "Propadiene",
+    "XPROPEN": "Propylene",
+    "XS": "S",
+    "XSO2": "SO2",
+    "XT2BUTEN": "trans-2-Butene",
+    "XTDECALIN": "trans-Decalin",
+    "XTOLUEN": "Toluene",
+    "XXE": "Xenon",
+}
 
 # Define the component groups via unique labels
 grouped_components = {

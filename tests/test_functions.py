@@ -10,6 +10,8 @@ This module provides comprehensive testing for:
 Uses both basic test cases and realistic process data from Ebsilon simulations.
 """
 
+import json
+
 import pytest
 
 from exerpy.functions import add_chemical_exergy
@@ -265,6 +267,46 @@ def test_fraction_conversion_invalid_substance():
         molar_to_mass_fractions({"InvalidSubstance1": 0.5, "InvaludeSubstance2": 0.5})
 
 
+def test_mass_to_molar_fractions_names_unknown_species():
+    """A species CoolProp has no molar mass for is named in the error instead of being dropped."""
+    with pytest.raises(ValueError, match="no molar mass for Kr in"):
+        mass_to_molar_fractions({"CH4": 0.7, "Kr": 0.3})
+
+    with pytest.raises(ValueError, match="no molar mass for Kr, NO2 in"):
+        mass_to_molar_fractions({"CH4": 0.5, "Kr": 0.3, "NO2": 0.2})
+
+
+def test_mass_to_molar_fractions_ignores_zero_fractions():
+    """Species with a zero mass fraction are left out, whether CoolProp knows them or not."""
+    molar_fractions = mass_to_molar_fractions({"CH4": 0.7, "Krypton": 0.3, "Kr": 0.0, "N2": 0.0})
+
+    n_CH4, n_Kr = 0.7 / 16.043e-3, 0.3 / 83.798e-3
+    expected = {"CH4": n_CH4 / (n_CH4 + n_Kr), "Krypton": n_Kr / (n_CH4 + n_Kr)}
+    assert molar_fractions == pytest.approx(expected, rel=1e-4)
+
+    assert mass_to_molar_fractions({"Therminol VP1": 1.0, "H2O": 0.0}) == {"Therminol VP1": 1.0}
+
+
+def test_mass_to_molar_fractions_rejects_an_empty_composition():
+    """A stream without mass fractions, e.g. an EBSILON binary mixture, raises a clear error."""
+    with pytest.raises(ValueError, match="mass composition is empty"):
+        mass_to_molar_fractions({})
+
+
+@pytest.mark.parametrize(
+    "path", ["examples/exergy_analysis/cgam/cgam_ebs.json", "examples/exergoeconomic_analysis/cgam/cgam.json"]
+)
+def test_stored_ebsilon_compositions_are_mass_fractions(path):
+    """The stored EBSILON exports name CoolProp species only and their mass fractions sum to 1."""
+    with open(path, encoding="utf-8") as f:
+        connections = json.load(f)["connections"]
+    for name, conn in connections.items():
+        composition = conn.get("mass_composition")
+        if composition and len(composition) > 1:
+            assert sum(composition.values()) == pytest.approx(1.0, abs=1e-6), name
+            mass_to_molar_fractions(composition)
+
+
 # Chemical Exergy Tests
 def test_calc_chemical_exergy_basic(basic_stream_data):
     """
@@ -319,7 +361,7 @@ def test_calc_chemical_exergy_invalid_substance():
     Test error handling for invalid substance in chemical exergy calculation.
     """
     stream_data = {"mass_composition": {"InvalidSubstance": 0.5, "AnotherInvalid": 0.5}}
-    with pytest.raises(ValueError, match="No valid molar masses were retrieved"):
+    with pytest.raises(ValueError, match="no molar mass for InvalidSubstance, AnotherInvalid"):
         calc_chemical_exergy(stream_data, 298.15, 1.01325, "Ahrendts")
 
 

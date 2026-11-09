@@ -136,6 +136,10 @@ component, counted from 0.
 ExerPy computes the exergy of each connection itself, so values such as ``E`` in an exported
 file are not needed.
 
+The species of a ``mass_composition`` carry the names CoolProp knows, such as ``CH4``, ``N2`` or
+``Ethane``. The chemical exergy of a mixture needs the molar mass of every species, so a species
+CoolProp does not know stops the analysis with an error that names it.
+
 *****
 Units
 *****

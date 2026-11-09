@@ -120,11 +120,16 @@ def _thermoliquid_name(pipe_cast):
 
 
 def _mass_composition(pipe_cast):
-    """Return the mass fractions of a pipe without H2OG and H2OL, the gaseous and liquid parts of H2O."""
+    """
+    Return the mass fractions of a pipe by species name, see ``composition_params``.
+
+    Parameters that are no mass fractions of the stream are skipped, and so are H2OG and H2OL, the
+    gaseous and liquid parts of H2O, when H2O is given.
+    """
     composition = {
-        param.lstrip("X"): getattr(pipe_cast, param).Value
-        for param in composition_params
-        if hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
+        species: getattr(pipe_cast, param).Value
+        for param, species in composition_params.items()
+        if species is not None and hasattr(pipe_cast, param) and getattr(pipe_cast, param).Value not in [0, None]
     }
     if "H2O" in composition:
         composition.pop("H2OG", None)
@@ -573,6 +578,12 @@ class EbsilonModelParser:
                     connection_data["mass_composition"] = {_thermoliquid_name(pipe_cast): 1}
                 else:
                     connection_data["mass_composition"] = _mass_composition(pipe_cast)
+                    if not connection_data["mass_composition"]:
+                        logger.warning(
+                            f"EBSILON gives no mass fractions for stream {pipe_cast.Name} (fluid type "
+                            f"{fluid_type_index.get(pipe_cast.FluidType, 'Unknown')}), so its chemical exergy "
+                            "is set to 0."
+                        )
 
             # HEAT AND POWER CONNECTIONS from Logic "fluids"
             if (pipe_cast.Kind - 1000) in logic_fluids:

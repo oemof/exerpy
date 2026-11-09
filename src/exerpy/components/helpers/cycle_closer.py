@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -105,12 +106,7 @@ class CycleCloser(Component):
         # Cost equality equations of the physical exergy. The coefficients are written on the exergy
         # flow of the stream, not on its specific exergy, as the F-principle requires.
         for label in ["M", "T"] if split_physical_exergy else ["PH"]:
-            A[counter, self.inl[0]["CostVar_index"][label]] = (
-                (1 / self.inl[0][f"E_{label}"]) if self.inl[0][f"e_{label}"] != 0 else 1
-            )
-            A[counter, self.outl[0]["CostVar_index"][label]] = (
-                (-1 / self.outl[0][f"E_{label}"]) if self.outl[0][f"e_{label}"] != 0 else -1
-            )
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], label)
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],

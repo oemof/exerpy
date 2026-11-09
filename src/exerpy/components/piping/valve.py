@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -253,8 +254,8 @@ class Valve(Component):
             \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
             = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
 
-        Where a stream carries no exergy of a given kind, its cost variable is fixed directly
-        instead of being equated, since the specific cost of nothing is undefined.
+        Where the inlet or the outlet carries no exergy of a share :math:`x`, the outlet carries no
+        cost of it, :math:`\dot{C}^{x}_\mathrm{out} = 0`.
 
         Parameters
         ----------
@@ -296,16 +297,7 @@ class Valve(Component):
         # Mechanical cost equation. Without the split there is no mechanical cost variable and the cost
         # balance alone determines the cost of the physical exergy of the outlet.
         if split_physical_exergy:
-            if self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] != 0:
-                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1 / self.inl[0]["E_M"]
-                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1 / self.outl[0]["E_M"]
-            elif self.inl[0]["e_M"] == 0 and self.outl[0]["e_M"] != 0:
-                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-            elif self.inl[0]["e_M"] != 0 and self.outl[0]["e_M"] == 0:
-                A[counter, self.outl[0]["CostVar_index"]["M"]] = 1
-            else:
-                A[counter, self.inl[0]["CostVar_index"]["M"]] = 1
-                A[counter, self.outl[0]["CostVar_index"]["M"]] = -1
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], "M")
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -316,10 +308,7 @@ class Valve(Component):
 
         if chemical_exergy_enabled:
             # --- Chemical cost equation (conditionally added) ---
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["E_CH"] if self.inl[0]["e_CH"] != 0 else 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                -1 / self.outl[0]["E_CH"] if self.outl[0]["e_CH"] != 0 else -1
-            )
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], "CH")
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],

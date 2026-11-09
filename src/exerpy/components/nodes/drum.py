@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -183,14 +184,7 @@ class Drum(Component):
         # --- Chemical cost auxiliary equations: the inlet passes its specific cost to each outlet ---
         if chemical_exergy_enabled:
             for outlet in outlets:
-                if self.inl[0]["e_CH"] != 0:
-                    A[row, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["E_CH"]
-                else:
-                    A[row, self.inl[0]["CostVar_index"]["CH"]] = 1
-                if outlet["e_CH"] != 0:
-                    A[row, outlet["CostVar_index"]["CH"]] = -1 / outlet["E_CH"]
-                else:
-                    A[row, outlet["CostVar_index"]["CH"]] = -1
+                set_equal_specific_cost(A, row, self.inl[0], outlet, "CH")
                 equations[row] = {
                     "kind": "aux_equality",
                     "objects": [self.name, self.inl[0]["name"], outlet["name"]],
@@ -201,16 +195,7 @@ class Drum(Component):
         # --- Physical cost auxiliary equations: all outlets share the same specific costs ---
         for label in ["T", "M"] if split_physical_exergy else ["PH"]:
             for outlet in outlets[1:]:
-                if (outlets[0][f"e_{label}"] != 0) and (outlet[f"e_{label}"] != 0):
-                    A[row, outlets[0]["CostVar_index"][label]] = 1 / outlets[0][f"E_{label}"]
-                    A[row, outlet["CostVar_index"][label]] = -1 / outlet[f"E_{label}"]
-                elif outlets[0][f"e_{label}"] == 0 and outlet[f"e_{label}"] != 0:
-                    A[row, outlets[0]["CostVar_index"][label]] = 1
-                elif outlets[0][f"e_{label}"] != 0 and outlet[f"e_{label}"] == 0:
-                    A[row, outlet["CostVar_index"][label]] = -1
-                else:
-                    A[row, outlets[0]["CostVar_index"][label]] = 1
-                    A[row, outlet["CostVar_index"][label]] = -1
+                set_equal_specific_cost(A, row, outlets[0], outlet, label, ref_is_outlet=True)
                 equations[row] = {
                     "kind": "aux_p_rule",
                     "objects": [self.name, outlets[0]["name"], outlet["name"]],
@@ -222,13 +207,13 @@ class Drum(Component):
         # This enforces that the thermal and mechanical cost components at outlet 0 are consistent.
         # Without the split there is a single physical cost variable, so no coupling is needed.
         if split_physical_exergy:
-            if (outlets[0]["e_T"] != 0) and (outlets[0]["e_M"] != 0):
+            if (outlets[0]["E_T"] != 0) and (outlets[0]["E_M"] != 0):
                 A[row, outlets[0]["CostVar_index"]["T"]] = 1 / outlets[0]["E_T"]
                 A[row, outlets[0]["CostVar_index"]["M"]] = -1 / outlets[0]["E_M"]
-            elif (outlets[0]["e_T"] == 0) and (outlets[0]["e_M"] == 0):
+            elif (outlets[0]["E_T"] == 0) and (outlets[0]["E_M"] == 0):
                 A[row, outlets[0]["CostVar_index"]["T"]] = 1
                 A[row, outlets[0]["CostVar_index"]["M"]] = -1
-            elif outlets[0]["e_T"] == 0:
+            elif outlets[0]["E_T"] == 0:
                 A[row, outlets[0]["CostVar_index"]["T"]] = 1
             else:
                 A[row, outlets[0]["CostVar_index"]["M"]] = -1

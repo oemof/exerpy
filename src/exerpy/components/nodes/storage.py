@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -177,6 +178,14 @@ class Storage(Component):
             \dot{C}_\mathrm{stored} = 0
             \qquad \text{for} \qquad \dot{E}_\mathrm{stored} = 0
 
+        An outlet without exergy of that share carries no cost of it, and the stored cost follows
+        from the cost balance:
+
+        .. math::
+
+            \dot{C}^{x}_\mathrm{out} = 0
+            \qquad \text{for} \qquad \dot{E}^{x}_\mathrm{out} = 0, \quad x \in \{\mathrm{T}, \mathrm{PH}\}
+
         What the storage does not raise passes through at its own specific cost (F-principle). That
         is the mechanical exergy with the split, and the chemical exergy when it is enabled; without
         the split there is no mechanical cost variable and this rule is not written:
@@ -245,6 +254,8 @@ class Storage(Component):
         if self.E_stored and E_product:
             A[counter, stored] = 1 / self.E_stored
             A[counter, outlet["CostVar_index"][product]] = -1 / E_product
+        elif self.E_stored:
+            A[counter, outlet["CostVar_index"][product]] = 1
         else:
             A[counter, stored] = 1
         equations[counter] = {
@@ -258,8 +269,7 @@ class Storage(Component):
         for label in labels:
             if label == product:
                 continue
-            A[counter, inlet["CostVar_index"][label]] = 1 / inlet[f"E_{label}"] if inlet[f"e_{label}"] != 0 else 1
-            A[counter, outlet["CostVar_index"][label]] = -1 / outlet[f"E_{label}"] if outlet[f"e_{label}"] != 0 else -1
+            set_equal_specific_cost(A, counter, inlet, outlet, label)
             equations[counter] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, inlet["name"], outlet["name"]],

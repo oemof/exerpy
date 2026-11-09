@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_mixing_cost
 from exerpy.logger import logger
 from exerpy.quantities import Branches
 
@@ -231,6 +232,9 @@ class Mixer(Component):
         With chemical exergy enabled the rule is written for :math:`x = \mathrm{CH}` in either
         mode, since the composition of the outlet is the mixture of the inlets.
 
+        An inlet without exergy of the share adds nothing to the sum, and an outlet without it carries
+        no cost of it, :math:`\dot{C}^{x}_\mathrm{out} = 0`.
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -263,21 +267,7 @@ class Mixer(Component):
         """
         # --- Chemical cost auxiliary equation (conditionally added) ---
         if chemical_exergy_enabled:
-            if self._single_outlet()["e_CH"] != 0:
-                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1 / self._single_outlet()["E_CH"]
-                # Iterate over inlet streams for chemical mixing.
-                for inlet in self.inl.values():
-                    if inlet["e_CH"] != 0:
-                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (
-                            self._single_outlet()["m"] * inlet["E_CH"]
-                        )
-                    else:
-                        A[counter, inlet["CostVar_index"]["CH"]] = 1
-            else:
-                # Outlet chemical exergy is zero: enforce cost conservation sum(C_CH_inlets) - C_CH_outlet = 0
-                for inlet in self.inl.values():
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1
-                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1
+            set_mixing_cost(A, counter, self.inl.values(), self._single_outlet(), "CH")
             equations[counter] = {
                 "kind": "aux_mixing",
                 "objects": [self.name] + [i["name"] for i in self.inl.values()] + [self._single_outlet()["name"]],
@@ -290,21 +280,7 @@ class Mixer(Component):
         # Mechanical cost auxiliary equation. Without the split the cost balance of the component is
         # the mixing rule for the physical exergy of the outlet already.
         if split_physical_exergy:
-            if self._single_outlet()["e_M"] != 0:
-                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1 / self._single_outlet()["E_M"]
-                # Iterate over inlet streams for mechanical mixing.
-                for inlet in self.inl.values():
-                    if inlet["e_M"] != 0:
-                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (
-                            self._single_outlet()["m"] * inlet["E_M"]
-                        )
-                    else:
-                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-            else:
-                # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
-                for inlet in self.inl.values():
-                    A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1
+            set_mixing_cost(A, counter + chem_row, self.inl.values(), self._single_outlet(), "M")
 
             # Dynamically build the list of inlet names
             inlet_names = [inlet["name"] for inlet in self.inl.values()]

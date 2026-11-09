@@ -10,6 +10,9 @@ This module provides comprehensive testing for:
 Uses both basic test cases and realistic process data from Ebsilon simulations.
 """
 
+import logging
+
+import CoolProp.CoolProp as CP
 import pytest
 
 from exerpy.functions import add_chemical_exergy
@@ -323,6 +326,48 @@ def test_calc_chemical_exergy_invalid_substance():
         calc_chemical_exergy(stream_data, 298.15, 1.01325, "Ahrendts")
 
 
+def test_calc_chemical_exergy_condensing_flue_gas():
+    """
+    Test the chemical exergy of a flue gas from which water condenses at the ambient state.
+
+    Bejan et al. (1996), p. 138, give for the CGAM flue gas 0.949 kmol of gas with 115 kJ/kmol and
+    0.051 kmol of liquid water with 45 kJ/kmol per kmol of mixture, so 111.43 kJ/kmol.
+    """
+    composition = {"N2": 0.75069, "O2": 0.13724, "CO2": 0.03141, "H2O": 0.08066}
+    molar_mass = sum(x * CP.PropsSI("M", substance) for substance, x in composition.items())
+    result = calc_chemical_exergy({"molar_composition": composition}, 298.15, 1.013e5, "Ahrendts")
+    assert result * molar_mass == pytest.approx(111.43, rel=1e-3)
+
+
+def test_calc_chemical_exergy_reference_phase():
+    """
+    Test that a pure substance gets the chemical exergy of its reference phase, liquid for methanol.
+    """
+    result = calc_chemical_exergy({"mass_composition": {"Methanol": 1.0}}, 298.15, 101325, "Ahrendts")
+    assert result == pytest.approx(710747 / CP.PropsSI("M", "Methanol"))
+
+
+@pytest.mark.parametrize("substance", ["R245fa", "Krypton", "Deuterium", "Therminol VP1"])
+def test_calc_chemical_exergy_pure_substance_without_data(substance, caplog):
+    """
+    Test that a pure substance without a value in the library gets 0 and a warning.
+    """
+    with caplog.at_level(logging.WARNING, logger="exerpy"):
+        result = calc_chemical_exergy({"mass_composition": {substance: 1.0}}, 298.15, 101325, "Ahrendts")
+    assert result == 0
+    assert f"Ahrendts has no chemical exergy for {substance}" in caplog.text
+
+
+@pytest.mark.parametrize("substance", ["R245fa", "Krypton"])
+def test_calc_chemical_exergy_mixture_without_data(substance):
+    """
+    Test that a mixture with a substance without a value in the library raises an error naming it.
+    """
+    stream_data = {"molar_composition": {"CH4": 0.9, substance: 0.1}}
+    with pytest.raises(ValueError, match=f"Ahrendts has no chemical exergy for {substance}"):
+        calc_chemical_exergy(stream_data, 298.15, 101325, "Ahrendts")
+
+
 # Exergy Addition Tests with Realistic Data
 def test_add_chemical_exergy_realistic(realistic_json_data):
     """
@@ -369,6 +414,21 @@ def test_chemical_exergy_zero_fractions():
     stream_data = {"mass_composition": {"N2": 0.0, "O2": 1.0}}
     result = calc_chemical_exergy(stream_data, 298.15, 1.01325, "Ahrendts")
     assert isinstance(result, float)
+
+
+def test_add_chemical_exergy_without_composition(caplog):
+    """A stream without a composition, e.g. an EBSILON binary mixture, gets 0 and a warning naming it."""
+    data = {
+        "connections": {
+            "A1": {"kind": "material", "mass_composition": {}},
+            "A2": {"kind": "material"},
+        }
+    }
+    with caplog.at_level(logging.WARNING):
+        data = add_chemical_exergy(data, 298.15, 101325, "Ahrendts")
+    for name in ("A1", "A2"):
+        assert data["connections"][name]["e_CH"] == 0
+        assert f"Connection {name} has no composition" in caplog.text
 
 
 def test_add_chemical_exergy_missing_ambient(realistic_json_data):

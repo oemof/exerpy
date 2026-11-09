@@ -10,8 +10,9 @@ class CombustionChamber(Component):
 
     This class performs exergy and exergoeconomic analysis calculations for combustion chambers,
     considering both thermal and mechanical exergy flows, as well as chemical exergy flows.
-    The exergy product is defined based on thermal and mechanical exergy differences,
-    while the exergy fuel is based on chemical exergy differences.
+    With split physical exergy, the exergy product is the increase of the thermal exergy and the
+    exergy fuel the decrease of the chemical and the mechanical exergy. Without the split, the product
+    is the increase of the physical exergy and the fuel the decrease of the chemical exergy.
 
     Attributes
     ----------
@@ -71,15 +72,32 @@ class CombustionChamber(Component):
         r"""
         Compute the exergy balance of the combustion chamber.
 
-        .. math::
-            \dot{E}_P = \dot{E}^{\mathrm{PH}}_{\text{out}}
-                      - \bigl(\dot{E}^{\mathrm{PH}}_{\text{in},1}
-                              + \dot{E}^{\mathrm{PH}}_{\text{in},2}\bigr)
+        The sums run over all inlets and all outlets. With split physical exergy, the thermal exergy
+        of fuel and oxidant is raised (product) at the expense of their chemical and mechanical
+        exergy (fuel):
 
         .. math::
-            \dot{E}_F = \dot{E}^{\mathrm{CH}}_{\text{in},1}
-                      + \dot{E}^{\mathrm{CH}}_{\text{in},2}
-                      - \dot{E}^{\mathrm{CH}}_{\text{out}}
+            \dot{E}_\mathrm{P} = \sum \dot{E}^{\mathrm{T}}_{\mathrm{out}}
+                               - \sum \dot{E}^{\mathrm{T}}_{\mathrm{in}}
+
+        .. math::
+            \dot{E}_\mathrm{F} = \Bigl(\sum \dot{E}^{\mathrm{CH}}_{\mathrm{in}}
+                                       - \sum \dot{E}^{\mathrm{CH}}_{\mathrm{out}}\Bigr)
+                               + \Bigl(\sum \dot{E}^{\mathrm{M}}_{\mathrm{in}}
+                                       - \sum \dot{E}^{\mathrm{M}}_{\mathrm{out}}\Bigr)
+
+        Without the split:
+
+        .. math::
+            \dot{E}_\mathrm{P} = \sum \dot{E}^{\mathrm{PH}}_{\mathrm{out}}
+                               - \sum \dot{E}^{\mathrm{PH}}_{\mathrm{in}}
+
+        .. math::
+            \dot{E}_\mathrm{F} = \sum \dot{E}^{\mathrm{CH}}_{\mathrm{in}}
+                               - \sum \dot{E}^{\mathrm{CH}}_{\mathrm{out}}
+
+        The exergy destruction :math:`\dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}`
+        is the same in both cases.
 
         Parameters
         ----------
@@ -101,23 +119,12 @@ class CombustionChamber(Component):
             logger.error(msg)
             raise ValueError(msg)
 
-        # Calculate total physical exergy of outlets
-        total_E_P_out = sum(outlet["m"] * outlet["e_PH"] for outlet in self.outl.values())
-
-        # Calculate total physical exergy of inlets
-        total_E_P_in = sum(inlet["m"] * inlet["e_PH"] for inlet in self.inl.values())
-
-        # Exergy Product (E_P)
-        self.E_P = total_E_P_out - total_E_P_in
-
-        # Calculate total chemical exergy of inlets
-        total_E_F_in = sum(inlet["m"] * inlet["e_CH"] for inlet in self.inl.values())
-
-        # Calculate total chemical exergy of outlets
-        total_E_F_out = sum(outlet["m"] * outlet["e_CH"] for outlet in self.outl.values())
-
-        # Exergy Fuel (E_F)
-        self.E_F = total_E_F_in - total_E_F_out
+        if split_physical_exergy:
+            self.E_P = self._exergy_increase("T")
+            self.E_F = -self._exergy_increase("CH") - self._exergy_increase("M")
+        else:
+            self.E_P = self._exergy_increase("PH")
+            self.E_F = -self._exergy_increase("CH")
 
         # Exergy destruction (difference between exergy fuel and exergy product)
         self.E_D = self.E_F - self.E_P
@@ -130,6 +137,17 @@ class CombustionChamber(Component):
             f"Exergy balance of CombustionChamber {self.name} calculated: "
             f"E_P={self.E_P:.2f}, E_F={self.E_F:.2f}, E_D={self.E_D:.2f}, "
             f"Efficiency={self.epsilon:.2%}"
+        )
+
+    def _exergy_increase(self, form):
+        """Exergy flow of one form (``"T"``, ``"M"``, ``"PH"`` or ``"CH"``) of all outlets minus all inlets."""
+        out = sum(stream["m"] * stream[f"e_{form}"] for stream in self.outl.values())
+        return out - sum(stream["m"] * stream[f"e_{form}"] for stream in self.inl.values())
+
+    def _cost_increase(self, form):
+        """Cost rate of one exergy form of all outlets minus all inlets."""
+        return sum(stream[f"C_{form}"] for stream in self.outl.values()) - sum(
+            stream[f"C_{form}"] for stream in self.inl.values()
         )
 
     def aux_eqs(self, A, b, counter, T0, equations, chemical_exergy_enabled, split_physical_exergy=True):
@@ -278,20 +296,29 @@ class CombustionChamber(Component):
             - \dot{C}^{\mathrm{PH}}_{\text{out}} - \dot{C}^{\mathrm{CH}}_{\text{out}}
             + \dot{Z} = 0
 
-        This method computes cost coefficients and ratios:
+        This method computes cost coefficients and ratios. Fuel and product take the same exergy
+        forms as in :meth:`calc_exergy_balance`, summed over all inlets and outlets. With split
+        physical exergy:
 
         .. math::
-            \dot{C}_P = \dot{C}^{\mathrm{T}}_{\text{out}}
-                      - \bigl(\dot{C}^{\mathrm{T}}_{\text{in},1}
-                              + \dot{C}^{\mathrm{T}}_{\text{in},2}\bigr)
+            \dot{C}_\mathrm{P} = \sum \dot{C}^{\mathrm{T}}_{\mathrm{out}}
+                               - \sum \dot{C}^{\mathrm{T}}_{\mathrm{in}}
 
         .. math::
-            \dot{C}_F = \dot{C}^{\mathrm{CH}}_{\text{in},1}
-                      + \dot{C}^{\mathrm{CH}}_{\text{in},2}
-                      - \dot{C}^{\mathrm{CH}}_{\text{out}}
-                      + \dot{C}^{\mathrm{M}}_{\text{in},1}
-                      + \dot{C}^{\mathrm{M}}_{\text{in},2}
-                      - \dot{C}^{\mathrm{M}}_{\text{out}}
+            \dot{C}_\mathrm{F} = \Bigl(\sum \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
+                                       - \sum \dot{C}^{\mathrm{CH}}_{\mathrm{out}}\Bigr)
+                               + \Bigl(\sum \dot{C}^{\mathrm{M}}_{\mathrm{in}}
+                                       - \sum \dot{C}^{\mathrm{M}}_{\mathrm{out}}\Bigr)
+
+        Without the split:
+
+        .. math::
+            \dot{C}_\mathrm{P} = \sum \dot{C}^{\mathrm{PH}}_{\mathrm{out}}
+                               - \sum \dot{C}^{\mathrm{PH}}_{\mathrm{in}}
+
+        .. math::
+            \dot{C}_\mathrm{F} = \sum \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
+                               - \sum \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
 
         Parameters
         ----------
@@ -305,19 +332,11 @@ class CombustionChamber(Component):
             single cost variable for its physical exergy. Default is True.
         """
         if split_physical_exergy:
-            self.C_P = self.outl[0]["C_T"] - (self.inl[0]["C_T"] + self.inl[1]["C_T"])
-            self.C_F = (
-                self.inl[0]["C_CH"]
-                + self.inl[1]["C_CH"]
-                - self.outl[0]["C_CH"]
-                + self.inl[0]["C_M"]
-                + self.inl[1]["C_M"]
-                - self.outl[0]["C_M"]
-            )
+            self.C_P = self._cost_increase("T")
+            self.C_F = -self._cost_increase("CH") - self._cost_increase("M")
         else:
-            # Without the split the product is the rise of the physical exergy, as in the exergy balance.
-            self.C_P = sum(out["C_PH"] for out in self.outl.values()) - sum(i["C_PH"] for i in self.inl.values())
-            self.C_F = sum(i["C_CH"] for i in self.inl.values()) - sum(out["C_CH"] for out in self.outl.values())
+            self.C_P = self._cost_increase("PH")
+            self.C_F = -self._cost_increase("CH")
         self.c_F = self.C_F / self.E_F
         self.c_P = self.C_P / self.E_P
         self.C_D = self.c_F * self.E_D

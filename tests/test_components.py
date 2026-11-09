@@ -288,6 +288,19 @@ def valid_simple_hex_streams():
     return {"inlets": {0: inlet}, "outlets": {0: outlet}}
 
 
+def test_simple_hex_below_ambient_fuel_scales_with_the_mass_flow(simple_hex):
+    """Cooled below T0, the fuel is the gain of thermal exergy plus the drop of mechanical exergy."""
+
+    def fuel(m):
+        simple_hex.inl = {0: {"m": m, "h": 40e3, "T": 290.0, "e_T": 200.0, "e_PH": 500.0, "e_M": 300.0}}
+        simple_hex.outl = {0: {"m": m, "h": 20e3, "T": 285.0, "e_T": 600.0, "e_PH": 850.0, "e_M": 250.0}}
+        simple_hex.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+        return simple_hex.E_F
+
+    assert fuel(1.0) == pytest.approx((600.0 - 200.0) + (300.0 - 250.0))
+    assert fuel(10.0) == pytest.approx(10.0 * fuel(1.0))
+
+
 def test_simple_hex_calc_exergy_balance_success(simple_hex, valid_simple_hex_streams):
     """
     Test that SimpleHeatExchanger.calc_exergy_balance computes correct exergy values

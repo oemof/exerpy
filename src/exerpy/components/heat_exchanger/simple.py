@@ -101,8 +101,8 @@ class SimpleHeatExchanger(Component):
         .. math::
 
             \dot{E}_{\mathrm{P}}
-            = \dot{E}^{\mathrm{T}}_{\mathrm{out}}
-            - \dot{E}^{\mathrm{T}}_{\mathrm{in}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{in}}
+            - \dot{E}^{\mathrm{T}}_{\mathrm{out}}
 
         .. math::
 
@@ -355,7 +355,7 @@ class SimpleHeatExchanger(Component):
             elif inlet["T"] <= T0 and outlet["T"] < T0:
                 if split_physical_exergy:
                     self.E_P = outlet["m"] * (outlet["e_T"] - inlet["e_T"])
-                    self.E_F = self.E_P + inlet["m"] * (inlet["e_M"] - outlet["m"] * outlet["e_M"])
+                    self.E_F = self.E_P + inlet["m"] * inlet["e_M"] - outlet["m"] * outlet["e_M"]
                 else:
                     self.E_P = (
                         np.nan
@@ -435,6 +435,12 @@ class SimpleHeatExchanger(Component):
             if conn.get("kind") == "heat":
                 return conn
         return None
+
+    def _heat_cost(self, heat):
+        """Cost of the heat stream from the cost balance, or the fuel cost plus Z without a heat stream."""
+        if heat is not None and heat.get("C_TOT") is not None:
+            return heat["C_TOT"]
+        return self.C_F + self.Z_costs
 
     def _value_heat_at_temperature(self, Q, inlet, outlet, T0):
         """Value the heat at ``T_hot`` or ``T_cold`` where given; return ``"source"``, ``"consumer"`` or None."""
@@ -656,12 +662,13 @@ class SimpleHeatExchanger(Component):
 
         **Heat release** (:math:`\dot{Q} < 0`)
 
-        Case 1: Both streams above ambient temperature
+        Case 1: Both streams above ambient temperature. The heat is the product, its cost follows
+        from the cost balance, :math:`\dot{C}_\mathrm{P} = \dot{C}_\mathrm{F} + \dot{Z}`.
 
         .. math::
             \dot{E}_{\mathrm{P}}
-            = \dot{E}^{\mathrm{T}}_{\mathrm{out}}
-            - \dot{E}^{\mathrm{T}}_{\mathrm{in}}
+            = \dot{E}^{\mathrm{T}}_{\mathrm{in}}
+            - \dot{E}^{\mathrm{T}}_{\mathrm{out}}
 
         .. math::
             \dot{E}_{\mathrm{F}}
@@ -780,13 +787,14 @@ class SimpleHeatExchanger(Component):
 
         # Determine heat transfer direction
         Q = outlet["m"] * outlet["h"] - inlet["m"] * inlet["h"]
+        heat = self._heat_stream()
 
         # Without the split the cost of the product follows the physical exergy of the streams that the
         # exergy balance uses in the same case.
         if not split_physical_exergy:
             if Q < 0 and inlet["T"] >= T0 and outlet["T"] >= T0:
-                self.C_P = np.nan if getattr(self, "dissipative", False) else inlet["C_PH"] - outlet["C_PH"]
                 self.C_F = inlet["C_PH"] - outlet["C_PH"]
+                self.C_P = np.nan if getattr(self, "dissipative", False) else self._heat_cost(heat)
             elif Q < 0 and inlet["T"] >= T0:
                 self.C_P = outlet["C_PH"]
                 self.C_F = inlet["C_PH"]
@@ -806,9 +814,9 @@ class SimpleHeatExchanger(Component):
         # Case 1: Heat is released (Q < 0)
         elif Q < 0:
             if inlet["T"] >= T0 and outlet["T"] >= T0:
-                # Both streams above ambient
-                self.C_P = outlet["C_T"] - inlet["C_T"]
+                # Both streams above ambient: the heat is the product.
                 self.C_F = inlet["C_PH"] - outlet["C_PH"]
+                self.C_P = self._heat_cost(heat)
             elif inlet["T"] >= T0 and outlet["T"] < T0:
                 # Inlet above, outlet below ambient
                 self.C_P = outlet["C_T"]
@@ -845,7 +853,6 @@ class SimpleHeatExchanger(Component):
             self.C_F = inlet["C_PH"] - outlet["C_PH"]
 
         # Heat valued at the temperature of its source or consumer: its cost is the fuel or the product.
-        heat = self._heat_stream()
         heat_at = getattr(self, "_heat_at", None)
         if heat is not None and heat.get("C_TOT") is not None:
             if heat_at == "source":

@@ -1177,7 +1177,7 @@ def _run_heatpump(split):
 
 
 class TestDissipativeShare:
-    """The cost a component is charged for a dissipative component counts as part of its Z."""
+    """The cost a component is charged for a dissipative component enters its cost balance, not its f."""
 
     @pytest.mark.parametrize("split", [True, False])
     def test_the_shares_add_up_to_the_cost_of_the_dissipative_components(self, split):
@@ -1207,16 +1207,16 @@ class TestDissipativeShare:
         assert sum(comp.Z_diss for comp in eco.components.values()) == pytest.approx(eco.components["EVA"].C_diff)
 
     @pytest.mark.parametrize("split", [True, False])
-    def test_f_counts_the_share_as_part_of_Z(self, split):
+    def test_f_compares_only_investment_and_exergy_destruction(self, split):
+        """f = Z / (Z + C_D) with the investment of the component only (Bejan et al., eq. 8.28)."""
         eco = _run_heatpump(split)
         served = [comp for comp in eco.components.values() if comp.Z_diss > 0]
         assert served
         for comp in served:
-            Z = comp.Z_costs + comp.Z_diss
-            assert comp.f == pytest.approx(Z / (Z + comp.C_D))
+            assert comp.f == pytest.approx(comp.Z_costs / (comp.Z_costs + comp.C_D))
 
     @pytest.mark.parametrize("split", [True, False])
-    def test_r_and_f_describe_the_same_cost_balance(self, split):
+    def test_r_contains_the_share(self, split):
         """(c_P - c_F) E_P = C_D + Z + Z_diss for every component with a cost balance."""
         eco = _run_heatpump(split)
         for comp in eco.components.values():
@@ -1229,7 +1229,8 @@ class TestDissipativeShare:
         columns = list(df.columns)
         assert columns.index("Z_diss [EUR/h]") == columns.index("Z [EUR/h]") + 1
         rows = df[df["Component"] != "TOT"]
-        total = rows["C_D [EUR/h]"] + rows["Z [EUR/h]"] + rows["Z_diss [EUR/h]"]
+        # C_D+Z of the dissipative component already contains the shares, so they are not added again.
+        total = rows["C_D [EUR/h]"] + rows["Z [EUR/h]"]
         assert rows["C_D+Z [EUR/h]"].to_numpy() == pytest.approx(total.to_numpy())
         # The shares stay inside the plant, so its total Z is the sum of the component costs.
         tot = df[df["Component"] == "TOT"].iloc[0]

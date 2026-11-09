@@ -2066,10 +2066,6 @@ class ExergoeconomicAnalysis:
                 comp.exergoeconomic_balance(
                     self.exergy_analysis.Tamb, self.chemical_exergy_enabled, self.split_physical_exergy
                 )
-                # The share of C_diff charged to a component is part of its Z in f
-                if comp.Z_diss:
-                    Z = comp.Z_costs + comp.Z_diss
-                    comp.f = Z / (Z + comp.C_D) if Z + comp.C_D else np.nan
 
         # Check cost balances before loss attribution (Step 6) modifies C_TOT values
         self.check_cost_balance()
@@ -2566,12 +2562,8 @@ class ExergoeconomicAnalysis:
         df_comp[f"C_D [{self.currency}/h]"] = C_D_list
         df_comp[f"Z [{self.currency}/h]"] = Z_cost_list
         df_comp[f"Z_diss [{self.currency}/h]"] = Z_diss_list
-        # The share of C_diff charged to a component is part of its Z, as in f
-        df_comp[f"C_D+Z [{self.currency}/h]"] = (
-            df_comp[f"C_D [{self.currency}/h]"]
-            + df_comp[f"Z [{self.currency}/h]"]
-            + df_comp[f"Z_diss [{self.currency}/h]"]
-        )
+        # Z_diss is already in C_D+Z of the dissipative component, so it is not counted here again.
+        df_comp[f"C_D+Z [{self.currency}/h]"] = df_comp[f"C_D [{self.currency}/h]"] + df_comp[f"Z [{self.currency}/h]"]
         df_comp["f [%]"] = f_list
         df_comp["r [%]"] = r_list
 
@@ -2759,8 +2751,7 @@ class ExergoeconomicAnalysis:
         sort_by : str, optional
             Column to sort by. Valid options:
 
-            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default), including
-              the share of the cost of dissipative components charged to the component (``Z_diss``)
+            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default)
             - ``"C_D"`` : cost rate of exergy destruction (inefficiency-driven cost)
             - ``"Z"`` : investment cost rate
             - ``"r"`` : relative cost difference [%]
@@ -2778,8 +2769,10 @@ class ExergoeconomicAnalysis:
         destruction (*f* close to 0 %).  A low *f* suggests that improving
         component efficiency would be more effective, while a high *f* suggests
         that reducing investment cost is the priority. The cost a component is
-        charged for the dissipative components it serves, ``Z_diss``, counts
-        as part of its investment in *f* and in ``C_D+Z``.
+        charged for the dissipative components it serves, ``Z_diss``, is part of
+        its *r* and ``c_P``, but not of *f* and ``C_D+Z``: it is
+        neither its investment nor its exergy destruction, and ``C_D+Z`` of the
+        dissipative component already contains it.
         """
         # Get full results without printing
         df_comp, _, _, _ = self.exergoeconomic_results(print_results=False)
@@ -2844,7 +2837,7 @@ class ExergoeconomicAnalysis:
                 driver = "inefficiency (C_D dominates)"
                 suggestion = "improve component efficiency"
             elif f_val > 75:
-                driver = "investment and charged dissipative cost (Z + Z_diss dominate)"
+                driver = "investment (Z dominates)"
                 suggestion = "reduce investment cost"
             else:
                 driver = "both investment and inefficiency"

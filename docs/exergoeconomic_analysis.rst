@@ -150,12 +150,13 @@ The fraction of a component’s total cost arising from investment and O&M (non-
 
     .. math::
 
-        f_k = \frac{\dot{Z}_k + \dot{Z}_{\mathrm{diss},k}}{\dot{Z}_k + \dot{Z}_{\mathrm{diss},k} + \dot{C}_{\mathrm{D},k}}
+        f_k = \frac{\dot{Z}_k}{\dot{Z}_k + \dot{C}_{\mathrm{D},k}}
 
-where :math:`\dot{Z}_{\mathrm{diss},k}` is the share of the cost of the dissipative components that is charged to
-component *k*, in proportion to its exergy destruction. It enters the cost balance of the component like the
-investment and is therefore counted with it :cite:`lazzaretto2006speco`. It is zero for a component that serves no
-dissipative component.
+with the investment and O&M cost rate :math:`\dot{Z}_k` of the component only :cite:`Bejan1996`. The share
+:math:`\dot{Z}_{\mathrm{diss},k}` of the cost of the dissipative components that is charged to component *k*, in
+proportion to its exergy destruction, enters its cost balance and thus its :math:`c_{\mathrm{P},k}` and
+:math:`r_k` :cite:`lazzaretto2006speco`. It is not part of :math:`f_k`, since it is neither the investment of the
+component nor the cost of its exergy destruction.
 
 A high :math:`f_k` indicates that capital and O&M dominate the cost, suggesting a focus on reducing
 :math:`\dot{Z}_k`. A low :math:`f_k` signals that inefficiencies (exergy destruction) are the primary cost drivers :cite:`Bejan1996`.
@@ -498,9 +499,10 @@ The component results table lists the cost rates and the indicators defined in
 :ref:`Exergoeconomic metrics and indicators <exergoeconomic_metrics_label>`. The components with the
 largest total cost rate :math:`\dot{C}_\mathrm{D} + \dot{Z}` are the most promising targets for an
 improvement. The column :code:`Z` holds the given cost rate of a component and :code:`Z_diss` the share
-of the cost of the dissipative components charged to it; :code:`C_D+Z` and :code:`f` include both. In the
-row :code:`TOT`, :code:`Z` is the sum of the given cost rates only, since the charged shares stay inside
-the plant.
+of the cost of the dissipative components charged to it. :code:`C_D+Z` and :code:`f` leave
+:code:`Z_diss` out, since :code:`C_D+Z` of the dissipative component already contains it. In the row
+:code:`TOT`, :code:`Z` is the sum of the given cost rates only, since the charged shares stay inside the
+plant.
 
 The :code:`evaluate_results()` method accepts the following :code:`sort_by` options:
 :code:`"C_D+Z"` (default), :code:`"C_D"`, :code:`"Z"`, :code:`"r"`, :code:`"f"`.

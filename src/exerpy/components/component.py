@@ -149,12 +149,13 @@ class Component:
 
             r = \frac{c_\mathrm{P} - c_\mathrm{F}}{c_\mathrm{F}}
             \qquad
-            f = \frac{\dot{Z} + \dot{Z}_\mathrm{diss}}{\dot{Z} + \dot{Z}_\mathrm{diss} + \dot{C}_\mathrm{D}}
+            f = \frac{\dot{Z}}{\dot{Z} + \dot{C}_\mathrm{D}}
 
-        :math:`\dot{Z}_\mathrm{diss}` is the share of the cost of the dissipative components that is
-        charged to the component in its cost balance :cite:`lazzaretto2006speco`. It is zero for a
-        component that serves no dissipative component, and
-        :class:`~exerpy.analyses.ExergoeconomicAnalysis` adds it to :math:`f` after this method.
+        with :math:`\dot{Z}` the investment and operating cost of the component :cite:`Bejan1996`. The
+        share of the cost of the dissipative components charged to the component,
+        :math:`\dot{Z}_\mathrm{diss}`, is part of its cost balance and thus of :math:`c_\mathrm{P}` and
+        :math:`r` :cite:`lazzaretto2006speco`, but not of :math:`f`: it is neither the investment of the
+        component nor the cost of its exergy destruction.
 
         The docstring of each component states only its own
         :math:`\dot{C}_\mathrm{F}` and :math:`\dot{C}_\mathrm{P}`; the five definitions above are

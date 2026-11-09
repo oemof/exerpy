@@ -434,7 +434,7 @@ The results include:
 - **Component results**: Cost of fuel (:code:`C_F`), cost of product (:code:`C_P`),
   cost of exergy destruction (:code:`C_D`), investment cost rate (:code:`Z`),
   share of the cost of the dissipative components charged to the component (:code:`Z_diss`),
-  total cost (:code:`C_D+Z`, including :code:`Z_diss`), exergoeconomic factor (:code:`f`), and
+  total cost (:code:`C_D+Z`), exergoeconomic factor (:code:`f`), and
   relative cost difference (:code:`r`)
 - **Material connection costs**: Thermal (:code:`C_T`), mechanical (:code:`C_M`),
   chemical (:code:`C_CH`), and total (:code:`C_TOT`) cost rates with their specific costs

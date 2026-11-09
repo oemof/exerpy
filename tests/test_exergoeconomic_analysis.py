@@ -1743,6 +1743,21 @@ class TestSimpleHeatExchangerExergoeconomics:
         assert eco.connections["Q"]["C_TOT"] == pytest.approx(unit.C_F + unit.Z_costs)
 
     @pytest.mark.parametrize("split", [True, False])
+    def test_releasing_heat_the_product_cost_is_the_cost_of_the_heat(self, split):
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            _simple_heat_exchanger_connections(releasing=True),
+            {"SHE_Z": 20.0, "in_c": 6.0},
+            split,
+            E_F={"inputs": ["in"], "outputs": ["out"]},
+            E_P={"inputs": ["Q"], "outputs": []},
+        )
+        assert pytest.approx(eco.connections["Q"]["C_TOT"]) == unit.C_P
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+        assert unit.c_P > unit.c_F > 0
+        assert unit.r > 0
+
+    @pytest.mark.parametrize("split", [True, False])
     def test_absorbing_heat_the_cost_balance_closes(self, split):
         eco, _ = _run_single_component(
             "SimpleHeatExchanger",

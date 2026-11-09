@@ -255,6 +255,65 @@ def test_dissipative_hex_missing_streams(dissipative_hex):
         dissipative_hex.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
 
+def _dissipative_cost_stream(name, first_column, m=2.0, **e):
+    """Return a connection with one cost variable per exergy share given in ``e``."""
+    stream = {"name": name, "m": m, "CostVar_index": {}}
+    for i, (label, value) in enumerate(e.items()):
+        stream[f"e_{label}"] = value
+        stream[f"E_{label}"] = m * value
+        stream["CostVar_index"][label] = first_column + i
+    return stream
+
+
+def _solve_dissipative(component, c_in, chemical_exergy_enabled=False):
+    """Solve the rows of a dissipative component whose inlets enter with the specific cost ``c_in``."""
+    streams = [*component.inl.values(), *component.outl.values()]
+    diss_col = sum(len(stream["CostVar_index"]) for stream in streams)
+    A = np.zeros((diss_col + 1, diss_col + 1))
+    b = np.zeros(diss_col + 1)
+    row = 0
+    for inlet in component.inl.values():
+        for label, col in inlet["CostVar_index"].items():
+            A[row, col] = 1
+            b[row] = c_in * inlet[f"E_{label}"]
+            row += 1
+        inlet["CostVar_index"]["dissipative"] = diss_col
+    A, b, counter, _ = component.dis_eqs(A, b, row, 298.15, {}, chemical_exergy_enabled, all_components=[])
+    assert counter == diss_col + 1
+    return np.linalg.solve(A, b), diss_col
+
+
+def test_dissipative_hex_outlet_without_exergy_carries_no_cost():
+    """
+    Test that a dissipative heat exchanger passes no cost to an outlet share without exergy.
+
+    Each outlet keeps the specific cost of its inlet. The hot stream leaves at the ambient pressure,
+    so it carries no mechanical cost, and the cooling water enters at the ambient temperature, so
+    it carries no thermal cost. What the outlets do not carry stays in C_diff.
+    """
+    hx = HeatExchanger(name="HX", dissipative=True, Z_costs=0.5)
+    hx.inl = {
+        0: _dissipative_cost_stream("hot_in", 0, T=80.0, M=30.0),
+        1: _dissipative_cost_stream("cold_in", 2, T=0.0, M=10.0),
+    }
+    hx.outl = {
+        0: _dissipative_cost_stream("hot_out", 4, T=50.0, M=0.0),
+        1: _dissipative_cost_stream("cold_out", 6, T=6.0, M=8.0),
+    }
+    c_in = 3.0
+
+    C, diss_col = _solve_dissipative(hx, c_in)
+
+    hot_out = hx.outl[0]["CostVar_index"]
+    cold_out = hx.outl[1]["CostVar_index"]
+    assert C[hot_out["M"]] == pytest.approx(0, abs=1e-12)
+    assert C[cold_out["T"]] == pytest.approx(0, abs=1e-12)
+    assert C[hot_out["T"]] == pytest.approx(c_in * hx.outl[0]["E_T"])
+    assert C[cold_out["M"]] == pytest.approx(c_in * hx.outl[1]["E_M"])
+    C_in = c_in * sum(inlet["E_T"] + inlet["E_M"] for inlet in hx.inl.values())
+    assert C[diss_col] == pytest.approx(C_in - C[hot_out["T"]] - C[cold_out["M"]] + hx.Z_costs)
+
+
 @pytest.fixture
 def simple_hex():
     """
@@ -870,6 +929,30 @@ def test_valve_missing_streams():
     p0 = 101325
     with pytest.raises(ValueError, match="Valve requires at least one inlet and one outlet."):
         valve.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+
+
+@pytest.mark.parametrize("chemical_exergy_enabled", [False, True])
+def test_valve_dissipative_outlet_at_ambient_pressure_carries_no_mechanical_cost(chemical_exergy_enabled):
+    """
+    Test that a dissipative valve throttling to the ambient pressure passes no mechanical cost on.
+
+    The outlet keeps the specific cost of the inlet. Without mechanical exergy it carries no
+    mechanical cost, and the mechanical cost of the inlet stays in C_diff.
+    """
+    chemical = {"CH": 5.0} if chemical_exergy_enabled else {}
+    valve = Valve(name="VAL", Z_costs=0.5)
+    valve.inl = {0: _dissipative_cost_stream("in", 0, T=40.0, M=60.0, **chemical)}
+    valve.outl = {0: _dissipative_cost_stream("out", len(valve.inl[0]["CostVar_index"]), T=35.0, M=0.0, **chemical)}
+    c_in = 3.0
+
+    C, diss_col = _solve_dissipative(valve, c_in, chemical_exergy_enabled)
+
+    inlet, outlet = valve.inl[0], valve.outl[0]
+    assert C[outlet["CostVar_index"]["M"]] == pytest.approx(0, abs=1e-12)
+    assert C[outlet["CostVar_index"]["T"]] == pytest.approx(c_in * outlet["E_T"])
+    if chemical_exergy_enabled:
+        assert C[outlet["CostVar_index"]["CH"]] == pytest.approx(c_in * outlet["E_CH"])
+    assert C[diss_col] == pytest.approx(c_in * (inlet["E_T"] + inlet["E_M"] - outlet["E_T"]) + valve.Z_costs)
 
 
 @pytest.fixture

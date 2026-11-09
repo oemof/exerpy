@@ -357,6 +357,19 @@ class Valve(Component):
         In this formulation, the unknown cost variable in the "dissipative" column (i.e. C_diff)
         is solved for, ensuring the valve's cost balance.
 
+        For each exergy share :math:`x` the outlet keeps the specific cost of the inlet. Where the
+        inlet or the outlet carries no exergy of a share, the outlet carries no cost of it, and the
+        cost of the inlet stays in :math:`\dot C_\mathrm{diff}`:
+
+        .. math::
+
+            \frac{\dot{C}^{x}_\mathrm{in}}{\dot{E}^{x}_\mathrm{in}}
+            = \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+            \qquad \text{or} \qquad
+            \dot{C}^{x}_\mathrm{out} = 0
+            \quad \text{for} \quad \dot{E}^{x}_\mathrm{in} = 0
+            \ \text{or} \ \dot{E}^{x}_\mathrm{out} = 0
+
         Parameters
         ----------
         A : numpy.ndarray
@@ -370,7 +383,7 @@ class Valve(Component):
         equations : dict
             Dictionary mapping row indices to equation labels.
         chemical_exergy_enabled : bool, optional
-            Flag indicating whether chemical exergy is considered. (Ignored here.)
+            Flag indicating whether chemical exergy is considered.
         all_components : list, optional
             Global list of all component objects; if not provided, defaults to [].
         split_physical_exergy : bool, optional
@@ -388,34 +401,22 @@ class Valve(Component):
         - It is assumed that each inlet/outlet stream's CostVar_index dictionary has keys: "T" (thermal), "M" (mechanical), and "dissipative" (the extra unknown).
         - self.Z_costs is the known cost rate (in currency/s) for the valve.
         """
-        # --- Physical exergy difference rows ---
-        phys_labels = ["T", "M"] if split_physical_exergy else ["PH"]
-        for label in phys_labels:
+        # --- Equality rows, one per exergy share ---
+        labels = ["T", "M"] if split_physical_exergy else ["PH"]
+        if chemical_exergy_enabled:
+            labels.append("CH")
+        for label in labels:
             if self.inl[0].get(f"E_{label}", 0) and self.outl[0].get(f"E_{label}", 0):
                 A[counter, self.inl[0]["CostVar_index"][label]] = 1 / self.inl[0][f"E_{label}"]
                 A[counter, self.outl[0]["CostVar_index"][label]] = -1 / self.outl[0][f"E_{label}"]
             else:
-                A[counter, self.inl[0]["CostVar_index"][label]] = 1
-                A[counter, self.outl[0]["CostVar_index"][label]] = -1
+                # No exergy of this share on one side: the outlet carries no cost of it, the rest stays in C_diff.
+                A[counter, self.outl[0]["CostVar_index"][label]] = 1
             b[counter] = 0
             equations[counter] = {
                 "kind": "dis_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
                 "property": f"c_{label}",
-            }
-            counter += 1
-
-        # --- Chemical difference row (if chemical exergy is enabled) ---
-        if chemical_exergy_enabled:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = 1 / self.inl[0]["E_CH"] if self.inl[0]["E_CH"] != 0 else 1
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                -1 / self.outl[0]["E_CH"] if self.outl[0]["E_CH"] != 0 else -1
-            )
-            b[counter] = 0
-            equations[counter] = {
-                "kind": "dis_equality",
-                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_CH",
             }
             counter += 1
 
@@ -452,7 +453,7 @@ class Valve(Component):
         # --- Extra overall cost balance row ---
         # This row enforces:
         #   (C_in,T - C_out,T) + (C_in,M - C_out,M) - C_diff = - Z_costs
-        for label in phys_labels + (["CH"] if chemical_exergy_enabled else []):
+        for label in labels:
             A[counter, self.inl[0]["CostVar_index"][label]] = 1
             A[counter, self.outl[0]["CostVar_index"][label]] = -1
         # Subtract the unknown dissipative cost difference:

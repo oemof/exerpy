@@ -118,6 +118,52 @@ and the mechanical exergy defined as:
 In these expressions, state :math:`A` is at ambient temperature :math:`T_0` and 
 pressure :math:`p_i`.
 
+.. _chemical_exergy_label:
+
+Chemical exergy
+===============
+
+The specific chemical exergy of a gas mixture follows from the molar fractions :math:`x_k` and the
+standard chemical exergies :math:`\bar{e}^\mathrm{CH}_k` of its components :cite:`Bejan1996`:
+
+.. math::
+
+    \bar{e}^\mathrm{CH} = \sum_k x_k\,\bar{e}^\mathrm{CH}_k + \bar{R}\,T_0 \sum_k x_k \ln x_k
+
+ExerPy takes :math:`\bar{e}^\mathrm{CH}_k` from the reference environment of Ahrendts
+:cite:`Ahrendts1980`. Of the hydrocarbons, only methane and ethane come from these data. For the others,
+the standard chemical exergy of a compound :math:`i` follows from its formation from the elements :math:`k`
+(Baehr and Kabelac, eq. 5.157) :cite:`Baehr2016`:
+
+.. math::
+
+    \bar{e}^\mathrm{CH}_i = \bar{g}_i + \sum_k \nu_k \left(\bar{e}^\mathrm{CH}_k - \bar{g}_k\right)
+    = \Delta_\mathrm{f}\bar{g}_i + \sum_k \nu_k\,\bar{e}^\mathrm{CH}_k
+
+Here :math:`\bar{g}` is the molar Gibbs function at 298.15 K and standard pressure, :math:`\nu_k` the
+number of moles of element :math:`k` per mole of :math:`i`, and
+:math:`\Delta_\mathrm{f}\bar{g}_i = \bar{g}_i - \sum_k \nu_k\,\bar{g}_k` the Gibbs function of formation.
+For a hydrocarbon :math:`\mathrm{C}_a\mathrm{H}_b` this gives
+
+.. math::
+
+    \bar{e}^\mathrm{CH}_{\mathrm{C}_a\mathrm{H}_b} = \Delta_\mathrm{f}\bar{g}_{\mathrm{C}_a\mathrm{H}_b}
+    + a\,\bar{e}^\mathrm{CH}_\mathrm{C} + \frac{b}{2}\,\bar{e}^\mathrm{CH}_\mathrm{H_2}
+
+with the standard chemical exergies of graphite, 404.589 kJ/mol, and hydrogen, 235.249 kJ/mol, in the
+environment of Ahrendts (Bejan et al., Table C.2, model I) :cite:`Bejan1996`. The element exergies that
+Baehr and Kabelac list next to eq. 5.157 (Table 5.8) belong to the environment of Diederichsen instead, so
+they are not used, and all values of the library refer to the same environment :cite:`Baehr2016`. Applying the same equation to
+CO2 and H2O and eliminating the element exergies gives the complete oxidation form of Bejan et al.
+(eq. 3.17b) :cite:`Bejan1996`.
+
+The Gibbs functions of propane, n-butane and ethylene are taken from Table 10.6 of Baehr and Kabelac
+:cite:`Baehr2016`. Isobutane, n-pentane, isopentane, n-hexane, n-heptane, n-octane, propylene, 1-butene,
+isobutene, cyclopentane, cyclohexane, benzene and toluene are missing there or listed only as liquids. For
+them, the ideal-gas Gibbs functions of formation are taken from Table 2-179 of Perry's handbook
+:cite:`Poling2008`. With the data of Baehr and Kabelac, the equation reproduces the values of Ahrendts for
+methane and ethane within 0.01 %.
+
 Component-level exergy balance
 ===============================
 
@@ -236,7 +282,7 @@ potential exergy are neglected and therefore not considered.
       - :math:`e^\mathrm{CH}`, :math:`E^\mathrm{CH}`
       - based on the standard chemical exergies of the reference environment; the `exerpy.data`
         module provides the dataset of Ahrendts
-        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`.
+        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`, see :ref:`chemical_exergy_label`.
     * - :code:`E_P`
       - product exergy
       - :math:`\dot{E}_\mathrm{P}`

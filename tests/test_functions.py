@@ -10,6 +10,9 @@ This module provides comprehensive testing for:
 Uses both basic test cases and realistic process data from Ebsilon simulations.
 """
 
+import math
+
+import CoolProp.CoolProp as CP
 import pytest
 
 from exerpy.functions import add_chemical_exergy
@@ -312,6 +315,58 @@ def test_calc_chemical_exergy_air(air_composition):
     result = calc_chemical_exergy(air_composition, 298.15, 1.01325, "Ahrendts")
     assert isinstance(result, float)
     assert result == pytest.approx(-432, abs=1)  # based on Ahrendts' model and selected substance
+
+
+@pytest.mark.parametrize(
+    ("substance", "e_ch_molar"),
+    [
+        ("Propane", 2131384),
+        ("n-Butane", 2779055),
+        ("IsoButane", 2773161),
+        ("n-Pentane", 3425626),
+        ("Isopentane", 3420389),
+        ("n-Hexane", 4074211),
+        ("n-Heptane", 4722280),
+        ("n-Octane", 5369953),
+        ("Ethylene", 1348102),
+        ("Propylene", 1982154),
+        ("1-Butene", 2629762),
+        ("IsoButene", 2617432),
+        ("Cyclopentane", 3238040),
+        ("CycloHexane", 3870938),
+        ("Benzene", 3262881),
+        ("Toluene", 3895319),
+    ],
+)
+def test_calc_chemical_exergy_pure_hydrocarbon(substance, e_ch_molar):
+    """
+    Test that the CoolProp name of a hydrocarbon finds its standard chemical exergy (J/mol) in the library.
+    """
+    stream_data = {"mass_composition": {substance: 1.0}}
+    result = calc_chemical_exergy(stream_data, 298.15, 1.01325, "Ahrendts")
+    assert result == pytest.approx(e_ch_molar / CP.PropsSI("M", substance), rel=1e-9)
+
+
+def test_calc_chemical_exergy_natural_gas():
+    """
+    Test chemical exergy calculation for a natural gas with propane and butane.
+
+    Verifies
+    --------
+    - Ideal gas mixture: (sum x_k e_k + R T0 sum x_k ln x_k) / M
+    - Value of about 48.851 MJ/kg
+    """
+    T0 = 298.15
+    x = {"Methane": 0.90, "Ethane": 0.05, "Propane": 0.02, "n-Butane": 0.01, "CO2": 0.01, "N2": 0.01}
+    e_ch = {"Methane": 824348, "Ethane": 1482033, "Propane": 2131384, "n-Butane": 2779055, "CO2": 14176, "N2": 639}
+    molar_mass = {k: CP.PropsSI("M", k) for k in x}
+    M_mix = sum(x[k] * molar_mass[k] for k in x)
+    stream_data = {"mass_composition": {k: x[k] * molar_mass[k] / M_mix for k in x}}
+
+    expected = (sum(x[k] * e_ch[k] for k in x) + 8.314 * T0 * sum(v * math.log(v) for v in x.values())) / M_mix
+    result = calc_chemical_exergy(stream_data, T0, 1.01325, "Ahrendts")
+    assert result == pytest.approx(expected, rel=1e-9)
+    assert result == pytest.approx(48.851e6, rel=1e-5)
 
 
 def test_calc_chemical_exergy_invalid_substance():

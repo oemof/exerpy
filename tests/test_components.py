@@ -672,6 +672,92 @@ def test_mixer_invalid_streams():
         mixer.calc_exergy_balance(300, 101325, split_physical_exergy=True)
 
 
+def _mixing_cost_stream(T, m, e_T, e_M, c_T, c_M):
+    """A material stream with split physical exergy and the costs the exergoeconomic balance reads."""
+    return {
+        "T": T,
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "c_T": c_T,
+        "c_M": c_M,
+        "C_T": c_T * m * e_T,
+        "C_M": c_M * m * e_M,
+    }
+
+
+@pytest.mark.parametrize("component_class", [Mixer, Deaerator])
+@pytest.mark.parametrize(
+    ("inlets", "outlet", "fuel_inlet", "far_inlet"),
+    [
+        # Outlet above T0: the hot inlet gives up thermal exergy.
+        (
+            {
+                0: _mixing_cost_stream(310, 10.0, 20e3, 500.0, 5e-9, 8e-9),
+                1: _mixing_cost_stream(400, 4.0, 80e3, 500.0, 20e-9, 9e-9),
+            },
+            _mixing_cost_stream(340, 14.0, 30e3, 450.0, 7e-9, 8.5e-9),
+            1,
+            None,
+        ),
+        # Outlet below T0: the cold inlet gives up thermal exergy.
+        (
+            {
+                0: _mixing_cost_stream(295, 4.0, 100.0, 500.0, 20e-9, 9e-9),
+                1: _mixing_cost_stream(260, 10.0, 3000.0, 500.0, 5e-9, 8e-9),
+            },
+            _mixing_cost_stream(270, 14.0, 1500.0, 450.0, 7e-9, 8.5e-9),
+            1,
+            None,
+        ),
+        # Outlet above T0, cold inlet below T0: its whole thermal exergy is fuel as well.
+        (
+            {
+                0: _mixing_cost_stream(280, 10.0, 1500.0, 500.0, 5e-9, 8e-9),
+                1: _mixing_cost_stream(400, 4.0, 80e3, 500.0, 20e-9, 9e-9),
+            },
+            _mixing_cost_stream(330, 14.0, 15e3, 450.0, 7e-9, 8.5e-9),
+            1,
+            0,
+        ),
+        # Outlet below T0, hot inlet above T0: its whole thermal exergy is fuel as well.
+        (
+            {
+                0: _mixing_cost_stream(310, 1.0, 200.0, 500.0, 20e-9, 9e-9),
+                1: _mixing_cost_stream(260, 10.0, 3000.0, 500.0, 5e-9, 8e-9),
+            },
+            _mixing_cost_stream(270, 11.0, 1500.0, 450.0, 7e-9, 8.5e-9),
+            1,
+            0,
+        ),
+    ],
+    ids=["outlet_above_T0", "outlet_below_T0", "cold_inlet_below_T0", "hot_inlet_above_T0"],
+)
+def test_mixing_fuel_cost_with_split_physical_exergy(component_class, inlets, outlet, fuel_inlet, far_inlet):
+    """
+    The fuel of a mixing component is the thermal exergy its fuel inlet gives up down to the outlet
+    state, charged at the specific cost of that inlet (F rule), plus the decrease in mechanical exergy.
+    An inlet on the other side of T0 than the outlet gives up all its thermal exergy.
+    """
+    comp = component_class(name="MIX", Z_costs=1e-3)
+    comp.inl = inlets
+    comp.outl = {0: outlet}
+    comp.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+    comp.exergoeconomic_balance(300, split_physical_exergy=True)
+
+    fuel = inlets[fuel_inlet]
+    expected_C_F = (
+        fuel["m"] * fuel["c_T"] * (fuel["e_T"] - outlet["e_T"]) + sum(i["C_M"] for i in inlets.values()) - outlet["C_M"]
+    )
+    if far_inlet is not None:
+        expected_C_F += inlets[far_inlet]["C_T"]
+    assert pytest.approx(expected_C_F, rel=1e-9) == comp.C_F
+    assert pytest.approx(expected_C_F + 1e-3, rel=1e-9) == comp.C_P
+    assert comp.c_F == pytest.approx(expected_C_F / comp.E_F, rel=1e-9)
+
+
 def test_valve_all_above_ambient():
     """
     Test Valve.exergy_balance for the case when both inlet and outlet temperatures are above ambient.

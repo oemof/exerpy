@@ -10,6 +10,7 @@ import logging
 import os
 import re
 
+import CoolProp.CoolProp as CP
 import numpy as np
 import pandas as pd
 import pytest
@@ -1376,6 +1377,81 @@ class TestFlashTankExergoeconomics:
         )
         assert eco.connections["vap"]["c_T"] == pytest.approx(eco.connections["liq"]["c_T"])
         assert eco.connections["vap"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
+
+
+def _water_stream(source, target, connector, m, T=None, h=None, p=5e5, T0=298.15, p0=101325.0):
+    """A water stream at T or h, with its thermal and mechanical exergy from CoolProp."""
+    if h is None:
+        h = CP.PropsSI("H", "T", T, "P", p, "water")
+    T = CP.PropsSI("T", "H", h, "P", p, "water")
+    s = CP.PropsSI("S", "H", h, "P", p, "water")
+    h_p, s_p = (CP.PropsSI(prop, "T", T0, "P", p, "water") for prop in ("H", "S"))
+    h_0, s_0 = (CP.PropsSI(prop, "T", T0, "P", p0, "water") for prop in ("H", "S"))
+    e_T = h - h_p - T0 * (s - s_p)
+    e_M = h_p - h_0 - T0 * (s_p - s_0)
+    return {**_material(source, target, connector, m, e_T, e_M, T=T, h=h), "p": p}
+
+
+def _water_mixing_connections(T_cold=330.0):
+    """10 kg/s of water at T_cold mixed with 4 kg/s at 420 K, all at 5 bar."""
+    cold = _water_stream(None, "MIX", 0, 10.0, T=T_cold)
+    hot = _water_stream(None, "MIX", 1, 4.0, T=420.0)
+    h_out = (cold["m"] * cold["h"] + hot["m"] * hot["h"]) / (cold["m"] + hot["m"])
+    return {"cold": cold, "hot": hot, "out": _water_stream("MIX", None, 0, 14.0, h=h_out)}
+
+
+class TestMixingExergoeconomics:
+    """A mixer and a deaerator, whose fuel is the exergy the hot inlet gives up."""
+
+    @staticmethod
+    def _run(component_type, split, T_cold=330.0):
+        _, unit = _run_single_component(
+            component_type,
+            _water_mixing_connections(T_cold),
+            {"MIX_Z": 0.5, "cold_c": 5.0, "hot_c": 20.0},
+            split,
+            E_F={"inputs": ["cold", "hot"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": []},
+        )
+        return unit
+
+    @pytest.mark.parametrize("component_type", ["Mixer", "Deaerator"])
+    def test_fuel_is_charged_at_the_cost_of_the_hot_inlet(self, component_type):
+        """At equal pressures the fuel is the thermal exergy of the hot inlet, at the cost of that inlet."""
+        unit = self._run(component_type, split=True)
+        assert unit.c_F == pytest.approx(20.0e-9, rel=1e-6)
+
+    @pytest.mark.parametrize("component_type", ["Mixer", "Deaerator"])
+    def test_a_cold_inlet_below_ambient_gives_up_all_its_thermal_exergy(self, component_type):
+        """Below T0 the cold inlet adds its whole thermal exergy, at its own cost, to the fuel."""
+        unit = self._run(component_type, split=True, T_cold=280.0)
+        streams = _water_mixing_connections(280.0)
+        cold, hot, out = streams["cold"], streams["hot"], streams["out"]
+        C_F = 5.0e-9 * cold["E_T"] + 20.0e-9 * hot["m"] * (hot["e_T"] - out["e_T"])
+        assert pytest.approx(C_F) == unit.C_F
+
+    @pytest.mark.parametrize("component_type", ["Mixer", "Deaerator"])
+    def test_split_and_unsplit_give_the_same_fuel_cost(self, component_type):
+        """At equal pressures both modes charge the exergy the hot inlet gives up at the cost of that inlet."""
+        split = self._run(component_type, split=True)
+        unsplit = self._run(component_type, split=False)
+        assert pytest.approx(unsplit.E_F) == split.E_F
+        assert unsplit.c_F == pytest.approx(20.0e-9, rel=1e-6)
+        for key in ("c_F", "c_P", "r", "f"):
+            assert getattr(split, key) == pytest.approx(getattr(unsplit, key), rel=1e-6), key
+
+    @pytest.mark.parametrize("component_type", ["Mixer", "Deaerator"])
+    def test_unsplit_fuel_cost_does_not_depend_on_the_investment(self, component_type):
+        """The exergy left in the outlet is valued at the inlet's cost, which does not contain Z."""
+        _, unit = _run_single_component(
+            component_type,
+            _water_mixing_connections(),
+            {"MIX_Z": 80.0, "cold_c": 5.0, "hot_c": 20.0},
+            False,
+            E_F={"inputs": ["cold", "hot"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": []},
+        )
+        assert unit.c_F == pytest.approx(20.0e-9, rel=1e-6)
 
 
 def _simple_heat_exchanger_connections(releasing):

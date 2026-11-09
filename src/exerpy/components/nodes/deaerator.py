@@ -318,16 +318,19 @@ class Deaerator(Component):
 
         .. math::
             \dot{C}_{\mathrm{F,cold}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
+            + \begin{cases}
+                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} < T_0\\
+                0, & T_{\mathrm{in}} \geq T_0
+            \end{cases}
             + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
 
         For hot inlets (:math:`T_{\mathrm{in}} \geq T_{\mathrm{out}}`):
 
         .. math::
-            \dot{C}_{\mathrm{F,hot}} = -\dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot e^{\mathrm{T}}_{\mathrm{in}}
-            + \left(\dot{C}^{\mathrm{T}}_{\mathrm{in}}
+            \dot{C}_{\mathrm{F,hot}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
+            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
             + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}\right)
+            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
 
         Total fuel cost:
 
@@ -352,16 +355,19 @@ class Deaerator(Component):
 
         .. math::
             \dot{C}_{\mathrm{F,hot}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
+            + \begin{cases}
+                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} \geq T_0\\
+                0, & T_{\mathrm{in}} < T_0
+            \end{cases}
             + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
 
         For cold inlets (:math:`T_{\mathrm{in}} \leq T_{\mathrm{out}}`):
 
         .. math::
-            \dot{C}_{\mathrm{F,cold}} = -\dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot e^{\mathrm{T}}_{\mathrm{in}}
-            + \left(\dot{C}^{\mathrm{T}}_{\mathrm{in}}
+            \dot{C}_{\mathrm{F,cold}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
+            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
             + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}\right)
+            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
 
         Total fuel cost:
 
@@ -423,7 +429,7 @@ class Deaerator(Component):
                 for i in self.inl.values():
                     fuel_side = (i["T"] >= out["T"]) if heating else (i["T"] <= out["T"])
                     if fuel_side:
-                        self.C_F += i["C_PH"] - i["m"] * out["c_PH"] * out["e_PH"]
+                        self.C_F += i["m"] * i["c_PH"] * (i["e_PH"] - out["e_PH"])
                     elif (i["T"] < T0) if heating else (i["T"] >= T0):
                         self.C_F += i["C_PH"]
         elif self.outl[0]["T"] > T0:
@@ -431,11 +437,13 @@ class Deaerator(Component):
                 if i["T"] < self.outl[0]["T"]:
                     # cold inlets
                     self.C_F += i["C_M"]
+                    if i["T"] < T0:
+                        self.C_F += i["C_T"]
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
                 else:
                     # hot inlets
-                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    self.C_F += i["m"] * i["c_T"] * (i["e_T"] - self.outl[0]["e_T"]) + i["C_M"]
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
             self.C_F += -self.outl[0]["C_M"]
@@ -450,11 +458,13 @@ class Deaerator(Component):
                 if i["T"] > self.outl[0]["T"]:
                     # hot inlets
                     self.C_F += i["C_M"]
+                    if i["T"] >= T0:
+                        self.C_F += i["C_T"]
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
                 else:
                     # cold inlets
-                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    self.C_F += i["m"] * i["c_T"] * (i["e_T"] - self.outl[0]["e_T"]) + i["C_M"]
                     if chemical_exergy_enabled:
                         self.C_F += i["C_CH"]
             self.C_F += -self.outl[0]["C_M"]

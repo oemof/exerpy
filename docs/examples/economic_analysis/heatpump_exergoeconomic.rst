@@ -211,7 +211,7 @@ reported instead of silently changing the result.
     "FAN", "17.13", "3.74", "20.87", "17.9", "45.39", "99.59"
 
 **How to read the table.** The components are ranked by :math:`\dot{C}_\mathrm{D} + \dot{Z}`, the
-cost rate of their exergy destruction and of their equipment together. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
+cost rate of their exergy destruction and of their equipment together. The exergoeconomic factor :math:`f = (\dot{Z} + \dot{Z}_\mathrm{diss}) / (\dot{Z} + \dot{Z}_\mathrm{diss} + \dot{C}_\mathrm{D})` tells which part
 dominates the total cost rate of a component. Following Bejan et al. :cite:`Bejan1996`, a low
 :math:`f` points to improving the efficiency of the component, even at a higher investment, and a
 high :math:`f` to reducing its investment, even at some loss of efficiency. With the placeholder costs of this example, the evaporator has
@@ -219,7 +219,8 @@ high :math:`f` to reducing its investment, even at some loss of efficiency. With
 compressor has :math:`f = 65.0` %, so its total cost rate is mostly investment. The evaporator and
 the valve are dissipative components: the evaporator passes heat from air at the ambient temperature
 to the working fluid below it. Neither has a product or a :math:`c_\mathrm{P}`, and their cost is
-passed on to the components they serve.
+passed on to the components they serve. There it appears as :math:`\dot{Z}_\mathrm{diss}` and counts in the
+total cost rate and in :math:`f` of these components.
 
 The product of the plant, the heat taken up by the water from stream 21 to stream 23, costs
 192.28 EUR/GJ. With other cost inputs, every number in this section

@@ -6,6 +6,7 @@ including cost variable initialization, cost assignment, matrix construction,
 solving, results generation, and evaluation.
 """
 
+import json
 import logging
 import os
 import re
@@ -810,6 +811,153 @@ class TestPrintHelpers:
 # =============================================================================
 # Integration Tests
 # =============================================================================
+
+CGAM_JSON = os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/cgam/cgam.json")
+CGAM_COSTS = {
+    "AC_Z": 56.99,
+    "CC_Z": 4.40,
+    "EXP_Z": 48.16,
+    "APH_Z": 12.26,
+    "EV_Z": 11.476,
+    "PH_Z": 5.454,
+    "GEN_Z": 0.0,
+    "1_c": 0.0,
+    "8_c": 0.0,
+    "10_c": 3.8635,
+    "10b_c": 3.8635,
+}
+
+
+def _run_cgam(tmp_path, split, change=None):
+    """Exergoeconomic analysis of the CGAM process, after ``change`` has edited its data."""
+    with open(CGAM_JSON) as f:
+        data = json.load(f)
+    if change is not None:
+        change(data)
+    path = tmp_path / "cgam.json"
+    path.write_text(json.dumps(data))
+    ean = ExergyAnalysis.from_json(str(path), split_physical_exergy=split)
+    fuel = [name for name in ("10", "10b", "1", "8") if name in data["connections"]]
+    loss = [name for name in ("7", "ash") if name in data["connections"]]
+    ean.analyse(
+        E_F={"inputs": fuel, "outputs": []},
+        E_P={"inputs": ["E1", "9"], "outputs": []},
+        E_L={"inputs": loss, "outputs": []},
+    )
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(CGAM_COSTS)
+    return eco
+
+
+def _fuel_in_two_inlets(data):
+    """The fuel enters through two equal inlets, as through two burners."""
+    fuel = data["connections"]["10"]
+    fuel["m"] /= 2
+    data["connections"]["10b"] = dict(fuel, name="10b", source_component="FUEL_2", target_connector=2)
+
+
+def _air_without_chemical_exergy(data):
+    """The air has the composition of the environment, so no chemical exergy."""
+    for name in ("1", "2", "3"):
+        data["connections"][name]["e_CH"] = 0.0
+
+
+def _fuel_without_mechanical_exergy(data):
+    """The fuel brings no mechanical exergy."""
+    fuel = data["connections"]["10"]
+    fuel["e_M"] = 0.0
+    fuel["e_PH"] = fuel["e_T"]
+
+
+class TestCombustionChamberMixing:
+    """The combustion gas takes the mass-weighted specific costs of all inlets for its M and CH exergy."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_fuel_in_two_inlets_gives_the_same_costs(self, tmp_path, split):
+        one, two = _run_cgam(tmp_path, split), _run_cgam(tmp_path, split, _fuel_in_two_inlets)
+        for label in ("T", "M", "CH") if split else ("PH", "CH"):
+            assert two.connections["4"][f"c_{label}"] == pytest.approx(one.connections["4"][f"c_{label}"])
+        for product in ("E1", "9"):
+            assert two.connections[product]["c_TOT"] == pytest.approx(one.connections[product]["c_TOT"])
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_air_without_chemical_exergy_leaves_the_cost_to_the_fuel(self, tmp_path, split):
+        eco = _run_cgam(tmp_path, split, _air_without_chemical_exergy)
+        fuel, air, gas = (eco.connections[name] for name in ("10", "3", "4"))
+        assert gas["c_CH"] == pytest.approx(fuel["m"] / (fuel["m"] + air["m"]) * fuel["c_CH"])
+
+    def test_fuel_without_mechanical_exergy_leaves_the_cost_to_the_air(self, tmp_path):
+        eco = _run_cgam(tmp_path, True, _fuel_without_mechanical_exergy)
+        fuel, air, gas = (eco.connections[name] for name in ("10", "3", "4"))
+        assert gas["c_M"] == pytest.approx(air["m"] / (fuel["m"] + air["m"]) * air["c_M"])
+
+
+def _ash_outlet(data):
+    """Hot ash with some unburnt carbon leaves the combustion chamber at outlet 1 to the surroundings."""
+    data["connections"]["ash"] = {
+        "kind": "material",
+        "source_component": "CC",
+        "source_connector": 1,
+        "target_component": None,
+        "target_connector": None,
+        "m": 0.05,
+        "T": 1200.0,
+        "p": 101325.0,
+        "h": 1.0e6,
+        "e_T": 6.0e5,
+        "e_M": 0.0,
+        "e_PH": 6.0e5,
+        "e_CH": 2.0e6,
+    }
+
+
+def _exergy(stream, *forms):
+    return stream["m"] * sum(stream[f"e_{form}"] for form in forms)
+
+
+class TestCombustionChamberAsh:
+    """Ash at outlet 1 is a loss of the chamber: subtracted from its fuel, at the specific cost of the fuel."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_ash_is_a_loss_at_the_cost_of_the_fuel(self, tmp_path, caplog, split):
+        eco = _run_cgam(tmp_path, split, _ash_outlet)
+        ean = eco.exergy_analysis
+        cc = ean.components["CC"]
+        air, fuel, gas, ash = (eco.connections[name] for name in ("3", "10", "4", "ash"))
+
+        # Product: rise from all inlets to the gas. Fuel: as without ash, less the total exergy of the ash.
+        E_ash = _exergy(ash, "PH", "CH")
+        if split:
+            E_P = _exergy(gas, "T") - _exergy(air, "T") - _exergy(fuel, "T")
+            E_F = _exergy(air, "CH", "M") + _exergy(fuel, "CH", "M") - _exergy(gas, "CH", "M") - E_ash
+        else:
+            E_P = _exergy(gas, "PH") - _exergy(air, "PH") - _exergy(fuel, "PH")
+            E_F = _exergy(air, "CH") + _exergy(fuel, "CH") - _exergy(gas, "CH") - E_ash
+        assert pytest.approx(E_P) == cc.E_P
+        assert pytest.approx(E_F) == cc.E_F
+        E_in = _exergy(air, "PH", "CH") + _exergy(fuel, "PH", "CH")
+        assert pytest.approx(E_in - _exergy(gas, "PH", "CH") - E_ash) == cc.E_D
+        assert sum(comp.E_D for comp in ean.components.values()) == pytest.approx(ean.E_D)
+        assert pytest.approx(_exergy(eco.connections["7"], "PH", "CH") + E_ash) == ean.E_L
+
+        # One row per cost variable, and the cost balances close for each component and the system.
+        assert len(eco.equations) == eco.num_variables
+        assert "not fulfilled" not in caplog.text
+        C_in = sum(stream["C_PH"] + stream["C_CH"] for stream in (air, fuel))
+        assert C_in + cc.Z_costs == pytest.approx(sum(stream["C_PH"] + stream["C_CH"] for stream in (gas, ash)))
+        assert pytest.approx(cc.C_F + cc.Z_costs) == cc.C_P
+        costs = eco.system_costs
+        assert costs["C_P"] == pytest.approx(costs["C_F"] + costs["Z"])
+
+        # Every exergy form of the ash has the cost per exergy unit of the fuel, zero without exergy.
+        c_fuel = fuel["C_TOT"] / _exergy(fuel, "PH", "CH")
+        assert c_fuel == pytest.approx(CGAM_COSTS["10_c"] * 1e-9)
+        for label in ("T", "M", "CH") if split else ("PH", "CH"):
+            if ash[f"e_{label}"] == 0:
+                assert ash[f"C_{label}"] == pytest.approx(0, abs=1e-12)
+            else:
+                assert ash[f"c_{label}"] == pytest.approx(c_fuel)
+        assert ash["C_TOT"] == pytest.approx(c_fuel * E_ash)
 
 
 class TestIntegration:

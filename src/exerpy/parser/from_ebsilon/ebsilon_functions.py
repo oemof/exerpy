@@ -75,6 +75,37 @@ def calc_X_from_PT(app: Any, pipe: Any, property: str, pressure: float, temperat
 
 
 @require_ebsilon
+def calc_ePH(app: Any, pipe: Any, Tamb: float, pamb: float) -> float:
+    """
+    Calculate the physical exergy of a stream at the dead state (Tamb, pamb).
+
+    e_PH = h - h(T0, p0) - T0 * (s - s(T0, p0)), with h and s at the dead state from the stream's own fluid data,
+    as in :func:`calc_eT`.
+
+    Parameters
+    ----------
+    app : Ebsilon application instance
+        The Ebsilon application instance.
+    pipe : Stream object
+        The stream object containing thermodynamic properties.
+    Tamb : float
+        The ambient temperature (in K).
+    pamb : float
+        The ambient pressure (in Pa).
+
+    Returns
+    -------
+    float
+        The physical exergy (in J/kg).
+    """
+    h_i = convert_to_SI("h", pipe.H.Value, unit_id_to_string.get(pipe.H.Dimension, "Unknown"))
+    s_i = convert_to_SI("s", pipe.S.Value, unit_id_to_string.get(pipe.S.Dimension, "Unknown"))
+    h_0 = calc_X_from_PT(app, pipe, "H", pamb, Tamb)
+    s_0 = calc_X_from_PT(app, pipe, "S", pamb, Tamb)
+    return h_i - h_0 - Tamb * (s_i - s_0)
+
+
+@require_ebsilon
 def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
     """
     Calculate the thermal component of physical exergy.
@@ -86,7 +117,7 @@ def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
     pipe : Stream object
         The stream object containing thermodynamic properties.
     pressure : float
-        The pressure value (in bar).
+        The pressure value (in Pa).
     Tamb : float
         The ambient temperature (in K).
     pamb : float
@@ -107,9 +138,9 @@ def calc_eT(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
 
 
 @require_ebsilon
-def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> float:
+def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float, e_PH: float | None = None) -> float:
     """
-    Calculate the mechanical component of physical exergy.
+    Calculate the mechanical component of physical exergy as e_M = e_PH - e_T.
 
     Parameters
     ----------
@@ -118,22 +149,23 @@ def calc_eM(app: Any, pipe: Any, pressure: float, Tamb: float, pamb: float) -> f
     pipe : Stream object
         The stream object containing thermodynamic properties.
     pressure : float
-        The pressure value (in bar).
+        The pressure value (in Pa).
     Tamb : float
         The ambient temperature (in K).
     pamb : float
         The ambient pressure (in Pa).
+    e_PH : float, optional
+        The physical exergy of the stream at (Tamb, pamb) (in J/kg). If None, the exergy E of the pipe is used,
+        which Ebsilon computes at the reference state of the model.
 
     Returns
     -------
     float
         The mechanical exergy component (in J/kg).
     """
-    eM = convert_to_SI("e_PH", pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown")) - calc_eT(
-        app, pipe, pressure, Tamb, pamb
-    )
-
-    return eM
+    if e_PH is None:
+        e_PH = convert_to_SI("e_PH", pipe.E.Value, unit_id_to_string.get(pipe.E.Dimension, "Unknown"))
+    return e_PH - calc_eT(app, pipe, pressure, Tamb, pamb)
 
 
 @require_ebsilon

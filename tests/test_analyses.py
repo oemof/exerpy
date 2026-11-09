@@ -302,11 +302,37 @@ def test_from_json_basic(json_file):
     assert abs(analysis.pamb - 101325) < 1e-5
 
 
-def test_from_json_override_ambient(json_file):
-    """Test overriding ambient conditions."""
-    analysis = ExergyAnalysis.from_json(str(json_file), Tamb=300, pamb=100000)
-    assert abs(analysis.Tamb - 300) < 1e-5
-    assert abs(analysis.pamb - 100000) < 1e-5
+@pytest.mark.parametrize(
+    "Tamb, pamb, passed",
+    [
+        (300, None, "Tamb = 300 K"),
+        (None, 100000, "pamb = 100000 Pa"),
+        (300, 101325, "Tamb = 300 K and pamb = 101325 Pa"),
+    ],
+)
+def test_from_json_other_ambient_state_raises(json_file, Tamb, pamb, passed):
+    """The exergies of a file hold only at its ambient state, so another one passed is rejected."""
+    with pytest.raises(
+        ValueError, match=f"computed at Tamb = 298.15 K and pamb = 101325 Pa, not at the passed {passed}"
+    ):
+        ExergyAnalysis.from_json(str(json_file), Tamb=Tamb, pamb=pamb)
+
+
+def test_from_json_same_ambient_state(json_file):
+    """The ambient state of the file passed again is accepted within round-off."""
+    analysis = ExergyAnalysis.from_json(str(json_file), Tamb=298.15 * (1 + 1e-9), pamb=101325)
+    assert analysis.Tamb == pytest.approx(298.15)
+    assert analysis.pamb == pytest.approx(101325)
+
+
+def test_from_json_ambient_state_passed(tmp_path, mock_json_data):
+    """A file without an ambient state takes the one passed."""
+    mock_json_data["ambient_conditions"] = {}
+    json_path = tmp_path / "no_ambient.json"
+    json_path.write_text(json.dumps(mock_json_data))
+    analysis = ExergyAnalysis.from_json(str(json_path), Tamb=300, pamb=100000)
+    assert analysis.Tamb == 300
+    assert analysis.pamb == 100000
 
 
 def test_from_json_missing_sections(tmp_path):
@@ -984,7 +1010,8 @@ def test_from_tespy_override_ambient(monkeypatch, mock_json_data):
         from exerpy.analyses import _process_json
 
         data = mock_json_data.copy()
-        data["ambient_conditions"] = {"Tamb": 298.15, "Tamb_unit": "K", "pamb": 101325, "pamb_unit": "Pa"}
+        # to_exerpy computes the exergies at the passed ambient state and stores it
+        data["ambient_conditions"] = {"Tamb": Tamb, "Tamb_unit": "K", "pamb": pamb, "pamb_unit": "Pa"}
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb, pamb, chemExLib, split_physical_exergy
         )
@@ -1013,6 +1040,24 @@ def test_from_aspen_invalid_extension(tmp_path):
     txt_file.write_text("dummy")
     with pytest.raises(ValueError, match="Unsupported file format"):
         ExergyAnalysis.from_aspen(str(txt_file))
+
+
+def test_from_aspen_passes_ambient_state(monkeypatch, mock_json_data):
+    """The ambient state passed to from_aspen reaches the parser, which computes the exergies at it."""
+    from exerpy.parser.from_aspen import aspen_parser
+
+    passed = {}
+
+    def run_aspen(path, **kwargs):
+        passed.update(kwargs)
+        mock_json_data["ambient_conditions"] = {"Tamb": kwargs["Tamb"], "pamb": kwargs["pamb"]}
+        return mock_json_data
+
+    monkeypatch.setattr(aspen_parser, "run_aspen", run_aspen)
+    analysis = ExergyAnalysis.from_aspen("model.bkp", Tamb=288.15, pamb=1e5, split_physical_exergy=False)
+    assert passed["Tamb"] == 288.15
+    assert passed["pamb"] == 1e5
+    assert analysis.Tamb == 288.15
 
 
 def test_no_negative_zero():

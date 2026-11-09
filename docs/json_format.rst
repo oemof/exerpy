@@ -28,8 +28,9 @@ A file has four sections:
     * - ``connections``
       - The streams between the components, stored under their names.
     * - ``ambient_conditions``
-      - The ambient temperature ``Tamb`` and pressure ``pamb``. Both may instead be passed to
-        ``from_json``.
+      - The ambient temperature ``Tamb`` and pressure ``pamb`` at which the exergies of the file
+        were computed. Both may instead be passed to ``from_json`` if the file has none; a passed
+        value that differs from the file raises an error.
     * - ``settings``
       - Optional: ``split_physical_exergy`` and ``chemExLib``. Arguments passed to ``from_json``
         take precedence.

@@ -632,6 +632,53 @@ def test_parse_model_integration(dummy_convert_to_SI, split):
     assert "StreamX" in parser.connections_data
 
 
+# --- Tests for the ambient state passed to the parser ---
+
+REF_TEMP = r"\Data\Setup\Sim-Options\Input\REF_TEMP"
+REF_PRES = r"\Data\Setup\Sim-Options\Input\REF_PRES"
+
+
+@pytest.mark.parametrize(
+    "Tamb, pamb, runs, ref_temp, ref_pres",
+    [
+        (None, None, 0, 25.0, 1.013),
+        (298.15, 101300.0, 0, 25.0, 1.013),
+        (288.15, None, 1, 15.0, 1.013),
+        (None, 1e5, 1, 25.0, 1.0),
+    ],
+)
+def test_set_ambient_conditions(Tamb, pamb, runs, ref_temp, ref_pres):
+    """
+    Test that a passed ambient state replaces REF_TEMP and REF_PRES, in their units, and that the model is run
+    again so that Aspen computes the exergies at it, unless the model holds this state already.
+    """
+    nodes = {REF_TEMP: DummyNode("REF_TEMP", 25.0, "C"), REF_PRES: DummyNode("REF_PRES", 1.013, "bar")}
+    aspen = DummyAspen(DummyTree(nodes))
+    aspen.Engine = Mock()
+    parser = AspenModelParser("dummy_model.bkp", Tamb=Tamb, pamb=pamb)
+    parser.aspen = aspen
+
+    parser.set_ambient_conditions()
+    parser.parse_ambient_conditions()
+
+    assert nodes[REF_TEMP].Value == pytest.approx(ref_temp)
+    assert nodes[REF_PRES].Value == pytest.approx(ref_pres)
+    assert aspen.Engine.Run2.call_count == runs
+    assert parser.Tamb == pytest.approx(ref_temp + 273.15)
+    assert parser.pamb == pytest.approx(ref_pres * 1e5)
+
+
+def test_set_ambient_conditions_without_node():
+    """
+    Test that a passed ambient state the model has no node for raises an error.
+    """
+    parser = AspenModelParser("dummy_model.bkp", Tamb=288.15)
+    parser.aspen = DummyAspen(DummyTree({}))
+
+    with pytest.raises(ValueError, match="REF_TEMP"):
+        parser.set_ambient_conditions()
+
+
 # --- Tests for the split of the physical exergy ---
 
 

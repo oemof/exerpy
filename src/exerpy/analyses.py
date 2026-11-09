@@ -1650,6 +1650,9 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            A material stream may also have a cost per exergy form, "<connection_name>_c_T",
+            "_c_M" and "_c_CH", or "_c_PH" for the thermal and the mechanical exergy together
+            (without the split: "_c_PH" and "_c_CH"). A form without a cost of its own takes "_c".
             Another unit in the currency of the analysis may be given next to a value, as
             ``"<connection_name>_c_unit": "EUR / MWh"`` or ``"<component_name>_Z_unit": "EUR / s"``.
 
@@ -1657,7 +1660,8 @@ class ExergoeconomicAnalysis:
         ------
         ValueError
             If a component cost is missing or if a required input connection cost is not provided,
-            or if a unit is unknown, of the wrong kind or in another currency.
+            if a cost per exergy form does not fit the split of the physical exergy, or if a unit is
+            unknown, of the wrong kind or in another currency.
 
         Notes
         -----
@@ -1695,6 +1699,9 @@ class ExergoeconomicAnalysis:
                 continue
 
             cost_key = f"{conn_name}_c"
+            form_costs = self._form_costs(Exe_Eco_Costs, conn_name) if kind == "material" else {}
+            missing = [f"'{conn_name}_c_{label}'" for label in self.cost_labels if label not in form_costs]
+            has_cost = cost_key in Exe_Eco_Costs or (kind == "material" and not missing)
 
             # Check if the connection is an input to the system: source is missing or not a registered
             # component (e.g. TESPy Source/Sink), while target is a valid component in the system.
@@ -1703,25 +1710,32 @@ class ExergoeconomicAnalysis:
             is_input = (source is None or source not in valid_component_names) and (target in valid_component_names)
 
             # For input connections (except for power connections) a cost is mandatory.
-            if is_input and kind != "power" and cost_key not in Exe_Eco_Costs:
+            if is_input and kind != "power" and not has_cost:
+                alternative = f" or {', '.join(missing)}" if form_costs else ""
                 raise ValueError(
-                    f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs."
+                    f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs: "
+                    f"give '{cost_key}'{alternative}."
                 )
 
             # Assign cost if provided.
-            if cost_key in Exe_Eco_Costs:
+            if has_cost:
                 # Convert cost from currency/GJ to currency/J.
-                c_TOT = self._user_cost(Exe_Eco_Costs, cost_key, "GJ") * 1e-9
+                c_TOT = self._user_cost(Exe_Eco_Costs, cost_key, "GJ") * 1e-9 if cost_key in Exe_Eco_Costs else None
                 conn["c_TOT"] = c_TOT
 
                 if kind == "material":
-                    # Compute C_TOT based on exergy terms and mass flow.
-                    conn["C_TOT"] = c_TOT * conn.get("E", 0)
-
-                    # Assign cost breakdown for material streams.
+                    # Assign cost breakdown for material streams, a form without its own cost takes c_TOT.
                     for label in self.cost_labels:
-                        conn[f"c_{label}"] = c_TOT
-                        conn[f"C_{label}"] = c_TOT * conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
+                        conn[f"c_{label}"] = form_costs.get(label, c_TOT)
+                        E_label = conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
+                        conn[f"C_{label}"] = conn[f"c_{label}"] * E_label
+
+                    if form_costs:
+                        conn["C_TOT"] = sum(conn[f"C_{label}"] for label in self.cost_labels)
+                        conn["c_TOT"] = conn["C_TOT"] / conn["E"] if conn.get("E") else (c_TOT or 0.0)
+                    else:
+                        # Compute C_TOT based on exergy terms and mass flow.
+                        conn["C_TOT"] = c_TOT * conn.get("E", 0)
 
                 elif kind in {"heat", "power"}:
                     # Ensure energy flow "E" is present before computing cost.
@@ -1740,6 +1754,30 @@ class ExergoeconomicAnalysis:
             return convert_cost(costs[key], unit, f"{self.currency} / {per}", self.currency)
         except ValueError as exc:
             raise ValueError(f"'{key}_unit': {exc}") from None
+
+    def _form_costs(self, costs, conn_name):
+        """Specific costs in currency/J given for single exergy forms of a stream, by cost label."""
+        given = {
+            label: self._user_cost(costs, f"{conn_name}_c_{label}", "GJ") * 1e-9
+            for label in ("T", "M", "PH", "CH")
+            if f"{conn_name}_c_{label}" in costs
+        }
+        if self.split_physical_exergy and "PH" in given:
+            if "T" in given or "M" in given:
+                raise ValueError(
+                    f"'{conn_name}_c_PH' stands for '{conn_name}_c_T' and '{conn_name}_c_M' together, "
+                    f"give either of them."
+                )
+            given["T"] = given["M"] = given.pop("PH")
+        elif not self.split_physical_exergy and ("T" in given or "M" in given):
+            raise ValueError(
+                f"The physical exergy is not split, so stream '{conn_name}' has no thermal and mechanical "
+                f"cost. Give '{conn_name}_c_PH' instead."
+            )
+        if "CH" in given and not self.chemical_exergy_enabled:
+            logger.warning(f"'{conn_name}_c_CH' is ignored, since the chemical exergy is not part of the analysis.")
+            del given["CH"]
+        return given
 
     def construct_matrix(self):
         """
@@ -2232,7 +2270,8 @@ class ExergoeconomicAnalysis:
         Exe_Eco_Costs : dict
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
-            Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            Format for connections: "<connection_name>_c": cost_value [currency/GJ], or a cost per
+            exergy form of a material stream, see :meth:`assign_user_costs`.
         allow_singular : bool, optional
             If True, use least-squares solver as fallback when the matrix is singular.
             The solution may not be physically consistent. Default is False.

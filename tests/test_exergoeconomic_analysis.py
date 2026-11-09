@@ -436,6 +436,90 @@ class TestAssignUserCosts:
         assert conn1["C_TOT"] == pytest.approx(expected_c_TOT * conn1["E"])
 
 
+def _run_flash_tank(costs, split=True, e_CH=50000.0):
+    """Cost a flash tank whose streams carry chemical exergy, unless ``e_CH`` is None."""
+    streams = _flash_tank_connections()
+    if e_CH is not None:
+        for stream in streams.values():
+            stream.update(e_CH=e_CH, E_CH=stream["m"] * e_CH, E=stream["E_PH"] + stream["m"] * e_CH)
+    return _run_single_component(
+        "FlashTank",
+        streams,
+        {"FT_Z": 12.0, **costs},
+        split,
+        E_F={"inputs": ["in"], "outputs": []},
+        E_P={"inputs": ["vap", "liq"], "outputs": []},
+    )
+
+
+class TestCostPerExergyForm:
+    """An entering material stream may have a known cost for each of its exergy forms."""
+
+    @pytest.mark.parametrize(
+        ("split", "costs", "expected"),
+        [
+            (True, {"in_c_T": 4.0, "in_c_M": 6.0, "in_c_CH": 8.0}, {"T": 4.0, "M": 6.0, "CH": 8.0}),
+            (True, {"in_c_PH": 5.0, "in_c_CH": 8.0}, {"T": 5.0, "M": 5.0, "CH": 8.0}),
+            (False, {"in_c_PH": 5.0, "in_c_CH": 8.0}, {"PH": 5.0, "CH": 8.0}),
+        ],
+    )
+    def test_each_form_has_its_own_cost(self, split, costs, expected):
+        eco, tank = _run_flash_tank(costs, split)
+        inlet = eco.connections["in"]
+        for label, c in expected.items():
+            assert inlet[f"c_{label}"] * 1e9 == pytest.approx(c)
+            E_label = inlet["m"] * inlet[f"e_{label}"]
+            assert inlet[f"C_{label}"] == pytest.approx(c * 1e-9 * E_label)
+        assert inlet["C_TOT"] == pytest.approx(sum(inlet[f"C_{label}"] for label in expected))
+        assert inlet["c_TOT"] == pytest.approx(inlet["C_TOT"] / inlet["E"])
+        # The chemical exergy passes through the tank at the cost it entered with.
+        for outlet in ("vap", "liq"):
+            assert eco.connections[outlet]["c_CH"] * 1e9 == pytest.approx(8.0)
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["FT"]
+        assert balanced, f"residual={residual}"
+        assert pytest.approx(tank.C_F + tank.Z_costs) == tank.C_P
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_the_same_cost_for_every_form_is_the_cost_of_the_stream(self, split):
+        forms = {"in_c_T": 5.0, "in_c_M": 5.0} if split else {"in_c_PH": 5.0}
+        eco_c, _ = _run_flash_tank({"in_c": 5.0}, split)
+        eco_forms, _ = _run_flash_tank({**forms, "in_c_CH": 5.0}, split)
+        for name, conn in eco_c.connections.items():
+            for key in ("C_PH", "C_CH", "C_TOT", "c_TOT"):
+                assert eco_forms.connections[name][key] == pytest.approx(conn[key])
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_a_form_without_its_own_cost_takes_c(self, split):
+        eco, _ = _run_flash_tank({"in_c": 3.0, "in_c_CH": 8.0}, split)
+        inlet = eco.connections["in"]
+        for label in ("T", "M") if split else ("PH",):
+            assert inlet[f"c_{label}"] * 1e9 == pytest.approx(3.0)
+        assert inlet["c_CH"] * 1e9 == pytest.approx(8.0)
+
+    def test_each_form_may_have_its_own_unit(self):
+        eco, _ = _run_flash_tank({"in_c": 3.0, "in_c_CH": 28.8, "in_c_CH_unit": "EUR / MWh"})
+        assert eco.connections["in"]["c_CH"] * 1e9 == pytest.approx(8.0)
+
+    def test_a_missing_form_without_c_is_named(self):
+        with pytest.raises(ValueError, match=r"mandatory but not provided.*give 'in_c' or 'in_c_M'\."):
+            _run_flash_tank({"in_c_T": 4.0, "in_c_CH": 8.0})
+
+    def test_a_thermal_cost_without_the_split_raises(self):
+        with pytest.raises(ValueError, match="not split.*Give 'in_c_PH' instead"):
+            _run_flash_tank({"in_c_T": 4.0, "in_c_M": 6.0, "in_c_CH": 8.0}, split=False)
+
+    def test_the_physical_cost_together_with_a_thermal_cost_raises(self):
+        with pytest.raises(ValueError, match="'in_c_PH' stands for 'in_c_T' and 'in_c_M' together"):
+            _run_flash_tank({"in_c_PH": 5.0, "in_c_T": 4.0, "in_c_CH": 8.0})
+
+    def test_a_chemical_cost_without_chemical_exergy_is_ignored(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco, _ = _run_flash_tank({"in_c": 5.0, "in_c_CH": 8.0}, e_CH=None)
+        assert "'in_c_CH' is ignored" in caplog.text
+        assert "C_CH" not in eco.connections["in"]
+        assert eco.connections["in"]["c_T"] * 1e9 == pytest.approx(5.0)
+
+
 # =============================================================================
 # Group D: construct_matrix() Tests
 # =============================================================================

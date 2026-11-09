@@ -393,7 +393,9 @@ The exergoeconomic analysis requires the following inputs:
   - **Component investment costs**: :code:`"<component_name>_Z"` in currency/h (mandatory for all
     components except CycleCloser, PowerBus and Splitter)
   - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
-    entering the system boundary)
+    entering the system boundary). A material stream can also have a cost per exergy form,
+    :code:`"<connection_name>_c_T"`, :code:`"_c_M"`, :code:`"_c_PH"` or :code:`"_c_CH"`, see
+    :ref:`Cost input format <exergoeconomic_cost_input_label>`.
 
   Another unit in the same currency can be given next to a value, e.g.
   :code:`"10_c_unit": "EUR / MWh"`.

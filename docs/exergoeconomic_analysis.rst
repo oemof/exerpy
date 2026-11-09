@@ -436,18 +436,31 @@ A value can also be given in another unit, as long as it is in the currency of t
 A cost per day or per year is not accepted: turning it into a cost per hour of operation needs the
 operating hours, which :class:`~exerpy.analyses.EconomicAnalysis` takes into account.
 
+A material stream entering the plant can also have a cost for each form of its exergy. In the SPECO
+method, the cost rate of each exergy form (thermal, mechanical and chemical) of a material stream
+supplied to the plant from outside is a known value of its own :cite:`lazzaretto2006speco`. The keys
+are :code:`"<connection_name>_c_T"`, :code:`"<connection_name>_c_M"` and
+:code:`"<connection_name>_c_CH"`, and :code:`"<connection_name>_c_PH"` stands for the thermal and the
+mechanical exergy together. Without the split of the physical exergy only :code:`"_c_PH"` and
+:code:`"_c_CH"` apply. :code:`"_c_CH"` is used only when the chemical exergy is part of the analysis.
+A form without a cost of its own takes the :code:`"_c"` of the stream, and each key can have its own
+unit, e.g. :code:`"10_c_CH_unit"`.
+
 **Mandatory costs:**
 
 - All components must have a :code:`_Z` cost, except the :code:`CycleCloser`, the :code:`PowerBus`
   and the :code:`Splitter`. These pass their streams on without a cost balance of their own, so a
   cost given for one of them could not be charged to any stream and is rejected.
-- All material and power/heat streams entering the system boundary must have a :code:`_c` cost
+- All material and power/heat streams entering the system boundary must have a :code:`_c` cost.
+  A material stream can have a cost for each of its exergy forms instead.
 
 **Examples:**
 
 - :code:`"COMP_Z": 80.0` — compressor investment cost of 80 EUR/h
 - :code:`"1_c": 0.0` — ambient air enters the system at zero cost
 - :code:`"10_c": 25.0` — natural gas enters the system at 25 EUR/GJ
+- :code:`"10_c": 2.0, "10_c_CH": 10.0` — the chemical exergy of stream 10 costs 10 EUR/GJ, its
+  thermal and mechanical exergy 2 EUR/GJ
 
 
 Interpreting results

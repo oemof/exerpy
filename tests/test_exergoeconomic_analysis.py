@@ -19,6 +19,8 @@ from exerpy.analyses import ExergyAnalysis
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.components.helpers.cycle_closer import CycleCloser
+from exerpy.components.nodes.deaerator import Deaerator
+from exerpy.components.nodes.mixer import Mixer
 
 # =============================================================================
 # Mock Components with Exergoeconomic Methods
@@ -658,6 +660,7 @@ class TestExergoeconomicResults:
             "C_P [EUR/h]",
             "C_D [EUR/h]",
             "Z [EUR/h]",
+            "Z_diss [EUR/h]",
             "C_D+Z [EUR/h]",
             "f [%]",
             "r [%]",
@@ -902,6 +905,128 @@ class TestIntegration:
         # Values should be finite
         for val in df["C_D+Z [EUR/h]"].values:
             assert np.isfinite(val)
+
+
+# =============================================================================
+# Cost of dissipative components charged to the components they serve
+# =============================================================================
+
+HEATPUMP_COSTS = {
+    "COMP_Z": 43.4,
+    "COND_Z": 17.36,
+    "EVA_Z": 21.7,
+    "FAN_Z": 5.79,
+    "MOT1_Z": 3.62,
+    "MOT2_Z": 8.68,
+    "MOT3_Z": 1.16,
+    "PUMP_Z": 2.17,
+    "VAL_Z": 0.72,
+    "e1_c": 43.67,
+    "11_c": 0.0,
+    "21_c": 0.0,
+}
+
+
+def _run_heatpump(split):
+    """Exergoeconomic analysis of the heat pump example, whose evaporator is dissipative."""
+    path = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/heatpump/hp.json")
+    )
+    ean = ExergyAnalysis.from_json(path, split_physical_exergy=split)
+    ean.analyse(
+        E_F={"inputs": ["e1"], "outputs": []},
+        E_P={"inputs": ["23"], "outputs": ["21"]},
+        E_L={"inputs": ["13"], "outputs": ["11"]},
+    )
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(HEATPUMP_COSTS)
+    return eco
+
+
+class TestDissipativeShare:
+    """The cost a component is charged for a dissipative component counts as part of its Z."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_the_shares_add_up_to_the_cost_of_the_dissipative_components(self, split):
+        eco = _run_heatpump(split)
+        dissipative = [comp for comp in eco.components.values() if getattr(comp, "is_dissipative", False)]
+        assert dissipative
+        charged = sum(comp.Z_diss for comp in eco.components.values())
+        assert charged == pytest.approx(sum(comp.C_diff for comp in dissipative))
+
+    def test_a_source_left_out_of_the_charged_components_keeps_its_cost_balance(self):
+        """The C_diff column of a dissipative component is not a cost of the streams that enter it."""
+        path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../examples/exergoeconomic_analysis/heatpump/hp.json")
+        )
+        ean = ExergyAnalysis.from_json(path, split_physical_exergy=True)
+        ean.analyse(
+            E_F={"inputs": ["e1"], "outputs": []},
+            E_P={"inputs": ["23"], "outputs": ["21"]},
+            E_L={"inputs": ["13"], "outputs": ["11"]},
+        )
+        # Without an exergy destruction the fan and the valve upstream of the evaporator are not charged.
+        for name in ("FAN", "VAL"):
+            ean.components[name].E_D = np.nan
+        eco = ExergoeconomicAnalysis(ean)
+        eco.run(HEATPUMP_COSTS)
+        assert eco.components["FAN"].Z_diss == 0
+        assert sum(comp.Z_diss for comp in eco.components.values()) == pytest.approx(eco.components["EVA"].C_diff)
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_f_counts_the_share_as_part_of_Z(self, split):
+        eco = _run_heatpump(split)
+        served = [comp for comp in eco.components.values() if comp.Z_diss > 0]
+        assert served
+        for comp in served:
+            Z = comp.Z_costs + comp.Z_diss
+            assert comp.f == pytest.approx(Z / (Z + comp.C_D))
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_r_and_f_describe_the_same_cost_balance(self, split):
+        """(c_P - c_F) E_P = C_D + Z + Z_diss for every component with a cost balance."""
+        eco = _run_heatpump(split)
+        for comp in eco.components.values():
+            if hasattr(comp, "exergy_cost_line") and not getattr(comp, "is_dissipative", False):
+                assert comp.r * comp.c_F * comp.E_P == pytest.approx(comp.C_D + comp.Z_costs + comp.Z_diss)
+
+    def test_the_results_table_shows_the_share_next_to_Z(self):
+        eco = _run_heatpump(True)
+        df, _, _, _ = eco.exergoeconomic_results(print_results=False)
+        columns = list(df.columns)
+        assert columns.index("Z_diss [EUR/h]") == columns.index("Z [EUR/h]") + 1
+        rows = df[df["Component"] != "TOT"]
+        total = rows["C_D [EUR/h]"] + rows["Z [EUR/h]"] + rows["Z_diss [EUR/h]"]
+        assert rows["C_D+Z [EUR/h]"].to_numpy() == pytest.approx(total.to_numpy())
+        # The shares stay inside the plant, so its total Z is the sum of the component costs.
+        tot = df[df["Component"] == "TOT"].iloc[0]
+        assert tot["Z [EUR/h]"] == pytest.approx(sum(v for k, v in HEATPUMP_COSTS.items() if k.endswith("_Z")))
+        assert np.isnan(tot["Z_diss [EUR/h]"])
+
+    def test_without_a_dissipative_component_nothing_is_charged(self, exergoecon, valid_costs):
+        exergoecon.run(valid_costs)
+        for comp in exergoecon.components.values():
+            assert comp.Z_diss == 0
+            assert comp.f == pytest.approx(comp.Z_costs / (comp.Z_costs + comp.C_D))
+
+    @pytest.mark.parametrize("name", ["solar_tower_ebs", "parabolic_tespy"])
+    def test_with_two_dissipative_components_each_share_is_what_the_matrix_charges(self, name):
+        eco = _run_solar(name)
+        columns = {
+            int(i): v.replace("dissipative_", "", 1) for i, v in eco.variables.items() if v.startswith("dissipative_")
+        }
+        assert len(columns) == 2
+        C_diff = {col: eco.components[comp].C_diff for col, comp in columns.items()}
+        for comp in eco.components.values():
+            if getattr(comp, "is_dissipative", False) or not hasattr(comp, "exergy_cost_line"):
+                assert comp.Z_diss == 0
+                continue
+            charged = sum(eco._A[comp.exergy_cost_line, col] * cost for col, cost in C_diff.items())
+            assert comp.Z_diss == pytest.approx(charged)
+            # Mixer and deaerator take their product cost from the balance, the others from their streams.
+            if not isinstance(comp, Mixer | Deaerator) and np.isfinite(comp.C_P) and np.isfinite(comp.C_F):
+                assert comp.Z_costs + comp.Z_diss == pytest.approx(comp.C_P - comp.C_F)
+        assert sum(comp.Z_diss for comp in eco.components.values()) == pytest.approx(sum(C_diff.values()))
 
 
 # =============================================================================

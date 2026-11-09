@@ -1736,8 +1736,10 @@ class ExergoeconomicAnalysis:
                             self._A[counter, col] = scale  # Incoming costs
                     # If the connection's source is the component, it is an outlet (subtract -1).
                     elif conn.get("source_component") == comp.name:
-                        for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = -scale  # Outgoing costs
+                        for key, col in conn["CostVar_index"].items():
+                            # The C_diff column of a dissipative target is not a cost of this stream.
+                            if key != "dissipative":
+                                self._A[counter, col] = -scale  # Outgoing costs
                     self.equations[counter] = {"kind": "cost_balance", "object": [comp.name], "property": "Z_costs"}
 
                 self._b[counter] = -getattr(comp, "Z_costs", 1)
@@ -1970,6 +1972,10 @@ class ExergoeconomicAnalysis:
                 comp.exergoeconomic_balance(
                     self.exergy_analysis.Tamb, self.chemical_exergy_enabled, self.split_physical_exergy
                 )
+                # The share of C_diff charged to a component is part of its Z in f
+                if comp.Z_diss:
+                    Z = comp.Z_costs + comp.Z_diss
+                    comp.f = Z / (Z + comp.C_D) if Z + comp.C_D else np.nan
 
         # Check cost balances before loss attribution (Step 6) modifies C_TOT values
         self.check_cost_balance()
@@ -2067,8 +2073,11 @@ class ExergoeconomicAnalysis:
 
     def distribute_all_Z_diff(self, C_solution):
         """
-        Distribute every dissipative cost-difference (the C_diff variables) among
-        all components according to their `serving_weight`.
+        Store the share of the dissipative cost differences (the C_diff variables) that the
+        cost balance of each component is charged with.
+
+        The share is read from the coefficients of the C_diff columns in the cost balance row of
+        the component and stored as its ``Z_diss``, zero for a component without such a row.
 
         Parameters
         ----------
@@ -2077,13 +2086,12 @@ class ExergoeconomicAnalysis:
         """
         # find all indices of variables named "dissipative_*"
         diss_indices = [int(idx) for idx, name in self.variables.items() if name.startswith("dissipative_")]
-        if not diss_indices:
-            return
-        total_C_diff = sum(C_solution[i] for i in diss_indices)
-        # assign to each component that got a serving_weight
         for comp in self.exergy_analysis.components.values():
-            if hasattr(comp, "serving_weight"):
-                comp.Z_diss = comp.serving_weight * total_C_diff
+            row = getattr(comp, "exergy_cost_line", None)
+            if row is not None and self.equations.get(row, {}).get("object") == [comp.name]:
+                comp.Z_diss = sum(self._A[row, i] * C_solution[i] for i in diss_indices)
+            else:
+                comp.Z_diss = 0.0
 
         # Store each dissipative component's own C_diff for balance checking
         for idx in diss_indices:
@@ -2212,6 +2220,7 @@ class ExergoeconomicAnalysis:
             ("C_P", "C_P", 3600, rate),
             ("C_D", "C_D", 3600, rate),
             ("Z", "Z_costs", 3600, rate),
+            ("Z_diss", "Z_diss", 3600, rate),
             ("c_F", "c_F", 1e9, specific),
             ("c_P", "c_P", 1e9, specific),
             ("r", "r", 1, "dimensionless"),
@@ -2421,6 +2430,7 @@ class ExergoeconomicAnalysis:
         C_P_list = []
         C_D_list = []
         Z_cost_list = []
+        Z_diss_list = []
         r_list = []
         f_list = []
 
@@ -2434,6 +2444,7 @@ class ExergoeconomicAnalysis:
                     C_P_list.append(getattr(comp, "C_P", 0) * 3600)
                     C_D_list.append(getattr(comp, "C_D", 0) * 3600)
                     Z_cost_list.append(getattr(comp, "Z_costs", 0) * 3600)
+                    Z_diss_list.append(getattr(comp, "Z_diss", 0) * 3600)
                     f_list.append(getattr(comp, "f", 0) * 100)
                     r_list.append(getattr(comp, "r", 0) * 100)
                 else:
@@ -2441,6 +2452,7 @@ class ExergoeconomicAnalysis:
                     C_P_list.append(np.nan)
                     C_D_list.append(np.nan)
                     Z_cost_list.append(np.nan)
+                    Z_diss_list.append(np.nan)
                     f_list.append(np.nan)
                     r_list.append(np.nan)
             else:
@@ -2449,6 +2461,7 @@ class ExergoeconomicAnalysis:
                 C_P_list.append(np.nan)
                 C_D_list.append(np.nan)
                 Z_cost_list.append(np.nan)
+                Z_diss_list.append(np.nan)
                 f_list.append(np.nan)
                 r_list.append(np.nan)
 
@@ -2457,7 +2470,13 @@ class ExergoeconomicAnalysis:
         df_comp[f"C_P [{self.currency}/h]"] = C_P_list
         df_comp[f"C_D [{self.currency}/h]"] = C_D_list
         df_comp[f"Z [{self.currency}/h]"] = Z_cost_list
-        df_comp[f"C_D+Z [{self.currency}/h]"] = df_comp[f"C_D [{self.currency}/h]"] + df_comp[f"Z [{self.currency}/h]"]
+        df_comp[f"Z_diss [{self.currency}/h]"] = Z_diss_list
+        # The share of C_diff charged to a component is part of its Z, as in f
+        df_comp[f"C_D+Z [{self.currency}/h]"] = (
+            df_comp[f"C_D [{self.currency}/h]"]
+            + df_comp[f"Z [{self.currency}/h]"]
+            + df_comp[f"Z_diss [{self.currency}/h]"]
+        )
         df_comp["f [%]"] = f_list
         df_comp["r [%]"] = r_list
 
@@ -2645,7 +2664,8 @@ class ExergoeconomicAnalysis:
         sort_by : str, optional
             Column to sort by. Valid options:
 
-            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default)
+            - ``"C_D+Z"`` : total cost rate of exergy destruction plus investment (default), including
+              the share of the cost of dissipative components charged to the component (``Z_diss``)
             - ``"C_D"`` : cost rate of exergy destruction (inefficiency-driven cost)
             - ``"Z"`` : investment cost rate
             - ``"r"`` : relative cost difference [%]
@@ -2662,7 +2682,9 @@ class ExergoeconomicAnalysis:
         component is dominated by investment (*f* close to 100 %) or by exergy
         destruction (*f* close to 0 %).  A low *f* suggests that improving
         component efficiency would be more effective, while a high *f* suggests
-        that reducing investment cost is the priority.
+        that reducing investment cost is the priority. The cost a component is
+        charged for the dissipative components it serves, ``Z_diss``, counts
+        as part of its investment in *f* and in ``C_D+Z``.
         """
         # Get full results without printing
         df_comp, _, _, _ = self.exergoeconomic_results(print_results=False)
@@ -2690,6 +2712,7 @@ class ExergoeconomicAnalysis:
             "Component",
             f"C_D [{self.currency}/h]",
             f"Z [{self.currency}/h]",
+            f"Z_diss [{self.currency}/h]",
             f"C_D+Z [{self.currency}/h]",
             "f [%]",
             "r [%]",
@@ -2719,20 +2742,21 @@ class ExergoeconomicAnalysis:
             name = row["Component"]
             c_d = row[f"C_D [{self.currency}/h]"]
             z = row[f"Z [{self.currency}/h]"]
+            z_diss = row[f"Z_diss [{self.currency}/h]"]
             f_val = row["f [%]"]
 
             if f_val < 25:
                 driver = "inefficiency (C_D dominates)"
                 suggestion = "improve component efficiency"
             elif f_val > 75:
-                driver = "investment (Z dominates)"
+                driver = "investment and charged dissipative cost (Z + Z_diss dominate)"
                 suggestion = "reduce investment cost"
             else:
                 driver = "both investment and inefficiency"
                 suggestion = "consider trade-off between efficiency and cost"
 
             print(
-                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f} {self.currency}/h, "
+                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f}, Z_diss={z_diss:.2f} {self.currency}/h, "
                 f"f={f_val:.1f}% -> {driver} -> {suggestion}"
             )
 

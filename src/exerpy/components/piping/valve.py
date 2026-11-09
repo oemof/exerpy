@@ -446,7 +446,6 @@ class Valve(Component):
             else:
                 for comp in serving:
                     weight = getattr(comp, "E_D", 0) / total_E_D
-                    comp.serving_weight = weight
                     A[comp.exergy_cost_line, diss_col] = weight
 
         # --- Extra overall cost balance row ---

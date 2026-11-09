@@ -16,6 +16,7 @@ SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger
 COST_KEYS = {"CostVar_index", *(f"{c}_{label}" for c in "cC" for label in ("T", "M", "PH", "CH", "TOT"))}
 
 from .components.component import component_registry
+from .components.component import set_equal_specific_cost
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
 from .components.nodes.splitter import Splitter
@@ -1833,13 +1834,12 @@ class ExergoeconomicAnalysis:
 
         # Only add auxiliary equations if there is more than one power connection.
         if len(power_conns) > 1:
-            # Choose the first connection as reference.
-            ref = power_conns[0]
-            ref_idx = ref["CostVar_index"]["exergy"]
-            for conn in power_conns[1:]:
-                cur_idx = conn["CostVar_index"]["exergy"]
-                self._A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
-                self._A[counter, cur_idx] = -1 / conn["E"] if conn["E"] != 0 else -1
+            # Choose the first connection with exergy as reference.
+            ref = next((conn for conn in power_conns if conn["E"] != 0), power_conns[0])
+            for conn in power_conns:
+                if conn is ref:
+                    continue
+                set_equal_specific_cost(self._A, counter, ref, conn, "exergy")
                 self._b[counter] = 0
                 self.equations[counter] = {
                     "kind": "aux_power_eq",
@@ -1993,7 +1993,8 @@ class ExergoeconomicAnalysis:
                     conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
-                    conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
+                    E = conn.get("E", 1)
+                    conn["c_TOT"] = conn["C_TOT"] / E if E != 0 else 0.0
 
         # Step 5: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():

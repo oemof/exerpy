@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 from exerpy.quantities import Temperature
 
@@ -296,8 +297,7 @@ class SteamGenerator(Component):
 
         def equal_specific_cost(A, b, counter, kind, first, second, label):
             """Give the two streams the same specific cost of the given exergy."""
-            A[counter, first["CostVar_index"][label]] = 1 / first[f"E_{label}"] if first[f"e_{label}"] != 0 else 1
-            A[counter, second["CostVar_index"][label]] = -1 / second[f"E_{label}"] if second[f"e_{label}"] != 0 else -1
+            set_equal_specific_cost(A, counter, first, second, label, ref_is_outlet=kind == "aux_p_rule")
             equations[counter] = {
                 "kind": kind,
                 "objects": [self.name, first["name"], second["name"]],

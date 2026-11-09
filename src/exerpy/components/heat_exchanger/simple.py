@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 from exerpy.quantities import Temperature
 
@@ -559,8 +560,7 @@ class SimpleHeatExchanger(Component):
         # Equality equation for mechanical exergy costs (c_M,in = c_M,out). Without the split there is no
         # mechanical cost variable, the rule below acts on the physical exergy instead.
         if split_physical_exergy:
-            A[counter, inlet["CostVar_index"]["M"]] = 1 / inlet["E_M"] if inlet["e_M"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
+            set_equal_specific_cost(A, counter, inlet, outlet, "M")
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, inlet["name"], outlet["name"]],
@@ -573,8 +573,7 @@ class SimpleHeatExchanger(Component):
 
         # Equality equation for chemical exergy costs (c_CH,in = c_CH,out)
         if chemical_exergy_enabled:
-            A[counter, inlet["CostVar_index"]["CH"]] = 1 / inlet["E_CH"] if inlet["e_CH"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["CH"]] = -1 / outlet["E_CH"] if outlet["e_CH"] != 0 else -1
+            set_equal_specific_cost(A, counter, inlet, outlet, "CH")
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, inlet["name"], outlet["name"]],
@@ -590,8 +589,7 @@ class SimpleHeatExchanger(Component):
             # Case 1.1: Both streams above ambient temperature
             if T_in >= T0 and T_out >= T0:
                 # Apply F-rule to thermal exergy (c_T,in = c_T,out)
-                A[counter, inlet["CostVar_index"][phys]] = 1 / inlet[f"E_{phys}"] if inlet[f"e_{phys}"] != 0 else 1
-                A[counter, outlet["CostVar_index"][phys]] = -1 / outlet[f"E_{phys}"] if outlet[f"e_{phys}"] != 0 else -1
+                set_equal_specific_cost(A, counter, inlet, outlet, phys)
                 equations[counter] = {
                     "kind": "aux_f_rule",
                     "objects": [self.name, inlet["name"], outlet["name"]],

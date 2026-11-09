@@ -6,6 +6,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -560,19 +561,6 @@ class HeatExchanger(Component):
             If required cost variable indices are missing.
         """
 
-        # Equality equation for mechanical and chemical exergy costs.
-        def set_equal(A, row, in_item, out_item, var):
-            if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
-                A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
-                A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
-            elif in_item["e_" + var] == 0 and out_item["e_" + var] != 0:
-                A[row, in_item["CostVar_index"][var]] = 1
-            elif in_item["e_" + var] != 0 and out_item["e_" + var] == 0:
-                A[row, out_item["CostVar_index"][var]] = 1
-            else:
-                A[row, in_item["CostVar_index"][var]] = 1
-                A[row, out_item["CostVar_index"][var]] = -1
-
         # Label of the physical exergy cost variable the thermal rules act on.
         phys = "T" if split_physical_exergy else "PH"
 
@@ -580,7 +568,7 @@ class HeatExchanger(Component):
         case = self._temperature_case(T0)
         # Case 1: All temperatures > T0.
         if case == 1:
-            set_equal(A, counter + 0, self.inl[0], self.outl[0], phys)
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -588,7 +576,7 @@ class HeatExchanger(Component):
             }
         # Case 2: All temperatures <= T0.
         elif case == 2:
-            set_equal(A, counter + 0, self.inl[1], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.inl[1], self.outl[1], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
@@ -596,7 +584,7 @@ class HeatExchanger(Component):
             }
         # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
         elif case == 3:
-            set_equal(A, counter + 0, self.outl[0], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.outl[0], self.outl[1], phys, ref_is_outlet=True)
             equations[counter] = {
                 "kind": "aux_p_rule",
                 "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
@@ -604,7 +592,7 @@ class HeatExchanger(Component):
             }
         # Case 4: Only hot inlet > T0
         elif case == 4:
-            set_equal(A, counter + 0, self.inl[1], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.inl[1], self.outl[1], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
@@ -612,7 +600,7 @@ class HeatExchanger(Component):
             }
         # Case 5: Only cold inlet <= T0
         elif case == 5:
-            set_equal(A, counter + 0, self.inl[0], self.outl[0], phys)
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -637,7 +625,7 @@ class HeatExchanger(Component):
         num_aux_eqs = 1
         for label in (["M"] if split_physical_exergy else []) + (["CH"] if chemical_exergy_enabled else []):
             for i in (0, 1):
-                set_equal(A, counter + num_aux_eqs, self.inl[i], self.outl[i], label)
+                set_equal_specific_cost(A, counter + num_aux_eqs, self.inl[i], self.outl[i], label)
                 equations[counter + num_aux_eqs] = {
                     "kind": "aux_equality",
                     "objects": [self.name, self.inl[i]["name"], self.outl[i]["name"]],

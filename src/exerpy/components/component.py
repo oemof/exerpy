@@ -172,3 +172,77 @@ class Component:
             single cost variable for its physical exergy. Default is True.
         """
         return
+
+
+def set_equal_specific_cost(A, row, ref, out, label, ref_is_outlet=False):
+    r"""
+    Write the row that gives two streams the same specific cost of one exergy share :math:`x`.
+
+    .. math::
+
+        \frac{\dot{C}^{x}_\mathrm{ref}}{\dot{E}^{x}_\mathrm{ref}}
+        = \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+
+    A stream without exergy of the share carries no cost of it, :math:`\dot{C}^{x} = c^{x}
+    \dot{E}^{x} = 0` :cite:`lazzaretto2006speco`. If either stream has none, the row becomes
+    :math:`\dot{C}^{x}_\mathrm{out} = 0`, or :math:`\dot{C}^{x}_\mathrm{ref} = 0` if ``ref`` is an
+    outlet as well and the one without exergy. An inlet is never fixed, its cost is set upstream.
+
+    Parameters
+    ----------
+    A : numpy.ndarray
+        Cost matrix, changed in place.
+    row : int
+        Index of the row to write.
+    ref : dict
+        Reference stream, an inlet or an outlet of the component.
+    out : dict
+        Outlet priced against ``ref``.
+    label : str
+        Cost variable: ``"T"``, ``"M"``, ``"PH"``, ``"CH"``, or ``"exergy"`` for power and heat.
+    ref_is_outlet : bool, optional
+        True if ``ref`` is an outlet of the component too (P-principle). Default is False.
+    """
+    key = "E" if label == "exergy" else f"E_{label}"
+    if ref[key] != 0 and out[key] != 0:
+        A[row, ref["CostVar_index"][label]] = 1 / ref[key]
+        A[row, out["CostVar_index"][label]] = -1 / out[key]
+    elif ref_is_outlet and out[key] != 0:
+        A[row, ref["CostVar_index"][label]] = 1
+    else:
+        A[row, out["CostVar_index"][label]] = 1
+
+
+def set_mixing_cost(A, row, inlets, out, label):
+    r"""
+    Write the row that gives the outlet of a mixing node the mass-weighted specific cost of its inlets.
+
+    .. math::
+
+        \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
+        = \sum_{i} \frac{\dot{m}_{i}}{\dot{m}_\mathrm{out}} \cdot \frac{\dot{C}^{x}_{i}}{\dot{E}^{x}_{i}}
+
+    An inlet without exergy of the share :math:`x` adds nothing. An outlet without it carries no
+    cost of it, and the row becomes :math:`\dot{C}^{x}_\mathrm{out} = 0`.
+
+    Parameters
+    ----------
+    A : numpy.ndarray
+        Cost matrix, changed in place.
+    row : int
+        Index of the row to write.
+    inlets : iterable of dict
+        Inlet streams of the node.
+    out : dict
+        Outlet stream of the node.
+    label : str
+        Cost variable, e.g. ``"M"`` or ``"CH"``.
+    """
+    key = f"E_{label}"
+    if out[key] == 0:
+        A[row, out["CostVar_index"][label]] = 1
+        return
+    A[row, out["CostVar_index"][label]] = -1 / out[key]
+    for inlet in inlets:
+        if inlet[key] != 0:
+            A[row, inlet["CostVar_index"][label]] = inlet["m"] / (out["m"] * inlet[key])

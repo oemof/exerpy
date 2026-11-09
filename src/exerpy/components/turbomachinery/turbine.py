@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -265,7 +266,7 @@ class Turbine(Component):
             = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
 
         The power leaving the turbine is one single product, so all of its outlets are priced alike
-        (P-principle), against the first of them as a reference:
+        (P-principle), against the first of them that carries power:
 
         .. math::
 
@@ -327,10 +328,7 @@ class Turbine(Component):
         inlet = self.inl[0]
         for outlet in material_outlets:
             for label in labels:
-                A[counter, inlet["CostVar_index"][label]] = 1 / inlet[f"E_{label}"] if inlet[f"e_{label}"] != 0 else 1
-                A[counter, outlet["CostVar_index"][label]] = (
-                    -1 / outlet[f"E_{label}"] if outlet[f"e_{label}"] != 0 else -1
-                )
+                set_equal_specific_cost(A, counter, inlet, outlet, label)
                 b[counter] = 0
                 equations[counter] = {
                     "kind": "aux_equality" if label == "CH" else "aux_f_rule",
@@ -346,12 +344,11 @@ class Turbine(Component):
             if outlet.get("kind") == "power" and outlet.get("source_component") and outlet.get("target_component")
         ]
         if len(power_outlets) > 1:
-            ref = power_outlets[0]
-            ref_idx = ref["CostVar_index"]["exergy"]
-            for outlet in power_outlets[1:]:
-                cur_idx = outlet["CostVar_index"]["exergy"]
-                A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
-                A[counter, cur_idx] = -1 / outlet["E"] if outlet["E"] != 0 else -1
+            ref = next((outlet for outlet in power_outlets if outlet["E"] != 0), power_outlets[0])
+            for outlet in power_outlets:
+                if outlet is ref:
+                    continue
+                set_equal_specific_cost(A, counter, ref, outlet, "exergy", ref_is_outlet=True)
                 b[counter] = 0
                 equations[counter] = {
                     "kind": "aux_p_rule",

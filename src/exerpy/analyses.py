@@ -1,4 +1,5 @@
 import json
+import math
 import os
 
 import numpy as np
@@ -372,9 +373,9 @@ class ExergyAnalysis:
         model : str | tespy.networks.network.Network
             Path to the tespy Network export or the actual Network instance.
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. All exergies are computed at it.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. All exergies are computed at it.
         chemExLib : str, optional
             Name of the library for chemical exergy tables.
         validate : bool, default=True
@@ -413,9 +414,12 @@ class ExergyAnalysis:
         path : str
             Path to the Aspen file (.bkp format).
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. Defaults to the reference temperature REF_TEMP of the model. A value
+            passed here replaces it and the model is run again, so all exergies are computed at it. The
+            model file stays unchanged.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. Defaults to the reference pressure REF_PRES of the model, and replaces
+            it like ``Tamb``.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -436,7 +440,7 @@ class ExergyAnalysis:
 
         if file_extension == ".bkp":
             logger.info("Running Aspen parsing and generating JSON data.")
-            data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy)
+            data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
             logger.info("Parsing completed successfully.")
 
         else:
@@ -460,9 +464,15 @@ class ExergyAnalysis:
         path : str
             Path to the Ebsilon file (.ebs format).
         Tamb : float, optional
-            Ambient temperature in K. Overrides the reference state of the model.
+            Ambient temperature in K. Defaults to the reference temperature of the model, set by a
+            measuring point. A value passed here overrides it and all exergies are computed at it; if it
+            differs from the model, the physical exergies are computed from the fluid data of the streams
+            instead of taken from Ebsilon. Only the reference state changes, not the simulation. If the
+            measuring point also sets an inlet temperature of the plant, change it in Ebsilon to simulate
+            the plant at another ambient temperature.
         pamb : float, optional
-            Ambient pressure in Pa. Overrides the reference state of the model.
+            Ambient pressure in Pa. Defaults to the reference pressure of the model, and overrides it
+            like ``Tamb``.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -520,9 +530,11 @@ class ExergyAnalysis:
         json_path : str
             Path to JSON file containing component and connection data.
         Tamb : float, optional
-            Ambient temperature in K. If None, extracted from JSON.
+            Ambient temperature in K. If None, taken from ``ambient_conditions`` of the JSON. The
+            exergies in the file were computed at that state, so a value passed here must agree with it;
+            it is needed only if the file has none.
         pamb : float, optional
-            Ambient pressure in Pa. If None, extracted from JSON.
+            Ambient pressure in Pa, like ``Tamb``.
         chemExLib : str, optional
             Name of chemical exergy library to use. Default is None.
         split_physical_exergy : bool, optional
@@ -542,7 +554,8 @@ class ExergyAnalysis:
         FileNotFoundError
             If JSON file does not exist.
         ValueError
-            If JSON structure is invalid or missing required data. For a unit that is
+            If JSON structure is invalid or missing required data, or if ``Tamb`` or ``pamb``
+            differ from the ambient state of the file. For a unit that is
             unknown or of the wrong kind, and with ``validate=True`` for any problem, this is
             an :class:`exerpy.schema.InputValidationError`, whose ``issues`` attribute lists
             each problem with its location.
@@ -1303,9 +1316,9 @@ def _process_json(
     data : dict
         Dictionary containing system data with components, connections and ambient conditions
     Tamb : float, optional
-        Ambient temperature in K, overrides the value in data if provided
+        Ambient temperature in K. Used if the data have none, and must agree with theirs otherwise
     pamb : float, optional
-        Ambient pressure in Pa, overrides the value in data if provided
+        Ambient pressure in Pa, like Tamb
     chemExLib : dict, optional
         Chemical exergy library for reference values
     split_physical_exergy : bool, default=True
@@ -1319,7 +1332,8 @@ def _process_json(
     Raises
     ------
     ValueError
-        If required sections or fields are missing, or if data structure is invalid
+        If required sections or fields are missing, if data structure is invalid, or if Tamb or pamb
+        differ from the ambient state the exergies in the data were computed at
     """
     # Validate required sections
     if required_component_fields is None:
@@ -1359,9 +1373,21 @@ def _process_json(
             if conn_data.get("kind") == "material" and "mass_composition" not in conn_data:
                 raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
 
-    # Extract or use provided ambient conditions
-    Tamb = Tamb or data["ambient_conditions"].get("Tamb")
-    pamb = pamb or data["ambient_conditions"].get("pamb")
+    # The stored exergies hold only at the stored ambient state
+    stored = data["ambient_conditions"]
+    states = [("Tamb", Tamb, stored.get("Tamb"), "K"), ("pamb", pamb, stored.get("pamb"), "Pa")]
+    if any(
+        value is not None and kept is not None and not math.isclose(value, kept, rel_tol=1e-6)
+        for _, value, kept, _ in states
+    ):
+        at = " and ".join(f"{name} = {kept:g} {unit}" for name, _, kept, unit in states if kept is not None)
+        passed = " and ".join(f"{name} = {value:g} {unit}" for name, value, _, unit in states if value is not None)
+        raise ValueError(
+            f"The exergies in the data were computed at {at}, not at the passed {passed}. Export the data again at "
+            "the new ambient state, or leave out Tamb and pamb."
+        )
+    Tamb = stored.get("Tamb") if Tamb is None else Tamb
+    pamb = stored.get("pamb") if pamb is None else pamb
 
     if Tamb is None or pamb is None:
         raise ValueError("Ambient conditions (Tamb, pamb) must be provided either in JSON or as parameters")

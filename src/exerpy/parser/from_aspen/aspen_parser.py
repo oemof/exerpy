@@ -1,5 +1,6 @@
 import itertools
 import json
+import math
 import os
 
 from exerpy.logger import logger
@@ -19,16 +20,21 @@ class AspenModelParser:
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
     """
 
-    def __init__(self, model_path, split_physical_exergy=True):
+    def __init__(self, model_path, split_physical_exergy=True, Tamb=None, pamb=None):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+            Tamb (float): Ambient temperature in K. Replaces REF_TEMP of the model, see
+                :meth:`set_ambient_conditions`.
+            pamb (float): Ambient pressure in Pa. Replaces REF_PRES of the model.
         """
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
+        self.Tamb = Tamb
+        self.pamb = pamb
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
@@ -62,6 +68,8 @@ class AspenModelParser:
         Parses the components and connections from the Aspen model.
         """
         try:
+            self.set_ambient_conditions()
+
             # Parse Tamb and pamb
             self.parse_ambient_conditions()
 
@@ -939,6 +947,36 @@ class AspenModelParser:
         # Store the component data in the appropriate group
         self.components_data[group][component_name] = component_data
 
+    def set_ambient_conditions(self):
+        """
+        Writes the ambient state passed to the parser to REF_TEMP and REF_PRES and runs the model again, so that
+        Aspen computes the exergies of the streams at it. Nothing happens if no value is passed or the model holds
+        the passed values already. The change exists in memory only; the model file stays unchanged.
+
+        Raises:
+            ValueError: If the model has no REF_TEMP or REF_PRES node for a passed value.
+        """
+        changed = False
+        for key, value, path in (
+            ("Tamb", self.Tamb, r"\Data\Setup\Sim-Options\Input\REF_TEMP"),
+            ("pamb", self.pamb, r"\Data\Setup\Sim-Options\Input\REF_PRES"),
+        ):
+            if value is None:
+                continue
+            node = self.aspen.Tree.FindNode(path)
+            if node is None:
+                raise ValueError(f"The Aspen model has no node {path} to set {key} = {value} {SI_UNITS[key]}.")
+            if node.Value is not None and math.isclose(
+                convert_to_SI(key, node.Value, node.UnitString), value, rel_tol=1e-6
+            ):
+                continue
+            node.Value = convert(value, SI_UNITS[key], node.UnitString)
+            changed = True
+        if changed:
+            logger.info("Running the model again at the ambient state passed to the parser.")
+            self.aspen.SuppressDialogs = 1
+            self.aspen.Engine.Run2()
+
     def parse_ambient_conditions(self):
         """
         Parses the ambient conditions from the Aspen model and stores them as class attributes.
@@ -1012,7 +1050,7 @@ class AspenModelParser:
             raise
 
 
-def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
+def run_aspen(model_path, output_dir=None, split_physical_exergy=True, Tamb=None, pamb=None):
     """
     Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -1021,16 +1059,21 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+        Tamb (float): Ambient temperature in K. Defaults to REF_TEMP of the model. A value passed here
+            replaces REF_TEMP and the model is run again, so all exergies are computed at it. The model
+            file stays unchanged.
+        pamb (float): Ambient pressure in Pa, like ``Tamb`` for REF_PRES.
 
     Returns:
-        dict: Parsed data in dictionary format.
+        dict: Parsed data in dictionary format. Its ``ambient_conditions`` hold the ambient state
+        the exergies were computed at.
     """
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy)
+    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
 
     try:
         parser.initialize_model()

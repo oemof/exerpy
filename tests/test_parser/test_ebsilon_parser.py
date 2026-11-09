@@ -377,6 +377,40 @@ def test_parse_connection(parser, mock_pipe):
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+@pytest.mark.parametrize("compute_e_PH, e_PH", [(False, 500e3), (True, 1000.0)])
+def test_parse_connection_physical_exergy(parser, mock_pipe, compute_e_PH, e_PH):
+    """
+    Test that e_PH is the exergy of the pipe, or computed at the ambient state if the parser is set so, and that
+    e_M = e_PH - e_T.
+    """
+    parser.Tamb = 288.15
+    parser.pamb = 101325
+    parser.compute_e_PH = compute_e_PH
+    parser.oc = Mock()
+    parser.oc.CastToPipe = Mock(return_value=mock_pipe)
+    mock_pipe.Kind = 1004  # water
+    mock_pipe.FluidType = 4
+    mock_pipe.HasComp = Mock(return_value=False)
+    mock_pipe.E.Dimension = 5  # kJ / kg
+    functions = "exerpy.parser.from_ebsilon.ebsilon_functions"
+
+    with (
+        patch(f"{functions}.calc_ePH", return_value=1000.0) as calc_ePH,
+        patch(f"{functions}.calc_eT", return_value=400.0),
+        patch(f"{functions}.state_reproduced", return_value=True),
+    ):
+        parser.parse_connection(mock_pipe)
+
+    conn = parser.connections_data[mock_pipe.Name]
+    assert conn["e_PH"] == pytest.approx(e_PH)
+    assert conn["e_T"] == 400.0
+    assert conn["e_M"] == pytest.approx(e_PH - 400.0)
+    assert calc_ePH.called is compute_e_PH
+    if compute_e_PH:
+        calc_ePH.assert_called_once_with(parser.app, mock_pipe, 288.15, 101325)
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
 def test_get_sorted_data(parser):
     """
     Test data sorting functionality.
@@ -847,6 +881,28 @@ def test_resolve_ambient_conditions_override():
 
     assert parser.Tamb == 300.0
     assert parser.pamb == 101325.0
+
+
+@pytest.mark.parametrize(
+    "pressures, Tamb, pamb, compute",
+    [
+        ([("MP_p", 101325.0)], None, None, False),
+        ([("MP_p", 101325.0)], 288.15, 101325.0, False),
+        ([("MP_p", 101325.0)], 298.15, None, True),
+        ([("MP_p", 101325.0)], None, 1e5, True),
+        ([], None, 101325.0, True),
+    ],
+)
+def test_resolve_ambient_conditions_compute_e_PH(pressures, Tamb, pamb, compute):
+    """
+    Test that the physical exergies are computed at the passed ambient state if it is not the one of the
+    measuring points, at which Ebsilon computes the exergy of the pipes.
+    """
+    parser = _ambient_parser([("MP_T", 288.15)], pressures, Tamb=Tamb, pamb=pamb)
+
+    parser._resolve_ambient_conditions()
+
+    assert parser.compute_e_PH is compute
 
 
 # ---------- Component Mapping Tests ----------

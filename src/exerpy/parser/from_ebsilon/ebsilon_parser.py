@@ -142,7 +142,10 @@ class EbsilonModelParser:
         pressure, each holding its value in MEASM. Measuring points of these types without a
         value are ignored, several of the same type are accepted as long as they agree, and
         conflicting ones raise an error. Values passed as ``Tamb`` and ``pamb`` take
-        precedence over the model and are used for the exergies of the connections as well.
+        precedence over the model and are used for all exergies. If they differ from the
+        measuring points, or the model has none, the physical exergy of a stream is
+        computed at them from its fluid data instead of taken from the exergy E of the pipe,
+        which Ebsilon computes at the measuring points.
 
     Steam generator heating surfaces
         A flue gas zone (component 88) and its main heating surface (component 89) model the
@@ -164,8 +167,10 @@ class EbsilonModelParser:
         Parameters:
             model_path (str): Path to the Ebsilon model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
-            Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
-            pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+            Tamb (float): Ambient temperature in K. Overrides the measuring points of the model
+                and is used for all exergies.
+            pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model
+                and is used for all exergies.
             profile (str or int): Name or id of the profile to activate. Defaults to the profile
                 the model was saved with.
 
@@ -195,6 +200,8 @@ class EbsilonModelParser:
         self.connections_data: dict[str, dict[str, Any]] = {}  # Dictionary to store connection data
         self.Tamb: float | None = Tamb  # Ambient temperature
         self.pamb: float | None = pamb  # Ambient pressure
+        # Compute e_PH at (Tamb, pamb) instead of reading the pipes' E, see _resolve_ambient_conditions
+        self.compute_e_PH = False
 
         # Measuring points defining the reference state: {"T"/"p": [(component name, value)]}
         self._ambient_measurements: dict[str, list[tuple[str, float | None]]] = {"T": [], "p": []}
@@ -387,6 +394,7 @@ class EbsilonModelParser:
             obj: The Ebsilon component object whose connections are to be parsed.
         """
         from .ebsilon_functions import calc_eM
+        from .ebsilon_functions import calc_ePH
         from .ebsilon_functions import calc_eT
         from .ebsilon_functions import state_reproduced
 
@@ -452,11 +460,16 @@ class EbsilonModelParser:
                     else None
                 )
 
-                e_PH_value = (
-                    convert_to_SI("e_PH", pipe_cast.E.Value, unit_id_to_string.get(pipe_cast.E.Dimension, "Unknown"))
-                    if hasattr(pipe_cast, "E") and pipe_cast.E.Value is not None
-                    else None
-                )
+                if self.compute_e_PH:
+                    e_PH_value = calc_ePH(self.app, pipe_cast, self.Tamb, self.pamb)
+                else:
+                    e_PH_value = (
+                        convert_to_SI(
+                            "e_PH", pipe_cast.E.Value, unit_id_to_string.get(pipe_cast.E.Dimension, "Unknown")
+                        )
+                        if hasattr(pipe_cast, "E") and pipe_cast.E.Value is not None
+                        else None
+                    )
 
                 # If e_PH is not available from Ebsilon, calculate using min-based formula
                 if (
@@ -533,17 +546,23 @@ class EbsilonModelParser:
                     }
                 )
 
+                if (
+                    (self.split_physical_exergy or self.compute_e_PH)
+                    and connection_data["T"] is not None
+                    and not state_reproduced(self.app, pipe_cast, connection_data["p"], connection_data["T"])
+                ):
+                    exergy = "physical" if self.compute_e_PH else "thermal and mechanical"
+                    logger.warning(
+                        f"The {exergy} exergy of stream {pipe_cast.Name} may be wrong: the property data used to "
+                        f"compute it do not reproduce the stream's enthalpy and entropy."
+                    )
+
                 # Add the mechanical and thermal specific exergies unless the flag is set to False
                 if self.split_physical_exergy:
-                    if connection_data["T"] is not None and not state_reproduced(
-                        self.app, pipe_cast, connection_data["p"], connection_data["T"]
-                    ):
-                        logger.warning(
-                            f"The thermal and mechanical exergy of stream {pipe_cast.Name} may be wrong: the property "
-                            f"data used for the split do not reproduce the stream's enthalpy and entropy."
-                        )
                     e_T_value = calc_eT(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
-                    e_M_value = calc_eM(self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb)
+                    e_M_value = calc_eM(
+                        self.app, pipe_cast, connection_data["p"], self.Tamb, self.pamb, e_PH=e_PH_value
+                    )
 
                     connection_data.update(
                         {
@@ -950,9 +969,15 @@ class EbsilonModelParser:
         """
         Determine the ambient temperature and pressure from the measuring points of the model.
 
+        A value passed to the parser that differs from the measuring points, or that the model
+        has no measuring point for, sets :attr:`compute_e_PH`: Ebsilon computes the exergy E of
+        the pipes at the measuring points, so the physical exergies are computed at the passed
+        state instead.
+
         Raises:
             ValueError: If the reference state is defined ambiguously or not at all.
         """
+        given = {"T": self.Tamb, "p": self.pamb}
         self.Tamb = self._select_ambient_value("T", "ambient temperature (Tamb)", REFERENCE_TEMPERATURE, "K")
         self.pamb = self._select_ambient_value("p", "ambient pressure (pamb)", REFERENCE_PRESSURE, "Pa")
 
@@ -973,6 +998,20 @@ class EbsilonModelParser:
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
+
+        self.compute_e_PH = any(
+            value is not None and not self._matches_model(prop, value) for prop, value in given.items()
+        )
+        if self.compute_e_PH:
+            logger.info(
+                f"The ambient state Tamb = {self.Tamb} K, pamb = {self.pamb} Pa differs from the measuring points of "
+                "the model, so the physical exergies are computed at it instead of taken from Ebsilon."
+            )
+
+    def _matches_model(self, prop: str, value: float) -> bool:
+        """Whether the model has measuring points of this reference type and all of them hold ``value``."""
+        values = [measured for _, measured in self._ambient_measurements[prop] if measured is not None]
+        return bool(values) and all(math.isclose(measured, value, rel_tol=1e-6) for measured in values)
 
     def _missing_ambient_hint(self, prop: str, label: str, ftyp: int) -> str:
         """Describe why a reference value could not be read from the model."""
@@ -1486,13 +1525,16 @@ def run_ebsilon(
         model_path (str): Path to the Ebsilon model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
-        Tamb (float): Ambient temperature in K. Overrides the measuring points of the model.
-        pamb (float): Ambient pressure in Pa. Overrides the measuring points of the model.
+        Tamb (float): Ambient temperature in K. Defaults to the measuring point of the model. A value
+            passed here overrides the model and is used for all exergies; if it differs from the model,
+            the physical exergies are computed from the fluid data of the streams.
+        pamb (float): Ambient pressure in Pa, like ``Tamb``.
         profile (str or int): Name or id of the profile to simulate. Defaults to the profile
             the model was saved with.
 
     Returns:
-        dict: Parsed data in dictionary format.
+        dict: Parsed data in dictionary format. Its ``ambient_conditions`` hold the ambient state
+        the exergies were computed at.
 
     Raises:
         FileNotFoundError: If the model file is not found at the specified path.

@@ -96,164 +96,122 @@ def molar_to_mass_fractions(molar_fractions):
     return mass_fractions
 
 
+def _library_entry(substance, chem_ex_data):
+    """Return the entry of a substance in the chemical exergy library, or None if it has no value."""
+    try:
+        aliases = CP.get_aliases(substance)
+    except ValueError:
+        aliases = [substance]
+    for alias in aliases:
+        entry = chem_ex_data.get(alias.upper())
+        if entry is not None:
+            return None if entry[4] == "NaN" else entry
+    return None
+
+
 def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
-    """
-    Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
-    - Case A: Handle pure substance.
-    - Case B: If water condenses, handle the liquid and gas phases separately.
-    - Case C: If water doesn't condense or if water is not present, handle the mixture using the standard approach (ideal mixture).
+    r"""
+    Calculate the specific chemical exergy of a stream.
 
-    Parameters:
-    - stream_data: Dictionary containing 'mass_composition' of the stream.
-    - Tamb: Ambient temperature in Celsius.
-    - pamb: Ambient pressure in bar.
+    A pure substance gets the value of its reference phase. A pure substance without a value in the
+    library gets 0, which is only valid if it does not react. A mixture is an ideal gas mixture. If
+    water condenses at the ambient state, the liquid water forms a separate phase
+    (Bejan et al., 1996, p. 138):
 
-    Returns:
-    - eCH: Chemical exergy in kJ/kg.
+    .. math::
+
+        \bar{e}^\mathrm{CH} = x_\mathrm{g} \left( \sum_k y_k \bar{e}^\mathrm{CH}_k
+        + \bar{R} T_0 \sum_k y_k \ln y_k \right)
+        + x_\mathrm{H_2O,l} \, \bar{e}^\mathrm{CH}_\mathrm{H_2O,l}
+
+    with the molar fraction of the gas phase :math:`x_\mathrm{g}` and the molar fractions
+    :math:`y_k` within the gas phase.
+
+    Parameters
+    ----------
+    stream_data : dict
+        ``molar_composition`` or ``mass_composition`` of the stream.
+    Tamb : float
+        Ambient temperature in K.
+    pamb : float
+        Ambient pressure in Pa.
+    chemExLib : str
+        Name of the chemical exergy library, e.g. ``'Ahrendts'``.
+
+    Returns
+    -------
+    float
+        Specific chemical exergy in J/kg.
+
+    Raises
+    ------
+    ValueError
+        If the library has no value for a substance of a mixture.
     """
-    logger.info(
-        f"Starting chemical exergy of stream of composition {stream_data} calculation with Tamb={Tamb}, pamb={pamb}"
-    )
+    logger.info(f"Calculating the chemical exergy of {stream_data} at Tamb={Tamb} K and pamb={pamb} Pa")
 
     try:
-        # Check if molar fractions already exist
         if "molar_composition" in stream_data:
             molar_fractions = stream_data["molar_composition"]
         else:
-            # If not, convert mass composition to molar fractions
             molar_fractions = mass_to_molar_fractions(stream_data["mass_composition"])
         try:
-            # Load chemical exergy data
             chem_ex_file = os.path.join(__datapath__, f"{chemExLib}.json")
             with open(chem_ex_file) as file:
-                chem_ex_data = json.load(file)  # data in J/kmol
+                chem_ex_data = json.load(file)  # in J/mol
         except FileNotFoundError:
             error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
-        R = 8.314  # Universal gas constant in J/(molK)
-        aliases_water = CP.get_aliases("H2O")
-
-        # Handle pure substance (Case A)
+        R = 8.314  # in J/(mol K)
         molar_fractions = {key: value for key, value in molar_fractions.items() if value > 1e-6}
+
         if len(molar_fractions) == 1:
-            logger.info("Handling pure substance case (Case A).")
-            substance = next(iter(molar_fractions))  # Get the single key
+            substance = next(iter(molar_fractions))
+            entry = _library_entry(substance, chem_ex_data)
+            if entry is None:
+                logger.warning(
+                    f"{chemExLib} has no chemical exergy for {substance}. It is set to 0, which is only valid "
+                    f"if {substance} does not react."
+                )
+                return 0.0
+            eCH = entry[entry[4]] / CP.PropsSI("M", substance)
+            logger.info(f"Chemical exergy of pure {substance}: {eCH} J/kg")
+            return eCH
 
-            try:
-                aliases = CP.get_aliases(substance)
+        eCH_gas = {}  # in J/mol
+        for substance in molar_fractions:
+            entry = _library_entry(substance, chem_ex_data)
+            if entry is None or entry[3] == "NaN":
+                error_msg = f"{chemExLib} has no chemical exergy for {substance} in the gas phase."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            eCH_gas[substance] = entry[3]
 
-                if set(aliases) & set(aliases_water):
-                    eCH = chem_ex_data["WATER"][2] / CP.PropsSI("M", "H2O")  # liquid water, in J/kg
-                    logger.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
-                else:
-                    for alias in aliases:
-                        if alias.upper() in chem_ex_data:
-                            eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI("M", substance)  # in J/kg
-                            logger.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
-                            break
-                    else:
-                        logger.error(f"No matching alias found for {substance}")
-                        raise KeyError(f"No matching alias found for {substance}")
+        molar_mass = sum(x * CP.PropsSI("M", substance) for substance, x in molar_fractions.items())  # in kg/mol
 
-            except Exception:
-                eCH = 0  # If no aliases found, set chemical exergy to 0
-                logger.warning(f"No CoolProp aliases found for {substance}. Setting chemical exergy to 0 J/kg.")
+        gas_fractions = dict(molar_fractions)
+        x_gas = 1
+        eCH_liquid_mol = 0
+        aliases_water = CP.get_aliases("H2O")
+        water = next((substance for substance in molar_fractions if substance in aliases_water), None)
+        if water is not None:
+            pH2O_sat = CP.PropsSI("P", "T", Tamb, "Q", 1, "Water")
+            if molar_fractions[water] * pamb > pH2O_sat:
+                x_dry = sum(x for substance, x in molar_fractions.items() if substance != water)
+                x_H2O_gas = x_dry / (pamb / pH2O_sat - 1)
+                x_H2O_liquid = molar_fractions[water] - x_H2O_gas
+                x_gas = 1 - x_H2O_liquid
+                gas_fractions[water] = x_H2O_gas
+                eCH_liquid_mol = x_H2O_liquid * chem_ex_data["WATER"][2]
+                logger.info(f"Water condenses: {x_H2O_liquid} mol of liquid per mol of mixture")
 
-        # Handle mixtures (Case B or C)
-        else:
-            logger.info("Handling mixture case (Case B or C).")
-            total_molar_mass = 0  # To compute the molar mass of the mixture
-            eCH_gas_mol = 0  # Molar chemical exergy of the gas phase if condensation
-            eCH_liquid_mol = 0  # Molar chemical exergy of the liquid phase if condensation
-            molar_fractions_gas = {}  # Molar fractions within the gas phase if condensation
-            entropy_mixing = 0  # Entropy of mixing of ideal mixtures
-
-            # Calculate the total molar mass of the mixture
-            for substance, fraction in molar_fractions.items():
-                molar_mass = CP.PropsSI("M", substance)  # Molar mass in kg/mol
-                total_molar_mass += fraction * molar_mass  # Weighted sum for molar mass in kg/mol
-            logger.info(f"Total molar mass of the mixture: {total_molar_mass} kg/mol")
-
-            water_present = any(alias in molar_fractions for alias in aliases_water)
-
-            if water_present:
-                water_alias = next(alias for alias in aliases_water if alias in molar_fractions)
-                pH2O_sat = CP.PropsSI("P", "T", Tamb, "Q", 1, "Water")  # Saturation pressure of water in bar
-                pH2O = molar_fractions[water_alias] * pamb  # Partial pressure of water
-
-                if pH2O > pH2O_sat:  # Case B: Water condenses
-                    logger.info("Condensation occurs in the mixture.")
-                    x_dry = sum(fraction for comp, fraction in molar_fractions.items() if comp != water_alias)
-                    x_H2O_gas = x_dry / (pamb / pH2O_sat - 1)  # Vaporous water fraction in the total mixture
-                    x_H2O_liquid = molar_fractions[water_alias] - x_H2O_gas  # Liquid water fraction
-                    x_total_gas = 1 - x_H2O_liquid  # Total gas phase fraction
-
-                    eCH_liquid_mol = x_H2O_liquid * (chem_ex_data["WATER"][2])  # Liquid phase contribution, in J/mol
-
-                    for substance, fraction in molar_fractions.items():
-                        if substance == water_alias:
-                            molar_fractions_gas[substance] = x_H2O_gas / x_total_gas
-                        else:
-                            molar_fractions_gas[substance] = molar_fractions[substance] / x_total_gas
-
-                    for substance, fraction in molar_fractions_gas.items():
-                        aliases = CP.get_aliases(substance)
-                        for alias in aliases:
-                            if alias.upper() in chem_ex_data:
-                                eCH_gas_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy is in J/mol
-                                break
-                        else:
-                            logger.error(f"No matching alias found for {substance}")
-                            raise KeyError(f"No matching alias found for {substance}")
-
-                        if fraction > 0:  # Avoid log(0)
-                            entropy_mixing += fraction * math.log(fraction)
-
-                    eCH_gas_mol += R * Tamb * entropy_mixing
-                    eCH_mol = eCH_gas_mol + eCH_liquid_mol
-                    logger.info(f"Condensed phase chemical exergy: {eCH_mol} J/kmol")
-
-                else:  # Case C: Water doesn't condense
-                    logger.info("Water does not condense.")
-                    eCH_mol = 0
-                    for substance, fraction in molar_fractions.items():
-                        aliases = CP.get_aliases(substance)
-                        for alias in aliases:
-                            if alias.upper() in chem_ex_data:
-                                eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
-                                break
-                        else:
-                            logger.error(f"No matching alias found for {substance}")
-                            raise KeyError(f"No matching alias found for {substance}")
-
-                        if fraction > 0:  # Avoid log(0)
-                            entropy_mixing += fraction * math.log(fraction)
-
-                    eCH_mol += R * Tamb * entropy_mixing
-
-            else:  # Case C: No water present
-                logger.info("No water present in the mixture.")
-                eCH_mol = 0
-                for substance, fraction in molar_fractions.items():
-                    aliases = CP.get_aliases(substance)
-                    for alias in aliases:
-                        if alias.upper() in chem_ex_data:
-                            eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
-                            break
-                    else:
-                        logger.error(f"No matching alias found for {substance}")
-                        raise KeyError(f"No matching alias found for {substance}")
-
-                    if fraction > 0:  # Avoid log(0)
-                        entropy_mixing += fraction * math.log(fraction)
-
-                eCH_mol += R * Tamb * entropy_mixing
-
-            eCH = eCH_mol / total_molar_mass  # Divide molar exergy by molar mass of mixture
-            logger.info(f"Chemical exergy: {eCH} kJ/kg")
-
+        y = {substance: x / x_gas for substance, x in gas_fractions.items()}
+        eCH_gas_mol = sum(y[substance] * eCH_gas[substance] for substance in y)
+        eCH_gas_mol += R * Tamb * sum(y_k * math.log(y_k) for y_k in y.values() if y_k > 0)
+        eCH = (x_gas * eCH_gas_mol + eCH_liquid_mol) / molar_mass
+        logger.info(f"Chemical exergy of the mixture: {eCH} J/kg")
         return eCH
 
     except Exception as e:
@@ -267,8 +225,8 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
 
     Parameters:
     - my_json: The JSON object containing the components and connections.
-    - Tamb: Ambient temperature in Celsius.
-    - pamb: Ambient pressure in bar.
+    - Tamb: Ambient temperature in K.
+    - pamb: Ambient pressure in Pa.
 
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
@@ -291,14 +249,23 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
             if molar_composition:
                 stream_data = {"molar_composition": molar_composition}
                 logger.info(f"Using molar composition for connection {conn_name}")
-            else:
+            elif mass_composition:
                 stream_data = {"mass_composition": mass_composition}
                 logger.info(f"Using mass composition for connection {conn_name}")
+            else:
+                # Like a substance without a value in the library.
+                logger.warning(
+                    f"Connection {conn_name} has no composition. Its chemical exergy is set to 0, which is only "
+                    "valid if it does not react."
+                )
+                conn_data["e_CH"] = 0.0
+                conn_data["e_CH_unit"] = SI_UNITS["e_CH"]
+                continue
 
             # Add the chemical exergy value
             conn_data["e_CH"] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
             conn_data["e_CH_unit"] = SI_UNITS["e_CH"]
-            logger.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
+            logger.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} J/kg")
         else:
             logger.info(
                 f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['kind']})"

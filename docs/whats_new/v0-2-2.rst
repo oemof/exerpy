@@ -1,0 +1,26 @@
+v0.2.2 (unreleased)
++++++++++++++++++++
+
+Bug Fixes
+#########
+- The chemical exergy of a gas mixture from which water condenses at the ambient state was too
+  high, since the exergy of the gas phase was not weighted with its molar fraction. The flue gases
+  of the CCPP and CGAM examples had a chemical exergy that was 5 to 7 % too high. The exergy
+  destruction of the combustion chamber was therefore too low and the exergy loss of the stack too
+  high. The overall exergetic efficiency does not change (closes #63).
+- In the Ahrendts library, the chemical exergy of liquid and gaseous methanol was swapped and
+  deuterium had the value of oxygen. Deuterium has no value now.
+- A pure substance gets the chemical exergy of its reference phase, e.g. liquid for methanol and
+  ethanol. Before, it got the value of the gas, except for water.
+- A pure substance without a value in the library gets a chemical exergy of 0 and a warning that
+  says so. A mixture with such a substance raises a ``ValueError`` that names it. Before, a library
+  entry without a value, such as propane, raised a ``TypeError`` in a mixture.
+- The docstrings of :func:`~exerpy.functions.calc_chemical_exergy` and
+  :func:`~exerpy.functions.add_chemical_exergy` give the units of the ambient state in K and Pa and
+  of the result in J/kg.
+
+Other Changes
+#############
+- The CCPP and CGAM examples were run again with all three simulators. Their validation notebooks
+  and the result tables of the CGAM exergoeconomic examples in the documentation show the new
+  results. The deviations between the simulators do not change.

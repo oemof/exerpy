@@ -38,63 +38,62 @@ def combustion_chamber():
     return CombustionChamber(name="TestCombustionChamber", Z_costs=1000)
 
 
-@pytest.fixture
-def valid_streams():
-    """
-    Create dummy inlet and outlet stream data for a combustion chamber.
-
-    For a combustion chamber, we assume:
-      - Two inlets (e.g., air and fuel)
-      - One outlet (exhaust)
-
-    Example values (units assumed to be consistent with the component):
-      - Inlet "air": mass flow m = 5, specific physical exergy e_PH = 500, and chemical exergy e_CH = 0
-      - Inlet "fuel": m = 2, e_PH = 300, e_CH = 800
-      - Outlet "exhaust": m = 7, e_PH = 700, e_CH = 200
-    """
-    inlet_air = {"m": 5, "e_PH": 500, "e_CH": 0}
-    inlet_fuel = {"m": 2, "e_PH": 300, "e_CH": 800}
-    outlet_exhaust = {"m": 7, "e_PH": 700, "e_CH": 200}
-    return {"inlets": {"air": inlet_air, "fuel": inlet_fuel}, "outlets": {"exhaust": outlet_exhaust}}
+def _cc_stream(m, e_T, e_M, e_CH, C_T, C_M, C_CH):
+    """Stream of a combustion chamber with specific exergies and cost rates per exergy form."""
+    return {
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "e_CH": e_CH,
+        "C_T": C_T,
+        "C_M": C_M,
+        "C_PH": C_T + C_M,
+        "C_CH": C_CH,
+    }
 
 
-def test_combustion_chamber_calc_exergy_balance_success(combustion_chamber, valid_streams):
-    """
-    Test that CombustionChamber.calc_exergy_balance computes correct values.
-    """
-    # Set the inlets and outlets.
-    combustion_chamber.inl = valid_streams["inlets"]
-    combustion_chamber.outl = valid_streams["outlets"]
+def _cc_streams(three_inlets):
+    """Air and fuel (and a second fuel) entering, exhaust gas leaving."""
+    inlets = {
+        0: _cc_stream(m=5, e_T=100, e_M=60, e_CH=0, C_T=5, C_M=3, C_CH=0),
+        1: _cc_stream(m=1, e_T=20, e_M=200, e_CH=5000, C_T=1, C_M=10, C_CH=250),
+    }
+    if three_inlets:
+        inlets[2] = _cc_stream(m=1, e_T=30, e_M=100, e_CH=4000, C_T=2, C_M=6, C_CH=200)
+        outlet = _cc_stream(m=7, e_T=600, e_M=40, e_CH=200, C_T=300, C_M=15, C_CH=20)
+    else:
+        outlet = _cc_stream(m=6, e_T=500, e_M=50, e_CH=100, C_T=180, C_M=12, C_CH=8)
+    return inlets, {0: outlet}
 
-    # Call the exergy balance calculation.
-    combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
-    # Calculate expected values:
-    # Physical exergy: sum(m * e_PH)
-    total_E_P_in = (
-        valid_streams["inlets"]["air"]["m"] * valid_streams["inlets"]["air"]["e_PH"]
-        + valid_streams["inlets"]["fuel"]["m"] * valid_streams["inlets"]["fuel"]["e_PH"]
-    )
-    total_E_P_out = valid_streams["outlets"]["exhaust"]["m"] * valid_streams["outlets"]["exhaust"]["e_PH"]
-    expected_E_P = total_E_P_out - total_E_P_in
+# Values by hand. Split: E_P = rise of E_T, E_F = decrease of E_CH + decrease of E_M.
+# Without the split: E_P = rise of E_PH, E_F = decrease of E_CH. The costs follow the same terms.
+CC_CASES = {
+    "two_inlets_split": (False, True, 2480, 4600, 174, 243),
+    "two_inlets_no_split": (False, False, 2280, 4400, 173, 242),
+    "three_inlets_split": (True, True, 3650, 7920, 292, 434),
+    "three_inlets_no_split": (True, False, 3330, 7600, 288, 430),
+}
 
-    # Chemical exergy: sum(m * e_CH)
-    total_E_F_in = (
-        valid_streams["inlets"]["air"]["m"] * valid_streams["inlets"]["air"]["e_CH"]
-        + valid_streams["inlets"]["fuel"]["m"] * valid_streams["inlets"]["fuel"]["e_CH"]
-    )
-    total_E_F_out = valid_streams["outlets"]["exhaust"]["m"] * valid_streams["outlets"]["exhaust"]["e_CH"]
-    expected_E_F = total_E_F_in - total_E_F_out
 
-    expected_E_D = expected_E_F - expected_E_P
-    expected_epsilon = expected_E_P / expected_E_F if expected_E_F != 0 else None
+@pytest.mark.parametrize("three_inlets, split, E_P, E_F, C_P, C_F", CC_CASES.values(), ids=CC_CASES.keys())
+def test_combustion_chamber_fuel_and_product(combustion_chamber, three_inlets, split, E_P, E_F, C_P, C_F):
+    """Exergy and cost balance use the same fuel and product, summed over all inlets and outlets."""
+    combustion_chamber.inl, combustion_chamber.outl = _cc_streams(three_inlets)
 
-    # Verify calculated values.
-    assert pytest.approx(expected_E_P, rel=1e-3) == combustion_chamber.E_P
-    assert pytest.approx(expected_E_F, rel=1e-3) == combustion_chamber.E_F
-    assert pytest.approx(expected_E_D, rel=1e-3) == combustion_chamber.E_D
-    if expected_epsilon is not None:
-        assert combustion_chamber.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+    combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=split)
+    assert pytest.approx(E_P) == combustion_chamber.E_P
+    assert pytest.approx(E_F) == combustion_chamber.E_F
+    assert pytest.approx(4270 if three_inlets else 2120) == combustion_chamber.E_D
+    assert pytest.approx(E_P / E_F) == combustion_chamber.epsilon
+
+    combustion_chamber.exergoeconomic_balance(T0=300, chemical_exergy_enabled=True, split_physical_exergy=split)
+    assert pytest.approx(C_P) == combustion_chamber.C_P
+    assert pytest.approx(C_F) == combustion_chamber.C_F
+    assert pytest.approx(C_P / E_P) == combustion_chamber.c_P
+    assert pytest.approx(C_F / E_F) == combustion_chamber.c_F
+    assert pytest.approx(C_F / E_F * combustion_chamber.E_D) == combustion_chamber.C_D
 
 
 def test_combustion_chamber_missing_streams(combustion_chamber):

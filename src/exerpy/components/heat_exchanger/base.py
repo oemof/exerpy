@@ -676,6 +676,18 @@ class HeatExchanger(Component):
 
         The equality equations enforce that specific costs are equal between inlet and outlet
         for each exergy component (thermal, mechanical, chemical) on both the hot and cold streams.
+        Where the inlet or the outlet of a stream :math:`i` carries no exergy of a share :math:`x`,
+        the outlet carries no cost of it, and the cost of the inlet stays in
+        :math:`\dot C_\mathrm{diff}`:
+
+        .. math::
+
+            \frac{\dot{C}^{x}_{\mathrm{in},i}}{\dot{E}^{x}_{\mathrm{in},i}}
+            = \frac{\dot{C}^{x}_{\mathrm{out},i}}{\dot{E}^{x}_{\mathrm{out},i}}
+            \qquad \text{or} \qquad
+            \dot{C}^{x}_{\mathrm{out},i} = 0
+            \quad \text{for} \quad \dot{E}^{x}_{\mathrm{in},i} = 0
+            \ \text{or} \ \dot{E}^{x}_{\mathrm{out},i} = 0
 
         Parameters
         ----------
@@ -709,8 +721,8 @@ class HeatExchanger(Component):
                 A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
                 A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
             else:
-                A[row, in_item["CostVar_index"][var]] = 1
-                A[row, out_item["CostVar_index"][var]] = -1
+                # No exergy of this share on one side: the outlet carries no cost of it, the rest stays in C_diff.
+                A[row, out_item["CostVar_index"][var]] = 1
 
         labels = ["T", "M"] if split_physical_exergy else ["PH"]
         if chemical_exergy_enabled:

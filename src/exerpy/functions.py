@@ -13,45 +13,53 @@ def mass_to_molar_fractions(mass_fractions):
     """
     Convert mass fractions to molar fractions.
 
-    Parameters:
-    - mass_fractions: Dictionary with component names as keys and mass fractions as values.
+    Species with a zero mass fraction are left out. A stream of a single species gets the molar
+    fraction 1 without its molar mass.
 
-    Returns:
-    - molar_fractions: Dictionary with component names as keys and molar fractions as values.
+    Parameters
+    ----------
+    mass_fractions : dict
+        Mass fractions by species name. The names have to be known to CoolProp.
+
+    Returns
+    -------
+    dict
+        Molar fractions by species name.
+
+    Raises
+    ------
+    ValueError
+        If CoolProp has no molar mass for a species with a nonzero mass fraction.
     """
-    molar_fractions = {}
+    species = {comp: fraction for comp, fraction in mass_fractions.items() if fraction}
 
-    if len(mass_fractions.values()) == 1:
-        molar_fractions = {comp: 1.0 for comp in mass_fractions}
+    if not species:
+        raise ValueError("The mass composition is empty, so the molar fractions cannot be computed.")
+    if len(species) == 1:
+        return {comp: 1.0 for comp in species}
 
-    else:
-        molar_masses = {}
+    molar_masses = {}
+    unknown = []
+    for comp in species:
+        try:
+            molar_masses[comp] = CP.PropsSI("M", comp)
+        except Exception:
+            unknown.append(comp)
 
-        # Step 1: Get the molar masses for each component
-        for fraction in mass_fractions:
-            try:
-                molar_masses[fraction] = CP.PropsSI("M", fraction)
-            except Exception:
-                #  print(f"Warning: Could not retrieve molar mass for {fraction} ({fraction}). Error: {e}")
-                continue  # Skip this fraction if there's an issue
+    if unknown:
+        raise ValueError(
+            f"CoolProp has no molar mass for {', '.join(unknown)} in the mass composition {mass_fractions}. "
+            "Name all species of the composition as CoolProp does."
+        )
+    if not molar_masses:
+        raise ValueError(f"No valid molar masses were retrieved for substances {list(mass_fractions.keys())}")
 
-        # Step 2: Check if we have valid molar masses
-        if not molar_masses:
-            raise ValueError(f"No valid molar masses were retrieved for substances {list(mass_fractions.keys())}")
+    total_moles = sum(species[comp] / molar_masses[comp] for comp in molar_masses)
+    molar_fractions = {comp: (species[comp] / molar_masses[comp]) / total_moles for comp in molar_masses}
 
-        else:
-
-            # Step 3: Calculate total moles in the mixture
-            total_moles = sum(mass_fractions[comp] / molar_masses[comp] for comp in molar_masses)
-
-            # Step 4: Calculate molar fractions
-            for component in molar_masses:
-                molar_fractions[component] = (mass_fractions[component] / molar_masses[component]) / total_moles
-
-            # Step 5: Check if molar fractions sum to approximately 1
-            molar_sum = sum(molar_fractions.values())
-            if abs(molar_sum - 1.0) > 1e-6:
-                raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
+    molar_sum = sum(molar_fractions.values())
+    if abs(molar_sum - 1.0) > 1e-6:
+        raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
 
     return molar_fractions
 

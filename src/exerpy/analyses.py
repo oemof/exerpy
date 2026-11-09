@@ -15,8 +15,10 @@ SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger
 COST_KEYS = {"CostVar_index", *(f"{c}_{label}" for c in "cC" for label in ("T", "M", "PH", "CH", "TOT"))}
 
 from .components.component import component_registry
+from .components.component import set_equal_specific_cost
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
+from .components.nodes.mixer import Mixer
 from .components.nodes.splitter import Splitter
 from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
@@ -1224,7 +1226,42 @@ def _construct_components(component_data, connection_data, Tamb):
             # Store the component in the dictionary
             components[component_name] = component
 
+    # The headers on either side of parallel branches count each branch stream that often.
+    for component in components.values():
+        if isinstance(component, Mixer):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.inl.items()}
+        elif isinstance(component, Splitter):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.outl.items()}
+        else:
+            continue
+        given = getattr(component, "num_branches", None)
+        if given not in (None, 1) and given not in component.branches.values():
+            logger.warning(
+                f"num_branches = {given} of {component.name} is not used: a header counts a stream of a "
+                "ParabolicTrough as often as the num_branches of the trough, and no stream of this header "
+                f"comes from a trough with {given} branches."
+            )
+
     return components  # Return the dictionary of created components
+
+
+def _stream_branches(conn, components):
+    """Return how often a stream exists in the plant.
+
+    A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
+    streams then carry the mass flow and the cost of a single branch, while the heat it takes
+    in and its investment cost belong to all of them. The other streams of the headers on either
+    side exist once. Every balance that a branch stream enters has to count it that often, or the
+    field counts as one branch.
+    """
+    if conn.get("kind", "material") != "material":
+        return 1
+    for end in ("source_component", "target_component"):
+        comp = components.get(conn.get(end))
+        branches = getattr(comp, "beta", 1) or 1
+        if branches != 1 and hasattr(comp, "_fluid_streams"):
+            return branches
+    return 1
 
 
 def _no_negative_zero(df, digits=3):
@@ -1478,22 +1515,12 @@ class ExergoeconomicAnalysis:
 
     @property
     def _branch_scales(self) -> dict:
-        """Return how often each stream exists in the plant.
-
-        A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
-        streams then carry the mass flow and the cost of a single branch, while the heat it takes
-        in and its investment cost belong to all of them. The streams of the headers on either side
-        carry the whole field. Every cost balance that a branch stream enters has to count it that
-        often, or the cost of the field is the cost of one branch.
-        """
+        """Return how often each stream exists in the plant, by name, where that is not once."""
         scales = {}
-        for comp in self.components.values():
-            branches = getattr(comp, "beta", 1) or 1
-            if branches == 1 or not hasattr(comp, "_fluid_streams"):
-                continue
-            for conn in list(comp.inl.values()) + list(comp.outl.values()):
-                if conn is not None and conn.get("kind", "material") == "material":
-                    scales[conn["name"]] = branches
+        for name, conn in self.connections.items():
+            branches = _stream_branches(conn, self.components)
+            if branches != 1:
+                scales[name] = branches
         return scales
 
     @property
@@ -1802,13 +1829,12 @@ class ExergoeconomicAnalysis:
 
         # Only add auxiliary equations if there is more than one power connection.
         if len(power_conns) > 1:
-            # Choose the first connection as reference.
-            ref = power_conns[0]
-            ref_idx = ref["CostVar_index"]["exergy"]
-            for conn in power_conns[1:]:
-                cur_idx = conn["CostVar_index"]["exergy"]
-                self._A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
-                self._A[counter, cur_idx] = -1 / conn["E"] if conn["E"] != 0 else -1
+            # Choose the first connection with exergy as reference.
+            ref = next((conn for conn in power_conns if conn["E"] != 0), power_conns[0])
+            for conn in power_conns:
+                if conn is ref:
+                    continue
+                set_equal_specific_cost(self._A, counter, ref, conn, "exergy")
                 self._b[counter] = 0
                 self.equations[counter] = {
                     "kind": "aux_power_eq",
@@ -1962,7 +1988,8 @@ class ExergoeconomicAnalysis:
                     conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
-                    conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
+                    E = conn.get("E", 1)
+                    conn["c_TOT"] = conn["C_TOT"] / E if E != 0 else 0.0
 
         # Step 5: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():

@@ -1,5 +1,6 @@
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -190,16 +191,7 @@ class FlashTank(Component):
 
         # --- Physical product-rule: c_x,out0 = c_x,out1 ---
         #  1/e_x,out0 · C_x,out0  - 1/e_x,out1 · C_x,out1 = 0
-        if out0[f"e_{phys}"] != 0 and out1[f"e_{phys}"] != 0:
-            A[counter, out0["CostVar_index"][phys]] = 1.0 / out0[f"E_{phys}"]
-            A[counter, out1["CostVar_index"][phys]] = -1.0 / out1[f"E_{phys}"]
-        elif out0[f"e_{phys}"] == 0 and out1[f"e_{phys}"] != 0:
-            A[counter, out0["CostVar_index"][phys]] = 1.0
-        elif out0[f"e_{phys}"] != 0 and out1[f"e_{phys}"] == 0:
-            A[counter, out1["CostVar_index"][phys]] = 1.0
-        else:
-            A[counter, out0["CostVar_index"][phys]] = 1.0
-            A[counter, out1["CostVar_index"][phys]] = -1.0
+        set_equal_specific_cost(A, counter, out0, out1, phys, ref_is_outlet=True)
 
         equations[counter] = {
             "kind": "aux_p_rule",
@@ -213,17 +205,7 @@ class FlashTank(Component):
         # Without the split the rule above already covers the physical exergy of both outlets.
         if split_physical_exergy:
             for out in (out0, out1):
-                if inlet["e_M"] != 0 and out["e_M"] != 0:
-                    A[counter, inlet["CostVar_index"]["M"]] = 1.0 / inlet["E_M"]
-                    A[counter, out["CostVar_index"]["M"]] = -1.0 / out["E_M"]
-                elif inlet["e_M"] == 0 and out["e_M"] != 0:
-                    A[counter, inlet["CostVar_index"]["M"]] = 1.0
-                elif inlet["e_M"] != 0 and out["e_M"] == 0:
-                    A[counter, out["CostVar_index"]["M"]] = 1.0
-                else:
-                    A[counter, inlet["CostVar_index"]["M"]] = 1.0
-                    A[counter, out["CostVar_index"]["M"]] = -1.0
-
+                set_equal_specific_cost(A, counter, inlet, out, "M")
                 equations[counter] = {
                     "kind": "aux_equality",
                     "objects": [self.name, inlet["name"], out["name"]],
@@ -235,17 +217,7 @@ class FlashTank(Component):
         # --- Chemical equality, if enabled: c_CH,inlet = c_CH,outlet_i ---
         if chemical_exergy_enabled:
             for out in (out0, out1):
-                if inlet["e_CH"] != 0 and out["e_CH"] != 0:
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1.0 / inlet["E_CH"]
-                    A[counter, out["CostVar_index"]["CH"]] = -1.0 / out["E_CH"]
-                elif inlet["e_CH"] == 0 and out["e_CH"] != 0:
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1.0
-                elif inlet["e_CH"] != 0 and out["e_CH"] == 0:
-                    A[counter, out["CostVar_index"]["CH"]] = 1.0
-                else:
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1.0
-                    A[counter, out["CostVar_index"]["CH"]] = -1.0
-
+                set_equal_specific_cost(A, counter, inlet, out, "CH")
                 equations[counter] = {
                     "kind": "aux_equality",
                     "objects": [self.name, inlet["name"], out["name"]],

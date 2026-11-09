@@ -46,6 +46,14 @@ Two fundamental principles govern the auxiliary costing equations :cite:`lazzare
 - **P principle**: All exergy added to product streams is assigned the same unit cost, denoted :math:`c_P`,
   determined from the component cost balance and the F equations.
 
+Costs are assigned to exergy, :math:`\dot{C} = c \cdot \dot{E}` :cite:`lazzaretto2006speco`, so a stream without
+exergy of a share :math:`x` (thermal, mechanical, physical or chemical) carries no cost of that share. Where an
+auxiliary equation equates specific costs and one of the two streams has no exergy of the share, ExerPy writes
+:math:`\dot{C}^{x}_\mathrm{out} = 0` instead, for the outlet without exergy, or for the outlet of the equation
+if the inlet has none. An inlet is never fixed, since its cost is set upstream. In the mixing rule of a mixer or
+deaerator, an inlet without exergy of the share adds nothing, and an outlet without it gets
+:math:`\dot{C}^{x}_\mathrm{out} = 0`.
+
 ***********
 Terminology
 ***********

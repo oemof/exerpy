@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_mixing_cost
 from exerpy.logger import logger
 from exerpy.quantities import Branches
 
@@ -92,6 +93,9 @@ class Mixer(Component):
             \quad \text{if }T_{\mathrm{out}}<T_{0}\text{ and }T_{\mathrm{in},i}<T_{\mathrm{out}}.
         \end{cases}
 
+    An inlet that stands for several identical parallel branches, such as the outlet of a
+    ``ParabolicTrough`` with ``num_branches`` :math:`n`, counts :math:`n` times, here and in the cost
+    equations, every other inlet once.
     """
 
     class Input(Component.Input, kw_only=True):
@@ -100,9 +104,11 @@ class Mixer(Component):
     def __init__(self, **kwargs):
         r"""Initialize mixer component with given parameters."""
         super().__init__(**kwargs)
-        # Number of identical parallel branches each modelled inlet represents (1 for an
-        # ordinary mixer; >1 when one branch stands in for a field of parallel branches).
-        self.num_branches = kwargs.get("num_branches", 1) or 1
+        # How often each inlet exists, by connector: the number of parallel branches it stands for,
+        # set by the analysis. An inlet not listed exists once.
+        self.branches = {}
+        # Only kept to warn if it is not used, see the analysis.
+        self.num_branches = kwargs.get("num_branches")
 
     def _single_outlet(self):
         """Return the single outlet, whatever connector index the model gave it."""
@@ -154,39 +160,37 @@ class Mixer(Component):
 
         # Case 1: Outlet temperature is greater than ambient.
         if T_out > T0:
-            for _, inlet in self.inl.items():
+            for k, inlet in self.inl.items():
+                m = self.branches.get(k, 1) * inlet["m"]
                 # Case when inlet temperature is lower than outlet temperature.
                 if inlet["T"] < T_out:
                     if inlet["T"] >= T0:
                         # Contribution to exergy product from inlets above ambient.
-                        self.E_P += inlet["m"] * (e_out_PH - inlet["e_PH"])
+                        self.E_P += m * (e_out_PH - inlet["e_PH"])
                     else:  # inlet['T'] < T0
-                        self.E_P += inlet["m"] * e_out_PH
-                        self.E_F += inlet["m"] * inlet["e_PH"]
+                        self.E_P += m * e_out_PH
+                        self.E_F += m * inlet["e_PH"]
                 else:  # inlet['T'] > T_out
-                    self.E_F += inlet["m"] * (inlet["e_PH"] - e_out_PH)
+                    self.E_F += m * (inlet["e_PH"] - e_out_PH)
 
         # Case 2: Outlet temperature equals ambient.
         elif T_out == T0:
             self.E_P = np.nan
-            for _, inlet in self.inl.items():
-                self.E_F += inlet["m"] * inlet["e_PH"]
+            for k, inlet in self.inl.items():
+                self.E_F += self.branches.get(k, 1) * inlet["m"] * inlet["e_PH"]
 
         # Case 3: Outlet temperature is less than ambient.
         else:  # T_out < T0
-            for _, inlet in self.inl.items():
+            for k, inlet in self.inl.items():
+                m = self.branches.get(k, 1) * inlet["m"]
                 if inlet["T"] > T_out:
                     if inlet["T"] >= T0:
-                        self.E_P += inlet["m"] * e_out_PH
-                        self.E_F += inlet["m"] * inlet["e_PH"]
+                        self.E_P += m * e_out_PH
+                        self.E_F += m * inlet["e_PH"]
                     else:  # inlet['T'] < T0
-                        self.E_P += inlet["m"] * (e_out_PH - inlet["e_PH"])
+                        self.E_P += m * (e_out_PH - inlet["e_PH"])
                 else:  # inlet['T'] <= T_out
-                    self.E_F += inlet["m"] * (inlet["e_PH"] - e_out_PH)
-
-        # Each modelled inlet represents num_branches identical parallel branches.
-        self.E_P *= self.num_branches
-        self.E_F *= self.num_branches
+                    self.E_F += m * (inlet["e_PH"] - e_out_PH)
 
         # Calculate exergy destruction and efficiency.
         self.E_D = self.E_F - self.E_P
@@ -212,8 +216,11 @@ class Mixer(Component):
         .. math::
 
             \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
-            = \sum_{i} \frac{\dot{m}_{\mathrm{in},i}}{\sum_{k} \dot{m}_{\mathrm{in},k}}
+            = \sum_{i} \frac{n_{i} \, \dot{m}_{\mathrm{in},i}}{\sum_{k} n_{k} \, \dot{m}_{\mathrm{in},k}}
               \cdot \frac{\dot{C}^{x}_{\mathrm{in},i}}{\dot{E}^{x}_{\mathrm{in},i}}
+
+        where :math:`n_{i}` is the number of parallel branches inlet :math:`i` stands for (1 for a
+        single stream).
 
         With split physical exergy this rule is written for the mechanical exergy,
         :math:`x = \mathrm{M}`, while the thermal exergy of the outlet is the product of the
@@ -230,6 +237,9 @@ class Mixer(Component):
 
         With chemical exergy enabled the rule is written for :math:`x = \mathrm{CH}` in either
         mode, since the composition of the outlet is the mixture of the inlets.
+
+        An inlet without exergy of the share adds nothing to the sum, and an outlet without it carries
+        no cost of it, :math:`\dot{C}^{x}_\mathrm{out} = 0`.
 
         Parameters
         ----------
@@ -262,22 +272,9 @@ class Mixer(Component):
             Updated structure with equation labels.
         """
         # --- Chemical cost auxiliary equation (conditionally added) ---
+        branches = [self.branches.get(k, 1) for k in self.inl]
         if chemical_exergy_enabled:
-            if self._single_outlet()["e_CH"] != 0:
-                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1 / self._single_outlet()["E_CH"]
-                # Iterate over inlet streams for chemical mixing.
-                for inlet in self.inl.values():
-                    if inlet["e_CH"] != 0:
-                        A[counter, inlet["CostVar_index"]["CH"]] = inlet["m"] / (
-                            self._single_outlet()["m"] * inlet["E_CH"]
-                        )
-                    else:
-                        A[counter, inlet["CostVar_index"]["CH"]] = 1
-            else:
-                # Outlet chemical exergy is zero: enforce cost conservation sum(C_CH_inlets) - C_CH_outlet = 0
-                for inlet in self.inl.values():
-                    A[counter, inlet["CostVar_index"]["CH"]] = 1
-                A[counter, self._single_outlet()["CostVar_index"]["CH"]] = -1
+            set_mixing_cost(A, counter, self.inl.values(), self._single_outlet(), "CH", branches)
             equations[counter] = {
                 "kind": "aux_mixing",
                 "objects": [self.name] + [i["name"] for i in self.inl.values()] + [self._single_outlet()["name"]],
@@ -290,21 +287,7 @@ class Mixer(Component):
         # Mechanical cost auxiliary equation. Without the split the cost balance of the component is
         # the mixing rule for the physical exergy of the outlet already.
         if split_physical_exergy:
-            if self._single_outlet()["e_M"] != 0:
-                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1 / self._single_outlet()["E_M"]
-                # Iterate over inlet streams for mechanical mixing.
-                for inlet in self.inl.values():
-                    if inlet["e_M"] != 0:
-                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = inlet["m"] / (
-                            self._single_outlet()["m"] * inlet["E_M"]
-                        )
-                    else:
-                        A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-            else:
-                # When outlet e_M = 0, enforce cost conservation: sum(C_M_inlets) - C_M_outlet = 0
-                for inlet in self.inl.values():
-                    A[counter + chem_row, inlet["CostVar_index"]["M"]] = 1
-                A[counter + chem_row, self._single_outlet()["CostVar_index"]["M"]] = -1
+            set_mixing_cost(A, counter + chem_row, self.inl.values(), self._single_outlet(), "M", branches)
 
             # Dynamically build the list of inlet names
             inlet_names = [inlet["name"] for inlet in self.inl.values()]
@@ -501,47 +484,50 @@ class Mixer(Component):
         if not split_physical_exergy:
             out = self._single_outlet()
             if abs(out["T"] - T0) < 1e-6:
-                for i in self.inl.values():
-                    self.C_F += i["C_TOT"]
+                for k, i in self.inl.items():
+                    self.C_F += self.branches.get(k, 1) * i["C_TOT"]
             else:
                 heating = out["T"] > T0
-                for i in self.inl.values():
+                for k, i in self.inl.items():
+                    n = self.branches.get(k, 1)
                     fuel_side = (i["T"] >= out["T"]) if heating else (i["T"] <= out["T"])
                     if fuel_side:
-                        self.C_F += i["C_PH"] - i["m"] * out["c_PH"] * out["e_PH"]
+                        self.C_F += n * (i["C_PH"] - i["m"] * out["c_PH"] * out["e_PH"])
                     elif (i["T"] < T0) if heating else (i["T"] >= T0):
-                        self.C_F += i["C_PH"]
+                        self.C_F += n * i["C_PH"]
         elif self._single_outlet()["T"] > T0:
-            for i in self.inl.values():
+            for k, i in self.inl.items():
+                n = self.branches.get(k, 1)
                 if i["T"] < self._single_outlet()["T"]:
                     # cold inlets
-                    self.C_F += i["C_M"]
+                    self.C_F += n * i["C_M"]
                     if chemical_exergy_enabled:
-                        self.C_F += i["C_CH"]
+                        self.C_F += n * i["C_CH"]
                 else:
                     # hot inlets
-                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    self.C_F += n * (-i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"]))
                     if chemical_exergy_enabled:
-                        self.C_F += i["C_CH"]
+                        self.C_F += n * i["C_CH"]
             self.C_F += -self._single_outlet()["C_M"]
             if chemical_exergy_enabled:
                 self.C_F += -self._single_outlet()["C_CH"]
         elif self._single_outlet()["T"] - 1e-6 < T0 and self._single_outlet()["T"] + 1e-6 > T0:
             # dissipative
-            for i in self.inl.values():
-                self.C_F += i["C_TOT"]
+            for k, i in self.inl.items():
+                self.C_F += self.branches.get(k, 1) * i["C_TOT"]
         else:
-            for i in self.inl.values():
+            for k, i in self.inl.items():
+                n = self.branches.get(k, 1)
                 if i["T"] > self._single_outlet()["T"]:
                     # hot inlets
-                    self.C_F += i["C_M"]
+                    self.C_F += n * i["C_M"]
                     if chemical_exergy_enabled:
-                        self.C_F += i["C_CH"]
+                        self.C_F += n * i["C_CH"]
                 else:
                     # cold inlets
-                    self.C_F += -i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"])
+                    self.C_F += n * (-i["m"] * i["c_T"] * i["e_T"] + (i["C_T"] + i["C_M"]))
                     if chemical_exergy_enabled:
-                        self.C_F += i["C_CH"]
+                        self.C_F += n * i["C_CH"]
             self.C_F += -self._single_outlet()["C_M"]
             if chemical_exergy_enabled:
                 self.C_F += -self._single_outlet()["C_CH"]

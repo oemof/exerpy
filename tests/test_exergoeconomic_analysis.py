@@ -1019,6 +1019,90 @@ class TestSolarThermalExergoeconomics:
 
 
 # =============================================================================
+# Parallel branches behind a header
+# =============================================================================
+
+
+def _header_stream(source, s_conn, target, t_conn, m, T, e_T, e_M):
+    stream = _material(source, target, 0, m, e_T, e_M, T=T)
+    stream["source_connector"], stream["target_connector"] = s_conn, t_conn
+    return stream
+
+
+def _header_plant(condensed, split_physical_exergy, header_branches=None):
+    """Two collector branches between a distributing and a collecting header, with a bypass.
+
+    The bypass leaves the distributing header and enters the collecting header as its main inlet,
+    which is no branch. ``condensed`` models one branch standing in for both, as EBSILON does.
+    """
+    n, m_b, m_s, Q_b = 2, 2.0, 3.0, 4.0e5
+    cold, hot, mixed = (450.0, 6.0e4, 6.0e3), (540.0, 1.2e5, 5.9e3), (510.0, 9.0e4, 5.8e3)
+    branches = [""] if condensed else [str(k) for k in range(n)]
+    conns = {
+        "A2": _header_stream(None, None, "SPL", 0, n * m_b + m_s, *cold),
+        "BYP": _header_stream("SPL", len(branches), "MRG", len(branches), m_s, *cold),
+        "A5": _header_stream("MRG", 0, None, None, n * m_b + m_s, *mixed),
+    }
+    troughs = {}
+    for k, b in enumerate(branches):
+        conns[f"A3{b}"] = _header_stream("SPL", k, f"PT{b}", 0, m_b, *cold)
+        conns[f"A4{b}"] = _header_stream(f"PT{b}", 0, "MRG", k, m_b, *hot)
+        conns[f"PT{b}_Q"] = {
+            "kind": "heat",
+            "source_component": None,
+            "target_component": f"PT{b}",
+            "target_connector": 1,
+            "energy_flow": Q_b * n / len(branches),
+        }
+        troughs[f"PT{b}"] = {"name": f"PT{b}", "Q_Solar": Q_b, "num_branches": n // len(branches)}
+    header_branches = header_branches or n // len(branches)
+    components = {
+        "ParabolicTrough": troughs,
+        "Splitter": {"SPL": {"name": "SPL", "num_branches": header_branches}},
+        "Mixer": {"MRG": {"name": "MRG", "num_branches": header_branches}},
+    }
+    ean = ExergyAnalysis(components, conns, 298.15, 101325, split_physical_exergy=split_physical_exergy)
+    ean.analyse(E_F={"inputs": [f"PT{b}_Q" for b in branches] + ["A2"]}, E_P={"inputs": ["A5"]})
+    costs = {"MRG_Z": 1.0, "A2_c": 10.0}
+    for b in branches:
+        costs[f"PT{b}_Z"] = 50.0 / len(branches)
+        costs[f"PT{b}_Q_c"] = 0.0
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(costs)
+    return eco
+
+
+def test_a_header_warns_if_its_num_branches_is_not_used(caplog):
+    """The headers count the streams of the trough, so a different num_branches of a header is not used."""
+    with caplog.at_level(logging.WARNING):
+        _header_plant(condensed=True, split_physical_exergy=True)
+    assert "is not used" not in caplog.text
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        _header_plant(condensed=True, split_physical_exergy=True, header_branches=3)
+    assert "num_branches = 3 of SPL is not used" in caplog.text
+    assert "num_branches = 3 of MRG is not used" in caplog.text
+
+
+@pytest.mark.parametrize("split_physical_exergy", [True, False])
+def test_header_counts_a_branch_as_often_as_it_exists(split_physical_exergy):
+    """One branch standing in for two gives the results of both branches modelled.
+
+    The main inlet of the collecting header and the bypass outlet of the distributing header are
+    no branches and count once.
+    """
+    condensed = _header_plant(True, split_physical_exergy)
+    expanded = _header_plant(False, split_physical_exergy)
+    mixer, reference = condensed.components["MRG"], expanded.components["MRG"]
+    for key in ("E_F", "E_P", "E_D", "C_F", "C_P", "c_F", "c_P", "C_D", "r", "f"):
+        assert getattr(mixer, key) == pytest.approx(getattr(reference, key), rel=1e-9), key
+    assert mixer.C_F > 0
+    assert pytest.approx(0.0, abs=1e-6) == condensed.components["SPL"].E_D
+    for key in ("C_T", "C_M", "c_T", "c_M") if split_physical_exergy else ("C_PH", "c_PH"):
+        assert condensed.connections["A5"][key] == pytest.approx(expanded.connections["A5"][key], rel=1e-9), key
+
+
+# =============================================================================
 # Storage
 # =============================================================================
 

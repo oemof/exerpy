@@ -853,43 +853,67 @@ class AspenModelParser:
 
     def assign_combustion_chamber_connectors(self, block_name, aspen, connections_data):
         """
-        Assign connectors for a combustion chamber (RStoic), based on stream types (air, fuel, etc.).
+        Assign connectors for a combustion chamber (RStoic), one per stream.
+
+        Inlets: oxidant streams (O2 mole fraction above 0.15) first, then fuel streams (CH4 above 0.15),
+        then the other material streams, each group in port order. Outlets: the combustion gas at 0, taken
+        as the material outlet with the largest mass flow since it carries the air, then the further
+        material outlets such as ash or a water decant. Heat and work streams come last on their side, so
+        they never replace a material stream and the combustion chamber rejects them. A heat duty (QCALC)
+        without a heat stream gives a warning, since the exergy of that heat ends up in the exergy
+        destruction of the combustion chamber.
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
             logger.warning(f"No Ports node found for combustion chamber block: {block_name}")
             return
 
-        # Iterate over all ports and assign connectors based on port labels
+        inlets, outlets = [], []
         for port in ports_node.Elements:
-            port_label = port.Name
+            if "(IN)" in port.Name:
+                streams = inlets
+            elif "(OUT)" in port.Name:
+                streams = outlets
+            else:
+                continue
+            port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port.Name}")
+            if port_node is not None:
+                streams.extend(element.Name for element in port_node.Elements if element.Name in connections_data)
 
-            # Handle inlet ports
-            if "(IN)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            molar_composition = connections_data[stream_name].get("molar_composition", {})
-                            if molar_composition.get("O2", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 0  # Air inlet
-                                logger.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
-                            elif molar_composition.get("CH4", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 1  # Fuel inlet
-                                logger.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
-                            else:
-                                logger.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
+        def is_material(name):
+            return connections_data[name].get("kind", "material") == "material"
 
-            # Handle outlet ports
-            elif "(OUT)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            connections_data[stream_name]["source_connector"] = 0  # Outlet stream
-                            logger.info(f"Assigned connector 0 to outlet stream: {stream_name}")
+        def inlet_rank(name):
+            composition = connections_data[name].get("molar_composition") or {}
+            if not is_material(name):
+                return 3
+            if composition.get("O2", 0) > 0.15:
+                return 0
+            return 1 if composition.get("CH4", 0) > 0.15 else 2
+
+        materials = [name for name in outlets if is_material(name)]
+        gas = max(materials, key=lambda name: connections_data[name].get("m") or 0, default=None)
+        inlets.sort(key=inlet_rank)
+        outlets.sort(key=lambda name: (not is_material(name), name != gas))
+        for idx, name in enumerate(inlets):
+            connections_data[name]["target_connector"] = idx
+        for idx, name in enumerate(outlets):
+            connections_data[name]["source_connector"] = idx
+        logger.debug(f"Combustion chamber {block_name}: inlets {inlets}, outlets {outlets} by connector.")
+
+        duty = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QCALC")
+        heat_streams = [name for name in inlets + outlets if connections_data[name].get("kind") == "heat"]
+        if duty is not None and duty.Value and not heat_streams:
+            Q = convert_to_SI("Q", duty.Value, duty.UnitString)
+            effect = (
+                "is counted as exergy destruction of the combustion chamber"
+                if Q < 0
+                else "is missing from the fuel of the combustion chamber, so its exergy destruction is too low"
+            )
+            logger.warning(
+                f"RStoic block {block_name} has a heat duty of {Q / 1e3:.1f} kW but no heat stream. The exergy of "
+                f"this heat {effect}."
+            )
 
     def assign_generic_connectors(self, block_name, component_type, aspen, connections_data, connector_mappings):
         """

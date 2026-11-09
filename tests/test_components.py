@@ -2104,8 +2104,7 @@ def test_solar_components_need_a_heat_inlet():
 
 
 def test_splitter_default_conserves_exergy():
-    sp = Splitter(name="SP")  # num_branches defaults to 1
-    assert sp.num_branches == 1
+    sp = Splitter(name="SP")  # every outlet exists once
     sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}
     sp.outl = {0: {"m": 6.0, "e_PH": 100.0}, 1: {"m": 4.0, "e_PH": 100.0}}
     sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
@@ -2114,28 +2113,33 @@ def test_splitter_default_conserves_exergy():
     assert np.isnan(sp.E_P)
 
 
-def test_splitter_num_branches_scales_outlets():
-    """One modelled branch (+ a dummy) standing in for 10 branches conserves exergy."""
-    sp = Splitter(name="SP", num_branches=10)
-    assert sp.num_branches == 10
-    sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}  # full flow
-    sp.outl = {0: {"m": 1.0, "e_PH": 100.0}, 1: {"m": 0.0, "e_PH": 100.0}}  # one branch + dummy
+def test_splitter_counts_only_the_branch_outlet_that_often():
+    """One modelled branch standing in for 10 branches, next to a main outlet that exists once."""
+    sp = Splitter(name="SP")
+    sp.branches = {0: 10}
+    sp.inl = {0: {"m": 12.0, "e_PH": 100.0}}  # full flow
+    sp.outl = {0: {"m": 1.0, "e_PH": 100.0}, 1: {"m": 2.0, "e_PH": 100.0}}  # one branch + main outlet
     sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
-    # E_out = 10 * (1*100 + 0) = 1000 = E_in -> E_D = 0.
+    # E_out = 10 * 1 * 100 + 2 * 100 = 1200 = E_in -> E_D = 0.
     assert pytest.approx(0.0, abs=1e-9) == sp.E_D
 
 
-def test_mixer_num_branches_scales_product_and_fuel():
-    """num_branches multiplies the mixer's E_P and E_F (default 1 leaves it unchanged)."""
-    base = Mixer(name="M1")  # default num_branches=1
-    scaled = Mixer(name="M2", num_branches=2)
-    for mx in (base, scaled):
-        mx.inl = {0: {"T": 310.0, "m": 10.0, "e_PH": 800.0}, 1: {"T": 330.0, "m": 5.0, "e_PH": 850.0}}
-        mx.outl = {0: {"T": 320.0, "m": 15.0, "e_PH": 810.0}}
+def test_mixer_counts_only_the_branch_inlet_that_often():
+    """A branch inlet standing in for 2 branches gives the E_P and E_F of both branches modelled."""
+    branch = {"T": 330.0, "m": 5.0, "e_PH": 850.0}
+    main = {"T": 310.0, "m": 10.0, "e_PH": 800.0}
+    outlet = {"T": 320.0, "m": 20.0, "e_PH": 810.0}
+    condensed = Mixer(name="M1")
+    condensed.branches = {0: 2}
+    condensed.inl = {0: branch, 1: main}
+    expanded = Mixer(name="M2")  # every inlet exists once
+    expanded.inl = {0: branch, 1: dict(branch), 2: main}
+    for mx in (condensed, expanded):
+        mx.outl = {0: outlet}
         mx.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
-    assert base.num_branches == 1
-    assert pytest.approx(2 * base.E_P, rel=1e-9) == scaled.E_P
-    assert pytest.approx(2 * base.E_F, rel=1e-9) == scaled.E_F
+    assert pytest.approx(expanded.E_P, rel=1e-12) == condensed.E_P
+    assert pytest.approx(expanded.E_F, rel=1e-12) == condensed.E_F
+    assert pytest.approx(10.0 * 10.0, rel=1e-12) == condensed.E_P  # main inlet counted once
 
 
 def test_turbine_main_outlet_not_at_slot_zero():

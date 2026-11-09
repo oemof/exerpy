@@ -116,6 +116,15 @@ def test_mixing_row_of_an_outlet_without_exergy():
     assert A[0] == pytest.approx([0.0, 0.0, 1.0])
 
 
+def test_mixing_row_counts_an_inlet_as_often_as_it_exists():
+    """An inlet standing in for 3 parallel branches weighs 3 times its mass flow."""
+    A = np.zeros((1, 3))
+    inlets = [_cost_stream("a", 0, M=4.0), _cost_stream("b", 1, M=8.0)]
+    set_mixing_cost(A, 0, inlets, _cost_stream("out", 2, M=10.0), "M", weights=[3, 1])
+    # m_out = 3 * 2 + 2 = 8 kg/s
+    assert A[0] == pytest.approx([3 * 2 / (8 * 4.0), 2 / (8 * 8.0), -0.1])
+
+
 @pytest.mark.parametrize("component", [Pump, Compressor])
 def test_chemical_row_of_a_stream_without_chemical_exergy(component):
     """Without chemical exergy on either side the outlet carries no chemical cost."""

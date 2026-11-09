@@ -213,17 +213,19 @@ def set_equal_specific_cost(A, row, ref, out, label, ref_is_outlet=False):
         A[row, out["CostVar_index"][label]] = 1
 
 
-def set_mixing_cost(A, row, inlets, out, label):
+def set_mixing_cost(A, row, inlets, out, label, weights=None):
     r"""
     Write the row that gives the outlet of a mixing node the mass-weighted specific cost of its inlets.
 
     .. math::
 
         \frac{\dot{C}^{x}_\mathrm{out}}{\dot{E}^{x}_\mathrm{out}}
-        = \sum_{i} \frac{\dot{m}_{i}}{\dot{m}_\mathrm{out}} \cdot \frac{\dot{C}^{x}_{i}}{\dot{E}^{x}_{i}}
+        = \sum_{i} \frac{n_{i} \, \dot{m}_{i}}{\sum_{k} n_{k} \, \dot{m}_{k}}
+        \cdot \frac{\dot{C}^{x}_{i}}{\dot{E}^{x}_{i}}
 
-    An inlet without exergy of the share :math:`x` adds nothing. An outlet without it carries no
-    cost of it, and the row becomes :math:`\dot{C}^{x}_\mathrm{out} = 0`.
+    :math:`n_{i}` is how often inlet :math:`i` exists, e.g. the number of parallel branches it
+    stands for. An inlet without exergy of the share :math:`x` adds nothing. An outlet without it
+    carries no cost of it, and the row becomes :math:`\dot{C}^{x}_\mathrm{out} = 0`.
 
     Parameters
     ----------
@@ -237,12 +239,17 @@ def set_mixing_cost(A, row, inlets, out, label):
         Outlet stream of the node.
     label : str
         Cost variable, e.g. ``"M"`` or ``"CH"``.
+    weights : iterable of float, optional
+        How often each inlet exists, :math:`n_{i}`, in the order of ``inlets``. Default is 1 each.
     """
     key = f"E_{label}"
     if out[key] == 0:
         A[row, out["CostVar_index"][label]] = 1
         return
+    inlets = list(inlets)
+    weights = [1] * len(inlets) if weights is None else list(weights)
+    m_out = sum(n * inlet["m"] for inlet, n in zip(inlets, weights, strict=True))
     A[row, out["CostVar_index"][label]] = -1 / out[key]
-    for inlet in inlets:
+    for inlet, n in zip(inlets, weights, strict=True):
         if inlet[key] != 0:
-            A[row, inlet["CostVar_index"][label]] = inlet["m"] / (out["m"] * inlet[key])
+            A[row, inlet["CostVar_index"][label]] = n * inlet["m"] / (m_out * inlet[key])

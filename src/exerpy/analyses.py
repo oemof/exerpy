@@ -19,6 +19,7 @@ from .components.component import component_registry
 from .components.component import set_equal_specific_cost
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
+from .components.nodes.mixer import Mixer
 from .components.nodes.splitter import Splitter
 from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
@@ -1238,7 +1239,42 @@ def _construct_components(component_data, connection_data, Tamb):
             # Store the component in the dictionary
             components[component_name] = component
 
+    # The headers on either side of parallel branches count each branch stream that often.
+    for component in components.values():
+        if isinstance(component, Mixer):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.inl.items()}
+        elif isinstance(component, Splitter):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.outl.items()}
+        else:
+            continue
+        given = getattr(component, "num_branches", None)
+        if given not in (None, 1) and given not in component.branches.values():
+            logger.warning(
+                f"num_branches = {given} of {component.name} is not used: a header counts a stream of a "
+                "ParabolicTrough as often as the num_branches of the trough, and no stream of this header "
+                f"comes from a trough with {given} branches."
+            )
+
     return components  # Return the dictionary of created components
+
+
+def _stream_branches(conn, components):
+    """Return how often a stream exists in the plant.
+
+    A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
+    streams then carry the mass flow and the cost of a single branch, while the heat it takes
+    in and its investment cost belong to all of them. The other streams of the headers on either
+    side exist once. Every balance that a branch stream enters has to count it that often, or the
+    field counts as one branch.
+    """
+    if conn.get("kind", "material") != "material":
+        return 1
+    for end in ("source_component", "target_component"):
+        comp = components.get(conn.get(end))
+        branches = getattr(comp, "beta", 1) or 1
+        if branches != 1 and hasattr(comp, "_fluid_streams"):
+            return branches
+    return 1
 
 
 def _no_negative_zero(df, digits=3):
@@ -1508,22 +1544,12 @@ class ExergoeconomicAnalysis:
 
     @property
     def _branch_scales(self) -> dict:
-        """Return how often each stream exists in the plant.
-
-        A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
-        streams then carry the mass flow and the cost of a single branch, while the heat it takes
-        in and its investment cost belong to all of them. The streams of the headers on either side
-        carry the whole field. Every cost balance that a branch stream enters has to count it that
-        often, or the cost of the field is the cost of one branch.
-        """
+        """Return how often each stream exists in the plant, by name, where that is not once."""
         scales = {}
-        for comp in self.components.values():
-            branches = getattr(comp, "beta", 1) or 1
-            if branches == 1 or not hasattr(comp, "_fluid_streams"):
-                continue
-            for conn in list(comp.inl.values()) + list(comp.outl.values()):
-                if conn is not None and conn.get("kind", "material") == "material":
-                    scales[conn["name"]] = branches
+        for name, conn in self.connections.items():
+            branches = _stream_branches(conn, self.components)
+            if branches != 1:
+                scales[name] = branches
         return scales
 
     @property

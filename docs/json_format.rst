@@ -94,11 +94,13 @@ Some types read further values:
     * - ``SteamGenerator``
       - ``T_hot``, the temperature of the heat source
     * - ``Mixer``, ``Splitter``
-      - ``num_branches``, the number of identical parallel branches
+      - ``num_branches`` is accepted but not needed: a header counts a stream of a
+        ``ParabolicTrough`` as often as the trough's ``num_branches``, every other stream once. A
+        value that none of its streams has gives a warning
     * - ``Heliostatfield``
       - ``Q_Solar``, the incident solar heat
     * - ``ParabolicTrough``
-      - ``Q_Solar`` and ``num_branches``
+      - ``Q_Solar`` and ``num_branches``, the number of identical parallel branches it stands for
 
 All other values of a component, such as the efficiencies a simulator reports, are kept but not
 checked.

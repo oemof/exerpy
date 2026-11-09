@@ -1378,6 +1378,125 @@ class TestFlashTankExergoeconomics:
         assert eco.connections["vap"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
 
 
+def _run_ccpp_with_chemical_exergy(split):
+    """CCPP example with chemical exergy and generic costs, whose water-steam cycle is closed."""
+    path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../examples/exergy_analysis/ccpp/ccpp_tespy.json"))
+    ean = ExergyAnalysis.from_json(path, chemExLib="Ahrendts", split_physical_exergy=split)
+    ean.analyse(
+        E_F={"inputs": ["1", "3"], "outputs": []},
+        E_P={"inputs": ["e15", "h1"], "outputs": []},
+        E_L={"inputs": ["8", "15"], "outputs": ["14"]},
+    )
+    names = set(ean.components)
+    costs = {
+        f"{name}_Z": 5.0
+        for name, comp in ean.components.items()
+        if type(comp).__name__ not in ("CycleCloser", "PowerBus", "Splitter")
+    }
+    for name, conn in ean.connections.items():
+        if conn["kind"] != "power" and conn["source_component"] not in names and conn["target_component"] in names:
+            costs[f"{name}_c"] = 0.0 if name in ("1", "14") else 10.0
+    eco = ExergoeconomicAnalysis(ean)
+    eco.run(costs)
+    return eco
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_the_chemical_cost_of_a_closed_cycle_is_zero(split):
+    """Without the cycle closer setting it, the chemical cost of the closed cycle is undetermined."""
+    eco = _run_ccpp_with_chemical_exergy(split)
+    closer = next(comp for comp in eco.components.values() if isinstance(comp, CycleCloser))
+    assert closer.closed_cycle
+    cycle = [
+        name
+        for name, conn in eco.connections.items()
+        if closer.name in (conn["source_component"], conn["target_component"])
+    ]
+    assert cycle
+    for name in cycle:
+        assert eco.connections[name]["E_CH"] > 0
+        assert eco.connections[name]["C_CH"] == pytest.approx(0.0, abs=1e-9), name
+
+
+def _cycle_with_make_up():
+    """A water-steam cycle that takes in make-up water and gives off blowdown.
+
+    Cycle closer, pump, mixer (make-up), boiler, turbine, condenser, splitter (blowdown), back to
+    the cycle closer. States of water from CoolProp, 10 kg/s in the cycle and 0.5 kg/s of make-up.
+    """
+    # T, p, h, e_T, e_M
+    liquid = (375.0, 1.2e5, 426981.0, 35565.0, 19.0)
+    pumped = (375.51, 40e5, 432045.0, 35936.0, 3907.0)
+    make_up = (300.0, 40e5, 116239.0, 24.0, 3907.0)
+    mixed = (371.94, 40e5, 417007.0, 32895.0, 3907.0)
+    live_steam = (773.15, 40e5, 3446022.0, 1332141.0, 3907.0)
+    exhaust = (401.46, 1.2e5, 2731487.0, 523154.0, 19.0)
+
+    def water(source, target, connector, m, state):
+        T, p, h, e_T, e_M = state
+        conn = _material(source, target, connector, m, e_T, e_M, T=T, h=h)
+        conn.update(p=p, e_CH=2500.0, E_CH=m * 2500.0, E=conn["E"] + m * 2500.0)
+        return conn
+
+    def energy(kind, source, target, value):
+        return {
+            "kind": kind,
+            "source_component": source,
+            "source_connector": 1 if source else None,
+            "target_component": target,
+            "target_connector": 1 if target else None,
+            "E": value,
+            "energy_flow": value,
+        }
+
+    return {
+        "1": water("CC", "P", 0, 10.0, liquid),
+        "2": water("P", "MX", 0, 10.0, pumped),
+        "mu": water(None, "MX", 1, 0.5, make_up),
+        "3": water("MX", "B", 0, 10.5, mixed),
+        "4": water("B", "T", 0, 10.5, live_steam),
+        "5": water("T", "C", 0, 10.5, exhaust),
+        "6": water("C", "SP", 0, 10.5, liquid),
+        "7": water("SP", "CC", 0, 10.0, liquid),
+        "bd": water("SP", None, 1, 0.5, liquid),
+        "W_P": energy("power", None, "P", 50640.0),
+        "W_T": energy("power", "T", None, 7502617.5),
+        "Q_B": energy("heat", None, "B", 31804657.5),
+        "Q_C": energy("heat", "C", None, 24197313.0),
+    }
+
+
+@pytest.mark.parametrize("split", [True, False])
+def test_the_make_up_water_sets_the_chemical_cost_of_an_open_cycle(split, caplog):
+    """Pinning the chemical cost at the cycle closer would remove the cost of the make-up water."""
+    components = {
+        "CycleCloser": {"CC": {"name": "CC"}},
+        "Pump": {"P": {"name": "P"}},
+        "Mixer": {"MX": {"name": "MX"}},
+        "SimpleHeatExchanger": {"B": {"name": "B", "T_hot": 1000.0}, "C": {"name": "C", "T_cold": 350.0}},
+        "Turbine": {"T": {"name": "T"}},
+        "Splitter": {"SP": {"name": "SP"}},
+    }
+    ean = ExergyAnalysis(components, _cycle_with_make_up(), 298.15, 101325, split_physical_exergy=split)
+    ean.analyse(
+        E_F={"inputs": ["Q_B", "mu", "W_P"], "outputs": []},
+        E_P={"inputs": ["W_T", "Q_C"], "outputs": []},
+        E_L={"inputs": ["bd"], "outputs": []},
+    )
+    eco = ExergoeconomicAnalysis(ean)
+    costs = {"P_Z": 2.0, "MX_Z": 1.0, "B_Z": 50.0, "T_Z": 30.0, "C_Z": 10.0}
+    with caplog.at_level(logging.WARNING):
+        eco.run({**costs, "mu_c": 10.0, "Q_B_c": 5.0, "W_P_c": 20.0})
+
+    assert not eco.components["CC"].closed_cycle
+    # The cost balance of every component is checked during the run
+    assert "not fulfilled" not in caplog.text
+    assert eco.system_costs["C_P"] == pytest.approx(eco.system_costs["C_F"] + eco.system_costs["Z"])
+    # The chemical exergy of the water is the same everywhere, so it keeps the cost of the make-up water
+    for name in ("1", "2", "3", "4", "5", "6", "7", "bd"):
+        assert eco.connections[name]["c_CH"] == pytest.approx(10.0e-9), name  # 10 EUR/GJ in EUR/J
+
+
 def _simple_heat_exchanger_connections(releasing):
     """A simple heat exchanger that either releases its heat or takes it in.
 

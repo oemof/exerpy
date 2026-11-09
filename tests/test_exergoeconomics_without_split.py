@@ -76,7 +76,15 @@ CGAM_CHEMICAL = {
     },
 }
 
-MODELS = {"cgam": CGAM, "heat_pump": HEAT_PUMP, "cgam_chemical": CGAM_CHEMICAL}
+# Heat pump with chemical exergy: the refrigerant in the closed cycle has none.
+HEAT_PUMP_CHEMICAL = {**HEAT_PUMP, "chemExLib": "Ahrendts"}
+
+MODELS = {
+    "cgam": CGAM,
+    "heat_pump": HEAT_PUMP,
+    "cgam_chemical": CGAM_CHEMICAL,
+    "heat_pump_chemical": HEAT_PUMP_CHEMICAL,
+}
 
 
 def _run(model, split, record=False):

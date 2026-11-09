@@ -1459,6 +1459,9 @@ class ExergoeconomicAnalysis:
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
+        for comp in self.components.values():
+            if isinstance(comp, CycleCloser):
+                comp.closed_cycle = comp.is_closed_cycle(self.components)
         self.chemical_exergy_enabled = exergy_analysis_instance.chemical_exergy_enabled
         self.split_physical_exergy = exergy_analysis_instance.split_physical_exergy
         if not self.split_physical_exergy:

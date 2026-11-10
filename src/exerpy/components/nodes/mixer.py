@@ -4,9 +4,87 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.components.component import set_mixing_cost
 from exerpy.logger import logger
 from exerpy.quantities import Branches
+
+
+def _mixing_roles(streams, outlet, T0, form):
+    """Role of each inlet of a mixing node: ``"fuel"``, ``"product"`` or ``"cross"``.
+
+    An inlet on the other side of the ambient temperature than the outlet crosses it, so its exergy at
+    the inlet is fuel and the exergy it carries at the outlet product. Otherwise a decrease of its
+    specific exergy is fuel and an increase product (SPECO, p. 1267).
+    """
+    T_out = outlet["T"]
+    roles = []
+    for _, inlet in streams:
+        if (T_out > T0 and inlet["T"] < T0) or (T_out < T0 and inlet["T"] >= T0):
+            roles.append("cross")
+        elif outlet[f"e_{form}"] > inlet[f"e_{form}"]:
+            roles.append("product")
+        else:
+            roles.append("fuel")
+    return roles
+
+
+def _with_chemical_exergy(streams, outlet):
+    """True if every stream of the node carries chemical exergy."""
+    return all(stream.get("e_CH") is not None for stream in [outlet] + [inlet for _, inlet in streams])
+
+
+def _mixing_fuel_and_product(streams, outlet, T0, split_physical_exergy):
+    """Exergy product and fuel of a mixing node from ``(number of branches, inlet)`` pairs and the outlet.
+
+    With split physical exergy the thermal exergy decides the roles and the decrease of mechanical
+    exergy of every inlet is fuel (SPECO, eq. 14). With chemical exergy the decrease of the sum of
+    chemical exergies is fuel (SPECO, eq. 35). With the outlet at the ambient temperature there is no
+    product, and the fuel is the decrease of exergy of all inlets.
+    """
+    form = "T" if split_physical_exergy else "PH"
+    e_out = outlet[f"e_{form}"]
+    E_P = np.nan if outlet["T"] == T0 else 0
+    E_F = 0
+    roles = _mixing_roles(streams, outlet, T0, form)
+    for (n, inlet), role in zip(streams, roles, strict=True):
+        m = n * inlet["m"]
+        e_in = inlet[f"e_{form}"]
+        if outlet["T"] == T0 or role == "fuel":
+            E_F += m * (e_in - e_out)
+        elif role == "product":
+            E_P += m * (e_out - e_in)
+        else:
+            E_P += m * e_out
+            E_F += m * e_in
+        if split_physical_exergy:
+            E_F += m * (inlet["e_M"] - outlet["e_M"])
+    if _with_chemical_exergy(streams, outlet):
+        E_F += sum(n * inlet["m"] * (inlet["e_CH"] - outlet["e_CH"]) for n, inlet in streams)
+    return E_P, E_F
+
+
+def _mixing_fuel_cost(streams, outlets, T0, split_physical_exergy):
+    """Cost of the fuel of a mixing node, on the same exergy forms and streams as its fuel.
+
+    ``outlets`` are the outlets at the mixed state; their cost rates are summed.
+    """
+    form = "T" if split_physical_exergy else "PH"
+    outlet = outlets[0]
+    roles = _mixing_roles(streams, outlet, T0, form)
+    C_F = 0
+    for (n, inlet), role in zip(streams, roles, strict=True):
+        # At the ambient temperature every inlet only gives up exergy.
+        if outlet["T"] == T0 or role == "fuel":
+            C_F += n * inlet["m"] * inlet[f"c_{form}"] * (inlet[f"e_{form}"] - outlet[f"e_{form}"])
+        elif role == "cross":
+            C_F += n * inlet[f"C_{form}"]
+    forms = ["M"] if split_physical_exergy else []
+    if _with_chemical_exergy(streams, outlet):
+        forms.append("CH")
+    for x in forms:
+        C_F += sum(n * inlet[f"C_{x}"] for n, inlet in streams) - sum(o[f"C_{x}"] for o in outlets)
+    return C_F
 
 
 @component_registry
@@ -43,55 +121,39 @@ class Mixer(Component):
 
     Notes
     -----
-    The exergy analysis accounts for physical exergy only. The equations for exergy
-    product and fuel are defined based on temperature relationships:
+    The exergy product and fuel follow the change of the specific exergy of each inlet
+    :math:`i` on its way to the outlet :cite:`lazzaretto2006speco`. A decrease is fuel, an increase
+    product. An inlet on the other side of the ambient temperature than the outlet crosses it, so its
+    exergy at the inlet is fuel and the exergy it carries at the outlet product:
 
     .. math::
-        \displaystyle
-        \dot E_{P} =
-        \begin{cases}
-            \displaystyle
-            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{out}}^{\mathrm{PH}}
-            -e_{\mathrm{in},i}^{\mathrm{PH}}\bigr),
-            \quad \text{if }T_{\mathrm{in},i}<T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}\ge T_{0},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,e_{\mathrm{out}}^{\mathrm{PH}},
-            \quad \text{if }T_{\mathrm{in},i}<T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}<T_{0},\\[8pt]
-            \displaystyle
-            \text{not defined (nan)},
-            \quad \text{if }T_{\mathrm{out}}=T_{0},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,e_{\mathrm{out}}^{\mathrm{PH}},
-            \quad \text{if }T_{\mathrm{in},i}>T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}\ge T_{0},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{out}}^{\mathrm{PH}}
-            -e_{\mathrm{in},i}^{\mathrm{PH}}\bigr),
-            \quad \text{if }T_{\mathrm{in},i}>T_{\mathrm{out}}\text{ and }T_{\mathrm{in},i}<T_{0}.
-        \end{cases}
+
+        \dot E_{P} = \sum_{i \in P} \dot m_{i}\,\bigl(e_{\mathrm{out}} - e_{\mathrm{in},i}\bigr)
+        + \sum_{i \in X} \dot m_{i}\,e_{\mathrm{out}}
+        \qquad
+        \dot E_{F} = \sum_{i \in F} \dot m_{i}\,\bigl(e_{\mathrm{in},i} - e_{\mathrm{out}}\bigr)
+        + \sum_{i \in X} \dot m_{i}\,e_{\mathrm{in},i}
+
+    with :math:`P` the inlets whose specific exergy rises, :math:`F` those whose specific exergy falls
+    and :math:`X` those that cross the ambient temperature; :math:`e` is the physical exergy
+    :math:`e^\mathrm{PH}`. With the outlet exactly at the ambient temperature there is no product,
+    :math:`\dot E_{P}` is NaN and :math:`\dot E_{F} = \dot E_{D} = \sum_{i} \dot m_{i}\,
+    (e_{\mathrm{in},i} - e_{\mathrm{out}})`.
+
+    With split physical exergy, the thermal exergy :math:`e^\mathrm{T}` takes the place of
+    :math:`e^\mathrm{PH}` in these sums, and the decrease of mechanical exergy of every inlet is
+    part of the fuel :cite:`lazzaretto2006speco`:
 
     .. math::
-        \displaystyle
-        \dot E_{F} =
-        \begin{cases}
-            \displaystyle
-            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{PH}}
-            -e_{\mathrm{out}}^{\mathrm{PH}}\bigr),
-            \quad \text{if }T_{\mathrm{out}}>T_{0}\text{ and }T_{\mathrm{in},i}>T_{\mathrm{out}},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
-            \quad \text{if }T_{\mathrm{out}}>T_{0}\text{ and }T_{\mathrm{in},i}<T_{\mathrm{out}}
-            \text{ and }T_{\mathrm{in},i}<T_{0},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
-            \quad \text{if }T_{\mathrm{out}}=T_{0},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,e_{\mathrm{in},i}^{\mathrm{PH}},
-            \quad \text{if }T_{\mathrm{out}}<T_{0}\text{ and }T_{\mathrm{in},i}>T_{\mathrm{out}},\\[8pt]
-            \displaystyle
-            \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{PH}}
-            -e_{\mathrm{out}}^{\mathrm{PH}}\bigr),
-            \quad \text{if }T_{\mathrm{out}}<T_{0}\text{ and }T_{\mathrm{in},i}<T_{\mathrm{out}}.
-        \end{cases}
+        \dot E_{F} \mathrel{+}= \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{M}}
+        -e_{\mathrm{out}}^{\mathrm{M}}\bigr)
+
+    With chemical exergy, the decrease of the sum of the chemical exergies is part of the fuel as
+    well, so that inlets of different composition are covered :cite:`lazzaretto2006speco`:
+
+    .. math::
+        \dot E_{F} \mathrel{+}= \sum_{i}\dot m_{i}\,\bigl(e_{\mathrm{in},i}^{\mathrm{CH}}
+        -e_{\mathrm{out}}^{\mathrm{CH}}\bigr)
 
     An inlet that stands for several identical parallel branches, such as the outlet of a
     ``ParabolicTrough`` with ``num_branches`` :math:`n`, counts :math:`n` times, here and in the cost
@@ -154,46 +216,11 @@ class Mixer(Component):
         # Sum the mass of all outlet streams (if needed for further analysis)
         sum(outlet.get("m", 0) for outlet in outlet_list)
 
-        # Initialize exergy product and fuel.
-        self.E_P = 0
-        self.E_F = 0
+        streams = [(self.branches.get(k, 1), inlet) for k, inlet in self.inl.items()]
+        self.E_P, self.E_F = _mixing_fuel_and_product(streams, first_outlet, T0, split_physical_exergy)
 
-        # Case 1: Outlet temperature is greater than ambient.
-        if T_out > T0:
-            for k, inlet in self.inl.items():
-                m = self.branches.get(k, 1) * inlet["m"]
-                # Case when inlet temperature is lower than outlet temperature.
-                if inlet["T"] < T_out:
-                    if inlet["T"] >= T0:
-                        # Contribution to exergy product from inlets above ambient.
-                        self.E_P += m * (e_out_PH - inlet["e_PH"])
-                    else:  # inlet['T'] < T0
-                        self.E_P += m * e_out_PH
-                        self.E_F += m * inlet["e_PH"]
-                else:  # inlet['T'] > T_out
-                    self.E_F += m * (inlet["e_PH"] - e_out_PH)
-
-        # Case 2: Outlet temperature equals ambient.
-        elif T_out == T0:
-            self.E_P = np.nan
-            for k, inlet in self.inl.items():
-                self.E_F += self.branches.get(k, 1) * inlet["m"] * inlet["e_PH"]
-
-        # Case 3: Outlet temperature is less than ambient.
-        else:  # T_out < T0
-            for k, inlet in self.inl.items():
-                m = self.branches.get(k, 1) * inlet["m"]
-                if inlet["T"] > T_out:
-                    if inlet["T"] >= T0:
-                        self.E_P += m * e_out_PH
-                        self.E_F += m * inlet["e_PH"]
-                    else:  # inlet['T'] < T0
-                        self.E_P += m * (e_out_PH - inlet["e_PH"])
-                else:  # inlet['T'] <= T_out
-                    self.E_F += m * (inlet["e_PH"] - e_out_PH)
-
-        # Calculate exergy destruction and efficiency.
-        self.E_D = self.E_F - self.E_P
+        # Calculate exergy destruction and efficiency; without a product all the fuel is destroyed.
+        self.E_D = self.E_F if np.isnan(self.E_P) else self.E_F - self.E_P
         self.epsilon = self.calc_epsilon()
 
         # Log the results.
@@ -304,6 +331,20 @@ class Mixer(Component):
             b[counter + i] = 0
         counter += num_rows
 
+        # Further outlets leave at the same state and the same specific cost as the first one.
+        first = self._single_outlet()
+        labels = (["T", "M"] if split_physical_exergy else ["PH"]) + (["CH"] if chemical_exergy_enabled else [])
+        for out in list(self.outl.values())[1:]:
+            for label in labels:
+                set_equal_specific_cost(A, counter, first, out, label, ref_is_outlet=True)
+                b[counter] = 0
+                equations[counter] = {
+                    "kind": "aux_p_rule",
+                    "objects": [self.name, first["name"], out["name"]],
+                    "property": f"c_{label}",
+                }
+                counter += 1
+
         return A, b, counter, equations
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
@@ -323,133 +364,24 @@ class Mixer(Component):
             + \dot{Z}
             = 0
 
-        The product is defined as the outlet stream. The fuel consists of all inlet
-        streams, with treatment depending on temperature levels and whether chemical
-        exergy is enabled. The cost balance is closed using:
+        The cost of the fuel takes the same exergy forms and streams as the fuel of
+        :meth:`calc_exergy_balance` :cite:`lazzaretto2006speco`. An inlet whose specific exergy
+        :math:`e^{x}` falls (:math:`x = \mathrm{T}` with split physical exergy, :math:`\mathrm{PH}`
+        without) gives up that decrease at its own specific cost, an inlet crossing the ambient
+        temperature brings its whole cost of that form, and the decrease of mechanical (with split) and
+        chemical exergy (if known) of all inlets is fuel:
 
         .. math::
-            \dot{C}_{\mathrm{P}} = \dot{C}_{\mathrm{F}} + \dot{Z}
 
-        **Case 1: Outlet above ambient temperature**
+            \dot{C}_\mathrm{F} = \sum_{i \in F} \dot m_{i}\, c^{x}_{\mathrm{in},i}
+            \bigl(e^{x}_{\mathrm{in},i} - e^{x}_\mathrm{out}\bigr)
+            + \sum_{i \in X} \dot C^{x}_{\mathrm{in},i}
+            + \sum_{y \in \{\mathrm{M}, \mathrm{CH}\}} \Bigl(\sum_{i} \dot C^{y}_{\mathrm{in},i}
+            - \dot C^{y}_\mathrm{out}\Bigr)
 
-        When :math:`T_{\mathrm{out}} > T_0`:
-
-        For cold inlets (:math:`T_{\mathrm{in}} < T_{\mathrm{out}}`):
-
-        Without chemical exergy:
-
-        .. math::
-            \dot{C}_{\mathrm{F,cold}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \begin{cases}
-                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} < T_0\\
-                0, & T_{\mathrm{in}} \geq T_0
-            \end{cases}
-
-        With chemical exergy enabled:
-
-        .. math::
-            \dot{C}_{\mathrm{F,cold}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \begin{cases}
-                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} < T_0\\
-                0, & T_{\mathrm{in}} \geq T_0
-            \end{cases}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-
-        For hot inlets (:math:`T_{\mathrm{in}} \geq T_{\mathrm{out}}`):
-
-        Without chemical exergy:
-
-        .. math::
-            \dot{C}_{\mathrm{F,hot}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-
-        With chemical exergy enabled:
-
-        .. math::
-            \dot{C}_{\mathrm{F,hot}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-
-        Total fuel cost (without chemical exergy):
-
-        .. math::
-            \dot{C}_{\mathrm{F}} = \sum \dot{C}_{\mathrm{F,cold}}
-            + \sum \dot{C}_{\mathrm{F,hot}}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
-
-        Total fuel cost (with chemical exergy):
-
-        .. math::
-            \dot{C}_{\mathrm{F}} = \sum \dot{C}_{\mathrm{F,cold}}
-            + \sum \dot{C}_{\mathrm{F,hot}}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
-            - \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
-
-        **Case 2: Outlet at ambient temperature (dissipative)**
-
-        When :math:`|T_{\mathrm{out}} - T_0| < 10^{-6}`:
-
-        .. math::
-            \dot{C}_{\mathrm{F}} = \sum_{\mathrm{in}} \dot{C}^{\mathrm{TOT}}_{\mathrm{in}}
-
-        **Case 3: Outlet below ambient temperature**
-
-        When :math:`T_{\mathrm{out}} < T_0`:
-
-        For hot inlets (:math:`T_{\mathrm{in}} > T_{\mathrm{out}}`):
-
-        Without chemical exergy:
-
-        .. math::
-            \dot{C}_{\mathrm{F,hot}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \begin{cases}
-                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} \geq T_0\\
-                0, & T_{\mathrm{in}} < T_0
-            \end{cases}
-
-        With chemical exergy enabled:
-
-        .. math::
-            \dot{C}_{\mathrm{F,hot}} = \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \begin{cases}
-                \dot{C}^{\mathrm{T}}_{\mathrm{in}}, & T_{\mathrm{in}} \geq T_0\\
-                0, & T_{\mathrm{in}} < T_0
-            \end{cases}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-
-        For cold inlets (:math:`T_{\mathrm{in}} \leq T_{\mathrm{out}}`):
-
-        Without chemical exergy:
-
-        .. math::
-            \dot{C}_{\mathrm{F,cold}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-
-        With chemical exergy enabled:
-
-        .. math::
-            \dot{C}_{\mathrm{F,cold}} = \dot{m}_{\mathrm{in}} \cdot c^{\mathrm{T}}_{\mathrm{in}}
-            \cdot \left(e^{\mathrm{T}}_{\mathrm{in}} - e^{\mathrm{T}}_{\mathrm{out}}\right)
-            + \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-            + \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-
-        Total fuel cost (without chemical exergy):
-
-        .. math::
-            \dot{C}_{\mathrm{F}} = \sum \dot{C}_{\mathrm{F,hot}}
-            + \sum \dot{C}_{\mathrm{F,cold}}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
-
-        Total fuel cost (with chemical exergy):
-
-        .. math::
-            \dot{C}_{\mathrm{F}} = \sum \dot{C}_{\mathrm{F,hot}}
-            + \sum \dot{C}_{\mathrm{F,cold}}
-            - \dot{C}^{\mathrm{M}}_{\mathrm{out}}
-            - \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
+        With the outlet at the ambient temperature every inlet only gives up exergy, so all inlets
+        count as :math:`F`. The product cost closes the balance,
+        :math:`\dot{C}_\mathrm{P} = \dot{C}_\mathrm{F} + \dot{Z} + \dot{Z}_\mathrm{diss}`.
 
         Parameters
         ----------
@@ -489,64 +421,8 @@ class Mixer(Component):
 
         Future development may include merging profits from dissipative components.
         """
-        self.C_P = 0
-        self.C_F = 0
-        # Without the split the cost of the fuel follows the physical exergy of the streams that the
-        # exergy balance uses in the same case.
-        if not split_physical_exergy:
-            out = self._single_outlet()
-            if abs(out["T"] - T0) < 1e-6:
-                for k, i in self.inl.items():
-                    self.C_F += self.branches.get(k, 1) * i["C_TOT"]
-            else:
-                heating = out["T"] > T0
-                for k, i in self.inl.items():
-                    n = self.branches.get(k, 1)
-                    fuel_side = (i["T"] >= out["T"]) if heating else (i["T"] <= out["T"])
-                    if fuel_side:
-                        self.C_F += n * i["m"] * i["c_PH"] * (i["e_PH"] - out["e_PH"])
-                    elif (i["T"] < T0) if heating else (i["T"] >= T0):
-                        self.C_F += n * i["C_PH"]
-        elif self._single_outlet()["T"] > T0:
-            for k, i in self.inl.items():
-                n = self.branches.get(k, 1)
-                if i["T"] < self._single_outlet()["T"]:
-                    # cold inlets
-                    self.C_F += n * i["C_M"]
-                    if i["T"] < T0:
-                        self.C_F += n * i["C_T"]
-                    if chemical_exergy_enabled:
-                        self.C_F += n * i["C_CH"]
-                else:
-                    # hot inlets
-                    self.C_F += n * (i["m"] * i["c_T"] * (i["e_T"] - self._single_outlet()["e_T"]) + i["C_M"])
-                    if chemical_exergy_enabled:
-                        self.C_F += n * i["C_CH"]
-            self.C_F += -self._single_outlet()["C_M"]
-            if chemical_exergy_enabled:
-                self.C_F += -self._single_outlet()["C_CH"]
-        elif self._single_outlet()["T"] - 1e-6 < T0 and self._single_outlet()["T"] + 1e-6 > T0:
-            # dissipative
-            for k, i in self.inl.items():
-                self.C_F += self.branches.get(k, 1) * i["C_TOT"]
-        else:
-            for k, i in self.inl.items():
-                n = self.branches.get(k, 1)
-                if i["T"] > self._single_outlet()["T"]:
-                    # hot inlets
-                    self.C_F += n * i["C_M"]
-                    if i["T"] >= T0:
-                        self.C_F += n * i["C_T"]
-                    if chemical_exergy_enabled:
-                        self.C_F += n * i["C_CH"]
-                else:
-                    # cold inlets
-                    self.C_F += n * (i["m"] * i["c_T"] * (i["e_T"] - self._single_outlet()["e_T"]) + i["C_M"])
-                    if chemical_exergy_enabled:
-                        self.C_F += n * i["C_CH"]
-            self.C_F += -self._single_outlet()["C_M"]
-            if chemical_exergy_enabled:
-                self.C_F += -self._single_outlet()["C_CH"]
+        streams = [(self.branches.get(k, 1), inlet) for k, inlet in self.inl.items()]
+        self.C_F = _mixing_fuel_cost(streams, list(self.outl.values()), T0, split_physical_exergy)
         self.C_P = self.C_F + self.Z_costs + getattr(self, "Z_diss", 0)
 
         self.c_F = self.C_F / self.E_F if self.E_F else np.nan

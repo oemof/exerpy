@@ -99,23 +99,29 @@ class Storage(Component):
 
             \dot{E}_\mathrm{P} = \dot{E}_\mathrm{out}^\mathrm{PH} - \dot{E}_\mathrm{in}^\mathrm{PH}
 
+        Where the chemical exergy of the streams is known, :math:`e^\mathrm{PH} + e^\mathrm{CH}`
+        takes the place of :math:`e^\mathrm{PH}`, as in the cost balance.
         """
 
         inlet, outlet = self._streams()
-        E_in = inlet["m"] * inlet["e_PH"]
-        E_out = outlet["m"] * outlet["e_PH"]
+        # The chemical exergy counts where it is known, as it does in the cost balance.
+        with_ch = inlet.get("e_CH") is not None and outlet.get("e_CH") is not None
+        e_in = inlet["e_PH"] + (inlet["e_CH"] if with_ch else 0)
+        e_out = outlet["e_PH"] + (outlet["e_CH"] if with_ch else 0)
+        E_in = inlet["m"] * e_in
+        E_out = outlet["m"] * e_out
 
         if inlet["m"] > outlet["m"]:
             logger.info(f"Storage '{self.name}' is charged.")
             self.charging = True
             # The exergy is stored at the state of the outlet.
-            self.E_stored = (inlet["m"] - outlet["m"]) * outlet["e_PH"]
+            self.E_stored = (inlet["m"] - outlet["m"]) * e_out
             self.E_F = E_in - E_out
             self.E_P = self.E_stored
         elif inlet["m"] < outlet["m"]:
             logger.info(f"Storage '{self.name}' is discharged.")
             self.charging = False
-            self.E_stored = (outlet["m"] - inlet["m"]) * outlet["e_PH"]
+            self.E_stored = (outlet["m"] - inlet["m"]) * e_out
             self.E_F = self.E_stored
             self.E_P = E_out - E_in
         else:

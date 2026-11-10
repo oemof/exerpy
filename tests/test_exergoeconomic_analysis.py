@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import re
+from types import SimpleNamespace
 
 import CoolProp.CoolProp as CP
 import numpy as np
@@ -756,6 +757,14 @@ class TestExergoeconomicResults:
         for col in expected_cols:
             assert col in df_comp.columns, f"Column '{col}' missing from component results"
 
+    def test_undefined_r_stays_nan(self, exergoecon, valid_costs):
+        """A component without a product has no r: it is shown as NaN, not as infinite."""
+        exergoecon.run(valid_costs)
+        name, comp = next(iter(exergoecon.exergy_analysis.components.items()))
+        comp.r = np.nan
+        df_comp, _, _, _ = exergoecon.exergoeconomic_results(print_results=False)
+        assert np.isnan(df_comp.loc[df_comp["Component"] == name, "r [%]"].iloc[0])
+
     def test_tot_row_present(self, exergoecon, valid_costs):
         """TOT row exists with system totals."""
         exergoecon.run(valid_costs)
@@ -1004,25 +1013,28 @@ def _exergy(stream, *forms):
 
 
 class TestCombustionChamberAsh:
-    """Ash at outlet 1 is a loss of the chamber: subtracted from its fuel, at the specific cost of the fuel."""
+    """Ash at outlet 1 is heated with the gas.
+
+    The increase of its physical exergy is product, its chemical exergy is subtracted from the fuel (SPECO,
+    gasification reactor with separate physical and chemical exergy).
+    """
 
     @pytest.mark.parametrize("split", [True, False])
-    def test_ash_is_a_loss_at_the_cost_of_the_fuel(self, tmp_path, caplog, split):
+    def test_ash_follows_the_speco_cost_rules(self, tmp_path, caplog, split):
         eco = _run_cgam(tmp_path, split, _ash_outlet)
         ean = eco.exergy_analysis
         cc = ean.components["CC"]
         air, fuel, gas, ash = (eco.connections[name] for name in ("3", "10", "4", "ash"))
 
-        # Product: rise from all inlets to the gas. Fuel: as without ash, less the total exergy of the ash.
-        E_ash = _exergy(ash, "PH", "CH")
-        if split:
-            E_P = _exergy(gas, "T") - _exergy(air, "T") - _exergy(fuel, "T")
-            E_F = _exergy(air, "CH", "M") + _exergy(fuel, "CH", "M") - _exergy(gas, "CH", "M") - E_ash
-        else:
-            E_P = _exergy(gas, "PH") - _exergy(air, "PH") - _exergy(fuel, "PH")
-            E_F = _exergy(air, "CH") + _exergy(fuel, "CH") - _exergy(gas, "CH") - E_ash
+        # Product: rise of the physical (thermal) exergy from all inlets to gas and ash. Fuel: decrease of
+        # the chemical (and mechanical) exergy, the ash included.
+        phys = "T" if split else "PH"
+        decrease = ("CH", "M") if split else ("CH",)
+        E_P = _exergy(gas, phys) + _exergy(ash, phys) - _exergy(air, phys) - _exergy(fuel, phys)
+        E_F = sum(_exergy(s, *decrease) for s in (air, fuel)) - sum(_exergy(s, *decrease) for s in (gas, ash))
         assert pytest.approx(E_P) == cc.E_P
         assert pytest.approx(E_F) == cc.E_F
+        E_ash = _exergy(ash, "PH", "CH")
         E_in = _exergy(air, "PH", "CH") + _exergy(fuel, "PH", "CH")
         assert pytest.approx(E_in - _exergy(gas, "PH", "CH") - E_ash) == cc.E_D
         assert sum(comp.E_D for comp in ean.components.values()) == pytest.approx(ean.E_D)
@@ -1037,15 +1049,16 @@ class TestCombustionChamberAsh:
         costs = eco.system_costs
         assert costs["C_P"] == pytest.approx(costs["C_F"] + costs["Z"])
 
-        # Every exergy form of the ash has the cost per exergy unit of the fuel, zero without exergy.
-        c_fuel = fuel["C_TOT"] / _exergy(fuel, "PH", "CH")
-        assert c_fuel == pytest.approx(CGAM_COSTS["10_c"] * 1e-9)
-        for label in ("T", "M", "CH") if split else ("PH", "CH"):
-            if ash[f"e_{label}"] == 0:
-                assert ash[f"C_{label}"] == pytest.approx(0, abs=1e-12)
-            else:
-                assert ash[f"c_{label}"] == pytest.approx(c_fuel)
-        assert ash["C_TOT"] == pytest.approx(c_fuel * E_ash)
+        # Chemical exergy of the ash at the specific cost of the fuel (SPECO eq. 48).
+        assert ash["c_CH"] == pytest.approx(fuel["c_CH"])
+        # Increase of its physical exergy at the specific cost of the gas's increase (SPECO eq. 49a).
+        k = ash["m"] / fuel["m"]
+        c_ash = (ash[f"C_{phys}"] - k * fuel[f"C_{phys}"]) / (_exergy(ash, phys) - k * _exergy(fuel, phys))
+        C_gas = gas[f"C_{phys}"] - air[f"C_{phys}"] - fuel[f"C_{phys}"] + k * fuel[f"C_{phys}"]
+        E_gas = _exergy(gas, phys) - _exergy(air, phys) - _exergy(fuel, phys) + k * _exergy(fuel, phys)
+        assert c_ash == pytest.approx(C_gas / E_gas)
+        if split:
+            assert ash["C_M"] == pytest.approx(0, abs=1e-12)  # no mechanical exergy, no cost
 
 
 class TestIntegration:
@@ -1666,14 +1679,26 @@ class TestSteamGenerator:
         assert pytest.approx(eco.connections["Q"]["C_TOT"]) == sg.C_F
         assert np.isfinite(sg.c_P) and np.isfinite(sg.r) and np.isfinite(sg.f)
 
-    def test_a_missing_drain_is_reported(self):
+    def test_a_steam_generator_without_drain_is_analysed(self):
         conns = _sg_connections(False)
         del conns["drain"]
         ean = ExergyAnalysis(
             {"SteamGenerator": {"SG": {"name": "SG", "type": "SteamGenerator"}}}, conns, 298.15, 101325
         )
-        with pytest.raises(ValueError, match="Missing outlet stream with index 2"):
-            ean.analyse(E_F={"inputs": ["Q"], "outputs": []}, E_P={"inputs": ["hp"], "outputs": ["fw"]})
+        ean.analyse(E_F={"inputs": ["Q"], "outputs": []}, E_P={"inputs": ["hp"], "outputs": ["fw"]})
+        assert ean.components["SG"]._streams()["drain"] is None
+
+    def test_the_drain_and_the_heat_are_found_on_any_connector(self):
+        """EBSILON maps the heat to connector 2 and the drain to outlet 3."""
+        conns = _sg_connections(False)
+        conns["drain"]["source_connector"] = 3
+        ean = ExergyAnalysis(
+            {"SteamGenerator": {"SG": {"name": "SG", "type": "SteamGenerator"}}}, conns, 298.15, 101325
+        )
+        ean.analyse(E_F={"inputs": ["Q"], "outputs": []}, E_P={"inputs": ["hp"], "outputs": ["fw"]})
+        streams = ean.components["SG"]._streams()
+        assert streams["drain"] is ean.connections["drain"]
+        assert streams["heat"] is ean.connections["Q"]
 
 
 def test_a_component_without_a_cost_balance_rejects_an_investment_cost():
@@ -1801,12 +1826,17 @@ class TestFlashTankExergoeconomics:
             E_F={"inputs": ["in"], "outputs": []},
             E_P={"inputs": ["vap", "liq"], "outputs": []},
         )
-        labels = ["C_T", "C_M"] if split else ["C_PH"]
-        assert pytest.approx(sum(eco.connections["in"][label] for label in labels)) == tank.C_F
-        assert (
-            pytest.approx(sum(eco.connections[name][label] for name in ("vap", "liq") for label in labels)) == tank.C_P
-        )
+        con = eco.connections
+        phys = "C_T" if split else "C_PH"
+        C_F = con["in"][phys]
+        if split:  # the decrease of mechanical exergy is fuel
+            C_F += con["in"]["C_M"] - con["vap"]["C_M"] - con["liq"]["C_M"]
+        assert pytest.approx(C_F) == tank.C_F
+        assert pytest.approx(con["vap"][phys] + con["liq"][phys]) == tank.C_P
         assert pytest.approx(tank.C_F + tank.Z_costs) == tank.C_P
+        # the exergy destruction is the full physical exergy balance
+        E_in = con["in"]["E_PH"]
+        assert pytest.approx(E_in - con["vap"]["E_PH"] - con["liq"]["E_PH"]) == tank.E_D
 
     def test_both_outlets_leave_at_the_same_specific_cost(self):
         eco, _ = _run_single_component(
@@ -2087,6 +2117,40 @@ class TestSimpleHeatExchangerExergoeconomics:
         residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
         assert balanced, f"residual={residual}"
 
+    @pytest.mark.parametrize("split", [True, False])
+    def test_absorbing_heat_the_fuel_cost_is_the_cost_of_the_heat(self, split):
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            _simple_heat_exchanger_connections(releasing=False),
+            {"SHE_Z": 20.0, "in_c": 6.0, "Q_c": 4.0},
+            split,
+            E_F={"inputs": ["Q"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": ["in"]},
+        )
+        assert pytest.approx(eco.connections["Q"]["C_TOT"]) == unit.C_F
+        # the investment lies between fuel and product, not inside the fuel
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+        assert unit.r > 0
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_releasing_heat_without_a_heat_connection_solves(self, split):
+        """Without a heat stream the outlet is priced by the cost balance alone (no extra row)."""
+        streams = _simple_heat_exchanger_connections(releasing=True)
+        del streams["Q"]
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            streams,
+            {"SHE_Z": 20.0, "in_c": 6.0},
+            split,
+            E_F={"inputs": ["in"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": []},
+        )
+        residual, balanced = eco.check_cost_balance(tol=1e-9)["SHE"]
+        assert balanced, f"residual={residual}"
+        C_in = sum(eco.connections["in"][f"C_{x}"] for x in (["T", "M"] if split else ["PH"]))
+        C_out = sum(eco.connections["out"][f"C_{x}"] for x in (["T", "M"] if split else ["PH"]))
+        assert pytest.approx(C_in + unit.Z_costs) == C_out
+
     def test_the_mechanical_exergy_passes_through_at_its_own_cost(self):
         eco, _ = _run_single_component(
             "SimpleHeatExchanger",
@@ -2099,6 +2163,132 @@ class TestSimpleHeatExchangerExergoeconomics:
         assert eco.connections["out"]["c_M"] == pytest.approx(eco.connections["in"]["c_M"])
         # Releasing heat above the ambient temperature, the thermal exergy follows the F-principle.
         assert eco.connections["out"]["c_T"] == pytest.approx(eco.connections["in"]["c_T"])
+
+
+def _cold_stream_connections(case, split=True, heat=True):
+    """A simple heat exchanger below or across the ambient temperature of 298.15 K.
+
+    ``"evaporator"``: heat taken in below T0, its exergy leaves (product). ``"chiller"``: heat
+    given off below T0, its exergy enters (fuel). ``"crossing"``: a stream cooled across T0.
+    """
+    if case == "evaporator":
+        inlet = _material(None, "SHE", 0, 1.0, 3000.0, 900.0, T=270.0, h=1.0e5)
+        outlet = _material("SHE", None, 0, 1.0, 1000.0, 850.0, T=285.0, h=1.5e5)
+    elif case == "chiller":
+        inlet = _material(None, "SHE", 0, 1.0, 1000.0, 900.0, T=285.0, h=1.5e5)
+        outlet = _material("SHE", None, 0, 1.0, 3000.0, 850.0, T=270.0, h=1.0e5)
+    else:
+        inlet = _material(None, "SHE", 0, 1.0, 400.0, 900.0, T=310.0, h=1.8e5)
+        outlet = _material("SHE", None, 0, 1.0, 1500.0, 850.0, T=280.0, h=1.2e5)
+    streams = {"in": inlet, "out": outlet}
+    if heat:
+        Q = outlet["h"] - inlet["h"]
+        key = "E_T" if split else "E_PH"
+        ends = (None, "SHE") if Q > 0 else ("SHE", None)
+        streams["Q"] = {
+            "kind": "heat",
+            "source_component": ends[0],
+            "source_connector": 999 if ends[0] else None,
+            "target_component": ends[1],
+            "target_connector": 999 if ends[1] else None,
+            "energy_flow": abs(Q),
+            "E": abs(outlet[key] - inlet[key]),
+        }
+    return streams
+
+
+class TestSimpleHeatExchangerBelowAmbient:
+    """Below T0 the exergy of heat flows against the heat, and so does its cost."""
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_heat_taken_in_below_ambient_is_the_product(self, split, caplog):
+        """An evaporator: the heat enters, its exergy leaves, so no cost is needed and the unit prices it."""
+        with caplog.at_level(logging.WARNING):
+            eco, unit = _run_single_component(
+                "SimpleHeatExchanger",
+                _cold_stream_connections("evaporator", split),
+                {"SHE_Z": 5.0, "in_c": 10.0},
+                split,
+                E_F={"inputs": ["in"], "outputs": ["out"]},
+                E_P={"inputs": ["Q"], "outputs": []},
+            )
+        assert "flows against the heat" in caplog.text
+        assert eco.check_cost_balance(tol=1e-9)["SHE"][1]
+        # The stream gives up the fuel at the cost it enters with, the heat carries the product.
+        assert unit.c_F == pytest.approx(10.0e-9)
+        assert eco.connections["Q"]["C_TOT"] == pytest.approx(unit.C_P)
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+        assert unit.f == pytest.approx(unit.Z_costs / (unit.Z_costs + unit.C_D))
+
+    def test_a_cost_given_for_heat_whose_exergy_leaves_is_not_used(self, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco, unit = _run_single_component(
+                "SimpleHeatExchanger",
+                _cold_stream_connections("evaporator"),
+                {"SHE_Z": 5.0, "in_c": 10.0, "Q_c": 99.0},
+                E_F={"inputs": ["in"], "outputs": ["out"]},
+                E_P={"inputs": ["Q"], "outputs": []},
+            )
+        assert "'Q' is not used" in caplog.text
+        assert pytest.approx(unit.C_F + unit.Z_costs) == eco.connections["Q"]["C_TOT"]
+
+    @pytest.mark.parametrize("split", [True, False])
+    def test_heat_given_off_below_ambient_is_a_fuel_with_a_known_cost(self, split):
+        """A chiller cooling a cold stream further: the heat leaves, its exergy enters and needs a cost."""
+        with pytest.raises(ValueError, match="'Q' is mandatory"):
+            _run_single_component(
+                "SimpleHeatExchanger",
+                _cold_stream_connections("chiller", split),
+                {"SHE_Z": 5.0, "in_c": 10.0},
+                split,
+                E_F={"inputs": ["Q"], "outputs": []},
+                E_P={"inputs": ["out"], "outputs": ["in"]},
+            )
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            _cold_stream_connections("chiller", split),
+            {"SHE_Z": 5.0, "in_c": 10.0, "Q_c": 30.0},
+            split,
+            E_F={"inputs": ["Q"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": ["in"]},
+        )
+        assert eco.check_cost_balance(tol=1e-9)["SHE"][1]
+        C_Q = 30.0e-9 * eco.connections["Q"]["E"]
+        assert eco.connections["Q"]["C_TOT"] == pytest.approx(C_Q)
+        # With split the pressure drop is fuel too, at the mechanical cost of the inlet.
+        assert pytest.approx(C_Q + (10.0e-9 * 50.0 if split else 0.0)) == unit.C_F
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+
+    def test_cooling_across_ambient_takes_the_cold_from_the_heat(self):
+        """Cooled across T0, the heat brings the cold exergy of the outlet: it is a fuel with a known cost."""
+        eco, unit = _run_single_component(
+            "SimpleHeatExchanger",
+            _cold_stream_connections("crossing"),
+            {"SHE_Z": 5.0, "in_c": 10.0, "Q_c": 30.0},
+            E_F={"inputs": ["in", "Q"], "outputs": []},
+            E_P={"inputs": ["out"], "outputs": []},
+        )
+        assert eco.check_cost_balance(tol=1e-9)["SHE"][1]
+        inlet, outlet = eco.connections["in"], eco.connections["out"]
+        assert pytest.approx(outlet["C_T"]) == unit.C_P
+        assert pytest.approx(inlet["C_T"] + eco.connections["Q"]["C_TOT"] + inlet["C_M"] - outlet["C_M"]) == unit.C_F
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+
+    @pytest.mark.parametrize("case", ["evaporator", "crossing"])
+    def test_without_heat_connection_the_heat_has_no_cost(self, case, caplog):
+        with caplog.at_level(logging.WARNING):
+            eco, unit = _run_single_component(
+                "SimpleHeatExchanger",
+                _cold_stream_connections(case, heat=False),
+                {"SHE_Z": 5.0, "in_c": 10.0},
+                E_F={"inputs": ["in"], "outputs": []},
+                E_P={"inputs": ["out"], "outputs": []},
+            )
+        assert "has no heat connection" in caplog.text
+        assert eco.check_cost_balance(tol=1e-9)["SHE"][1]
+        assert pytest.approx(unit.C_F + unit.Z_costs) == unit.C_P
+        if case == "evaporator":
+            assert unit.c_F == pytest.approx(10.0e-9)
 
 
 class TestSimpleHeatExchangerHeatTemperature:
@@ -2169,3 +2359,56 @@ class TestSimpleHeatExchangerHeatTemperature:
                 E_F={"inputs": ["in"], "outputs": ["out"]},
                 E_P={"inputs": ["Q"], "outputs": []},
             )
+
+
+class TestNetProductPairing:
+    """The loss cost is split by net product exergy; a subtracted stream pairs with the product downstream."""
+
+    @staticmethod
+    def _plant(outputs):
+        def conn(name, src, src_con, tgt, tgt_con, E, kind="material"):
+            return {
+                "name": name,
+                "source_component": src,
+                "source_connector": src_con,
+                "target_component": tgt,
+                "target_connector": tgt_con,
+                "E": E,
+                "kind": kind,
+            }
+
+        connections = {
+            # feedwater 8 through the preheater PH and the evaporator EV to the steam 9, on side 1
+            "8": conn("8", None, None, "PH", 1, 1.0),
+            "8b": conn("8b", "PH", 1, "EV", 1, 3.0),
+            "9": conn("9", "EV", 1, None, None, 13.0),
+            # flue gas on side 0
+            "6": conn("6", "GT", 0, "EV", 0, 20.0),
+            "6b": conn("6b", "EV", 0, "PH", 0, 8.0),
+            "7": conn("7", "PH", 0, None, None, 4.0),
+            "E1": conn("E1", "GEN", 0, None, None, 30.0, kind="power"),
+        }
+        return SimpleNamespace(connections=connections, E_P_dict={"inputs": ["E1", "9"], "outputs": outputs})
+
+    def test_feedwater_pairs_with_the_steam(self):
+        fake = self._plant(["8"])
+        net = ExergoeconomicAnalysis._net_product_exergy.__get__(fake)
+        fake._downstream_products = ExergoeconomicAnalysis._downstream_products.__get__(fake)
+        assert net() == {"E1": 30.0, "9": 12.0}
+
+    def test_without_subtracted_streams_the_gross_exergy_counts(self):
+        fake = self._plant([])
+        fake._downstream_products = ExergoeconomicAnalysis._downstream_products.__get__(fake)
+        assert ExergoeconomicAnalysis._net_product_exergy(fake) == {"E1": 30.0, "9": 13.0}
+
+    def test_an_unpaired_stream_falls_back_to_gross_with_a_warning(self, caplog):
+        fake = self._plant(["7"])  # the flue gas reaches no product
+        fake._downstream_products = ExergoeconomicAnalysis._downstream_products.__get__(fake)
+        assert ExergoeconomicAnalysis._net_product_exergy(fake) == {"E1": 30.0, "9": 13.0}
+        assert "leads to 0 product streams" in caplog.text
+
+
+def test_component_balances_hold_after_the_loss_cost_is_charged(exergoecon, valid_costs):
+    """The share of the loss cost added to the products does not show up as a residual of their components."""
+    exergoecon.run(valid_costs)
+    assert all(ok for _, ok in exergoecon.check_cost_balance().values())

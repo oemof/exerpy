@@ -571,9 +571,9 @@ def parsed_combustion_chamber(case):
     return _construct_components(parser.components_data, parser.connections_data, 300)["CC"]
 
 
-# By hand: E_D = in 9 * 15 + 1 * 50050 - out 9.9 * 1604 - 0.1 * 1500. E_P = 9.9 * 1500 - 9 * 10 with the
-# split and 9.9 * 1504 - 9 * 15 - 1 * 50 without.
-@pytest.mark.parametrize("split, E_P", [(True, 14760), (False, 14704.6)], ids=["split", "no_split"])
+# By hand: E_D = in 9 * 15 + 1 * 50050 - out 9.9 * 1604 - 0.1 * 1500. E_P = 9.9 * 1500 + 0.1 * 500 - 9 * 10 with
+# the split and 9.9 * 1504 + 0.1 * 500 - 9 * 15 - 1 * 50 without (the ash is heated with the gas).
+@pytest.mark.parametrize("split, E_P", [(True, 14810), (False, 14754.6)], ids=["split", "no_split"])
 def test_parsed_combustion_chamber_keeps_gas_and_ash(split, E_P):
     """Gas and ash both reach the combustion chamber, so its exergy balance closes over all four streams."""
     chamber = parsed_combustion_chamber("ash_outlet")

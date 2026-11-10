@@ -78,6 +78,7 @@ class AspenModelParser:
 
             # Parse blocks (components)
             self.parse_blocks()
+            self.orient_consumer_power()
 
             if self.split_physical_exergy:
                 self.split_physical_exergy_of_streams()
@@ -599,12 +600,26 @@ class AspenModelParser:
 
                 # Create a new connection for the motor
                 if elec_power is not None:
-                    electr_connection_name = f"{block_name}_ELEC"
+                    # The work stream of the pump in Aspen is its electric power: it feeds the motor. Without
+                    # one, the electric power comes from outside the model.
+                    work = [
+                        name
+                        for name, conn in self.connections_data.items()
+                        if conn.get("kind") == "power"
+                        and block_name in (conn.get("source_component"), conn.get("target_component"))
+                    ]
+                    electr_connection_name = work[0] if work else f"{block_name}_ELEC"
+                    old = self.connections_data.get(electr_connection_name, {})
+                    other = (
+                        old.get("target_component")
+                        if old.get("source_component") == block_name
+                        else old.get("source_component")
+                    )
                     electr_connection_data = {
                         "name": electr_connection_name,
                         "kind": "power",
-                        "source_component": None,  # Electrical power usually leaves the system
-                        "source_connector": None,  # Electrical power usually leaves the system
+                        "source_component": other if work else None,
+                        "source_connector": None,
                         "target_component": motor_name,
                         "target_connector": 0,
                         "energy_flow": motor_data["P_el"],
@@ -629,6 +644,42 @@ class AspenModelParser:
 
             # Assign connectors
             self.assign_connectors(component_data, block_name)
+
+    def orient_consumer_power(self):
+        """
+        Lets the power of a compressor or pump flow into it.
+
+        Aspen draws the work stream of a compressor from its WS(OUT) port, so the parsed stream leaves the
+        machine, and the stream of a motor block that drives it leaves the motor towards the grid. A machine
+        that consumes power receives it, so such streams are reversed: a stream leaving a compressor or pump
+        now enters it on connector 1, and the stream at the other end of a motor driving it enters the motor
+        on connector 0.
+        """
+        types = {name: data.get("type") for group in self.components_data.values() for name, data in group.items()}
+        consumers = {name for name, kind in types.items() if kind in ("Compressor", "Pump")}
+        driving_motors = set()
+        for conn in self.connections_data.values():
+            if conn.get("kind") != "power" or conn.get("source_component") not in consumers:
+                continue
+            machine, other = conn["source_component"], conn.get("target_component")
+            conn.update(
+                source_component=other,
+                source_connector=0 if types.get(other) == "Motor" else None,
+                target_component=machine,
+                target_connector=1,
+            )
+            if types.get(other) == "Motor":
+                driving_motors.add(other)
+        for conn in self.connections_data.values():
+            motor = conn.get("source_component")
+            if conn.get("kind") != "power" or motor not in driving_motors or conn.get("target_component") in consumers:
+                continue
+            conn.update(
+                source_component=conn.get("target_component"),
+                source_connector=None,
+                target_component=motor,
+                target_connector=0,
+            )
 
     def mult_block_type(self, block_name, factor):
         """

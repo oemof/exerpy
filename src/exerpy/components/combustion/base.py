@@ -1,5 +1,9 @@
+import numpy as np
+
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
+from exerpy.components.component import set_mixing_cost
 from exerpy.logger import logger
 
 
@@ -10,12 +14,12 @@ class CombustionChamber(Component):
 
     This class performs exergy and exergoeconomic analysis calculations for combustion chambers,
     considering both thermal and mechanical exergy flows, as well as chemical exergy flows.
-    The combustion gas leaves at outlet 0. With split physical exergy, the exergy product is the
-    increase of the thermal exergy from all inlets to the combustion gas and the exergy fuel the
-    decrease of the chemical and the mechanical exergy. Without the split, the product is the
-    increase of the physical exergy and the fuel the decrease of the chemical exergy. Every further
-    material outlet, such as ash or slag, is no product of the chamber: its exergy is subtracted from
-    the fuel and it takes the cost per exergy unit of the fuel stream, wherever it goes next.
+    The combustion gas leaves at outlet 0, every further material outlet is ash or slag. With split
+    physical exergy, the exergy product is the increase of the thermal exergy from all inlets to all
+    outlets and the exergy fuel the decrease of the chemical and the mechanical exergy. Without the
+    split, the product is the increase of the physical exergy and the fuel the decrease of the
+    chemical exergy. The ash is heated with the gas, so the increase of its physical exergy is
+    product, while its chemical exergy is subtracted from the fuel.
 
     Attributes
     ----------
@@ -75,36 +79,32 @@ class CombustionChamber(Component):
         r"""
         Compute the exergy balance of the combustion chamber.
 
-        The sums over :math:`\mathrm{in}` run over all inlets. The combustion gas leaves at outlet 0;
-        every further outlet :math:`\mathrm{A}`, such as ash or slag, is no product. As for the ash of
-        a gasification reactor, its exergy is subtracted from the fuel, whether it leaves the plant or is
-        used further downstream. With split physical exergy, the thermal exergy of fuel and oxidant is raised
-        (product) at the expense of their chemical and mechanical exergy (fuel):
+        The sums run over all inlets and over all outlets, the combustion gas at outlet 0 and any ash
+        or slag at further outlets. With split physical exergy, the thermal exergy of the streams is
+        raised (product) at the expense of their chemical and mechanical exergy (fuel):
 
         .. math::
-            \dot{E}_\mathrm{P} = \dot{E}^{\mathrm{T}}_{\mathrm{gas}}
+            \dot{E}_\mathrm{P} = \sum \dot{E}^{\mathrm{T}}_{\mathrm{out}}
                                - \sum \dot{E}^{\mathrm{T}}_{\mathrm{in}}
 
         .. math::
             \dot{E}_\mathrm{F} = \Bigl(\sum \dot{E}^{\mathrm{CH}}_{\mathrm{in}}
-                                       - \dot{E}^{\mathrm{CH}}_{\mathrm{gas}}\Bigr)
+                                       - \sum \dot{E}^{\mathrm{CH}}_{\mathrm{out}}\Bigr)
                                + \Bigl(\sum \dot{E}^{\mathrm{M}}_{\mathrm{in}}
-                                       - \dot{E}^{\mathrm{M}}_{\mathrm{gas}}\Bigr)
-                               - \sum_\mathrm{A} \bigl(\dot{E}^{\mathrm{T}}_{\mathrm{A}}
-                                       + \dot{E}^{\mathrm{M}}_{\mathrm{A}}
-                                       + \dot{E}^{\mathrm{CH}}_{\mathrm{A}}\bigr)
+                                       - \sum \dot{E}^{\mathrm{M}}_{\mathrm{out}}\Bigr)
 
         Without the split:
 
         .. math::
-            \dot{E}_\mathrm{P} = \dot{E}^{\mathrm{PH}}_{\mathrm{gas}}
+            \dot{E}_\mathrm{P} = \sum \dot{E}^{\mathrm{PH}}_{\mathrm{out}}
                                - \sum \dot{E}^{\mathrm{PH}}_{\mathrm{in}}
 
         .. math::
             \dot{E}_\mathrm{F} = \sum \dot{E}^{\mathrm{CH}}_{\mathrm{in}}
-                               - \dot{E}^{\mathrm{CH}}_{\mathrm{gas}}
-                               - \sum_\mathrm{A} \bigl(\dot{E}^{\mathrm{PH}}_{\mathrm{A}}
-                                       + \dot{E}^{\mathrm{CH}}_{\mathrm{A}}\bigr)
+                               - \sum \dot{E}^{\mathrm{CH}}_{\mathrm{out}}
+
+        An inlet below the ambient temperature brings thermal exergy that the chamber has to make up
+        first, so it reduces the product.
 
         The exergy destruction :math:`\dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}`
         is the same in both cases: the total exergy of all inlets less that of all outlets.
@@ -152,14 +152,12 @@ class CombustionChamber(Component):
             logger.error(msg)
             raise ValueError(msg)
 
-        forms = ("T", "M", "CH") if split_physical_exergy else ("PH", "CH")
-        E_ash = sum(stream["m"] * stream[f"e_{form}"] for stream in self._ash_outlets() for form in forms)
         if split_physical_exergy:
             self.E_P = self._exergy_increase("T")
-            self.E_F = -self._exergy_increase("CH") - self._exergy_increase("M") - E_ash
+            self.E_F = -self._exergy_increase("CH") - self._exergy_increase("M")
         else:
             self.E_P = self._exergy_increase("PH")
-            self.E_F = -self._exergy_increase("CH") - E_ash
+            self.E_F = -self._exergy_increase("CH")
 
         # Exergy destruction (difference between exergy fuel and exergy product)
         self.E_D = self.E_F - self.E_P
@@ -175,13 +173,14 @@ class CombustionChamber(Component):
         )
 
     def _exergy_increase(self, form):
-        """Exergy flow of one form (``"T"``, ``"M"``, ``"PH"`` or ``"CH"``) of the combustion gas minus all inlets."""
-        gas = self.outl[0]
-        return gas["m"] * gas[f"e_{form}"] - sum(stream["m"] * stream[f"e_{form}"] for stream in self.inl.values())
+        """Exergy flow of one form (``"T"``, ``"M"``, ``"PH"`` or ``"CH"``) of all outlets minus all inlets."""
+        return sum(s["m"] * s[f"e_{form}"] for s in self.outl.values()) - sum(
+            s["m"] * s[f"e_{form}"] for s in self.inl.values()
+        )
 
     def _cost_increase(self, form):
-        """Cost rate of one exergy form of the combustion gas minus all inlets."""
-        return self.outl[0][f"C_{form}"] - sum(stream[f"C_{form}"] for stream in self.inl.values())
+        """Cost rate of one exergy form of all outlets minus all inlets."""
+        return sum(s[f"C_{form}"] for s in self.outl.values()) - sum(s[f"C_{form}"] for s in self.inl.values())
 
     def _ash_outlets(self):
         """Outlets other than the combustion gas, such as ash or slag."""
@@ -223,17 +222,29 @@ class CombustionChamber(Component):
         If the gas has no exergy of the form :math:`x`, the row sets its cost to zero,
         :math:`\dot{C}^{x}_{\mathrm{gas}} = 0`.
 
-        Every further outlet :math:`\mathrm{A}`, such as ash or slag, takes the
-        cost per exergy unit of the fuel stream, the inlet with the largest chemical exergy flow
-        (F-principle). For each of its exergy forms :math:`x` (T, M and CH with split physical
-        exergy, PH and CH without):
+        Every further outlet :math:`\mathrm{A}`, such as ash or slag, stems from the fuel stream
+        :math:`\mathrm{f}`, the inlet with the largest chemical exergy flow, in the share
+        :math:`k = \dot m_\mathrm{A} / \dot m_\mathrm{f}` :cite:`lazzaretto2006speco`. Its chemical
+        exergy keeps the specific cost of the fuel (F-principle), and with split physical exergy its
+        mechanical exergy mixes like that of the gas:
 
         .. math::
-            \frac{\dot{C}^{x}_{\mathrm{A}}}{\dot{E}^{x}_{\mathrm{A}}}
-            = \frac{\sum_{y} \dot{C}^{y}_{\mathrm{fuel}}}{\sum_{y} \dot{E}^{y}_{\mathrm{fuel}}}
+            \frac{\dot{C}^{\mathrm{CH}}_{\mathrm{A}}}{\dot{E}^{\mathrm{CH}}_{\mathrm{A}}}
+            = \frac{\dot{C}^{\mathrm{CH}}_{\mathrm{f}}}{\dot{E}^{\mathrm{CH}}_{\mathrm{f}}}
 
-        If the ash has no exergy of the form :math:`x`, the row sets
-        :math:`\dot{C}^{x}_{\mathrm{A}} = 0`.
+        The increase of its physical exergy :math:`x` (T with split physical exergy, PH without) is
+        product and costs as much per unit as the increase of the gas (P-principle):
+
+        .. math::
+            \frac{\dot{C}^{x}_{\mathrm{A}} - k\,\dot{C}^{x}_{\mathrm{f}}}
+                 {\dot{E}^{x}_{\mathrm{A}} - k\,\dot{E}^{x}_{\mathrm{f}}}
+            = \frac{\dot{C}^{x}_{\mathrm{gas}} - \sum_{i} \dot{C}^{x}_{\mathrm{in},i}
+                    + \sum_\mathrm{A} k\,\dot{C}^{x}_{\mathrm{f}}}
+                   {\dot{E}^{x}_{\mathrm{gas}} - \sum_{i} \dot{E}^{x}_{\mathrm{in},i}
+                    + \sum_\mathrm{A} k\,\dot{E}^{x}_{\mathrm{f}}}
+
+        If the ash gains no physical exergy, it keeps the cost of its share of the fuel,
+        :math:`\dot{C}^{x}_{\mathrm{A}} = k\,\dot{C}^{x}_{\mathrm{f}}`.
 
         Parameters
         ----------
@@ -279,45 +290,69 @@ class CombustionChamber(Component):
 
         inlets = list(self.inl.values())
         gas = self.outl[0]
-        m_in = sum(inlet["m"] for inlet in inlets)
+        ashes = self._ash_outlets()
         names = [self.name] + [inlet["name"] for inlet in inlets] + [gas["name"]]
+        phys = "T" if split_physical_exergy else "PH"
 
         # Without the split the cost balance alone determines the cost of the physical exergy of the
-        # gas, so only the chemical mixing rule is needed.
+        # gas, so only the chemical mixing rule is needed. The mechanical exergy of the ash mixes alike.
         for label in ("M", "CH") if split_physical_exergy else ("CH",):
-            E = f"E_{label}"
-            if gas[E] != 0:
-                A[counter, gas["CostVar_index"][label]] = -1 / gas[E]
-                for inlet in inlets:
-                    # An inlet without exergy of this form brings no cost of it.
-                    if inlet[E] != 0:
-                        A[counter, inlet["CostVar_index"][label]] = inlet["m"] / (m_in * inlet[E])
-            else:
-                A[counter, gas["CostVar_index"][label]] = 1
+            set_mixing_cost(A, counter, inlets, gas, label)
             b[counter] = 0
             equations[counter] = {"kind": "aux_mixing", "objects": names, "property": f"c_{label}"}
             counter += 1
 
-        # Ash takes the cost per exergy unit of the fuel stream, the inlet with the most chemical exergy.
-        labels = ("T", "M", "CH") if split_physical_exergy else ("PH", "CH")
+        # The ash stems from the fuel, the inlet with the largest chemical exergy flow.
         fuel = max(inlets, key=lambda inlet: inlet["E_CH"])
-        for ash in self._ash_outlets():
-            E_fuel = sum(fuel[f"E_{label}"] for label in labels)
-            for label in labels:
-                E = ash[f"E_{label}"]
-                if E != 0:
-                    A[counter, ash["CostVar_index"][label]] = 1 / E
-                    for fuel_label in labels:
-                        A[counter, fuel["CostVar_index"][fuel_label]] = -1 / E_fuel
-                else:
-                    A[counter, ash["CostVar_index"][label]] = 1
+        shares = [ash["m"] / fuel["m"] for ash in ashes]
+        if ashes:
+            gas_increase = (
+                gas[f"E_{phys}"] - sum(inlet[f"E_{phys}"] for inlet in inlets) + sum(shares) * fuel[f"E_{phys}"]
+            )
+        for ash, k in zip(ashes, shares, strict=True):
+            # Chemical exergy: F-principle, the specific cost of the fuel (SPECO eq. 48).
+            set_equal_specific_cost(A, counter, fuel, ash, "CH")
+            b[counter] = 0
+            equations[counter] = {
+                "kind": "aux_f_rule",
+                "objects": [self.name, fuel["name"], ash["name"]],
+                "property": "c_CH",
+            }
+            counter += 1
+
+            if split_physical_exergy:
+                set_mixing_cost(A, counter, inlets, ash, "M")
                 b[counter] = 0
                 equations[counter] = {
-                    "kind": "aux_f_rule",
-                    "objects": [self.name, fuel["name"], ash["name"]],
-                    "property": f"c_{label}",
+                    "kind": "aux_mixing",
+                    "objects": [self.name, *[inlet["name"] for inlet in inlets], ash["name"]],
+                    "property": "c_M",
                 }
                 counter += 1
+
+            # Physical exergy: P-principle, the increase of the ash costs as much per unit as the
+            # increase of the gas (SPECO eq. 49a).
+            ash_increase = ash[f"E_{phys}"] - k * fuel[f"E_{phys}"]
+            col = ash["CostVar_index"][phys]
+            fuel_col = fuel["CostVar_index"][phys]
+            if ash_increase != 0 and gas_increase != 0:
+                A[counter, col] += 1 / ash_increase
+                A[counter, fuel_col] -= k / ash_increase
+                A[counter, gas["CostVar_index"][phys]] -= 1 / gas_increase
+                for inlet in inlets:
+                    A[counter, inlet["CostVar_index"][phys]] += 1 / gas_increase
+                A[counter, fuel_col] -= sum(shares) / gas_increase
+            else:
+                # No increase: the ash keeps the cost of its share of the fuel.
+                A[counter, col] = 1
+                A[counter, fuel_col] = -k
+            b[counter] = 0
+            equations[counter] = {
+                "kind": "aux_p_rule",
+                "objects": [self.name, gas["name"], ash["name"]],
+                "property": f"c_{phys}",
+            }
+            counter += 1
 
         return [A, b, counter, equations]
 
@@ -332,35 +367,28 @@ class CombustionChamber(Component):
             + \dot{Z} = 0
 
         This method computes cost coefficients and ratios. Fuel and product take the same exergy
-        forms as in :meth:`calc_exergy_balance`: the combustion gas at outlet 0 against all inlets,
-        with the further outlets :math:`\mathrm{A}` such as ash subtracted from the
-        fuel, so that :math:`\dot{C}_\mathrm{P} = \dot{C}_\mathrm{F} + \dot{Z}`. With split
-        physical exergy:
+        forms as in :meth:`calc_exergy_balance`, all outlets (gas and ash) against all inlets, so
+        that :math:`\dot{C}_\mathrm{P} = \dot{C}_\mathrm{F} + \dot{Z}`. With split physical exergy:
 
         .. math::
-            \dot{C}_\mathrm{P} = \dot{C}^{\mathrm{T}}_{\mathrm{gas}}
+            \dot{C}_\mathrm{P} = \sum \dot{C}^{\mathrm{T}}_{\mathrm{out}}
                                - \sum \dot{C}^{\mathrm{T}}_{\mathrm{in}}
 
         .. math::
             \dot{C}_\mathrm{F} = \Bigl(\sum \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-                                       - \dot{C}^{\mathrm{CH}}_{\mathrm{gas}}\Bigr)
+                                       - \sum \dot{C}^{\mathrm{CH}}_{\mathrm{out}}\Bigr)
                                + \Bigl(\sum \dot{C}^{\mathrm{M}}_{\mathrm{in}}
-                                       - \dot{C}^{\mathrm{M}}_{\mathrm{gas}}\Bigr)
-                               - \sum_\mathrm{A} \bigl(\dot{C}^{\mathrm{T}}_{\mathrm{A}}
-                                       + \dot{C}^{\mathrm{M}}_{\mathrm{A}}
-                                       + \dot{C}^{\mathrm{CH}}_{\mathrm{A}}\bigr)
+                                       - \sum \dot{C}^{\mathrm{M}}_{\mathrm{out}}\Bigr)
 
         Without the split:
 
         .. math::
-            \dot{C}_\mathrm{P} = \dot{C}^{\mathrm{PH}}_{\mathrm{gas}}
+            \dot{C}_\mathrm{P} = \sum \dot{C}^{\mathrm{PH}}_{\mathrm{out}}
                                - \sum \dot{C}^{\mathrm{PH}}_{\mathrm{in}}
 
         .. math::
             \dot{C}_\mathrm{F} = \sum \dot{C}^{\mathrm{CH}}_{\mathrm{in}}
-                               - \dot{C}^{\mathrm{CH}}_{\mathrm{gas}}
-                               - \sum_\mathrm{A} \bigl(\dot{C}^{\mathrm{PH}}_{\mathrm{A}}
-                                       + \dot{C}^{\mathrm{CH}}_{\mathrm{A}}\bigr)
+                               - \sum \dot{C}^{\mathrm{CH}}_{\mathrm{out}}
 
         Parameters
         ----------
@@ -373,16 +401,14 @@ class CombustionChamber(Component):
             mechanical share, each with its own cost variable. If False, the stream carries a
             single cost variable for its physical exergy. Default is True.
         """
-        forms = ("T", "M", "CH") if split_physical_exergy else ("PH", "CH")
-        C_ash = sum(stream[f"C_{form}"] for stream in self._ash_outlets() for form in forms)
         if split_physical_exergy:
             self.C_P = self._cost_increase("T")
-            self.C_F = -self._cost_increase("CH") - self._cost_increase("M") - C_ash
+            self.C_F = -self._cost_increase("CH") - self._cost_increase("M")
         else:
             self.C_P = self._cost_increase("PH")
-            self.C_F = -self._cost_increase("CH") - C_ash
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
+            self.C_F = -self._cost_increase("CH")
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
         self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

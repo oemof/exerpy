@@ -127,8 +127,8 @@ class Turbine(Component):
             logger.error(msg)
             raise ValueError(msg)
 
-        # Case 1: Both temperatures above ambient
-        if self.inl[0]["T"] >= T0 and main_out["T"] >= T0 and self.inl[0]["T"] >= main_out["T"]:
+        # Case 1: Both temperatures above ambient (a liquid may leave slightly warmer)
+        if self.inl[0]["T"] >= T0 and main_out["T"] >= T0:
             self.E_P = abs(self.P)
             self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self._total_outlet("m", "e_PH")
 
@@ -163,11 +163,11 @@ class Turbine(Component):
                 )
                 self.E_P = abs(self.P)
                 self.E_F = self.inl[0]["m"] * self.inl[0]["e_PH"] - self._total_outlet("m", "e_PH")
-        # Invalid case: outlet temperature larger than inlet
+        # Inlet below and outlet above the ambient temperature
         else:
             logger.warning(
-                "Exergy balance of a turbine where outlet temperature is larger "
-                "than inlet temperature is not implemented."
+                f"Exergy balance of turbine {self.name} with the inlet below and the outlet above the ambient "
+                "temperature is not implemented; its exergy destruction is taken from the balance."
             )
             self.E_P = np.nan
             self.E_F = np.nan
@@ -308,11 +308,8 @@ class Turbine(Component):
             Updated structure with equation labels.
         """
         if split_physical_exergy:
-            if self.inl[0]["T"] > T0 and self.outl[0]["T"] > T0:
-                labels = ["T", "M"]
-            else:
-                labels = []
-                logger.warning("Turbine with outlet below T0 not implemented in exergoeconomics yet!")
+            # The thermal exergy gets its own rule per outlet below.
+            labels = ["M"]
         else:
             labels = ["PH"]
             if self.inl[0]["T"] <= T0 or self.outl[0]["T"] <= T0:
@@ -337,6 +334,9 @@ class Turbine(Component):
                 }
                 counter += 1
 
+        if split_physical_exergy:
+            counter = self._thermal_rows(A, b, counter, T0, equations, inlet, material_outlets)
+
         # --- Auxiliary equation for shaft power equality ---
         power_outlets = [
             outlet
@@ -358,6 +358,59 @@ class Turbine(Component):
                 counter += 1
 
         return A, b, counter, equations
+
+    def _thermal_rows(self, A, b, counter, T0, equations, inlet, material_outlets):
+        r"""
+        Write the rows for the thermal exergy of each material outlet with split physical exergy.
+
+        Above the ambient temperature the thermal exergy is fuel and keeps its specific cost
+        (F-principle). At or below it the thermal exergy of the outlet is product, so it costs as much
+        per unit as the power (P-principle) :cite:`lazzaretto2006speco`: its whole value when the inlet
+        is above the ambient temperature, its increase when both are below. :math:`k` is the share of
+        the inlet mass flow that leaves through the outlet.
+
+        .. math::
+
+            \frac{\dot C^\mathrm{T}_\mathrm{out}}{\dot E^\mathrm{T}_\mathrm{out}}
+            = \frac{\dot C_W}{\dot W}
+            \qquad \text{or} \qquad
+            \frac{\dot C^\mathrm{T}_\mathrm{out} - k\,\dot C^\mathrm{T}_\mathrm{in}}
+            {\dot E^\mathrm{T}_\mathrm{out} - k\,\dot E^\mathrm{T}_\mathrm{in}}
+            = \frac{\dot C_W}{\dot W}
+        """
+        power = [o for o in self.outl.values() if o.get("kind") == "power"]
+        for outlet in material_outlets:
+            if inlet["T"] >= T0 and outlet["T"] >= T0:
+                set_equal_specific_cost(A, counter, inlet, outlet, "T")
+                kind = "aux_f_rule"
+            else:
+                if not power or not power[0].get("E"):
+                    raise ValueError(
+                        f"Turbine {self.name} expands below the ambient temperature, so the cost of the thermal "
+                        "exergy of its outlet follows the cost of its power, but it has no power outlet."
+                    )
+                W = power[0]["E"]
+                k = outlet["m"] / inlet["m"] if inlet["m"] else 0.0
+                col_out = outlet["CostVar_index"]["T"]
+                col_in = inlet["CostVar_index"]["T"]
+                if inlet["T"] > T0:
+                    dE = outlet["E_T"]
+                    A[counter, col_out] = 1 / dE if dE else 1
+                else:
+                    dE = outlet["E_T"] - k * inlet["E_T"]
+                    A[counter, col_out] = 1 / dE if dE else 1
+                    A[counter, col_in] = -k / dE if dE else -k
+                if dE:
+                    A[counter, power[0]["CostVar_index"]["exergy"]] = -1 / W
+                kind = "aux_p_rule"
+            b[counter] = 0
+            equations[counter] = {
+                "kind": kind,
+                "objects": [self.name, inlet["name"], outlet["name"]],
+                "property": "c_T",
+            }
+            counter += 1
+        return counter
 
     def exergoeconomic_balance(self, T0, chemical_exergy_enabled=False, split_physical_exergy=True):
         r"""
@@ -462,8 +515,10 @@ class Turbine(Component):
         C_power_out = sum(
             stream.get("C_TOT", 0) for stream in self.outl.values() if stream.get("kind") == "power"
         ) - sum(stream.get("C_TOT", 0) for stream in self.inl.values() if stream.get("kind") == "power")
-        # Assume a single primary inlet for material cost properties.
+        # Assume a single primary inlet for material cost properties; the outlet that decides the
+        # temperature case is the same as in the exergy balance.
         inlet = self.inl[0]
+        main_out = self._main_outlet()
         # Filter material outlets and sum their cost components.
         material_outlets = [out for out in self.outl.values() if out.get("kind") == "material"]
         sum_C_PH_out = sum(out.get("C_PH", 0) for out in material_outlets)
@@ -473,32 +528,31 @@ class Turbine(Component):
         # Case 1: Both inlet and first outlet above ambient. Below the ambient temperature the split is
         # needed to charge the cold exergy of the outlet to the product, so without it the power stays
         # the only product and the definition of case 1 holds in every temperature case.
-        if (inlet["T"] >= T0 and self.outl[0]["T"] >= T0) or (
-            not split_physical_exergy and inlet["T"] >= self.outl[0]["T"]
-        ):
+        if not split_physical_exergy or (inlet["T"] >= T0 and main_out["T"] >= T0):
             self.C_P = C_power_out
             self.C_F = inlet.get("C_PH", 0) - sum_C_PH_out
 
         # Case 2: Inlet above ambient and outlet at or below ambient.
-        elif inlet["T"] > T0 and self.outl[0]["T"] <= T0:
+        elif inlet["T"] > T0 and main_out["T"] <= T0:
             self.C_P = C_power_out + sum_C_T_out
             self.C_F = inlet.get("C_T", 0) + (inlet.get("C_M", 0) - sum_C_M_out)
 
         # Case 3: Both inlet and outlet at or below ambient.
-        elif inlet["T"] <= T0 and self.outl[0]["T"] <= T0:
+        elif inlet["T"] <= T0 and main_out["T"] <= T0:
             self.C_P = C_power_out + (sum_C_T_out - inlet.get("C_T", 0))
             self.C_F = inlet.get("C_M", 0) - sum_C_M_out
 
         else:
             logger.warning(
-                "Exergoeconomic balance of a turbine with outlet temperature larger than inlet is not implemented."
+                "Exergoeconomic balance of a turbine whose inlet is below and outlet above the ambient "
+                "temperature is not implemented."
             )
             self.C_P = np.nan
             self.C_F = np.nan
 
         # Calculate the specific cost terms and exergoeconomic parameters.
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
         self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

@@ -1,3 +1,5 @@
+import numpy as np
+
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
@@ -219,12 +221,15 @@ class Motor(Component):
         """
         self.C_P = self.outl[0].get("C_TOT", 0)
         self.C_F = self.inl[0].get("C_TOT", 0)
+        if self.outl[0]["energy_flow"] > self.inl[0]["energy_flow"]:
+            # Fuel and product are swapped in the exergy balance, so they are here too.
+            self.C_P, self.C_F = self.C_F, self.C_P
 
         if self.E_P == 0 or self.E_F == 0:
             raise ValueError(f"E_P or E_F is zero; cannot compute specific costs for component: {self.name}.")
 
-        self.c_P = self.C_P / self.E_P
-        self.c_F = self.C_F / self.E_F
-        self.C_D = self.c_F * self.E_D  # Ensure that self.E_D is computed beforehand.
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else 0
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

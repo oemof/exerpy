@@ -102,6 +102,10 @@ class Valve(Component):
         Performs exergy balance calculations considering the temperature relationships
         between inlet stream, outlet stream, and ambient conditions.
 
+        Below the ambient temperature the product is the gain of thermal exergy. A liquid that warms
+        on throttling loses thermal exergy instead, so the valve has no product and is treated as
+        dissipative :cite:`lazzaretto2006speco`.
+
         Parameters
         ----------
         T0 : float
@@ -170,9 +174,13 @@ class Valve(Component):
 
         # Case 3: Both temperatures below ambient
         elif T_in <= T0 and T_out <= T0:
-            if split_physical_exergy:
+            if split_physical_exergy and self.outl[0]["e_T"] >= self.inl[0]["e_T"]:
                 self.E_P = self.inl[0]["m"] * (self.outl[0]["e_T"] - self.inl[0]["e_T"])
                 self.E_F = self.inl[0]["m"] * (self.inl[0]["e_M"] - self.outl[0]["e_M"])
+            elif split_physical_exergy:
+                # A liquid that warms on throttling loses thermal exergy: no product, so dissipative.
+                self.E_P = np.nan
+                self.E_F = self.inl[0]["m"] * (self.inl[0]["e_PH"] - self.outl[0]["e_PH"])
             else:
                 logger.warning(
                     "Exergy balance of a valve, where both temperatures are smaller than "
@@ -464,7 +472,7 @@ class Valve(Component):
         **Dissipative Valve (E_P is NaN):**
 
         When the valve has no identifiable product (Cases 1, 4, or Cases 2-3 without split),
-        the entire exergy loss is considered destruction. The cost of fuel is the decrease
+        the entire decrease of exergy is destruction. The cost of fuel is the decrease
         in physical exergy cost:
 
         .. math::
@@ -481,7 +489,7 @@ class Valve(Component):
         *Case 2 (Inlet above T0, outlet below T0):*
 
         The product is the thermal exergy at the outlet (cooling capacity), and the fuel
-        is the thermal exergy decrease plus the mechanical exergy loss:
+        is the thermal exergy decrease plus the mechanical exergy decrease:
 
         .. math::
             \dot{C}_{\mathrm{P}} = \dot{C}_{\mathrm{out}}^{\mathrm{T}}
@@ -492,7 +500,7 @@ class Valve(Component):
         *Case 3 (Both inlet and outlet below T0):*
 
         The product is the increase in thermal exergy (cooling capacity increase), and
-        the fuel is the mechanical exergy loss:
+        the fuel is the mechanical exergy decrease:
 
         .. math::
             \dot{C}_{\mathrm{P}} = \dot{C}_{\mathrm{out}}^{\mathrm{T}} - \dot{C}_{\mathrm{in}}^{\mathrm{T}}

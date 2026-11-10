@@ -46,7 +46,7 @@ class Compressor(Component):
     -----
     The exergy analysis considers three cases based on temperature relationships:
 
-    Case 1 - **Both temperatures above ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} > T_0`):
+    Case 1 - **Both temperatures at or above ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} \geq T_0`):
 
     .. math::
 
@@ -127,8 +127,8 @@ class Compressor(Component):
             self.E_P = np.nan
             self.E_F = np.nan
 
-        # Case 1: Both temperatures above ambient
-        elif round(self.inl[0]["T"], 5) >= T0 and round(self.outl[0]["T"], 5) > T0:
+        # Case 1: Both temperatures at or above ambient
+        elif round(self.inl[0]["T"], 5) >= T0 and round(self.outl[0]["T"], 5) >= T0:
             self.E_P = self.outl[0]["m"] * (self.outl[0]["e_PH"] - self.inl[0]["e_PH"])
             self.E_F = abs(self.P)
 
@@ -171,6 +171,9 @@ class Compressor(Component):
 
         # Calculate exergy destruction and efficiency
         self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_F):
+            # No fuel and product defined: the destruction is still the exergy balance.
+            self.E_D = abs(self.P) + self.inl[0]["m"] * self.inl[0]["e_PH"] - self.outl[0]["m"] * self.outl[0]["e_PH"]
         self.epsilon = self.calc_epsilon()
 
         # Log the results
@@ -469,9 +472,13 @@ class Compressor(Component):
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] <= T0:
             self.C_P = self.outl[0]["C_M"] - self.inl[0]["C_M"]
             self.C_F = power_cost + (self.inl[0]["C_T"] - self.outl[0]["C_T"])
+        else:
+            # Outlet colder than the inlet across the ambient temperature: no fuel and product.
+            self.C_P = np.nan
+            self.C_F = np.nan
 
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
         self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

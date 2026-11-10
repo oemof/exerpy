@@ -175,12 +175,16 @@ class ParabolicTrough(Component):
             self.E_D = self.E_F
         else:
             self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_D):
+            # Off-design: no fuel and product, but the destruction is still the exergy balance.
+            self.E_D = self.E_Solar + self.beta * outlet["m"] * (inlet["e_PH"] - outlet["e_PH"])
 
         # Calculate exergy efficiency.
         self.epsilon = self.calc_epsilon()
 
-        # Write the solar fuel exergy onto the boundary solar heat connection so the
-        # system-level E_F accounting can read it (heat connections are created with E=None).
+        # Write the solar exergy onto the boundary solar heat connection so the system-level E_F
+        # accounting can read it (heat connections are created with E=None). Only the solar exergy:
+        # with split physical exergy E_F also holds the mechanical exergy drop of the fluid.
         try:
             for conn in list(self.outl.values()) + list(self.inl.values()):
                 if (
@@ -188,7 +192,7 @@ class ParabolicTrough(Component):
                     and conn.get("kind") == "heat"
                     and (conn.get("source_component") is None or conn.get("target_component") is None)
                 ):
-                    conn["E"] = self.E_F
+                    conn["E"] = self.E_Solar
                     conn["E_unit"] = SI_UNITS["E"]
         except (KeyError, TypeError) as e:
             logger.warning(f"Could not write back exergy to connection for Parabolic Trough '{self.name}': {e}")

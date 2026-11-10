@@ -118,6 +118,26 @@ and the mechanical exergy defined as:
 In these expressions, state :math:`A` is at ambient temperature :math:`T_0` and 
 pressure :math:`p_i`.
 
+.. _chemical_exergy_label:
+
+Chemical exergy
+===============
+
+The specific chemical exergy of a gas mixture follows from the molar fractions :math:`x_k` and the
+standard chemical exergies :math:`\bar{e}^\mathrm{CH}_k` of its components :cite:`Bejan1996`:
+
+.. math::
+
+    \bar{e}^\mathrm{CH} = \sum_k x_k\,\bar{e}^\mathrm{CH}_k + \bar{R}\,T_0 \sum_k x_k \ln x_k
+
+ExerPy takes :math:`\bar{e}^\mathrm{CH}_k` from the reference environment of Ahrendts
+:cite:`Ahrendts1980`; for the substances listed by Bejan et al. (Table C.2, model I), these are the values
+given there :cite:`Bejan1996`. A pure substance takes the value of its phase at 25 °C, e.g. liquid for
+water, methanol and ethanol. If water condenses from a gas mixture at the ambient state, the liquid water
+forms a separate phase (Bejan et al., p. 138) :cite:`Bejan1996`. A substance without a value in the
+library gets a chemical exergy of 0 as a pure substance, with a warning, and raises an error in a
+mixture.
+
 Component-level exergy balance
 ===============================
 
@@ -167,8 +187,11 @@ temperature :math:`T` is given, ExerPy values the heat at it,
   the water and steam gain, and the component warns.
 - A **simple heat exchanger** may take ``T_hot``, the temperature of the source of the heat it takes
   in, which then gives its fuel, or ``T_cold``, the temperature of the consumer of the heat it gives
-  off, which then gives its product. Without them, the heat is valued at the exergy change of the
-  stream itself, so the loss of the heat transfer to or from the outside lies outside the component.
+  off, which then gives its product. Without them, the heat is valued at the change of the exergy of
+  the stream itself, so the loss of the heat transfer to or from the outside lies outside the
+  component. With split physical exergy that is the change of thermal exergy, and the friction of
+  the stream is exergy destruction of the component. Without the split it is the change of physical
+  exergy: the friction is then part of the exergy of the heat, and the component warns.
   The option applies to streams above the ambient temperature; a source has to be hotter than the
   stream, and a consumer colder.
 
@@ -236,7 +259,7 @@ potential exergy are neglected and therefore not considered.
       - :math:`e^\mathrm{CH}`, :math:`E^\mathrm{CH}`
       - based on the standard chemical exergies of the reference environment; the `exerpy.data`
         module provides the dataset of Ahrendts
-        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`.
+        :cite:`Ahrendts1980,Ahrendts1977,Ahrendts1974`, see :ref:`chemical_exergy_label`.
     * - :code:`E_P`
       - product exergy
       - :math:`\dot{E}_\mathrm{P}`

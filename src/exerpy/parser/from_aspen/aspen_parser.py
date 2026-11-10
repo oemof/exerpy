@@ -1,5 +1,6 @@
 import itertools
 import json
+import math
 import os
 
 from exerpy.logger import logger
@@ -19,16 +20,21 @@ class AspenModelParser:
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
     """
 
-    def __init__(self, model_path, split_physical_exergy=True):
+    def __init__(self, model_path, split_physical_exergy=True, Tamb=None, pamb=None):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+            Tamb (float): Ambient temperature in K. Replaces REF_TEMP of the model, see
+                :meth:`set_ambient_conditions`.
+            pamb (float): Ambient pressure in Pa. Replaces REF_PRES of the model.
         """
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
+        self.Tamb = Tamb
+        self.pamb = pamb
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
@@ -62,6 +68,8 @@ class AspenModelParser:
         Parses the components and connections from the Aspen model.
         """
         try:
+            self.set_ambient_conditions()
+
             # Parse Tamb and pamb
             self.parse_ambient_conditions()
 
@@ -70,6 +78,7 @@ class AspenModelParser:
 
             # Parse blocks (components)
             self.parse_blocks()
+            self.orient_consumer_power()
 
             if self.split_physical_exergy:
                 self.split_physical_exergy_of_streams()
@@ -591,12 +600,26 @@ class AspenModelParser:
 
                 # Create a new connection for the motor
                 if elec_power is not None:
-                    electr_connection_name = f"{block_name}_ELEC"
+                    # The work stream of the pump in Aspen is its electric power: it feeds the motor. Without
+                    # one, the electric power comes from outside the model.
+                    work = [
+                        name
+                        for name, conn in self.connections_data.items()
+                        if conn.get("kind") == "power"
+                        and block_name in (conn.get("source_component"), conn.get("target_component"))
+                    ]
+                    electr_connection_name = work[0] if work else f"{block_name}_ELEC"
+                    old = self.connections_data.get(electr_connection_name, {})
+                    other = (
+                        old.get("target_component")
+                        if old.get("source_component") == block_name
+                        else old.get("source_component")
+                    )
                     electr_connection_data = {
                         "name": electr_connection_name,
                         "kind": "power",
-                        "source_component": None,  # Electrical power usually leaves the system
-                        "source_connector": None,  # Electrical power usually leaves the system
+                        "source_component": other if work else None,
+                        "source_connector": None,
                         "target_component": motor_name,
                         "target_connector": 0,
                         "energy_flow": motor_data["P_el"],
@@ -621,6 +644,42 @@ class AspenModelParser:
 
             # Assign connectors
             self.assign_connectors(component_data, block_name)
+
+    def orient_consumer_power(self):
+        """
+        Lets the power of a compressor or pump flow into it.
+
+        Aspen draws the work stream of a compressor from its WS(OUT) port, so the parsed stream leaves the
+        machine, and the stream of a motor block that drives it leaves the motor towards the grid. A machine
+        that consumes power receives it, so such streams are reversed: a stream leaving a compressor or pump
+        now enters it on connector 1, and the stream at the other end of a motor driving it enters the motor
+        on connector 0.
+        """
+        types = {name: data.get("type") for group in self.components_data.values() for name, data in group.items()}
+        consumers = {name for name, kind in types.items() if kind in ("Compressor", "Pump")}
+        driving_motors = set()
+        for conn in self.connections_data.values():
+            if conn.get("kind") != "power" or conn.get("source_component") not in consumers:
+                continue
+            machine, other = conn["source_component"], conn.get("target_component")
+            conn.update(
+                source_component=other,
+                source_connector=0 if types.get(other) == "Motor" else None,
+                target_component=machine,
+                target_connector=1,
+            )
+            if types.get(other) == "Motor":
+                driving_motors.add(other)
+        for conn in self.connections_data.values():
+            motor = conn.get("source_component")
+            if conn.get("kind") != "power" or motor not in driving_motors or conn.get("target_component") in consumers:
+                continue
+            conn.update(
+                source_component=conn.get("target_component"),
+                source_connector=None,
+                target_component=motor,
+                target_connector=0,
+            )
 
     def mult_block_type(self, block_name, factor):
         """
@@ -845,43 +904,67 @@ class AspenModelParser:
 
     def assign_combustion_chamber_connectors(self, block_name, aspen, connections_data):
         """
-        Assign connectors for a combustion chamber (RStoic), based on stream types (air, fuel, etc.).
+        Assign connectors for a combustion chamber (RStoic), one per stream.
+
+        Inlets: oxidant streams (O2 mole fraction above 0.15) first, then fuel streams (CH4 above 0.15),
+        then the other material streams, each group in port order. Outlets: the combustion gas at 0, taken
+        as the material outlet with the largest mass flow since it carries the air, then the further
+        material outlets such as ash or a water decant. Heat and work streams come last on their side, so
+        they never replace a material stream and the combustion chamber rejects them. A heat duty (QCALC)
+        without a heat stream gives a warning, since the exergy of that heat ends up in the exergy
+        destruction of the combustion chamber.
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
             logger.warning(f"No Ports node found for combustion chamber block: {block_name}")
             return
 
-        # Iterate over all ports and assign connectors based on port labels
+        inlets, outlets = [], []
         for port in ports_node.Elements:
-            port_label = port.Name
+            if "(IN)" in port.Name:
+                streams = inlets
+            elif "(OUT)" in port.Name:
+                streams = outlets
+            else:
+                continue
+            port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port.Name}")
+            if port_node is not None:
+                streams.extend(element.Name for element in port_node.Elements if element.Name in connections_data)
 
-            # Handle inlet ports
-            if "(IN)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            molar_composition = connections_data[stream_name].get("molar_composition", {})
-                            if molar_composition.get("O2", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 0  # Air inlet
-                                logger.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
-                            elif molar_composition.get("CH4", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 1  # Fuel inlet
-                                logger.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
-                            else:
-                                logger.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
+        def is_material(name):
+            return connections_data[name].get("kind", "material") == "material"
 
-            # Handle outlet ports
-            elif "(OUT)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            connections_data[stream_name]["source_connector"] = 0  # Outlet stream
-                            logger.info(f"Assigned connector 0 to outlet stream: {stream_name}")
+        def inlet_rank(name):
+            composition = connections_data[name].get("molar_composition") or {}
+            if not is_material(name):
+                return 3
+            if composition.get("O2", 0) > 0.15:
+                return 0
+            return 1 if composition.get("CH4", 0) > 0.15 else 2
+
+        materials = [name for name in outlets if is_material(name)]
+        gas = max(materials, key=lambda name: connections_data[name].get("m") or 0, default=None)
+        inlets.sort(key=inlet_rank)
+        outlets.sort(key=lambda name: (not is_material(name), name != gas))
+        for idx, name in enumerate(inlets):
+            connections_data[name]["target_connector"] = idx
+        for idx, name in enumerate(outlets):
+            connections_data[name]["source_connector"] = idx
+        logger.debug(f"Combustion chamber {block_name}: inlets {inlets}, outlets {outlets} by connector.")
+
+        duty = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QCALC")
+        heat_streams = [name for name in inlets + outlets if connections_data[name].get("kind") == "heat"]
+        if duty is not None and duty.Value and not heat_streams:
+            Q = convert_to_SI("Q", duty.Value, duty.UnitString)
+            effect = (
+                "is counted as exergy destruction of the combustion chamber"
+                if Q < 0
+                else "is missing from the fuel of the combustion chamber, so its exergy destruction is too low"
+            )
+            logger.warning(
+                f"RStoic block {block_name} has a heat duty of {Q / 1e3:.1f} kW but no heat stream. The exergy of "
+                f"this heat {effect}."
+            )
 
     def assign_generic_connectors(self, block_name, component_type, aspen, connections_data, connector_mappings):
         """
@@ -938,6 +1021,36 @@ class AspenModelParser:
 
         # Store the component data in the appropriate group
         self.components_data[group][component_name] = component_data
+
+    def set_ambient_conditions(self):
+        """
+        Writes the ambient state passed to the parser to REF_TEMP and REF_PRES and runs the model again, so that
+        Aspen computes the exergies of the streams at it. Nothing happens if no value is passed or the model holds
+        the passed values already. The change exists in memory only; the model file stays unchanged.
+
+        Raises:
+            ValueError: If the model has no REF_TEMP or REF_PRES node for a passed value.
+        """
+        changed = False
+        for key, value, path in (
+            ("Tamb", self.Tamb, r"\Data\Setup\Sim-Options\Input\REF_TEMP"),
+            ("pamb", self.pamb, r"\Data\Setup\Sim-Options\Input\REF_PRES"),
+        ):
+            if value is None:
+                continue
+            node = self.aspen.Tree.FindNode(path)
+            if node is None:
+                raise ValueError(f"The Aspen model has no node {path} to set {key} = {value} {SI_UNITS[key]}.")
+            if node.Value is not None and math.isclose(
+                convert_to_SI(key, node.Value, node.UnitString), value, rel_tol=1e-6
+            ):
+                continue
+            node.Value = convert(value, SI_UNITS[key], node.UnitString)
+            changed = True
+        if changed:
+            logger.info("Running the model again at the ambient state passed to the parser.")
+            self.aspen.SuppressDialogs = 1
+            self.aspen.Engine.Run2()
 
     def parse_ambient_conditions(self):
         """
@@ -1012,7 +1125,7 @@ class AspenModelParser:
             raise
 
 
-def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
+def run_aspen(model_path, output_dir=None, split_physical_exergy=True, Tamb=None, pamb=None):
     """
     Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -1021,16 +1134,21 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+        Tamb (float): Ambient temperature in K. Defaults to REF_TEMP of the model. A value passed here
+            replaces REF_TEMP and the model is run again, so all exergies are computed at it. The model
+            file stays unchanged.
+        pamb (float): Ambient pressure in Pa, like ``Tamb`` for REF_PRES.
 
     Returns:
-        dict: Parsed data in dictionary format.
+        dict: Parsed data in dictionary format. Its ``ambient_conditions`` hold the ambient state
+        the exergies were computed at.
     """
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy)
+    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
 
     try:
         parser.initialize_model()

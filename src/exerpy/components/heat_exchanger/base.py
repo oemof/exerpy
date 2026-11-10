@@ -6,6 +6,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -221,8 +222,8 @@ class HeatExchanger(Component):
 
         .. math::
             \dot{E}_{\mathrm{P}}
-            = \dot{E}^{\mathrm{T}}_{\mathrm{out},1}
-            + \dot{E}^{\mathrm{T}}_{\mathrm{out},2}
+            = \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}
+            + \dot{E}^{\mathrm{PH}}_{\mathrm{out},2}
 
         .. math::
             \dot{E}_{\mathrm{F}}
@@ -283,7 +284,7 @@ class HeatExchanger(Component):
                     - \dot{E}^{\mathrm{PH}}_{\mathrm{out},1}\bigr)
             + \dot{E}^{\mathrm{PH}}_{\mathrm{in},2}
 
-        Case 6: Hot stream always above and cold stream always below ambiente temperature (dissipative case):
+        Case 6: Hot stream always above and cold stream always below ambient temperature (dissipative case):
 
         .. math::
             \dot{E}_{\mathrm{P}} = \mathrm{NaN}
@@ -324,6 +325,20 @@ class HeatExchanger(Component):
         # Ensure that the component has both inlet and outlet streams
         if len(self.inl) < 2 or len(self.outl) < 2:
             raise ValueError("Heat exchanger requires two inlets and two outlets.")
+        extra = sorted({*self.inl, *self.outl} - {0, 1})
+        if extra:
+            msg = (
+                f"Heat exchanger {self.name} has streams at connector(s) {extra}, but only connectors 0 (hot) and "
+                f"1 (cold) are balanced. Join a further stream, such as a cascaded drain, with a mixer before "
+                f"the heat exchanger."
+            )
+            logger.error(msg)
+            raise ValueError(msg)
+        if self.inl[0].get("T", np.inf) < self.inl[1].get("T", -np.inf):
+            logger.warning(
+                f"Heat exchanger {self.name}: the stream at connector 0 enters colder than the one at connector 1, "
+                f"but connector 0 is the hot side. Check the connectors, fuel and product may be swapped."
+            )
 
         if self.dissipative is not True:
             case = self._temperature_case(T0)
@@ -351,7 +366,7 @@ class HeatExchanger(Component):
                     )
                 else:
                     logger.warning(
-                        "While dealing with heat exchnager below ambient temperautre, "
+                        "While dealing with heat exchanger below ambient temperature, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
                     self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"] - self.inl[0]["m"] * self.inl[0]["e_PH"]
@@ -368,7 +383,7 @@ class HeatExchanger(Component):
                     )
                 else:
                     logger.warning(
-                        "While dealing with heat exchnager below ambient temperautre, "
+                        "While dealing with heat exchanger below ambient temperature, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
                     self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"] + self.outl[1]["m"] * self.outl[1]["e_PH"]
@@ -385,7 +400,7 @@ class HeatExchanger(Component):
                     )
                 else:
                     logger.warning(
-                        "While dealing with heat exchnager below ambient temperautre, "
+                        "While dealing with heat exchanger below ambient temperature, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
                     self.E_P = self.outl[0]["m"] * self.outl[0]["e_PH"]
@@ -404,7 +419,7 @@ class HeatExchanger(Component):
                     )
                 else:
                     logger.warning(
-                        "While dealing with heat exchnager below ambient temperautre, "
+                        "While dealing with heat exchanger below ambient temperature, "
                         "physical exergy should be split into thermal and mechanical components!"
                     )
                     self.E_P = self.outl[1]["m"] * self.outl[1]["e_PH"]
@@ -434,6 +449,8 @@ class HeatExchanger(Component):
                     f"The heat exchanger {self.name} has an unexpected temperature configuration. "
                     "Please check the inlet and outlet temperatures."
                 )
+                self.E_P = np.nan
+                self.E_F = np.nan
 
         else:
             self.E_F = (
@@ -448,6 +465,11 @@ class HeatExchanger(Component):
             self.E_D = self.E_F
         else:
             self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_D):
+            # No fuel and product defined: the destruction is still the exergy balance.
+            self.E_D = sum(
+                self.inl[i]["m"] * self.inl[i]["e_PH"] - self.outl[i]["m"] * self.outl[i]["e_PH"] for i in (0, 1)
+            )
         self.epsilon = self.calc_epsilon()
 
         # Log the results
@@ -560,19 +582,6 @@ class HeatExchanger(Component):
             If required cost variable indices are missing.
         """
 
-        # Equality equation for mechanical and chemical exergy costs.
-        def set_equal(A, row, in_item, out_item, var):
-            if in_item["e_" + var] != 0 and out_item["e_" + var] != 0:
-                A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
-                A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
-            elif in_item["e_" + var] == 0 and out_item["e_" + var] != 0:
-                A[row, in_item["CostVar_index"][var]] = 1
-            elif in_item["e_" + var] != 0 and out_item["e_" + var] == 0:
-                A[row, out_item["CostVar_index"][var]] = 1
-            else:
-                A[row, in_item["CostVar_index"][var]] = 1
-                A[row, out_item["CostVar_index"][var]] = -1
-
         # Label of the physical exergy cost variable the thermal rules act on.
         phys = "T" if split_physical_exergy else "PH"
 
@@ -580,7 +589,7 @@ class HeatExchanger(Component):
         case = self._temperature_case(T0)
         # Case 1: All temperatures > T0.
         if case == 1:
-            set_equal(A, counter + 0, self.inl[0], self.outl[0], phys)
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -588,7 +597,7 @@ class HeatExchanger(Component):
             }
         # Case 2: All temperatures <= T0.
         elif case == 2:
-            set_equal(A, counter + 0, self.inl[1], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.inl[1], self.outl[1], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
@@ -596,7 +605,7 @@ class HeatExchanger(Component):
             }
         # Case 3: Both stream crossing T0 (hot inlet and cold outlet > T0, hot outlet and cold inlet <= T0)
         elif case == 3:
-            set_equal(A, counter + 0, self.outl[0], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.outl[0], self.outl[1], phys, ref_is_outlet=True)
             equations[counter] = {
                 "kind": "aux_p_rule",
                 "objects": [self.name, self.outl[0]["name"], self.outl[1]["name"]],
@@ -604,7 +613,7 @@ class HeatExchanger(Component):
             }
         # Case 4: Only hot inlet > T0
         elif case == 4:
-            set_equal(A, counter + 0, self.inl[1], self.outl[1], phys)
+            set_equal_specific_cost(A, counter, self.inl[1], self.outl[1], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_cold",
                 "objects": [self.name, self.inl[1]["name"], self.outl[1]["name"]],
@@ -612,7 +621,7 @@ class HeatExchanger(Component):
             }
         # Case 5: Only cold inlet <= T0
         elif case == 5:
-            set_equal(A, counter + 0, self.inl[0], self.outl[0], phys)
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], phys)
             equations[counter] = {
                 "kind": "aux_f_rule_hot",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -637,7 +646,7 @@ class HeatExchanger(Component):
         num_aux_eqs = 1
         for label in (["M"] if split_physical_exergy else []) + (["CH"] if chemical_exergy_enabled else []):
             for i in (0, 1):
-                set_equal(A, counter + num_aux_eqs, self.inl[i], self.outl[i], label)
+                set_equal_specific_cost(A, counter + num_aux_eqs, self.inl[i], self.outl[i], label)
                 equations[counter + num_aux_eqs] = {
                     "kind": "aux_equality",
                     "objects": [self.name, self.inl[i]["name"], self.outl[i]["name"]],
@@ -649,6 +658,10 @@ class HeatExchanger(Component):
             b[counter + i] = 0
 
         return A, b, counter + num_aux_eqs, equations
+
+    def _exergy_drop(self, i, labels):
+        """Exergy that stream ``i`` loses between inlet and outlet, over the given shares."""
+        return sum(self.inl[i].get(f"E_{x}", 0) - self.outl[i].get(f"E_{x}", 0) for x in labels)
 
     def dis_eqs(
         self,
@@ -674,8 +687,27 @@ class HeatExchanger(Component):
            - \dot C_{\mathrm{diff}}
            = -\,\dot Z_{\mathrm{costs}}
 
-        The equality equations enforce that specific costs are equal between inlet and outlet
-        for each exergy component (thermal, mechanical, chemical) on both the hot and cold streams.
+        A main working fluid keeps its specific cost between inlet and outlet for each exergy share
+        :math:`x` (thermal, mechanical, chemical). Where its inlet or outlet carries no exergy of a
+        share, the outlet carries no cost of it, and the cost of the inlet stays in
+        :math:`\dot C_\mathrm{diff}`:
+
+        .. math::
+
+            \frac{\dot{C}^{x}_{\mathrm{in}}}{\dot{E}^{x}_{\mathrm{in}}}
+            = \frac{\dot{C}^{x}_{\mathrm{out}}}{\dot{E}^{x}_{\mathrm{out}}}
+            \qquad \text{or} \qquad
+            \dot{C}^{x}_{\mathrm{out}} = 0
+            \quad \text{for} \quad \dot{E}^{x}_{\mathrm{in}} = 0
+            \ \text{or} \ \dot{E}^{x}_{\mathrm{out}} = 0
+
+        The auxiliary fluid, e.g. the cooling water of a condenser, brings its cost into the component
+        and leaves without cost, :math:`\dot{C}^{x}_{\mathrm{aux,out}} = 0`, so its cost is part of
+        :math:`\dot C_\mathrm{diff}` :cite:`lazzaretto2006speco`. It is the side that is discharged: the
+        exergy analysis follows each outlet through splitters, mixers and dissipative components, and
+        the side whose paths all end in a loss stream of ``E_L`` is the auxiliary fluid (attribute
+        ``auxiliary_side``). If neither side or both are discharged, a stream that gains exergy is taken
+        as the auxiliary fluid, and if both lose exergy, both are main working fluids.
 
         Parameters
         ----------
@@ -709,16 +741,26 @@ class HeatExchanger(Component):
                 A[row, in_item["CostVar_index"][var]] = 1 / in_item["E_" + var]
                 A[row, out_item["CostVar_index"][var]] = -1 / out_item["E_" + var]
             else:
-                A[row, in_item["CostVar_index"][var]] = 1
-                A[row, out_item["CostVar_index"][var]] = -1
+                # No exergy of this share on one side: the outlet carries no cost of it, the rest stays in C_diff.
+                A[row, out_item["CostVar_index"][var]] = 1
 
         labels = ["T", "M"] if split_physical_exergy else ["PH"]
         if chemical_exergy_enabled:
             labels.append("CH")
 
+        # The auxiliary fluid leaves without cost: the side discharged as a loss, found by the exergy analysis,
+        # else a stream that gains exergy. A main working fluid keeps its specific cost.
+        aux = getattr(self, "auxiliary_side", None)
+        if aux is not None:
+            main = [i for i in (0, 1) if i != aux]
+        else:
+            main = [i for i in (0, 1) if self._exergy_drop(i, labels) >= 0]
         for label in labels:
             for i in (0, 1):
-                set_equal_dis(A, counter, self.inl[i], self.outl[i], label)
+                if i in main:
+                    set_equal_dis(A, counter, self.inl[i], self.outl[i], label)
+                else:
+                    A[counter, self.outl[i]["CostVar_index"][label]] = 1
                 b[counter] = 0
                 equations[counter] = {
                     "kind": "dis_equality",
@@ -753,7 +795,6 @@ class HeatExchanger(Component):
             else:
                 for comp in serving:
                     weight = getattr(comp, "E_D", 0) / total_E_D
-                    comp.serving_weight = weight
                     A[comp.exergy_cost_line, diss_col] = weight
 
         # --- Overall cost balance row ---
@@ -878,10 +919,11 @@ class HeatExchanger(Component):
             single cost variable for its physical exergy. Default is True.
         """
         case = self._temperature_case(T0)
-        # Dissipative heat exchanger (E_P is NaN): no identifiable product
+        # Dissipative heat exchanger (E_P is NaN): no product. All costs the streams leave behind, the
+        # chemical cost of an auxiliary fluid included, are fuel, so C_F + Z = C_diff (SPECO eq. 53).
         if np.isnan(self.E_P):
             self.C_P = np.nan
-            self.C_F = self.inl[0]["C_PH"] - self.outl[0]["C_PH"] + (self.inl[1]["C_PH"] - self.outl[1]["C_PH"])
+            self.C_F = sum(self.inl[i]["C_TOT"] - self.outl[i]["C_TOT"] for i in (0, 1))
         # Case 1: All streams are above the ambient temperature
         # Without the split the cost of the product follows the physical exergy of the streams that the
         # exergy balance uses in the same case.

@@ -357,7 +357,7 @@ class TestWithOpenPyTEA:
         assert estimate["quantity"] == "power"
         assert estimate["fit"]["status"] == "in range"
 
-    def test_a_size_below_the_range_is_scaled_from_the_lower_bound(self, heat_pump):
+    def test_a_size_below_the_range_is_scaled_from_the_lower_bound(self, heat_pump, caplog):
         from openpytea.equipment import CostCorrelationDB
 
         pump = heat_pump.components["PUMP"]
@@ -367,6 +367,7 @@ class TestWithOpenPyTEA:
         assert estimate["bound"] == 1.0
         assert estimate["PEC"] == pytest.approx(at_bound * (estimate["size"] / 1.0) ** costing.EXPONENT)
         assert estimate["units"] == 1
+        assert "below the range of the correlation 'centrifugal_pump_turton_2001'" in caplog.text
         with pytest.raises(ValueError, match="below lower bound"):
             costing.estimate(pump, "centrifugal_pump_turton_2001", outside="parallel")
 

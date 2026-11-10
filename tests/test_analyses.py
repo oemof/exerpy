@@ -302,11 +302,37 @@ def test_from_json_basic(json_file):
     assert abs(analysis.pamb - 101325) < 1e-5
 
 
-def test_from_json_override_ambient(json_file):
-    """Test overriding ambient conditions."""
-    analysis = ExergyAnalysis.from_json(str(json_file), Tamb=300, pamb=100000)
-    assert abs(analysis.Tamb - 300) < 1e-5
-    assert abs(analysis.pamb - 100000) < 1e-5
+@pytest.mark.parametrize(
+    "Tamb, pamb, passed",
+    [
+        (300, None, "Tamb = 300 K"),
+        (None, 100000, "pamb = 100000 Pa"),
+        (300, 101325, "Tamb = 300 K and pamb = 101325 Pa"),
+    ],
+)
+def test_from_json_other_ambient_state_raises(json_file, Tamb, pamb, passed):
+    """The exergies of a file hold only at its ambient state, so another one passed is rejected."""
+    with pytest.raises(
+        ValueError, match=f"computed at Tamb = 298.15 K and pamb = 101325 Pa, not at the passed {passed}"
+    ):
+        ExergyAnalysis.from_json(str(json_file), Tamb=Tamb, pamb=pamb)
+
+
+def test_from_json_same_ambient_state(json_file):
+    """The ambient state of the file passed again is accepted within round-off."""
+    analysis = ExergyAnalysis.from_json(str(json_file), Tamb=298.15 * (1 + 1e-9), pamb=101325)
+    assert analysis.Tamb == pytest.approx(298.15)
+    assert analysis.pamb == pytest.approx(101325)
+
+
+def test_from_json_ambient_state_passed(tmp_path, mock_json_data):
+    """A file without an ambient state takes the one passed."""
+    mock_json_data["ambient_conditions"] = {}
+    json_path = tmp_path / "no_ambient.json"
+    json_path.write_text(json.dumps(mock_json_data))
+    analysis = ExergyAnalysis.from_json(str(json_path), Tamb=300, pamb=100000)
+    assert analysis.Tamb == 300
+    assert analysis.pamb == 100000
 
 
 def test_from_json_missing_sections(tmp_path):
@@ -539,6 +565,32 @@ def test_heatexchanger_dissipative_from_E_L():
     assert hx.dissipative is True
     assert hx.is_dissipative is True
     assert np.isnan(hx.E_P)
+
+
+def test_dissipative_heatexchanger_auxiliary_side_is_the_discharged_one():
+    """The side whose outlet ends in E_L is the auxiliary fluid; without a discharged side it is None."""
+    component_data, connection_data = _hex_network()
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"outputs": ["2"]}, E_L={"inputs": ["4"]})
+    assert analysis.components["HX1"].auxiliary_side == 1
+
+    component_data, connection_data = _hex_network(hx_kwargs={"dissipative": True})
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1", "3"]}, E_P={"inputs": ["2", "4"]})
+    assert analysis.components["HX1"].auxiliary_side is None
+
+
+def test_heatexchanger_inferred_dissipative_is_reset_by_a_new_analysis():
+    """A second analyse() with another E_L starts again from the built state of the component."""
+    component_data, connection_data = _hex_network()
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"outputs": ["2"]}, E_L={"inputs": ["4"]})
+    assert analysis.components["HX1"].is_dissipative is True
+    analysis.analyse(E_F={"inputs": ["1"]}, E_P={"inputs": ["4"], "outputs": ["3"]}, E_L={"inputs": ["2"]})
+    hx = analysis.components["HX1"]
+    assert hx.dissipative is None
+    assert hx.is_dissipative is False
+    assert np.isclose(hx.E_P, 3000)
 
 
 def test_heatexchanger_explicit_productive_overrides_E_L():
@@ -984,7 +1036,8 @@ def test_from_tespy_override_ambient(monkeypatch, mock_json_data):
         from exerpy.analyses import _process_json
 
         data = mock_json_data.copy()
-        data["ambient_conditions"] = {"Tamb": 298.15, "Tamb_unit": "K", "pamb": 101325, "pamb_unit": "Pa"}
+        # to_exerpy computes the exergies at the passed ambient state and stores it
+        data["ambient_conditions"] = {"Tamb": Tamb, "Tamb_unit": "K", "pamb": pamb, "pamb_unit": "Pa"}
         data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
             data, Tamb, pamb, chemExLib, split_physical_exergy
         )
@@ -1015,6 +1068,24 @@ def test_from_aspen_invalid_extension(tmp_path):
         ExergyAnalysis.from_aspen(str(txt_file))
 
 
+def test_from_aspen_passes_ambient_state(monkeypatch, mock_json_data):
+    """The ambient state passed to from_aspen reaches the parser, which computes the exergies at it."""
+    from exerpy.parser.from_aspen import aspen_parser
+
+    passed = {}
+
+    def run_aspen(path, **kwargs):
+        passed.update(kwargs)
+        mock_json_data["ambient_conditions"] = {"Tamb": kwargs["Tamb"], "pamb": kwargs["pamb"]}
+        return mock_json_data
+
+    monkeypatch.setattr(aspen_parser, "run_aspen", run_aspen)
+    analysis = ExergyAnalysis.from_aspen("model.bkp", Tamb=288.15, pamb=1e5, split_physical_exergy=False)
+    assert passed["Tamb"] == 288.15
+    assert passed["pamb"] == 1e5
+    assert analysis.Tamb == 288.15
+
+
 def test_no_negative_zero():
     """
     Test that values rounding to zero are printed as +0 while real values stay untouched.
@@ -1029,3 +1100,103 @@ def test_no_negative_zero():
     assert np.isnan(result["value"][3])
     # the original frame keeps its values
     assert np.signbit(df["value"][0])
+
+
+def _hex_with_header(split_twice=False):
+    """The cold outlet 4 of HX1 is discharged through passive nodes before it reaches the loss stream."""
+    component_data, connection_data = _hex_network()
+    cold = dict(connection_data["4"])
+
+    def stream(src, sc, tgt, tc, m):
+        return {
+            **cold,
+            "source_component": src,
+            "source_connector": sc,
+            "target_component": tgt,
+            "target_connector": tc,
+            "m": m,
+            "E": m * cold["e_PH"],
+        }
+
+    connection_data["4"].update(target_component="S", target_connector=0)
+    component_data["Splitter"] = {"S": {"name": "S", "type": "Splitter"}}
+    component_data["Mixer"] = {"M": {"name": "M", "type": "Mixer"}}
+    connection_data["a"] = stream("S", 0, "M", 0, 5)
+    connection_data["b"] = stream("S", 1, "M", 1, 5)
+    if split_twice:
+        component_data["Splitter"]["S2"] = {"name": "S2", "type": "Splitter"}
+        connection_data["c"] = stream("M", 0, "S2", 0, 10)
+        connection_data["d"] = stream("S2", 0, None, None, 5)
+        connection_data["e"] = stream("S2", 1, None, None, 5)
+        losses = ["d", "e"]
+    else:
+        connection_data["c"] = stream("M", 0, None, None, 10)
+        losses = ["c"]
+    return component_data, connection_data, losses
+
+
+@pytest.mark.parametrize("split_twice", [False, True])
+def test_heatexchanger_discharged_through_passive_nodes_is_dissipative(split_twice):
+    """The tracing to E_L follows every branch of splitters and mixers, also after a split, merge and split."""
+    component_data, connection_data, losses = _hex_with_header(split_twice)
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    analysis.analyse(E_F={"inputs": ["1"], "outputs": ["2"]}, E_P={}, E_L={"inputs": losses, "outputs": ["3"]})
+    hx = analysis.components["HX1"]
+    assert hx.is_dissipative is True
+    assert hx.auxiliary_side == 1
+
+
+def test_flows_from_roles_reverses_heat_below_ambient(caplog):
+    """Below T0 the exergy of heat flows against the heat: heat into a cold stream carries exergy out."""
+    component_data = {"SimpleHeatExchanger": {"E": {"name": "E", "type": "SimpleHeatExchanger"}}}
+    connection_data = {
+        "1": {
+            "kind": "material",
+            "source_component": None,
+            "source_connector": None,
+            "target_component": "E",
+            "target_connector": 0,
+            "T": 280.0,
+            "p": 2e5,
+            "m": 1.0,
+            "h": 50e3,
+            "e_PH": 1800.0,
+            "e_T": 1700.0,
+            "e_M": 100.0,
+        },
+        "2": {
+            "kind": "material",
+            "source_component": "E",
+            "source_connector": 0,
+            "target_component": None,
+            "target_connector": None,
+            "T": 290.0,
+            "p": 1.9e5,
+            "m": 1.0,
+            "h": 92e3,
+            "e_PH": 490.0,
+            "e_T": 400.0,
+            "e_M": 90.0,
+        },
+        "Q": {
+            "kind": "heat",
+            "source_component": None,
+            "source_connector": None,
+            "target_component": "E",
+            "target_connector": 1,
+            "energy_flow": 42e3,
+        },
+    }
+    analysis = ExergyAnalysis(component_data, connection_data, 298.15, 101325)
+    E_F, E_P, E_L = analysis.flows_from_roles({"1": "F", "2": "F", "Q": "P"})
+    assert E_P == {"inputs": ["Q"], "outputs": []}
+    assert "flows against the heat" in caplog.text
+
+
+def test_a_listed_stream_without_exergy_raises():
+    component_data, connection_data = _hex_network()
+    connection_data["1"]["E"] = float("nan")
+    connection_data["1"]["e_PH"] = float("nan")
+    analysis = ExergyAnalysis(component_data, connection_data, 300, 101325)
+    with pytest.raises(ValueError, match="listed in E_F but has no exergy value"):
+        analysis.analyse(E_F={"inputs": ["1"], "outputs": ["2"]}, E_P={"inputs": ["4"], "outputs": ["3"]})

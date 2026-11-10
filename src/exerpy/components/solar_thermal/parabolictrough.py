@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 from exerpy.quantities import Branches
 from exerpy.units import SI_UNITS
@@ -174,12 +175,16 @@ class ParabolicTrough(Component):
             self.E_D = self.E_F
         else:
             self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_D):
+            # Off-design: no fuel and product, but the destruction is still the exergy balance.
+            self.E_D = self.E_Solar + self.beta * outlet["m"] * (inlet["e_PH"] - outlet["e_PH"])
 
         # Calculate exergy efficiency.
         self.epsilon = self.calc_epsilon()
 
-        # Write the solar fuel exergy onto the boundary solar heat connection so the
-        # system-level E_F accounting can read it (heat connections are created with E=None).
+        # Write the solar exergy onto the boundary solar heat connection so the system-level E_F
+        # accounting can read it (heat connections are created with E=None). Only the solar exergy:
+        # with split physical exergy E_F also holds the mechanical exergy drop of the fluid.
         try:
             for conn in list(self.outl.values()) + list(self.inl.values()):
                 if (
@@ -187,7 +192,7 @@ class ParabolicTrough(Component):
                     and conn.get("kind") == "heat"
                     and (conn.get("source_component") is None or conn.get("target_component") is None)
                 ):
-                    conn["E"] = self.E_F
+                    conn["E"] = self.E_Solar
                     conn["E_unit"] = SI_UNITS["E"]
         except (KeyError, TypeError) as e:
             logger.warning(f"Could not write back exergy to connection for Parabolic Trough '{self.name}': {e}")
@@ -283,8 +288,7 @@ class ParabolicTrough(Component):
         inlet, outlet = self._fluid_streams()
 
         if split_physical_exergy:
-            A[counter, inlet["CostVar_index"]["M"]] = 1 / inlet["E_M"] if inlet["e_M"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["M"]] = -1 / outlet["E_M"] if outlet["e_M"] != 0 else -1
+            set_equal_specific_cost(A, counter, inlet, outlet, "M")
             equations[counter] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, inlet["name"], outlet["name"]],
@@ -294,8 +298,7 @@ class ParabolicTrough(Component):
             counter += 1
 
         if chemical_exergy_enabled:
-            A[counter, inlet["CostVar_index"]["CH"]] = 1 / inlet["E_CH"] if inlet["e_CH"] != 0 else 1
-            A[counter, outlet["CostVar_index"]["CH"]] = -1 / outlet["E_CH"] if outlet["e_CH"] != 0 else -1
+            set_equal_specific_cost(A, counter, inlet, outlet, "CH")
             equations[counter] = {
                 "kind": "aux_f_rule",
                 "objects": [self.name, inlet["name"], outlet["name"]],

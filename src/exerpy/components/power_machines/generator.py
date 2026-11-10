@@ -1,3 +1,5 @@
+import numpy as np
+
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
@@ -213,8 +215,8 @@ class Generator(Component):
         if self.E_P == 0 or self.E_F == 0:
             raise ValueError(f"E_P or E_F is zero; cannot compute specific costs for component: {self.name}.")
 
-        self.c_P = self.C_P / self.E_P
-        self.c_F = self.C_F / self.E_F
-        self.C_D = self.c_F * self.E_D  # Ensure that self.E_D is computed beforehand.
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) != 0 else 0
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
+        self.C_D = self.c_F * self.E_D
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

@@ -93,7 +93,7 @@ This module requires the user to provide the following inputs:
 
 - **Parsing method**: The appropriate method (:code:`from_aspen`, :code:`from_ebsilon` or :code:`from_tespy`) based on the simulation tool used.
 
-- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`) if they are not defined within the simulation.
+- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`). By default, the reference state of the simulation model is used. Values passed here replace it, and all exergies are computed at them.
 
 - **Chemical Exergy Library (optional)**: The library used for calculating chemical exergy. Currently only the Ahrendts model is supported.
 
@@ -393,7 +393,9 @@ The exergoeconomic analysis requires the following inputs:
   - **Component investment costs**: :code:`"<component_name>_Z"` in currency/h (mandatory for all
     components except CycleCloser, PowerBus and Splitter)
   - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
-    entering the system boundary)
+    entering the system boundary). A material stream can also have a cost per exergy form,
+    :code:`"<connection_name>_c_T"`, :code:`"_c_M"`, :code:`"_c_PH"` or :code:`"_c_CH"`, see
+    :ref:`Cost input format <exergoeconomic_cost_input_label>`.
 
   Another unit in the same currency can be given next to a value, e.g.
   :code:`"10_c_unit": "EUR / MWh"`.
@@ -431,6 +433,7 @@ The results include:
 
 - **Component results**: Cost of fuel (:code:`C_F`), cost of product (:code:`C_P`),
   cost of exergy destruction (:code:`C_D`), investment cost rate (:code:`Z`),
+  share of the cost of the dissipative components charged to the component (:code:`Z_diss`),
   total cost (:code:`C_D+Z`), exergoeconomic factor (:code:`f`), and
   relative cost difference (:code:`r`)
 - **Material connection costs**: Thermal (:code:`C_T`), mechanical (:code:`C_M`),

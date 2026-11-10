@@ -76,7 +76,15 @@ CGAM_CHEMICAL = {
     },
 }
 
-MODELS = {"cgam": CGAM, "heat_pump": HEAT_PUMP, "cgam_chemical": CGAM_CHEMICAL}
+# Heat pump with chemical exergy: the refrigerant in the closed cycle has none.
+HEAT_PUMP_CHEMICAL = {**HEAT_PUMP, "chemExLib": "Ahrendts"}
+
+MODELS = {
+    "cgam": CGAM,
+    "heat_pump": HEAT_PUMP,
+    "cgam_chemical": CGAM_CHEMICAL,
+    "heat_pump_chemical": HEAT_PUMP_CHEMICAL,
+}
 
 
 def _run(model, split, record=False):
@@ -157,6 +165,16 @@ def test_cost_balance_of_the_system_closes(model, split):
     eco, _ = _run(model, split)
     costs = eco.system_costs
     assert costs["C_P"] == pytest.approx(costs["C_F"] + costs["Z"], rel=1e-6)
+
+
+def test_dissipative_outlet_without_mechanical_exergy_carries_no_mechanical_cost():
+    """The air leaves the dissipative evaporator at the ambient pressure, so its mechanical cost stays in C_diff."""
+    eco, _ = _run(HEAT_PUMP, True)
+    air_out = eco.connections["13"]
+    assert eco.components["EVA"].is_dissipative
+    assert air_out["E_M"] == pytest.approx(0, abs=1e-6)
+    assert air_out["C_M"] == pytest.approx(0, abs=1e-9)
+    assert all(balanced for _, balanced in eco.check_cost_balance().values())
 
 
 def test_results_table_columns_follow_the_cost_variables():

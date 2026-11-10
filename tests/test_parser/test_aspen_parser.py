@@ -25,6 +25,7 @@ from unittest.mock import patch
 import pytest
 
 import exerpy.parser.from_aspen.aspen_parser as ap
+from exerpy.analyses import _construct_components
 from exerpy.parser import STATE_CHECK_STEP
 from exerpy.parser.from_aspen.aspen_parser import AspenModelParser
 from exerpy.parser.from_aspen.aspen_parser import run_aspen
@@ -472,6 +473,161 @@ def test_assign_combustion_chamber_connectors():
     assert connections_data["StreamExhaust"].get("source_connector") == 0
 
 
+RSTOIC_STREAMS = {
+    "air": {"kind": "material", "m": 9.0, "molar_composition": {"O2": 0.21, "N2": 0.79}},
+    "fuel": {"kind": "material", "m": 1.0, "molar_composition": {"CH4": 1.0}},
+    "steam": {"kind": "material", "m": 0.5, "molar_composition": {"H2O": 1.0}},
+    "gas": {"kind": "material", "m": 9.9, "molar_composition": {"O2": 0.1, "N2": 0.75, "CO2": 0.05, "H2O": 0.1}},
+    "ash": {"kind": "material", "m": 0.1, "molar_composition": {}},
+    "heat": {"kind": "heat", "energy_flow": 1000.0},
+}
+
+
+def rstoic_parser(ports, duty=None):
+    """
+    Parser of a model with the RStoic block CC whose ports {label: [stream names]} hold RSTOIC_STREAMS.
+
+    ``duty`` is the (value, unit) of the calculated heat duty QCALC. Without it, CC has no QCALC node.
+    """
+    block = DummyBlockNode("CC", None, "RStoic")
+    blocks = DummyNode("Blocks")
+    blocks.Elements = DummyCollection([block])
+    ports_node = DummyNode("Ports")
+    nodes = {r"\Data\Blocks": blocks, r"\Data\Blocks\CC": block, r"\Data\Blocks\CC\Ports": ports_node}
+    if duty is not None:
+        nodes[r"\Data\Blocks\CC\Output\QCALC"] = DummyNode("QCALC", *duty)
+    connections = {}
+    for label, names in ports.items():
+        port = DummyNode(label)
+        port.Elements = DummyCollection([DummyNode(name) for name in names])
+        ports_node.Elements.append(port)
+        nodes[rf"\Data\Blocks\CC\Ports\{label}"] = port
+        end = "target" if "(IN)" in label else "source"
+        for name in names:
+            connections[name] = {
+                "name": name,
+                "source_component": None,
+                "source_connector": None,
+                "target_component": None,
+                "target_connector": None,
+                **RSTOIC_STREAMS[name],
+                f"{end}_component": "CC",
+            }
+    parser = AspenModelParser("dummy.apw")
+    parser.aspen = DummyAspen(DummyTree(nodes))
+    parser.connections_data = connections
+    return parser
+
+
+# The ash and heat ports come before the gas in port order: only the mass flow and the stream kind keep them off
+# connector 0.
+RSTOIC_CASES = {
+    "two_inlets": ({"F(IN)": ["fuel", "air"], "P(OUT)": ["gas"]}, {"air": 0, "fuel": 1, "gas": 0}),
+    "three_inlets": (
+        {"F(IN)": ["steam", "fuel", "air"], "P(OUT)": ["gas"]},
+        {"air": 0, "fuel": 1, "steam": 2, "gas": 0},
+    ),
+    "ash_outlet": (
+        {"F(IN)": ["air", "fuel"], "Ash(OUT)": ["ash"], "P(OUT)": ["gas"]},
+        {"air": 0, "fuel": 1, "gas": 0, "ash": 1},
+    ),
+    "heat_outlet": (
+        {"F(IN)": ["air", "fuel"], "Heat(OUT)": ["heat"], "P(OUT)": ["gas"]},
+        {"air": 0, "fuel": 1, "gas": 0, "heat": 1},
+    ),
+    "heat_inlet": (
+        {"Heat(IN)": ["heat"], "F(IN)": ["fuel", "air"], "P(OUT)": ["gas"]},
+        {"air": 0, "fuel": 1, "heat": 2, "gas": 0},
+    ),
+}
+
+
+@pytest.mark.parametrize("ports, connectors", RSTOIC_CASES.values(), ids=RSTOIC_CASES.keys())
+def test_assign_combustion_chamber_connectors_one_per_stream(ports, connectors):
+    """Air 0 and fuel 1 in, the combustion gas 0 out, every further stream the next free connector of its side."""
+    parser = rstoic_parser(ports)
+    parser.parse_blocks()
+
+    assert "CC" in parser.components_data["CombustionChamber"]
+    parsed = {
+        name: conn["target_connector"] if conn["target_component"] == "CC" else conn["source_connector"]
+        for name, conn in parser.connections_data.items()
+    }
+    assert parsed == connectors
+
+
+# Specific exergies e_T, e_M and e_CH of the streams around CC
+RSTOIC_EXERGY = {"air": (10, 5, 0), "fuel": (0, 50, 50000), "gas": (1500, 4, 100), "ash": (500, 0, 1000)}
+
+
+def parsed_combustion_chamber(case):
+    """Combustion chamber built from the connectors the parser assigns in one of RSTOIC_CASES."""
+    parser = rstoic_parser(RSTOIC_CASES[case][0])
+    parser.parse_blocks()
+    for name, conn in parser.connections_data.items():
+        if name in RSTOIC_EXERGY:
+            e_T, e_M, e_CH = RSTOIC_EXERGY[name]
+            conn.update({"e_T": e_T, "e_M": e_M, "e_PH": e_T + e_M, "e_CH": e_CH})
+    return _construct_components(parser.components_data, parser.connections_data, 300)["CC"]
+
+
+# By hand: E_D = in 9 * 15 + 1 * 50050 - out 9.9 * 1604 - 0.1 * 1500. E_P = 9.9 * 1500 + 0.1 * 500 - 9 * 10 with
+# the split and 9.9 * 1504 + 0.1 * 500 - 9 * 15 - 1 * 50 without (the ash is heated with the gas).
+@pytest.mark.parametrize("split, E_P", [(True, 14810), (False, 14754.6)], ids=["split", "no_split"])
+def test_parsed_combustion_chamber_keeps_gas_and_ash(split, E_P):
+    """Gas and ash both reach the combustion chamber, so its exergy balance closes over all four streams."""
+    chamber = parsed_combustion_chamber("ash_outlet")
+
+    assert {idx: conn["name"] for idx, conn in chamber.inl.items()} == {0: "air", 1: "fuel"}
+    assert {idx: conn["name"] for idx, conn in chamber.outl.items()} == {0: "gas", 1: "ash"}
+    chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=split)
+    assert pytest.approx(E_P) == chamber.E_P
+    assert pytest.approx(50185 - 16029.6) == chamber.E_D
+
+
+@pytest.mark.parametrize("case, where", [("heat_outlet", "outlet 1"), ("heat_inlet", "inlet 2")])
+def test_parsed_combustion_chamber_rejects_heat_stream(case, where):
+    """The heat stream of a non-adiabatic RStoic leaves the gas at outlet 0 and the chamber names it."""
+    chamber = parsed_combustion_chamber(case)
+
+    assert chamber.outl[0]["name"] == "gas"
+    with pytest.raises(ValueError, match=f"stream of kind 'heat' at {where}"):
+        chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+
+@pytest.mark.parametrize(
+    "duty, message, effect",
+    [
+        ((-1642.9, "kW"), "heat duty of -1642.9 kW", "counted as exergy destruction of the combustion chamber"),
+        ((2.0, "Gcal/hr"), "heat duty of 2324.4 kW", "missing from the fuel of the combustion chamber"),
+    ],
+    ids=["heat leaves", "heat enters"],
+)
+def test_rstoic_heat_duty_without_heat_stream(duty, message, effect, caplog):
+    """A heat duty of an RStoic without a heat stream gives a warning with the block name, the duty in kW and its effect."""
+    rstoic_parser(RSTOIC_CASES["two_inlets"][0], duty).parse_blocks()
+
+    assert f"RStoic block CC has a {message} but no heat stream" in caplog.text
+    assert effect in caplog.text
+
+
+@pytest.mark.parametrize(
+    "case, duty",
+    [
+        ("two_inlets", None),
+        ("two_inlets", (0.0, "kW")),
+        ("heat_outlet", (-1642.9, "kW")),
+        ("heat_inlet", (1642.9, "kW")),
+    ],
+    ids=["no_duty_node", "adiabatic", "heat_outlet", "heat_inlet"],
+)
+def test_rstoic_heat_duty_no_warning(case, duty, caplog):
+    """No warning for an adiabatic RStoic or one whose heat duty has a heat stream."""
+    rstoic_parser(RSTOIC_CASES[case][0], duty).parse_blocks()
+
+    assert "heat duty" not in caplog.text
+
+
 def test_assign_generic_connectors():
     """
     Test the assign_generic_connectors function for components with predefined connector mappings.
@@ -630,6 +786,53 @@ def test_parse_model_integration(dummy_convert_to_SI, split):
     assert parser.Tamb == 290
     assert parser.pamb == 100000
     assert "StreamX" in parser.connections_data
+
+
+# --- Tests for the ambient state passed to the parser ---
+
+REF_TEMP = r"\Data\Setup\Sim-Options\Input\REF_TEMP"
+REF_PRES = r"\Data\Setup\Sim-Options\Input\REF_PRES"
+
+
+@pytest.mark.parametrize(
+    "Tamb, pamb, runs, ref_temp, ref_pres",
+    [
+        (None, None, 0, 25.0, 1.013),
+        (298.15, 101300.0, 0, 25.0, 1.013),
+        (288.15, None, 1, 15.0, 1.013),
+        (None, 1e5, 1, 25.0, 1.0),
+    ],
+)
+def test_set_ambient_conditions(Tamb, pamb, runs, ref_temp, ref_pres):
+    """
+    Test that a passed ambient state replaces REF_TEMP and REF_PRES, in their units, and that the model is run
+    again so that Aspen computes the exergies at it, unless the model holds this state already.
+    """
+    nodes = {REF_TEMP: DummyNode("REF_TEMP", 25.0, "C"), REF_PRES: DummyNode("REF_PRES", 1.013, "bar")}
+    aspen = DummyAspen(DummyTree(nodes))
+    aspen.Engine = Mock()
+    parser = AspenModelParser("dummy_model.bkp", Tamb=Tamb, pamb=pamb)
+    parser.aspen = aspen
+
+    parser.set_ambient_conditions()
+    parser.parse_ambient_conditions()
+
+    assert nodes[REF_TEMP].Value == pytest.approx(ref_temp)
+    assert nodes[REF_PRES].Value == pytest.approx(ref_pres)
+    assert aspen.Engine.Run2.call_count == runs
+    assert parser.Tamb == pytest.approx(ref_temp + 273.15)
+    assert parser.pamb == pytest.approx(ref_pres * 1e5)
+
+
+def test_set_ambient_conditions_without_node():
+    """
+    Test that a passed ambient state the model has no node for raises an error.
+    """
+    parser = AspenModelParser("dummy_model.bkp", Tamb=288.15)
+    parser.aspen = DummyAspen(DummyTree({}))
+
+    with pytest.raises(ValueError, match="REF_TEMP"):
+        parser.set_ambient_conditions()
 
 
 # --- Tests for the split of the physical exergy ---

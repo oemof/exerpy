@@ -38,63 +38,102 @@ def combustion_chamber():
     return CombustionChamber(name="TestCombustionChamber", Z_costs=1000)
 
 
-@pytest.fixture
-def valid_streams():
-    """
-    Create dummy inlet and outlet stream data for a combustion chamber.
-
-    For a combustion chamber, we assume:
-      - Two inlets (e.g., air and fuel)
-      - One outlet (exhaust)
-
-    Example values (units assumed to be consistent with the component):
-      - Inlet "air": mass flow m = 5, specific physical exergy e_PH = 500, and chemical exergy e_CH = 0
-      - Inlet "fuel": m = 2, e_PH = 300, e_CH = 800
-      - Outlet "exhaust": m = 7, e_PH = 700, e_CH = 200
-    """
-    inlet_air = {"m": 5, "e_PH": 500, "e_CH": 0}
-    inlet_fuel = {"m": 2, "e_PH": 300, "e_CH": 800}
-    outlet_exhaust = {"m": 7, "e_PH": 700, "e_CH": 200}
-    return {"inlets": {"air": inlet_air, "fuel": inlet_fuel}, "outlets": {"exhaust": outlet_exhaust}}
+def _cc_stream(m, e_T, e_M, e_CH, C_T, C_M, C_CH):
+    """Stream of a combustion chamber with specific exergies and cost rates per exergy form."""
+    return {
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "e_CH": e_CH,
+        "C_T": C_T,
+        "C_M": C_M,
+        "C_PH": C_T + C_M,
+        "C_CH": C_CH,
+    }
 
 
-def test_combustion_chamber_calc_exergy_balance_success(combustion_chamber, valid_streams):
-    """
-    Test that CombustionChamber.calc_exergy_balance computes correct values.
-    """
-    # Set the inlets and outlets.
-    combustion_chamber.inl = valid_streams["inlets"]
-    combustion_chamber.outl = valid_streams["outlets"]
+def _cc_streams(three_inlets):
+    """Air and fuel (and a second fuel) entering, exhaust gas leaving."""
+    inlets = {
+        0: _cc_stream(m=5, e_T=100, e_M=60, e_CH=0, C_T=5, C_M=3, C_CH=0),
+        1: _cc_stream(m=1, e_T=20, e_M=200, e_CH=5000, C_T=1, C_M=10, C_CH=250),
+    }
+    if three_inlets:
+        inlets[2] = _cc_stream(m=1, e_T=30, e_M=100, e_CH=4000, C_T=2, C_M=6, C_CH=200)
+        outlet = _cc_stream(m=7, e_T=600, e_M=40, e_CH=200, C_T=300, C_M=15, C_CH=20)
+    else:
+        outlet = _cc_stream(m=6, e_T=500, e_M=50, e_CH=100, C_T=180, C_M=12, C_CH=8)
+    return inlets, {0: outlet}
 
-    # Call the exergy balance calculation.
-    combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
-    # Calculate expected values:
-    # Physical exergy: sum(m * e_PH)
-    total_E_P_in = (
-        valid_streams["inlets"]["air"]["m"] * valid_streams["inlets"]["air"]["e_PH"]
-        + valid_streams["inlets"]["fuel"]["m"] * valid_streams["inlets"]["fuel"]["e_PH"]
-    )
-    total_E_P_out = valid_streams["outlets"]["exhaust"]["m"] * valid_streams["outlets"]["exhaust"]["e_PH"]
-    expected_E_P = total_E_P_out - total_E_P_in
+# Values by hand. Split: E_P = rise of E_T, E_F = decrease of E_CH + decrease of E_M.
+# Without the split: E_P = rise of E_PH, E_F = decrease of E_CH. The costs follow the same terms.
+CC_CASES = {
+    "two_inlets_split": (False, True, 2480, 4600, 174, 243),
+    "two_inlets_no_split": (False, False, 2280, 4400, 173, 242),
+    "three_inlets_split": (True, True, 3650, 7920, 292, 434),
+    "three_inlets_no_split": (True, False, 3330, 7600, 288, 430),
+}
 
-    # Chemical exergy: sum(m * e_CH)
-    total_E_F_in = (
-        valid_streams["inlets"]["air"]["m"] * valid_streams["inlets"]["air"]["e_CH"]
-        + valid_streams["inlets"]["fuel"]["m"] * valid_streams["inlets"]["fuel"]["e_CH"]
-    )
-    total_E_F_out = valid_streams["outlets"]["exhaust"]["m"] * valid_streams["outlets"]["exhaust"]["e_CH"]
-    expected_E_F = total_E_F_in - total_E_F_out
 
-    expected_E_D = expected_E_F - expected_E_P
-    expected_epsilon = expected_E_P / expected_E_F if expected_E_F != 0 else None
+@pytest.mark.parametrize("three_inlets, split, E_P, E_F, C_P, C_F", CC_CASES.values(), ids=CC_CASES.keys())
+def test_combustion_chamber_fuel_and_product(combustion_chamber, three_inlets, split, E_P, E_F, C_P, C_F):
+    """Exergy and cost balance use the same fuel and product, summed over all inlets and outlets."""
+    combustion_chamber.inl, combustion_chamber.outl = _cc_streams(three_inlets)
 
-    # Verify calculated values.
-    assert pytest.approx(expected_E_P, rel=1e-3) == combustion_chamber.E_P
-    assert pytest.approx(expected_E_F, rel=1e-3) == combustion_chamber.E_F
-    assert pytest.approx(expected_E_D, rel=1e-3) == combustion_chamber.E_D
-    if expected_epsilon is not None:
-        assert combustion_chamber.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+    combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=split)
+    assert pytest.approx(E_P) == combustion_chamber.E_P
+    assert pytest.approx(E_F) == combustion_chamber.E_F
+    assert pytest.approx(4270 if three_inlets else 2120) == combustion_chamber.E_D
+    assert pytest.approx(E_P / E_F) == combustion_chamber.epsilon
+
+    combustion_chamber.exergoeconomic_balance(T0=300, chemical_exergy_enabled=True, split_physical_exergy=split)
+    assert pytest.approx(C_P) == combustion_chamber.C_P
+    assert pytest.approx(C_F) == combustion_chamber.C_F
+    assert pytest.approx(C_P / E_P) == combustion_chamber.c_P
+    assert pytest.approx(C_F / E_F) == combustion_chamber.c_F
+    assert pytest.approx(C_F / E_F * combustion_chamber.E_D) == combustion_chamber.C_D
+
+
+# Values by hand for the two inlets above and an ash outlet with E_T = 200, E_M = 0, E_CH = 500 and the
+# costs C_T = 4, C_M = 0, C_CH = 10. The ash is heated with the gas, so its physical exergy is product and
+# only its chemical exergy is subtracted from the fuel: E_P = 2480 + 200 (split) and 2280 + 200 (without),
+# E_F = 4600 - 500 and 4400 - 500. E_D = 6020 in - 4600 out in both cases.
+CC_ASH_CASES = {"split": (True, 2680, 4100, 178, 233), "no_split": (False, 2480, 3900, 177, 232)}
+
+
+@pytest.mark.parametrize("split, E_P, E_F, C_P, C_F", CC_ASH_CASES.values(), ids=CC_ASH_CASES.keys())
+def test_combustion_chamber_ash_physical_exergy_is_product(combustion_chamber, split, E_P, E_F, C_P, C_F):
+    """The physical exergy of the ash at outlet 1 is product, its chemical exergy is subtracted from the fuel."""
+    combustion_chamber.inl, combustion_chamber.outl = _cc_streams(False)
+    combustion_chamber.outl[1] = _cc_stream(m=0.5, e_T=400, e_M=0, e_CH=1000, C_T=4, C_M=0, C_CH=10)
+
+    combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=split)
+    assert pytest.approx(E_P) == combustion_chamber.E_P
+    assert pytest.approx(E_F) == combustion_chamber.E_F
+    assert pytest.approx(1420) == combustion_chamber.E_D
+
+    combustion_chamber.exergoeconomic_balance(T0=300, chemical_exergy_enabled=True, split_physical_exergy=split)
+    assert pytest.approx(C_P) == combustion_chamber.C_P
+    assert pytest.approx(C_F) == combustion_chamber.C_F
+
+
+@pytest.mark.parametrize(
+    "outlets, match",
+    [
+        ({0: {"kind": "material"}, 2: {"kind": "other"}}, "stream of kind 'other' at outlet 2"),
+        ({1: {"kind": "material"}}, "needs its combustion gas at outlet 0"),
+    ],
+    ids=["heat_outlet", "no_gas_outlet"],
+)
+def test_combustion_chamber_rejects_outlets_it_cannot_assign(combustion_chamber, outlets, match):
+    """A heat output, such as the wall losses of a reaction zone, or a missing gas outlet give a clear error."""
+    combustion_chamber.inl, _ = _cc_streams(False)
+    combustion_chamber.outl = outlets
+
+    with pytest.raises(ValueError, match=match):
+        combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
 
 def test_combustion_chamber_missing_streams(combustion_chamber):
@@ -107,6 +146,102 @@ def test_combustion_chamber_missing_streams(combustion_chamber):
 
     with pytest.raises(ValueError, match="CombustionChamber requires at least two inlets .*"):
         combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
+
+
+def test_combustion_chamber_needs_chemical_exergy(combustion_chamber):
+    """Without the chemical exergy of its streams the chamber has no fuel."""
+    combustion_chamber.inl = {0: {"m": 5, "e_PH": 500}, 1: {"m": 1, "e_PH": 300}}
+    combustion_chamber.outl = {0: {"m": 6, "e_PH": 700}}
+
+    with pytest.raises(ValueError, match="needs the chemical exergy of its streams. Pass chemExLib"):
+        combustion_chamber.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+
+def _cc_cost_stream(name, m, e_M, e_CH, col, e_T=0):
+    """Stream of a combustion chamber with the columns of its T, M and CH cost variables."""
+    return {
+        "name": name,
+        "m": m,
+        "E_T": m * e_T,
+        "E_M": m * e_M,
+        "E_CH": m * e_CH,
+        "CostVar_index": {"T": col, "M": col + 1, "CH": col + 2},
+    }
+
+
+def test_combustion_chamber_mixing_rule_runs_over_all_inlets(combustion_chamber):
+    """m_out c_out = sum m_i c_i over all inlets; an inlet without the exergy form is left out."""
+    combustion_chamber.inl = {
+        0: _cc_cost_stream("air", m=8, e_M=50, e_CH=0, col=0),
+        1: _cc_cost_stream("fuel", m=1, e_M=200, e_CH=5000, col=3),
+        2: _cc_cost_stream("fuel_2", m=1, e_M=0, e_CH=4000, col=6),
+    }
+    combustion_chamber.outl = {0: _cc_cost_stream("gas", m=10, e_M=40, e_CH=100, col=9)}
+
+    A, b, counter, equations = combustion_chamber.aux_eqs(np.zeros((2, 12)), np.ones(2), 0, 300, {}, True, True)
+    assert counter == 2
+    assert list(b) == [0, 0]
+    mechanical = {1: 8 / (10 * 400), 4: 1 / (10 * 200), 10: -1 / 400}
+    chemical = {5: 1 / (10 * 5000), 8: 1 / (10 * 4000), 11: -1 / 1000}
+    for row, expected in enumerate((mechanical, chemical)):
+        assert set(np.flatnonzero(A[row])) == set(expected)
+        for col, value in expected.items():
+            assert A[row, col] == pytest.approx(value)
+    assert equations[1] == {
+        "kind": "aux_mixing",
+        "objects": ["TestCombustionChamber", "air", "fuel", "fuel_2", "gas"],
+        "property": "c_CH",
+    }
+
+    # Without the split only the chemical rule is written.
+    A, _, counter, _ = combustion_chamber.aux_eqs(np.zeros((1, 12)), np.ones(1), 0, 300, {}, True, False)
+    assert counter == 1
+    assert set(np.flatnonzero(A[0])) == set(chemical)
+
+
+def test_combustion_chamber_outlet_without_an_exergy_form_gets_no_cost_of_it(combustion_chamber):
+    """An outlet without mechanical exergy carries no mechanical cost."""
+    combustion_chamber.inl = {
+        0: _cc_cost_stream("air", m=9, e_M=50, e_CH=0, col=0),
+        1: _cc_cost_stream("fuel", m=1, e_M=200, e_CH=5000, col=3),
+    }
+    combustion_chamber.outl = {0: _cc_cost_stream("gas", m=10, e_M=0, e_CH=100, col=6)}
+
+    A, b, _, _ = combustion_chamber.aux_eqs(np.zeros((2, 9)), np.ones(2), 0, 300, {}, True, True)
+    assert list(np.flatnonzero(A[0])) == [7]
+    assert A[0, 7] == 1
+    assert b[0] == 0
+
+
+def test_combustion_chamber_ash_rows_follow_speco(combustion_chamber):
+    """Ash: CH at the fuel's specific cost (SPECO eq. 48), M mixed, T increase priced like the gas's (eq. 49a)."""
+    combustion_chamber.inl = {
+        0: _cc_cost_stream("air", m=9, e_T=100, e_M=50, e_CH=0, col=0),
+        1: _cc_cost_stream("coal", m=1, e_T=1000, e_M=0, e_CH=25000, col=3),
+    }
+    combustion_chamber.outl = {
+        0: _cc_cost_stream("gas", m=9.9, e_T=500, e_M=40, e_CH=100, col=6),
+        1: _cc_cost_stream("ash", m=0.1, e_T=2000, e_M=0, e_CH=500, col=9),
+    }
+
+    # Two mixing rows for the gas (M, CH) and three rows for the ash (CH, M, T): its outlets carry six cost
+    # variables, the cost balance covers one.
+    A, b, counter, equations = combustion_chamber.aux_eqs(np.zeros((5, 12)), np.ones(5), 0, 300, {}, True, True)
+    assert counter == 5
+    assert list(b) == [0] * 5
+    # The ash is 0.1 of the coal: its T increase is 200 - 0.1 * 1000 = 100, the gas's 4950 - 1900 + 100 = 3150.
+    k, dE_ash, dE_gas = 0.1, 100.0, 3150.0
+    ash_T = {9: 1 / dE_ash, 3: -k / dE_ash + 1 / dE_gas - k / dE_gas, 6: -1 / dE_gas, 0: 1 / dE_gas}
+    for row, expected in ((2, {5: 1 / 25000, 11: -1 / 50}), (3, {10: 1}), (4, ash_T)):
+        assert set(np.flatnonzero(A[row])) == set(expected)
+        for col, value in expected.items():
+            assert A[row, col] == pytest.approx(value)
+    assert equations[2]["property"] == "c_CH"
+    assert equations[4] == {
+        "kind": "aux_p_rule",
+        "objects": ["TestCombustionChamber", "gas", "ash"],
+        "property": "c_T",
+    }
 
 
 @pytest.fixture
@@ -167,6 +302,15 @@ def test_heat_exchanger_calc_exergy_balance_success(heat_exchanger, valid_heat_e
     assert pytest.approx(expected_E_D, rel=1e-3) == heat_exchanger.E_D
     if expected_epsilon is not None:
         assert heat_exchanger.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+
+
+def test_heat_exchanger_rejects_a_third_stream(heat_exchanger, valid_heat_exchanger_streams):
+    """A stream at connector 2 would be left out of the balance, so it is rejected."""
+    inl = valid_heat_exchanger_streams["inlets"]
+    heat_exchanger.inl = {**inl, 2: dict(inl[0])}
+    heat_exchanger.outl = valid_heat_exchanger_streams["outlets"]
+    with pytest.raises(ValueError, match=r"connector\(s\) \[2\]"):
+        heat_exchanger.calc_exergy_balance(300, 101325, split_physical_exergy=True)
 
 
 def test_heat_exchanger_missing_streams(heat_exchanger):
@@ -255,6 +399,108 @@ def test_dissipative_hex_missing_streams(dissipative_hex):
         dissipative_hex.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
 
+def _dissipative_cost_stream(name, first_column, m=2.0, **e):
+    """Return a connection with one cost variable per exergy share given in ``e``."""
+    stream = {"name": name, "m": m, "CostVar_index": {}}
+    for i, (label, value) in enumerate(e.items()):
+        stream[f"e_{label}"] = value
+        stream[f"E_{label}"] = m * value
+        stream["CostVar_index"][label] = first_column + i
+    return stream
+
+
+def _solve_dissipative(component, c_in, chemical_exergy_enabled=False):
+    """Solve the rows of a dissipative component whose inlets enter with the specific cost ``c_in``."""
+    streams = [*component.inl.values(), *component.outl.values()]
+    diss_col = sum(len(stream["CostVar_index"]) for stream in streams)
+    A = np.zeros((diss_col + 1, diss_col + 1))
+    b = np.zeros(diss_col + 1)
+    row = 0
+    for inlet in component.inl.values():
+        for label, col in inlet["CostVar_index"].items():
+            A[row, col] = 1
+            b[row] = c_in * inlet[f"E_{label}"]
+            row += 1
+        inlet["CostVar_index"]["dissipative"] = diss_col
+    A, b, counter, _ = component.dis_eqs(A, b, row, 298.15, {}, chemical_exergy_enabled, all_components=[])
+    assert counter == diss_col + 1
+    return np.linalg.solve(A, b), diss_col
+
+
+def test_dissipative_hex_outlet_without_exergy_carries_no_cost():
+    """
+    Test that a dissipative heat exchanger passes no cost to an outlet share without exergy.
+
+    The hot stream (main fluid) keeps the specific cost of its inlet, but leaves at the ambient
+    pressure, so it carries no mechanical cost. The cooling water (auxiliary fluid) leaves without
+    cost (SPECO, Fig. 4). What the outlets do not carry stays in C_diff.
+    """
+    hx = HeatExchanger(name="HX", dissipative=True, Z_costs=0.5)
+    hx.inl = {
+        0: _dissipative_cost_stream("hot_in", 0, T=80.0, M=30.0),
+        1: _dissipative_cost_stream("cold_in", 2, T=0.0, M=10.0),
+    }
+    hx.outl = {
+        0: _dissipative_cost_stream("hot_out", 4, T=50.0, M=0.0),
+        1: _dissipative_cost_stream("cold_out", 6, T=6.0, M=8.0),
+    }
+    c_in = 3.0
+
+    C, diss_col = _solve_dissipative(hx, c_in)
+
+    hot_out = hx.outl[0]["CostVar_index"]
+    cold_out = hx.outl[1]["CostVar_index"]
+    assert C[hot_out["M"]] == pytest.approx(0, abs=1e-12)
+    assert C[cold_out["T"]] == pytest.approx(0, abs=1e-12)
+    assert C[cold_out["M"]] == pytest.approx(0, abs=1e-12)
+    assert C[hot_out["T"]] == pytest.approx(c_in * hx.outl[0]["E_T"])
+    C_in = c_in * sum(inlet["E_T"] + inlet["E_M"] for inlet in hx.inl.values())
+    assert C[diss_col] == pytest.approx(C_in - C[hot_out["T"]] + hx.Z_costs)
+
+
+@pytest.mark.parametrize("hot", [0, 1])
+def test_dissipative_hex_auxiliary_fluid_leaves_without_cost(hot):
+    """The stream that loses exergy keeps its specific cost; the cooling stream leaves without cost."""
+    cold = 1 - hot
+    hx = HeatExchanger(name="HX", dissipative=True, Z_costs=0.5)
+    hx.inl = {
+        hot: _dissipative_cost_stream("hot_in", 4 * hot, T=80.0, M=30.0),
+        cold: _dissipative_cost_stream("cold_in", 4 * cold, T=1.0, M=10.0),
+    }
+    hx.outl = {
+        hot: _dissipative_cost_stream("hot_out", 4 * hot + 2, T=50.0, M=29.0),
+        cold: _dissipative_cost_stream("cold_out", 4 * cold + 2, T=6.0, M=9.0),
+    }
+    C, diss_col = _solve_dissipative(hx, 3.0)
+
+    main = hx.outl[hot]["CostVar_index"]
+    aux = hx.outl[cold]["CostVar_index"]
+    m = 2.0
+    assert C[main["T"]] == pytest.approx(3.0 * m * 50.0)
+    assert C[main["M"]] == pytest.approx(3.0 * m * 29.0)
+    assert C[aux["T"]] == pytest.approx(0, abs=1e-12)
+    assert C[aux["M"]] == pytest.approx(0, abs=1e-12)
+    # C_diff = c_i * (E_i - E_e) of the main fluid + cost of the auxiliary fluid + Z (SPECO eq. 53)
+    assert C[diss_col] == pytest.approx(3.0 * m * (110.0 - 79.0) + 3.0 * m * 11.0 + 0.5)
+
+
+def test_dissipative_hex_both_streams_losing_exergy_keep_their_specific_cost():
+    """E.g. a heat pump evaporator: pressurized air and the cold refrigerant both lose exergy."""
+    hx = HeatExchanger(name="HX", dissipative=True, Z_costs=0.5)
+    hx.inl = {
+        0: _dissipative_cost_stream("air_in", 0, T=2.0, M=300.0),
+        1: _dissipative_cost_stream("ref_in", 2, T=16.0, M=30.0),
+    }
+    hx.outl = {
+        0: _dissipative_cost_stream("air_out", 4, T=1.0, M=1.0),
+        1: _dissipative_cost_stream("ref_out", 6, T=1.0, M=29.0),
+    }
+    C, _ = _solve_dissipative(hx, 3.0)
+    for name, stream in hx.outl.items():
+        for label, col in stream["CostVar_index"].items():
+            assert C[col] == pytest.approx(3.0 * stream[f"E_{label}"]), (name, label)
+
+
 @pytest.fixture
 def simple_hex():
     """
@@ -288,6 +534,19 @@ def valid_simple_hex_streams():
     return {"inlets": {0: inlet}, "outlets": {0: outlet}}
 
 
+def test_simple_hex_below_ambient_fuel_scales_with_the_mass_flow(simple_hex):
+    """Cooled below T0, the fuel is the gain of thermal exergy plus the drop of mechanical exergy."""
+
+    def fuel(m):
+        simple_hex.inl = {0: {"m": m, "h": 40e3, "T": 290.0, "e_T": 200.0, "e_PH": 500.0, "e_M": 300.0}}
+        simple_hex.outl = {0: {"m": m, "h": 20e3, "T": 285.0, "e_T": 600.0, "e_PH": 850.0, "e_M": 250.0}}
+        simple_hex.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+        return simple_hex.E_F
+
+    assert fuel(1.0) == pytest.approx((600.0 - 200.0) + (300.0 - 250.0))
+    assert fuel(10.0) == pytest.approx(10.0 * fuel(1.0))
+
+
 def test_simple_hex_calc_exergy_balance_success(simple_hex, valid_simple_hex_streams):
     """
     Test that SimpleHeatExchanger.calc_exergy_balance computes correct exergy values
@@ -309,6 +568,75 @@ def test_simple_hex_calc_exergy_balance_success(simple_hex, valid_simple_hex_str
     assert pytest.approx(expected_E_F, rel=1e-3) == simple_hex.E_F
     assert pytest.approx(expected_E_D, rel=1e-3) == simple_hex.E_D
     assert simple_hex.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+
+
+def test_simple_hex_cooled_below_ambient_uses_thermal_and_mechanical_exergy(simple_hex):
+    """Cooled across T0 with split: the product is the cold exergy, the warm exergy and the friction are destroyed."""
+    inlet = {"T": 330.0, "m": 10.0, "h": 400e3, "e_T": 1600.0, "e_M": 140e3, "e_PH": 141600.0}
+    outlet = {"T": 260.0, "m": 10.0, "h": 330e3, "e_T": 2400.0, "e_M": 139e3, "e_PH": 141400.0}
+    simple_hex.inl = {0: inlet}
+    simple_hex.outl = {0: outlet}
+    simple_hex.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+
+    assert pytest.approx(10.0 * 2400.0) == simple_hex.E_P
+    assert pytest.approx(10.0 * (1600.0 + 2400.0 + 1000.0)) == simple_hex.E_F
+    # the heat released above T0 and the friction are destroyed
+    assert pytest.approx(10.0 * (1600.0 + 1000.0)) == simple_hex.E_D
+
+
+def test_simple_hex_cooled_below_ambient_without_split_uses_physical_exergy_only(simple_hex, caplog):
+    """Without split only e_PH is used: the heat carries the net change, nothing is destroyed, with a warning."""
+    simple_hex.inl = {0: {"T": 330.0, "m": 10.0, "h": 400e3, "e_PH": 141600.0, "e_T": 1600.0, "e_M": 140e3}}
+    simple_hex.outl = {0: {"T": 260.0, "m": 10.0, "h": 330e3, "e_PH": 141400.0, "e_T": 2400.0, "e_M": 139e3}}
+    simple_hex.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    assert pytest.approx(10.0 * 200.0) == simple_hex.E_P
+    assert pytest.approx(simple_hex.E_P) == simple_hex.E_F
+    assert pytest.approx(0) == simple_hex.E_D
+    assert "cannot be told apart" in caplog.text
+
+
+@pytest.mark.parametrize("Q_sign", [-1, 1])
+def test_simple_hex_friction_depends_on_the_split(Q_sign, caplog):
+    """With split the pressure drop is destroyed; without it, as chosen, it is part of the heat, with a warning."""
+    hot = {"T": 600.0, "m": 2.0, "p": 10e5, "h": 600e3, "e_T": 90e3, "e_M": 60e3, "e_PH": 150e3}
+    cold = {"T": 300.0, "m": 2.0, "p": 9e5, "h": 300e3, "e_T": 1e3, "e_M": 57e3, "e_PH": 58e3}
+    if Q_sign < 0:
+        inlet, outlet = hot, cold
+    else:
+        inlet = dict(cold, p=10e5, e_M=60e3, e_PH=61e3)
+        outlet = dict(hot, p=9e5, e_M=57e3, e_PH=147e3)
+    split = SimpleHeatExchanger(name="SHX")
+    split.inl, split.outl = {0: inlet}, {0: outlet}
+    split.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    assert pytest.approx(2.0 * 3e3) == split.E_D
+
+    unsplit = SimpleHeatExchanger(name="SHX")
+    unsplit.inl, unsplit.outl = {0: inlet}, {0: outlet}
+    unsplit.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    assert pytest.approx(0) == unsplit.E_D
+    assert "counted in the exergy of the heat" in caplog.text
+
+
+@pytest.mark.parametrize("dissipative", [False, True])
+def test_simple_hex_warns_where_the_heat_connection_differs(dissipative, caplog):
+    """Across T0 or when dissipative, the heat connection carries another exergy than the component balance."""
+    shx = SimpleHeatExchanger(name="SHX", dissipative=dissipative)
+    T_out = 330.0 if dissipative else 260.0
+    shx.inl = {0: {"T": 360.0, "m": 10.0, "h": 400e3, "e_T": 9000.0, "e_M": 140e3, "e_PH": 149e3}}
+    shx.outl = {
+        0: {"T": T_out, "m": 10.0, "h": 330e3, "e_T": 2400.0, "e_M": 139e3, "e_PH": 141400.0},
+        1: {"kind": "heat"},
+    }
+    shx.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    expected = "counted twice" if dissipative else "may not close"
+    assert expected in caplog.text
+
+
+def test_simple_hex_without_heat_connection_does_not_warn_about_it(simple_hex, caplog):
+    simple_hex.inl = {0: {"T": 330.0, "m": 10.0, "h": 400e3, "e_T": 1600.0, "e_M": 140e3, "e_PH": 141600.0}}
+    simple_hex.outl = {0: {"T": 260.0, "m": 10.0, "h": 330e3, "e_T": 2400.0, "e_M": 139e3, "e_PH": 141400.0}}
+    simple_hex.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    assert "may not close" not in caplog.text
 
 
 def test_simple_hex_invalid_streams(simple_hex):
@@ -384,7 +712,7 @@ def test_deaerator_outlet_above(deaerator, deaerator_streams_outlet_above):
     deaerator.inl = inl
     deaerator.outl = outl
 
-    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=False)
 
     expected_E_P = 10 * (950 - 900) + 5 * 950  # 500 + 4750 = 5250
     expected_E_F = 5 * 800  # 4000
@@ -403,18 +731,18 @@ def deaerator_streams_outlet_equal():
 
     For this case, the code sets:
       - E_P = NaN
-      - E_F is the sum over all inlets: m * e_PH
+      - E_F is the sum over all inlets: m * (e_PH - e_PH_out)
 
-    Let T0 = 300 K, outlet: T = 300 K.
-      Inlet0: T = 310 K, m = 10, e_PH = 900   → contribution = 10 * 900 = 9000
-      Inlet1: T = 290 K, m = 5, e_PH = 800    → contribution = 5 * 800 = 4000
+    Let T0 = 300 K, outlet: T = 300 K, e_PH = 850.
+      Inlet0: T = 310 K, m = 10, e_PH = 900   → contribution = 10 * 50 = 500
+      Inlet1: T = 290 K, m = 5, e_PH = 800    → contribution = 5 * (-50) = -250
 
     Expected:
-      E_F = 9000 + 4000 = 13000 W,
-      E_P = NaN, and E_D = E_F (13000 W).
+      E_F = 250 W,
+      E_P = NaN, and E_D = E_F (250 W).
     """
     inlets = {0: {"T": 310, "m": 10, "e_PH": 900}, 1: {"T": 290, "m": 5, "e_PH": 800}}
-    outlets = {0: {"T": 300, "m": 1, "e_PH": 850}}  # e_PH here is irrelevant since T_out == T0
+    outlets = {0: {"T": 300, "m": 15, "e_PH": 850}}
     return inlets, outlets
 
 
@@ -425,9 +753,9 @@ def test_deaerator_outlet_equal(deaerator, deaerator_streams_outlet_equal):
     deaerator.inl = inl
     deaerator.outl = outl
 
-    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=False)
 
-    expected_E_F = 10 * 900 + 5 * 800  # 9000 + 4000 = 13000
+    expected_E_F = 10 * (900 - 850) + 5 * (800 - 850)  # the outlet exergy is no destruction
     assert np.isnan(deaerator.E_P)
     assert pytest.approx(expected_E_F, rel=1e-3) == deaerator.E_F
     assert pytest.approx(expected_E_F, rel=1e-3) == deaerator.E_D
@@ -468,7 +796,7 @@ def test_deaerator_outlet_below(deaerator, deaerator_streams_outlet_below):
     deaerator.inl = inl
     deaerator.outl = outl
 
-    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    deaerator.calc_exergy_balance(T0, p0, split_physical_exergy=False)
 
     expected_E_P = 10 * 280  # Only inlet0 contributes: 2800
     expected_E_F = 10 * 900 + 5 * (800 - 280)  # 9000 + 2600 = 11600
@@ -640,7 +968,7 @@ def test_mixer_calc_exergy_balance_success():
     T0 = 300
     p0 = 101325
 
-    mixer.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    mixer.calc_exergy_balance(T0, p0, split_physical_exergy=False)
 
     expected_E_P = 10 * (810 - 800)  # = 100
     expected_E_F = 5 * (850 - 810)  # = 200
@@ -651,6 +979,44 @@ def test_mixer_calc_exergy_balance_success():
     assert pytest.approx(expected_E_F, rel=1e-3) == mixer.E_F
     assert pytest.approx(expected_E_D, rel=1e-3) == mixer.E_D
     assert mixer.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+
+
+@pytest.mark.parametrize("node", [Mixer, Deaerator])
+def test_mixing_node_with_split_puts_the_mechanical_decrease_into_the_fuel(node):
+    """With split, the product is the thermal exergy increase and every inlet's mechanical decrease is fuel."""
+    component = node(name="MX")
+    # cold inlet throttled from 20 bar, hot inlet from 6 bar, outlet at 5 bar
+    component.inl = {
+        0: {"T": 313.15, "m": 10.0, "e_PH": 2000.0, "e_T": 300.0, "e_M": 1700.0},
+        1: {"T": 423.15, "m": 3.0, "e_PH": 60000.0, "e_T": 59500.0, "e_M": 500.0},
+    }
+    component.outl = {0: {"T": 339.0, "m": 13.0, "e_PH": 9000.0, "e_T": 8600.0, "e_M": 400.0}}
+    component.calc_exergy_balance(T0=298.15, p0=101325, split_physical_exergy=True)
+
+    E_P = 10.0 * (8600.0 - 300.0)
+    E_F = 3.0 * (59500.0 - 8600.0) + 10.0 * (1700.0 - 400.0) + 3.0 * (500.0 - 400.0)
+    assert pytest.approx(E_P, rel=1e-12) == component.E_P
+    assert pytest.approx(E_F, rel=1e-12) == component.E_F
+    # the destruction is the physical exergy balance, whatever the split
+    assert pytest.approx(10.0 * 2000.0 + 3.0 * 60000.0 - 13.0 * 9000.0, rel=1e-12) == component.E_D
+
+
+@pytest.mark.parametrize("node", [Mixer, Deaerator])
+@pytest.mark.parametrize("split", [True, False])
+def test_mixing_node_puts_the_chemical_exergy_decrease_into_the_fuel(node, split):
+    """Inlets of different composition: the chemical exergy lost by mixing is fuel and destruction."""
+    component = node(name="MX")
+    component.inl = {
+        0: {"T": 310.0, "m": 4.0, "e_PH": 800.0, "e_T": 700.0, "e_M": 100.0, "e_CH": 5000.0},
+        1: {"T": 330.0, "m": 1.0, "e_PH": 4000.0, "e_T": 3900.0, "e_M": 100.0, "e_CH": 20000.0},
+    }
+    component.outl = {0: {"T": 315.0, "m": 5.0, "e_PH": 1200.0, "e_T": 1100.0, "e_M": 100.0, "e_CH": 7000.0}}
+    component.calc_exergy_balance(T0=300.0, p0=101325, split_physical_exergy=split)
+
+    dE_CH = 4.0 * 5000.0 + 1.0 * 20000.0 - 5.0 * 7000.0
+    E_in = 4.0 * (800.0 + 5000.0) + 1.0 * (4000.0 + 20000.0)
+    assert pytest.approx(E_in - 5.0 * (1200.0 + 7000.0), rel=1e-12) == component.E_D
+    assert pytest.approx(1.0 * (4000.0 - 1200.0) + dE_CH, rel=1e-12) == component.E_F
 
 
 def test_mixer_invalid_streams():
@@ -670,6 +1036,92 @@ def test_mixer_invalid_streams():
     mixer.outl = {}
     with pytest.raises(ValueError, match="Mixer requires at least two inlets and one outlet."):
         mixer.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+
+def _mixing_cost_stream(T, m, e_T, e_M, c_T, c_M):
+    """A material stream with split physical exergy and the costs the exergoeconomic balance reads."""
+    return {
+        "T": T,
+        "m": m,
+        "e_T": e_T,
+        "e_M": e_M,
+        "e_PH": e_T + e_M,
+        "c_T": c_T,
+        "c_M": c_M,
+        "C_T": c_T * m * e_T,
+        "C_M": c_M * m * e_M,
+    }
+
+
+@pytest.mark.parametrize("component_class", [Mixer, Deaerator])
+@pytest.mark.parametrize(
+    ("inlets", "outlet", "fuel_inlet", "far_inlet"),
+    [
+        # Outlet above T0: the hot inlet gives up thermal exergy.
+        (
+            {
+                0: _mixing_cost_stream(310, 10.0, 20e3, 500.0, 5e-9, 8e-9),
+                1: _mixing_cost_stream(400, 4.0, 80e3, 500.0, 20e-9, 9e-9),
+            },
+            _mixing_cost_stream(340, 14.0, 30e3, 450.0, 7e-9, 8.5e-9),
+            1,
+            None,
+        ),
+        # Outlet below T0: the cold inlet gives up thermal exergy.
+        (
+            {
+                0: _mixing_cost_stream(295, 4.0, 100.0, 500.0, 20e-9, 9e-9),
+                1: _mixing_cost_stream(260, 10.0, 3000.0, 500.0, 5e-9, 8e-9),
+            },
+            _mixing_cost_stream(270, 14.0, 1500.0, 450.0, 7e-9, 8.5e-9),
+            1,
+            None,
+        ),
+        # Outlet above T0, cold inlet below T0: its whole thermal exergy is fuel as well.
+        (
+            {
+                0: _mixing_cost_stream(280, 10.0, 1500.0, 500.0, 5e-9, 8e-9),
+                1: _mixing_cost_stream(400, 4.0, 80e3, 500.0, 20e-9, 9e-9),
+            },
+            _mixing_cost_stream(330, 14.0, 15e3, 450.0, 7e-9, 8.5e-9),
+            1,
+            0,
+        ),
+        # Outlet below T0, hot inlet above T0: its whole thermal exergy is fuel as well.
+        (
+            {
+                0: _mixing_cost_stream(310, 1.0, 200.0, 500.0, 20e-9, 9e-9),
+                1: _mixing_cost_stream(260, 10.0, 3000.0, 500.0, 5e-9, 8e-9),
+            },
+            _mixing_cost_stream(270, 11.0, 1500.0, 450.0, 7e-9, 8.5e-9),
+            1,
+            0,
+        ),
+    ],
+    ids=["outlet_above_T0", "outlet_below_T0", "cold_inlet_below_T0", "hot_inlet_above_T0"],
+)
+def test_mixing_fuel_cost_with_split_physical_exergy(component_class, inlets, outlet, fuel_inlet, far_inlet):
+    """
+    The fuel of a mixing component is the thermal exergy its fuel inlet gives up down to the outlet
+    state, charged at the specific cost of that inlet (F rule), plus the decrease in mechanical exergy.
+    An inlet on the other side of T0 than the outlet gives up all its thermal exergy.
+    """
+    comp = component_class(name="MIX", Z_costs=1e-3)
+    comp.inl = inlets
+    comp.outl = {0: outlet}
+    comp.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+    comp.exergoeconomic_balance(300, split_physical_exergy=True)
+
+    fuel = inlets[fuel_inlet]
+    expected_C_F = (
+        fuel["m"] * fuel["c_T"] * (fuel["e_T"] - outlet["e_T"]) + sum(i["C_M"] for i in inlets.values()) - outlet["C_M"]
+    )
+    if far_inlet is not None:
+        expected_C_F += inlets[far_inlet]["C_T"]
+    assert pytest.approx(expected_C_F, rel=1e-9) == comp.C_F
+    assert pytest.approx(expected_C_F + 1e-3, rel=1e-9) == comp.C_P
+    assert comp.c_F == pytest.approx(expected_C_F / comp.E_F, rel=1e-9)
 
 
 def test_valve_all_above_ambient():
@@ -724,29 +1176,32 @@ def test_valve_heat_release_split_true():
 
 def test_valve_both_below_ambient_split_true():
     """
-    Test Valve.exergy_balance for the case when both inlet and outlet temperatures are below ambient,
-    with split physical exergy enabled.
+    Both temperatures below ambient, split physical exergy: the gain of thermal exergy is the product.
     Expected:
       - E_P = m * (outlet e_T - inlet e_T)
       - E_F = m * (inlet e_M - outlet e_M)
     """
     valve = Valve(name="TestValve")
-    # Example: T0=300; inlet T=290, outlet T=280.
-    valve.inl = {0: {"T": 290, "m": 10, "p": 10, "e_PH": 950, "e_T": 300, "e_M": 200}}
-    valve.outl = {0: {"T": 280, "m": 10, "p": 1, "e_PH": 930, "e_T": 280, "e_M": 180}}
-    T0 = 300
-    p0 = 101325
-    valve.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+    # T0 = 300; the stream cools from 290 to 280 K and gains thermal exergy.
+    valve.inl = {0: {"T": 290, "m": 10, "p": 10, "e_PH": 500, "e_T": 300, "e_M": 200}}
+    valve.outl = {0: {"T": 280, "m": 10, "p": 1, "e_PH": 500, "e_T": 320, "e_M": 180}}
+    valve.calc_exergy_balance(300, 101325, split_physical_exergy=True)
 
-    expected_E_P = 10 * (280 - 300)  # = 10 * (-20) = -200
-    expected_E_F = 10 * (200 - 180)  # = 10 * 20 = 200
-    expected_E_D = expected_E_F - expected_E_P  # = 200 - (-200) = 400
-    expected_epsilon = expected_E_P / expected_E_F  # = -200/200 = -1
+    assert pytest.approx(10 * 20, rel=1e-12) == valve.E_P
+    assert pytest.approx(10 * 20, rel=1e-12) == valve.E_F
+    assert pytest.approx(0, abs=1e-9) == valve.E_D
 
-    assert pytest.approx(expected_E_P, rel=1e-3) == valve.E_P
-    assert pytest.approx(expected_E_F, rel=1e-3) == valve.E_F
-    assert pytest.approx(expected_E_D, rel=1e-3) == valve.E_D
-    assert valve.epsilon == pytest.approx(expected_epsilon, rel=1e-3)
+
+def test_valve_below_ambient_losing_thermal_exergy_is_dissipative():
+    """A liquid that warms on throttling below T0 loses thermal exergy: no product, so dissipative."""
+    valve = Valve(name="TestValve")
+    valve.inl = {0: {"T": 278, "m": 10, "p": 10, "e_PH": 950, "e_T": 300, "e_M": 650}}
+    valve.outl = {0: {"T": 279, "m": 10, "p": 1, "e_PH": 400, "e_T": 280, "e_M": 120}}
+    valve.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+
+    assert np.isnan(valve.E_P)
+    assert pytest.approx(10 * (950 - 400), rel=1e-12) == valve.E_F
+    assert pytest.approx(valve.E_F, rel=1e-12) == valve.E_D
 
 
 def test_valve_unimplemented_case():
@@ -784,6 +1239,30 @@ def test_valve_missing_streams():
     p0 = 101325
     with pytest.raises(ValueError, match="Valve requires at least one inlet and one outlet."):
         valve.calc_exergy_balance(T0, p0, split_physical_exergy=True)
+
+
+@pytest.mark.parametrize("chemical_exergy_enabled", [False, True])
+def test_valve_dissipative_outlet_at_ambient_pressure_carries_no_mechanical_cost(chemical_exergy_enabled):
+    """
+    Test that a dissipative valve throttling to the ambient pressure passes no mechanical cost on.
+
+    The outlet keeps the specific cost of the inlet. Without mechanical exergy it carries no
+    mechanical cost, and the mechanical cost of the inlet stays in C_diff.
+    """
+    chemical = {"CH": 5.0} if chemical_exergy_enabled else {}
+    valve = Valve(name="VAL", Z_costs=0.5)
+    valve.inl = {0: _dissipative_cost_stream("in", 0, T=40.0, M=60.0, **chemical)}
+    valve.outl = {0: _dissipative_cost_stream("out", len(valve.inl[0]["CostVar_index"]), T=35.0, M=0.0, **chemical)}
+    c_in = 3.0
+
+    C, diss_col = _solve_dissipative(valve, c_in, chemical_exergy_enabled)
+
+    inlet, outlet = valve.inl[0], valve.outl[0]
+    assert C[outlet["CostVar_index"]["M"]] == pytest.approx(0, abs=1e-12)
+    assert C[outlet["CostVar_index"]["T"]] == pytest.approx(c_in * outlet["E_T"])
+    if chemical_exergy_enabled:
+        assert C[outlet["CostVar_index"]["CH"]] == pytest.approx(c_in * outlet["E_CH"])
+    assert C[diss_col] == pytest.approx(c_in * (inlet["E_T"] + inlet["E_M"] - outlet["E_T"]) + valve.Z_costs)
 
 
 @pytest.fixture
@@ -908,6 +1387,17 @@ def test_motor_missing_outlet_raises(motor):
 def compressor():
     """Return a fresh Compressor instance with a name for logging."""
     return Compressor(name="TestCompressor", Z_costs=1000)
+
+
+@pytest.mark.parametrize("machine", [Compressor, Pump])
+def test_machine_with_colder_outlet_still_has_its_destruction(machine):
+    """Fuel and product are undefined, but the destruction is the exergy balance."""
+    unit = machine(name="M")
+    unit.inl = {0: {"T": 280.0, "m": 2.0, "h": 100e3, "e_PH": 1000.0, "e_T": 300.0, "e_M": 700.0}}
+    unit.outl = {0: {"T": 279.0, "m": 2.0, "h": 110e3, "e_PH": 9000.0, "e_T": 320.0, "e_M": 8680.0}}
+    unit.calc_exergy_balance(300.0, 101325, split_physical_exergy=True)
+    assert np.isnan(unit.E_P)
+    assert pytest.approx(2.0 * 10e3 + 2.0 * 1000.0 - 2.0 * 9000.0) == unit.E_D
 
 
 def test_compressor_case1_above_ambient(compressor):
@@ -1273,22 +1763,22 @@ def test_turbine_case3_without_split(turbine):
     assert np.isclose(turbine.E_D, 150, atol=1e-3)
 
 
-def test_turbine_invalid_case(turbine):
-    """
-    Test an invalid case for the turbine:
-    When outlet temperature is larger than inlet temperature, the case is not implemented.
-    Expected behavior: both E_P and E_F are set to NaN.
-    """
-    T0 = 300
-    p0 = 101325
+def test_turbine_with_a_slightly_warmer_outlet_keeps_its_definition(turbine):
+    """A hydraulic turbine can leave slightly warmer: power is the product, the exergy decrease the fuel."""
     turbine.inl = {0: {"T": 310, "m": 5, "h": 400, "e_PH": 1000}}
-    turbine.outl = {0: {"T": 320, "m": 5, "h": 380, "e_PH": 950}}
+    turbine.outl = {0: {"T": 310.02, "m": 5, "h": 380, "e_PH": 950}}
+    turbine.calc_exergy_balance(300, 101325, split_physical_exergy=False)
+    assert pytest.approx(100) == turbine.E_P
+    assert pytest.approx(250) == turbine.E_F
+    assert pytest.approx(150) == turbine.E_D
 
-    turbine.calc_exergy_balance(T0, p0, split_physical_exergy=True)
 
-    assert np.isnan(turbine.E_P), "E_P should be NaN for invalid case (outlet T > inlet T)."
-    assert np.isnan(turbine.E_F), "E_F should be NaN for invalid case (outlet T > inlet T)."
-    # E_D still follows from the overall balance: 5*1000 - 5*950 - |P| = 250 - 100 = 150
+def test_turbine_with_inlet_below_and_outlet_above_ambient_is_nan(turbine):
+    """Not implemented: fuel and product are NaN, the destruction follows from the balance."""
+    turbine.inl = {0: {"T": 290, "m": 5, "h": 400, "e_PH": 1000}}
+    turbine.outl = {0: {"T": 310, "m": 5, "h": 380, "e_PH": 950}}
+    turbine.calc_exergy_balance(300, 101325, split_physical_exergy=True)
+    assert np.isnan(turbine.E_P) and np.isnan(turbine.E_F)
     assert np.isclose(turbine.E_D, 150, atol=1e-3)
 
 
@@ -1372,6 +1862,17 @@ def test_storage_discharging(storage, discharging_streams):
     assert storage.epsilon == pytest.approx(0.5, rel=1e-6)
 
 
+def test_storage_counts_the_chemical_exergy_where_known(storage):
+    """The stored exergy includes the chemical exergy, as the stored cost does."""
+    storage.inl = {0: {"m": 10, "e_PH": 100, "e_CH": 50}}
+    storage.outl = {0: {"m": 5, "e_PH": 80, "e_CH": 50}}
+    storage.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
+
+    assert pytest.approx(5 * (80 + 50), rel=1e-12) == storage.E_stored
+    assert pytest.approx(10 * 150 - 5 * 130, rel=1e-12) == storage.E_F
+    assert pytest.approx(10 * 150 - 5 * 130 - 5 * 130, rel=1e-12) == storage.E_D
+
+
 def test_storage_missing_streams_raises(storage):
     """A storage needs exactly one inlet and one outlet."""
     storage.inl = {}  # no inlet
@@ -1405,8 +1906,8 @@ def valid_flash_streams():
       0: m = 1, e_PH =  90, e_T = 45
       1: m = 4, e_PH =  70, e_T = 35
     """
-    inl = {0: {"m": 3, "e_PH": 100, "e_T": 50}, 1: {"m": 2, "e_PH": 80, "e_T": 40}}
-    outl = {0: {"m": 1, "e_PH": 90, "e_T": 45}, 1: {"m": 4, "e_PH": 70, "e_T": 35}}
+    inl = {0: {"m": 3, "e_PH": 100, "e_T": 50, "e_M": 50}, 1: {"m": 2, "e_PH": 80, "e_T": 40, "e_M": 40}}
+    outl = {0: {"m": 1, "e_PH": 90, "e_T": 45, "e_M": 45}, 1: {"m": 4, "e_PH": 70, "e_T": 35, "e_M": 35}}
     return inl, outl
 
 
@@ -1421,11 +1922,11 @@ def test_flash_tank_calc_exergy_balance_success(flash_tank, valid_flash_streams)
 
     flash_tank.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=True)
 
-    # E_F = 3*50 + 2*40 = 230
+    # E_F = thermal exergy in (3*50 + 2*40 = 230) + mechanical decrease (230 - (1*45 + 4*35) = 45)
     # E_P = 1*45 + 4*35 = 185
-    expected_E_F = 230
+    expected_E_F = 275
     expected_E_P = 185
-    expected_E_D = expected_E_F - expected_E_P  # 45
+    expected_E_D = expected_E_F - expected_E_P  # 90 = the physical exergy balance
     expected_epsilon = expected_E_P / expected_E_F
 
     assert pytest.approx(expected_E_F, rel=1e-6) == flash_tank.E_F
@@ -1582,6 +2083,8 @@ def test_parabolic_trough_split_same_destruction():
     assert pytest.approx(1000.0 * alpha * 2 + 2 * 3.0 * (5.0 - 10.0), rel=1e-9) == pt_s.E_F
     # Destruction must match the non-split case.
     assert pytest.approx(pt_ns.E_D, rel=1e-9) == pt_s.E_D
+    # The solar connection carries the solar exergy only, not the mechanical decrease.
+    assert pytest.approx(1000.0 * alpha * 2, rel=1e-9) == pt_s.outl[None]["E"]
 
 
 def test_parabolic_trough_default_num_branches_is_one():
@@ -1598,7 +2101,8 @@ def test_parabolic_trough_off_design_is_nan():
     pt.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
     assert np.isnan(pt.E_P)
     assert np.isnan(pt.E_F)
-    assert np.isnan(pt.E_D)
+    # The destruction still follows from the balance.
+    assert pytest.approx(pt.E_Solar + outlet["m"] * (inlet["e_PH"] - outlet["e_PH"])) == pt.E_D
 
 
 def test_parabolic_trough_missing_material_raises():
@@ -1791,8 +2295,7 @@ def test_solar_components_need_a_heat_inlet():
 
 
 def test_splitter_default_conserves_exergy():
-    sp = Splitter(name="SP")  # num_branches defaults to 1
-    assert sp.num_branches == 1
+    sp = Splitter(name="SP")  # every outlet exists once
     sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}
     sp.outl = {0: {"m": 6.0, "e_PH": 100.0}, 1: {"m": 4.0, "e_PH": 100.0}}
     sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
@@ -1801,28 +2304,33 @@ def test_splitter_default_conserves_exergy():
     assert np.isnan(sp.E_P)
 
 
-def test_splitter_num_branches_scales_outlets():
-    """One modelled branch (+ a dummy) standing in for 10 branches conserves exergy."""
-    sp = Splitter(name="SP", num_branches=10)
-    assert sp.num_branches == 10
-    sp.inl = {0: {"m": 10.0, "e_PH": 100.0}}  # full flow
-    sp.outl = {0: {"m": 1.0, "e_PH": 100.0}, 1: {"m": 0.0, "e_PH": 100.0}}  # one branch + dummy
+def test_splitter_counts_only_the_branch_outlet_that_often():
+    """One modelled branch standing in for 10 branches, next to a main outlet that exists once."""
+    sp = Splitter(name="SP")
+    sp.branches = {0: 10}
+    sp.inl = {0: {"m": 12.0, "e_PH": 100.0}}  # full flow
+    sp.outl = {0: {"m": 1.0, "e_PH": 100.0}, 1: {"m": 2.0, "e_PH": 100.0}}  # one branch + main outlet
     sp.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
-    # E_out = 10 * (1*100 + 0) = 1000 = E_in -> E_D = 0.
+    # E_out = 10 * 1 * 100 + 2 * 100 = 1200 = E_in -> E_D = 0.
     assert pytest.approx(0.0, abs=1e-9) == sp.E_D
 
 
-def test_mixer_num_branches_scales_product_and_fuel():
-    """num_branches multiplies the mixer's E_P and E_F (default 1 leaves it unchanged)."""
-    base = Mixer(name="M1")  # default num_branches=1
-    scaled = Mixer(name="M2", num_branches=2)
-    for mx in (base, scaled):
-        mx.inl = {0: {"T": 310.0, "m": 10.0, "e_PH": 800.0}, 1: {"T": 330.0, "m": 5.0, "e_PH": 850.0}}
-        mx.outl = {0: {"T": 320.0, "m": 15.0, "e_PH": 810.0}}
+def test_mixer_counts_only_the_branch_inlet_that_often():
+    """A branch inlet standing in for 2 branches gives the E_P and E_F of both branches modelled."""
+    branch = {"T": 330.0, "m": 5.0, "e_PH": 850.0}
+    main = {"T": 310.0, "m": 10.0, "e_PH": 800.0}
+    outlet = {"T": 320.0, "m": 20.0, "e_PH": 810.0}
+    condensed = Mixer(name="M1")
+    condensed.branches = {0: 2}
+    condensed.inl = {0: branch, 1: main}
+    expanded = Mixer(name="M2")  # every inlet exists once
+    expanded.inl = {0: branch, 1: dict(branch), 2: main}
+    for mx in (condensed, expanded):
+        mx.outl = {0: outlet}
         mx.calc_exergy_balance(T0=300, p0=101325, split_physical_exergy=False)
-    assert base.num_branches == 1
-    assert pytest.approx(2 * base.E_P, rel=1e-9) == scaled.E_P
-    assert pytest.approx(2 * base.E_F, rel=1e-9) == scaled.E_F
+    assert pytest.approx(expanded.E_P, rel=1e-12) == condensed.E_P
+    assert pytest.approx(expanded.E_F, rel=1e-12) == condensed.E_F
+    assert pytest.approx(10.0 * 10.0, rel=1e-12) == condensed.E_P  # main inlet counted once
 
 
 def test_turbine_main_outlet_not_at_slot_zero():
@@ -1834,3 +2342,166 @@ def test_turbine_main_outlet_not_at_slot_zero():
     assert pytest.approx(100.0, rel=1e-3) == tb.E_P
     assert pytest.approx(250.0, rel=1e-3) == tb.E_F
     assert pytest.approx(150.0, rel=1e-3) == tb.E_D
+
+
+# --- third audit: mixing nodes, dissipative costs, simple heat exchanger, turbomachines ---
+
+
+@pytest.mark.parametrize("node", [Mixer, Deaerator])
+def test_mixing_node_with_outlet_at_ambient_destroys_its_fuel(node):
+    """Outlet exactly at T0: no product, E_D = E_F = sum of the exergy decreases, fuel cost at the inlet costs."""
+    unit = node(name="MX", Z_costs=0.0)
+    c = 10e-9  # 10 per GJ
+    unit.inl = {
+        0: {"T": 333.15, "m": 1.0, "e_PH": 5000.0, "C_PH": c * 5000.0, "c_PH": c},
+        1: {"T": 283.15, "m": 1.0, "e_PH": 800.0, "C_PH": c * 800.0, "c_PH": c},
+    }
+    unit.outl = {0: {"T": 298.15, "m": 2.0, "e_PH": 200.0, "C_PH": c * 400.0 + 1e-6}}
+    unit.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    assert np.isnan(unit.E_P)
+    assert pytest.approx(5000.0 + 800.0 - 2 * 200.0) == unit.E_D
+    unit.exergoeconomic_balance(298.15, chemical_exergy_enabled=False, split_physical_exergy=False)
+    assert pytest.approx(c * unit.E_F) == unit.C_F
+    assert pytest.approx(c, rel=1e-9) == unit.c_F
+
+
+@pytest.mark.parametrize("node", [Mixer, Deaerator])
+def test_mixing_node_without_split_charges_the_chemical_decrease(node):
+    """Without split and with chemical exergy, C_F contains the cost of the chemical exergy decrease."""
+    unit = node(name="MX", Z_costs=0.0)
+    unit.inl = {
+        0: {"T": 400.0, "m": 1.0, "e_PH": 9000.0, "e_CH": 1000.0, "C_PH": 0.9, "c_PH": 1e-4, "C_CH": 0.2},
+        1: {"T": 310.0, "m": 2.0, "e_PH": 600.0, "e_CH": 20000.0, "C_PH": 0.24, "c_PH": 2e-4, "C_CH": 6.0},
+    }
+    unit.outl = {0: {"T": 340.0, "m": 3.0, "e_PH": 2500.0, "e_CH": 13000.0, "C_PH": 1.5, "C_CH": 5.9}}
+    unit.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    unit.exergoeconomic_balance(298.15, chemical_exergy_enabled=True, split_physical_exergy=False)
+    C_hot = 1.0 * 1e-4 * (9000.0 - 2500.0)  # the hot inlet gives up physical exergy
+    assert pytest.approx(C_hot + (0.2 + 6.0 - 5.9)) == unit.C_F
+
+
+def test_mixer_classifies_inlets_by_the_sign_of_their_exergy_change():
+    """Two steams at different pressures whose specific exergy both falls: no product (SPECO, p. 1267)."""
+    mixer = Mixer(name="MX")
+    mixer.inl = {0: {"T": 453.0, "m": 2.0, "e_PH": 818e3}, 1: {"T": 573.0, "m": 1.0, "e_PH": 844e3}}
+    mixer.outl = {0: {"T": 481.0, "m": 3.0, "e_PH": 761e3}}
+    mixer.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    assert mixer.E_P == 0
+    assert pytest.approx(2.0 * (818e3 - 761e3) + 1.0 * (844e3 - 761e3)) == mixer.E_F
+    assert pytest.approx(mixer.E_F) == mixer.E_D
+
+
+def test_deaerator_vent_closes_the_balance():
+    """A vent at its own state: E_D is the full balance of inlets and both outlets."""
+    dea = Deaerator(name="DEA")
+    dea.inl = {0: {"T": 400.0, "m": 9.0, "e_PH": 50e3}, 1: {"T": 450.0, "m": 1.05, "e_PH": 700e3}}
+    dea.outl = {0: {"T": 420.0, "m": 10.0, "e_PH": 100e3}, 1: {"T": 420.0, "m": 0.05, "e_PH": 650e3}}
+    dea.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    E_in = 9.0 * 50e3 + 1.05 * 700e3
+    E_out = 10.0 * 100e3 + 0.05 * 650e3
+    assert pytest.approx(E_in - E_out) == dea.E_D
+
+
+def test_dissipative_hex_fuel_cost_contains_the_chemical_cost_of_the_auxiliary_fluid():
+    """C_F + Z = C_diff: all costs the streams leave behind, the chemical one included (SPECO eq. 53)."""
+    hx = HeatExchanger(name="HX", dissipative=True, Z_costs=0.5)
+    hx.inl = {
+        0: {"T": 350.0, "m": 1.0, "e_PH": 30e3, "C_TOT": 3.0},
+        1: {"T": 290.0, "m": 5.0, "e_PH": 10.0, "C_TOT": 1.8},
+    }
+    hx.outl = {
+        0: {"T": 310.0, "m": 1.0, "e_PH": 5e3, "C_TOT": 0.5},
+        1: {"T": 300.0, "m": 5.0, "e_PH": 200.0, "C_TOT": 0.0},
+    }
+    hx.calc_exergy_balance(298.15, 101325, split_physical_exergy=False)
+    hx.exergoeconomic_balance(298.15, chemical_exergy_enabled=True, split_physical_exergy=False)
+    assert pytest.approx(3.0 - 0.5 + 1.8 - 0.0) == hx.C_F
+
+
+def test_simple_hex_heated_across_ambient_destroys_the_cold_exergy():
+    """Heated from below to above T0 with split: E_P = E_T,out, E_D = E_T,in + friction >= 0."""
+    shx = SimpleHeatExchanger(name="SHX")
+    shx.inl = {0: {"T": 280.0, "m": 2.0, "h": 30e3, "e_T": 900.0, "e_M": 500.0, "e_PH": 1400.0}}
+    shx.outl = {0: {"T": 330.0, "m": 2.0, "h": 240e3, "e_T": 4000.0, "e_M": 450.0, "e_PH": 4450.0}}
+    shx.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    assert pytest.approx(2.0 * 4000.0) == shx.E_P
+    assert pytest.approx(2.0 * (900.0 + 4000.0 + 50.0)) == shx.E_F
+    assert pytest.approx(2.0 * (900.0 + 50.0)) == shx.E_D
+
+
+@pytest.mark.parametrize("machine", [Compressor, Pump])
+def test_machine_at_ambient_temperature_keeps_its_definition(machine):
+    """Inlet and outlet exactly at T0: product = rise of physical exergy, fuel = power."""
+    unit = machine(name="M")
+    unit.inl = {0: {"T": 298.15, "m": 2.0, "h": 100e3, "e_PH": 100.0, "e_T": 0.0, "e_M": 100.0}}
+    unit.outl = {0: {"T": 298.15, "m": 2.0, "h": 101e3, "e_PH": 900.0, "e_T": 0.0, "e_M": 900.0}}
+    unit.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    assert pytest.approx(2.0 * 800.0) == unit.E_P
+    assert pytest.approx(2.0 * 1e3) == unit.E_F
+
+
+def test_turbine_below_ambient_with_split_prices_the_cold_outlet_like_its_power():
+    """Outlet at or below T0: M keeps its cost (F rule), the thermal exergy costs as much as the power (P rule)."""
+    tb = Turbine(name="T")
+    tb.inl = {
+        0: {
+            "name": "in",
+            "kind": "material",
+            "T": 320.0,
+            "m": 2.0,
+            "E_T": 4000.0,
+            "E_M": 9000.0,
+            "CostVar_index": {"T": 0, "M": 1},
+        }
+    }
+    tb.outl = {
+        0: {
+            "name": "out",
+            "kind": "material",
+            "T": 250.0,
+            "m": 2.0,
+            "E_T": 1500.0,
+            "E_M": 1000.0,
+            "CostVar_index": {"T": 2, "M": 3},
+        },
+        1: {"name": "W", "kind": "power", "E": 5000.0, "CostVar_index": {"exergy": 4}},
+    }
+    A = np.zeros((2, 5))
+    A, b, counter, equations = tb.aux_eqs(A, np.ones(2), 0, 298.15, {}, False, True)
+    assert counter == 2  # outlet variables T, M and power minus the cost balance
+    assert A[1, 2] == pytest.approx(1 / 1500.0)
+    assert A[1, 4] == pytest.approx(-1 / 5000.0)
+    assert equations[1]["kind"] == "aux_p_rule"
+
+
+def test_heat_exchanger_uncovered_temperature_case_keeps_its_destruction():
+    """Case 7 has no fuel and product, but the destruction follows from the balance."""
+    hx = HeatExchanger(name="HX")
+    hx.inl = {0: {"T": 290.0, "m": 1.0, "e_PH": 500.0}, 1: {"T": 305.0, "m": 1.0, "e_PH": 300.0}}
+    hx.outl = {0: {"T": 300.0, "m": 1.0, "e_PH": 400.0}, 1: {"T": 295.0, "m": 1.0, "e_PH": 250.0}}
+    hx.calc_exergy_balance(298.0, 101325, split_physical_exergy=False)
+    assert hx._temperature_case(298.0) == 7
+    assert np.isnan(hx.E_P)
+    assert pytest.approx(500.0 + 300.0 - 400.0 - 250.0) == hx.E_D
+
+
+@pytest.mark.parametrize("machine", [Generator, Motor])
+def test_ideal_free_power_machine_has_no_exergoeconomic_factor(machine):
+    """f = Z / (Z + C_D) is 0/0 for a unit without destruction and investment: NaN, not 0."""
+    unit = machine(name="G", Z_costs=0.0)
+    unit.inl = {0: {"kind": "power", "energy_flow": 1000.0, "C_TOT": 0.01}}
+    unit.outl = {0: {"kind": "power", "energy_flow": 1000.0, "C_TOT": 0.01}}
+    unit.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    unit.exergoeconomic_balance(298.15)
+    assert np.isnan(unit.f)
+
+
+def test_motor_costs_follow_its_exergy_swap():
+    """With the outlet power larger than the inlet power, fuel and product swap in exergy and cost alike."""
+    motor = Motor(name="M", Z_costs=0.0)
+    motor.inl = {0: {"kind": "power", "energy_flow": 900.0, "C_TOT": 0.02}}
+    motor.outl = {0: {"kind": "power", "energy_flow": 1000.0, "C_TOT": 0.03}}
+    motor.calc_exergy_balance(298.15, 101325, split_physical_exergy=True)
+    motor.exergoeconomic_balance(298.15)
+    assert pytest.approx(0.03) == motor.C_F
+    assert pytest.approx(0.02) == motor.C_P

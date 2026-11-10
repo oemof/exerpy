@@ -28,8 +28,9 @@ A file has four sections:
     * - ``connections``
       - The streams between the components, stored under their names.
     * - ``ambient_conditions``
-      - The ambient temperature ``Tamb`` and pressure ``pamb``. Both may instead be passed to
-        ``from_json``.
+      - The ambient temperature ``Tamb`` and pressure ``pamb`` at which the exergies of the file
+        were computed. Both may instead be passed to ``from_json`` if the file has none; a passed
+        value that differs from the file raises an error.
     * - ``settings``
       - Optional: ``split_physical_exergy`` and ``chemExLib``. Arguments passed to ``from_json``
         take precedence.
@@ -93,11 +94,13 @@ Some types read further values:
     * - ``SteamGenerator``
       - ``T_hot``, the temperature of the heat source
     * - ``Mixer``, ``Splitter``
-      - ``num_branches``, the number of identical parallel branches
+      - ``num_branches`` is accepted but not needed: a header counts a stream of a
+        ``ParabolicTrough`` as often as the trough's ``num_branches``, every other stream once. A
+        value that none of its streams has gives a warning
     * - ``Heliostatfield``
       - ``Q_Solar``, the incident solar heat
     * - ``ParabolicTrough``
-      - ``Q_Solar`` and ``num_branches``
+      - ``Q_Solar`` and ``num_branches``, the number of identical parallel branches it stands for
 
 All other values of a component, such as the efficiencies a simulator reports, are kept but not
 checked.
@@ -135,6 +138,10 @@ component, counted from 0.
 
 ExerPy computes the exergy of each connection itself, so values such as ``E`` in an exported
 file are not needed.
+
+The species of a ``mass_composition`` carry the names CoolProp knows, such as ``CH4``, ``N2`` or
+``Ethane``. The chemical exergy of a mixture needs the molar mass of every species, so a species
+CoolProp does not know stops the analysis with an error that names it.
 
 *****
 Units

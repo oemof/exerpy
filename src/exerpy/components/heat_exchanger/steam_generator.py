@@ -4,6 +4,7 @@ from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 from exerpy.quantities import Temperature
 
@@ -71,9 +72,10 @@ class SteamGenerator(Component):
     - outl[1]: Superheated steam outlet (intermediate pressure)
     - outl[2]: Drain / Blow down outlet
 
-    The heat inlet is picked by its kind rather than by its index, so it may sit on any connector,
-    and every material inlet that is neither the feed water nor the steam inlet is a water
-    injection. The heat source of a steam generator is usually outside of the model, so its
+    The heat is picked by its kind rather than by its index, among inlets and outlets, so it may sit
+    on any connector (the EBSILON parser maps it to an outlet). Every material inlet that is neither
+    the feed water nor the steam inlet is a water injection, and the drain is the material outlet
+    that is neither of the two steam outlets, on whatever connector, and may be missing. The heat source of a steam generator is usually outside of the model, so its
     temperature is not known from the streams and has to be given as ``T_hot``.
     """
 
@@ -99,17 +101,21 @@ class SteamGenerator(Component):
     def _streams(self):
         """Return the streams of the steam generator, grouped by their role.
 
-        The roles follow the connector indices documented for the class. The heat inlet is picked
-        by its kind rather than by its index, and every material inlet that is neither the feed
-        water nor the steam inlet is a water injection.
+        The roles follow the connector indices documented for the class. The heat is picked by its
+        kind among inlets and outlets rather than by its index, every material inlet that is neither
+        the feed water nor the steam inlet is a water injection, and the drain is the material outlet
+        that is neither of the two steam outlets, if there is one.
         """
-        heat_inlets = [c for c in self.inl.values() if c is not None and c.get("kind") == "heat"]
-        for idx in (0,):
-            if idx not in self.inl:
-                raise ValueError(f"Missing inlet stream with index {idx}.")
-        for idx in (0, 2):
-            if idx not in self.outl:
-                raise ValueError(f"Missing outlet stream with index {idx}.")
+        heat = [c for c in [*self.inl.values(), *self.outl.values()] if c is not None and c.get("kind") == "heat"]
+        if 0 not in self.inl:
+            raise ValueError("Missing inlet stream with index 0.")
+        if 0 not in self.outl:
+            raise ValueError("Missing outlet stream with index 0.")
+        drains = [
+            c
+            for key, c in sorted(self.outl.items())
+            if key not in (0, 1) and c is not None and c.get("kind", "material") == "material"
+        ]
 
         injections = [
             c
@@ -117,13 +123,13 @@ class SteamGenerator(Component):
             if key not in (0, 1) and c is not None and c.get("kind", "material") == "material"
         ]
         return {
-            "heat": heat_inlets[0] if heat_inlets else None,
+            "heat": heat[0] if heat else None,
             "feed_water": self.inl[0],
             "steam_inlet": self.inl.get(1),
             "injections": injections,
             "steam_HP": self.outl[0],
             "steam_IP": self.outl.get(1),
-            "drain": self.outl[2],
+            "drain": drains[0] if drains else None,
         }
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
@@ -296,8 +302,7 @@ class SteamGenerator(Component):
 
         def equal_specific_cost(A, b, counter, kind, first, second, label):
             """Give the two streams the same specific cost of the given exergy."""
-            A[counter, first["CostVar_index"][label]] = 1 / first[f"E_{label}"] if first[f"e_{label}"] != 0 else 1
-            A[counter, second["CostVar_index"][label]] = -1 / second[f"E_{label}"] if second[f"e_{label}"] != 0 else -1
+            set_equal_specific_cost(A, counter, first, second, label, ref_is_outlet=kind == "aux_p_rule")
             equations[counter] = {
                 "kind": kind,
                 "objects": [self.name, first["name"], second["name"]],
@@ -306,9 +311,16 @@ class SteamGenerator(Component):
             b[counter] = 0
             return counter + 1
 
+        if s["heat"] is not None and any(s["heat"] is c for c in self.outl.values()):
+            raise ValueError(
+                f"The heat connection of steam generator {self.name} leaves the component in the model. "
+                "Its cost can only be assigned to heat entering the steam generator; reverse the connection."
+            )
+
         # The drain comes out of the same water as the high pressure steam.
-        for label in labels:
-            counter = equal_specific_cost(A, b, counter, "aux_p_rule", s["steam_HP"], s["drain"], label)
+        if s["drain"] is not None:
+            for label in labels:
+                counter = equal_specific_cost(A, b, counter, "aux_p_rule", s["steam_HP"], s["drain"], label)
 
         # What the component does not raise passes through at its own cost.
         for label in labels:

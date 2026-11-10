@@ -129,33 +129,33 @@ the whole plant. The cost part of that table is:
     :header: "Component", ":math:`\dot{C}_\mathrm{F}`", ":math:`\dot{C}_\mathrm{P}`", ":math:`\dot{C}_\mathrm{D}`", ":math:`\dot{Z}`", ":math:`\dot{C}_\mathrm{D}+\dot{Z}`"
     :widths: 16 16 16 16 16 18
 
-    "AC", "797.57", "854.56", "56.48", "56.99", "113.47"
-    "APH", "385.34", "397.60", "59.20", "12.26", "71.46"
-    "CC", "1218.04", "1222.44", "366.79", "4.40", "371.19"
-    "EV", "347.40", "358.87", "105.15", "11.48", "116.62"
-    "EXP", "1556.13", "1604.29", "74.36", "48.16", "122.52"
-    "GEN", "806.72", "806.72", "0.00", "0.00", "0.00"
-    "PH", "95.08", "100.54", "44.36", "5.45", "49.81"
-    "TOT", "1183.90", "1322.64", "548.78", "138.74", "687.52"
+    "AC", "798.73", "855.72", "56.54", "56.99", "113.53"
+    "APH", "385.36", "397.62", "59.20", "12.26", "71.46"
+    "CC", "1218.46", "1222.86", "360.53", "4.40", "364.93"
+    "EV", "347.54", "359.01", "105.20", "11.48", "116.68"
+    "EXP", "1557.39", "1605.55", "74.43", "48.16", "122.59"
+    "GEN", "806.82", "806.82", "0.00", "0.00", "0.00"
+    "PH", "95.13", "100.58", "44.39", "5.45", "49.84"
+    "TOT", "1184.26", "1323.00", "549.37", "138.74", "688.11"
 
 .. csv-table:: Specific costs in USD/GJ and exergoeconomic indicators in %
     :header: "Component", ":math:`\dot{E}_\mathrm{D}` [kW]", ":math:`c_\mathrm{F}`", ":math:`c_\mathrm{P}`", ":math:`f`", ":math:`r`"
     :widths: 16 16 16 16 16 16
 
-    "AC", "2100.5", "7.470", "8.613", "50.223", "15.312"
-    "APH", "2559.6", "6.425", "7.833", "17.156", "21.911"
-    "CC", "25314.3", "4.025", "5.780", "1.185", "43.605"
-    "EV", "4586.8", "6.368", "9.433", "9.840", "48.141"
-    "EXP", "2994.1", "6.899", "7.470", "39.306", "8.269"
-    "GEN", "0.0", "7.470", "7.470", "0.000", "0.000"
-    "PH", "1911.4", "6.446", "12.775", "10.950", "98.192"
-    "TOT", "39466.7", "3.862", "8.581", "20.180", "122.165"
+    "AC", "2102.2", "7.471", "8.613", "50.199", "15.296"
+    "APH", "2558.6", "6.427", "7.835", "17.157", "21.909"
+    "CC", "25351.9", "3.950", "5.631", "1.206", "42.536"
+    "EV", "4587.7", "6.370", "9.437", "9.835", "48.149"
+    "EXP", "2996.2", "6.900", "7.471", "39.287", "8.266"
+    "GEN", "0.0", "7.471", "7.471", "0.000", "0.000"
+    "PH", "1912.1", "6.448", "12.781", "10.943", "98.221"
+    "TOT", "39508.8", "3.862", "8.583", "20.163", "122.224"
 
 **How to read the tables.** The plant converts fuel at 3.862 USD/GJ into a product at
-8.581 USD/GJ. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
+8.583 USD/GJ. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
 dominates the total cost rate of a component. Following Bejan et al. :cite:`Bejan1996`, a low
 :math:`f` points to improving the efficiency of the component, even at a higher investment, and a
-high :math:`f` to reducing its investment, even at some loss of efficiency. Here the combustion chamber has the largest cost rate of exergy destruction, 366.79 USD/h,
+high :math:`f` to reducing its investment, even at some loss of efficiency. Here the combustion chamber has the largest cost rate of exergy destruction, 360.53 USD/h,
 at :math:`f = 1.2` %, so its total cost rate is almost entirely the cost of its exergy destruction.
 The compressor and the gas turbine have :math:`f` between 39 and 50 %, so the investment accounts for a
 large share of their total cost rate.

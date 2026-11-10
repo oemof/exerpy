@@ -114,8 +114,8 @@ def test_exergy_analysis_results(exergy_analysis):
     # Check the calculated values with a tolerance of 100
     assert pytest.approx(exergy_analysis.E_F, abs=100) == 85106352
     assert pytest.approx(exergy_analysis.E_P, abs=100) == 42753648
-    assert pytest.approx(exergy_analysis.E_D, abs=100) == 39489245
-    assert pytest.approx(exergy_analysis.E_L, abs=100) == 2863459
+    assert pytest.approx(exergy_analysis.E_D, abs=100) == 39508815
+    assert pytest.approx(exergy_analysis.E_L, abs=100) == 2843889
 
 
 @pytest.fixture

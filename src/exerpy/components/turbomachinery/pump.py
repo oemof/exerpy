@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -42,7 +43,7 @@ class Pump(Component):
     -----
     The exergy analysis considers three cases based on temperature relationships:
 
-    Case 1 - **Both temperatures above ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} > T_0`):
+    Case 1 - **Both temperatures at or above ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} \geq T_0`):
 
     .. math::
 
@@ -50,26 +51,34 @@ class Pump(Component):
         e_\mathrm{in}^\mathrm{PH})\\
         \dot{E}_\mathrm{F} &= |\dot{W}|
 
-    Case 2 - **Inlet below, outlet above ambient** (:math:`T_\mathrm{in} < T_0 < T_\mathrm{out}`):
+    Case 2 - **Inlet below, outlet above ambient** (:math:`T_\mathrm{in} < T_0 < T_\mathrm{out}`),
+    with split physical exergy:
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= |\dot{W}| + (e_\mathrm{out}^\mathrm{PH} -
-        e_\mathrm{in}^\mathrm{M})\\
-        \dot{E}_\mathrm{F} &= e_\mathrm{in}^\mathrm{M} + e_\mathrm{in}^\mathrm{PH}
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot \bigl(e_\mathrm{out}^\mathrm{T}
+        + e_\mathrm{out}^\mathrm{M} - e_\mathrm{in}^\mathrm{M}\bigr)\\
+        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot e_\mathrm{in}^\mathrm{T}
 
-    Case 3 - **Both temperatures below ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} \leq T_0`):
+    Case 3 - **Both temperatures below ambient** (:math:`T_\mathrm{in}, T_\mathrm{out} \leq T_0`),
+    with split physical exergy:
 
     .. math::
 
-        \dot{E}_\mathrm{P} &= e_\mathrm{out}^\mathrm{M} - e_\mathrm{in}^\mathrm{M}\\
-        \dot{E}_\mathrm{F} &= e_\mathrm{in}^\mathrm{PH} - e_\mathrm{out}^\mathrm{PH}
+        \dot{E}_\mathrm{P} &= \dot{m} \cdot (e_\mathrm{out}^\mathrm{M} - e_\mathrm{in}^\mathrm{M})\\
+        \dot{E}_\mathrm{F} &= |\dot{W}| + \dot{m} \cdot (e_\mathrm{in}^\mathrm{T} - e_\mathrm{out}^\mathrm{T})
+
+    Without the split, cases 2 and 3 fall back to case 1 and the pump warns.
 
     For all valid cases, the exergy destruction is:
 
     .. math::
 
         \dot{E}_\mathrm{D} = \dot{E}_\mathrm{F} - \dot{E}_\mathrm{P}
+
+    If the outlet is colder than the inlet, fuel and product are not defined and the exergy
+    destruction is the exergy balance, :math:`|\dot{W}| + \dot{m}\,(e_\mathrm{in}^\mathrm{PH}
+    - e_\mathrm{out}^\mathrm{PH})`.
 
     where:
         - :math:`\dot{W}`: Power input
@@ -119,8 +128,8 @@ class Pump(Component):
             self.E_P = np.nan
             self.E_F = np.nan
 
-        # Case 1: Both temperatures above ambient
-        elif round(self.inl[0]["T"], 5) >= T0 and round(self.outl[0]["T"], 5) > T0:
+        # Case 1: Both temperatures at or above ambient
+        elif round(self.inl[0]["T"], 5) >= T0 and round(self.outl[0]["T"], 5) >= T0:
             self.E_P = self.outl[0]["m"] * (self.outl[0]["e_PH"] - self.inl[0]["e_PH"])
             self.E_F = abs(self.P)
 
@@ -163,6 +172,9 @@ class Pump(Component):
 
         # Calculate exergy destruction and efficiency
         self.E_D = self.E_F - self.E_P
+        if np.isnan(self.E_F):
+            # No fuel and product defined: the destruction is still the exergy balance.
+            self.E_D = abs(self.P) + self.inl[0]["m"] * self.inl[0]["e_PH"] - self.outl[0]["m"] * self.outl[0]["e_PH"]
         self.epsilon = self.calc_epsilon()
 
         # Log the results
@@ -224,6 +236,9 @@ class Pump(Component):
             \frac{\dot{C}^\mathrm{T}_\mathrm{in}}{\dot{E}^\mathrm{T}_\mathrm{in}}
             = \frac{\dot{C}^\mathrm{T}_\mathrm{out}}{\dot{E}^\mathrm{T}_\mathrm{out}}
 
+        A share the stream does not gain passes through at its own specific cost instead, and a share
+        the outlet does not carry has no cost, :math:`\dot{C}^{x}_\mathrm{out} = 0`.
+
         Below the ambient temperature the split is what separates the cold exergy from the pressure
         rise, so running without it there makes the component warn.
 
@@ -260,12 +275,7 @@ class Pump(Component):
         # --- Chemical equality equation (row added only if enabled) ---
         if chemical_exergy_enabled:
             # Set the chemical cost equality:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
-                (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
-            )
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else 1
-            )
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], "CH")
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -297,11 +307,17 @@ class Pump(Component):
                         "property": "c_T, c_M",
                     }
                 else:
-                    logger.warning("Case where thermal or mechanical exergy difference is zero is not implemented.")
+                    label = "T" if dET == 0 else "M"
+                    set_equal_specific_cost(A, row_index, self.inl[0], self.outl[0], label)
+                    equations[row_index] = {
+                        "kind": "aux_f_rule",
+                        "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
+                        "property": f"c_{label}",
+                    }
             elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] > T0:
                 # Case 2: Inlet at/below ambient, outlet above ambient
                 # Handle potential zero values for robustness
-                if self.outl[0]["e_T"] != 0 and dEM != 0:
+                if self.outl[0]["E_T"] != 0 and dEM != 0:
                     A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
                     A[row_index, self.inl[0]["CostVar_index"]["M"]] = 1 / dEM
                     A[row_index, self.outl[0]["CostVar_index"]["M"]] = -1 / dEM
@@ -311,33 +327,16 @@ class Pump(Component):
                         "property": "c_T, c_M",
                     }
                 else:
-                    logger.warning(
-                        f"Pump '{self.name}' Case 2: outlet thermal exergy or mechanical exergy "
-                        "difference is zero, auxiliary equation may be degenerate."
-                    )
-                    # Fallback: set identity equation for thermal cost
-                    A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
+                    label = "M" if self.outl[0]["E_T"] != 0 else "T"
+                    set_equal_specific_cost(A, row_index, self.inl[0], self.outl[0], label)
                     equations[row_index] = {
-                        "kind": "aux_p_rule",
+                        "kind": "aux_f_rule",
                         "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                        "property": "c_T",
+                        "property": f"c_{label}",
                     }
             else:
                 # Case 3: Both temperatures at or below ambient - apply F-rule for thermal exergy
-                # Handle zero thermal exergy cases to avoid division by zero
-                if self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] != 0:
-                    A[row_index, self.inl[0]["CostVar_index"]["T"]] = -1 / self.inl[0]["E_T"]
-                    A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1 / self.outl[0]["E_T"]
-                elif self.inl[0]["e_T"] == 0 and self.outl[0]["e_T"] != 0:
-                    # Inlet thermal exergy is zero, constrain C_T_in = 0
-                    A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
-                elif self.inl[0]["e_T"] != 0 and self.outl[0]["e_T"] == 0:
-                    # Outlet thermal exergy is zero, constrain C_T_out = 0
-                    A[row_index, self.outl[0]["CostVar_index"]["T"]] = 1
-                else:
-                    # Both thermal exergies are zero, set identity equation
-                    A[row_index, self.inl[0]["CostVar_index"]["T"]] = 1
-                    A[row_index, self.outl[0]["CostVar_index"]["T"]] = -1
+                set_equal_specific_cost(A, row_index, self.inl[0], self.outl[0], "T")
                 equations[row_index] = {
                     "kind": "aux_f_rule",
                     "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -474,9 +473,13 @@ class Pump(Component):
         elif self.inl[0]["T"] <= T0 and self.outl[0]["T"] <= T0:
             self.C_P = self.outl[0]["C_M"] - self.inl[0]["C_M"]
             self.C_F = power_cost + (self.inl[0]["C_T"] - self.outl[0]["C_T"])
+        else:
+            # Outlet colder than the inlet across the ambient temperature: no fuel and product.
+            self.C_P = np.nan
+            self.C_F = np.nan
 
-        self.c_F = self.C_F / self.E_F
-        self.c_P = self.C_P / self.E_P
+        self.c_F = self.C_F / self.E_F if self.E_F else np.nan
+        self.c_P = self.C_P / self.E_P if self.E_P else np.nan
         self.C_D = self.c_F * self.E_D
-        self.r = (self.c_P - self.c_F) / self.c_F
-        self.f = self.Z_costs / (self.Z_costs + self.C_D)
+        self.r = (self.c_P - self.c_F) / self.c_F if self.c_F else np.nan
+        self.f = self.Z_costs / (self.Z_costs + self.C_D) if (self.Z_costs + self.C_D) else np.nan

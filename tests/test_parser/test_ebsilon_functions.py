@@ -17,6 +17,7 @@ import pytest
 from exerpy.parser.from_ebsilon import __ebsilon_path__
 from exerpy.parser.from_ebsilon.ebsilon_config import substance_mapping
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eM
+from exerpy.parser.from_ebsilon.ebsilon_functions import calc_ePH
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_eT
 from exerpy.parser.from_ebsilon.ebsilon_functions import calc_X_from_PT
 from exerpy.parser.from_ebsilon.ebsilon_functions import state_reproduced
@@ -265,6 +266,37 @@ def test_calc_eM_known(monkeypatch, mock_app, mock_pipe):
     )
     result = calc_eM(mock_app, mock_pipe, 1e5, 300, 101325)
     assert result == pytest.approx(460, rel=1e-2)
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_calc_eM_with_physical_exergy(monkeypatch, mock_app, mock_pipe):
+    """
+    Test that calc_eM takes a physical exergy passed to it instead of the exergy of the pipe.
+    """
+    monkeypatch.setattr(
+        "exerpy.parser.from_ebsilon.ebsilon_functions.calc_eT", lambda app, pipe, pressure, Tamb, pamb: 40
+    )
+    assert calc_eM(mock_app, mock_pipe, 1e5, 300, 101325, e_PH=100.0) == pytest.approx(60.0)
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+def test_calc_ePH_known(monkeypatch, mock_app, mock_pipe):
+    """
+    Test that calc_ePH evaluates the stream's fluid at the dead state.
+
+    With h = 2000 J/kg, s = 4 J/kgK, h(T0, p0) = 1900 J/kg, s(T0, p0) = 3.8 J/kgK and T0 = 300 K:
+    e_PH = 2000 - 1900 - 300 * (4 - 3.8) = 40 J/kg.
+    """
+    calls = []
+
+    def dummy_calc_X_from_PT(app, pipe, prop, pressure, temperature):
+        calls.append((prop, pressure, temperature))
+        return {"H": 1900.0, "S": 3.8}[prop]
+
+    monkeypatch.setattr("exerpy.parser.from_ebsilon.ebsilon_functions.calc_X_from_PT", dummy_calc_X_from_PT)
+
+    assert calc_ePH(mock_app, mock_pipe, 300.0, 101325.0) == pytest.approx(40.0)
+    assert calls == [("H", 101325.0, 300.0), ("S", 101325.0, 300.0)]
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")

@@ -1035,6 +1035,11 @@ def purchase_cost(key, value, outside="scale", exponent=EXPONENT):
     where = fit(correlation(key), float(value))
     if where["status"] in ("below", "above") and outside == "scale":
         bound = where["lower"] if where["status"] == "below" else where["upper"]
+        logger.warning(
+            f"The size {float(value):g} lies {where['status']} the range of the correlation '{key}', so its cost "
+            f"is extrapolated from the bound {bound:g} with the exponent {exponent}. Check the result, or give a "
+            f"cost of your own."
+        )
         cost, units, year = db.evaluate(key, bound)
         cost = cost / units * (float(value) / bound) ** exponent
         return {

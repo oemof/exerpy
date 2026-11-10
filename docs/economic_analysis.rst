@@ -290,7 +290,7 @@ The published cost correlations collected in `OpenPyTEA <https://github.com/pbta
 - it reads the size the correlation is based on from the model and converts it into the units of
   the correlation;
 - it checks the size against the range of the correlation; outside it, it extrapolates from the
-  nearest bound, or splits the component into parallel units with ``outside="parallel"``;
+  nearest bound and warns, or splits the component into parallel units with ``outside="parallel"``;
 - for a heat exchanger, it takes the exchanger type the correlation describes.
 
 The user gives:
@@ -444,7 +444,8 @@ The levelized carrying charges and the levelized operating and maintenance cost 
     \qquad
     \mathrm{OMC}_\mathrm{L} = \mathrm{CELF}(r_\mathrm{n}) \cdot \sum_j \mathrm{OMC}_{0,j}
 
-The first-year operating and maintenance cost :math:`\mathrm{OMC}_{0,j}` of a component is a share
+The operating and maintenance cost :math:`\mathrm{OMC}_{0,j}` of a component in the base year
+(:meth:`~exerpy.analyses.EconomicAnalysis.base_year_om_costs`) is a share
 :math:`\mathrm{omc}_j` of its purchased equipment cost or of its total capital investment, whichever
 :code:`omc_basis` names. The two differ by the installation factor :math:`f_{\mathrm{TCI},j}`, so a
 share meant for one basis is badly wrong on the other:

@@ -1,6 +1,7 @@
 import json
 import math
 import os
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -3590,11 +3591,14 @@ class EconomicAnalysis:
         """
         return self.TCI * self.compute_crf()
 
-    def first_year_om_costs(self):
+    def base_year_om_costs(self):
         r"""
-        Compute the operating and maintenance cost of the first year, per component.
+        Compute the operating and maintenance cost per component in money of the base year.
 
-        The share is taken of the purchased equipment cost or of the total capital investment,
+        This is the cost at the start of the first year of operation, :math:`P_0` in
+        :cite:`Bejan1996` (eq. 7.34); the payment for the first year is :math:`(1 + r_n)` times it,
+        which the levelization accounts for. The share is taken of the purchased equipment cost or of
+        the total capital investment,
         whichever ``omc_basis`` names. The two differ by the installation factor, so a share meant
         for one basis understates or overstates the cost badly when applied to the other:
 
@@ -3608,12 +3612,21 @@ class EconomicAnalysis:
         Returns
         -------
         dict
-            The first-year operating and maintenance cost of every component, in currency per year.
+            The operating and maintenance cost of every component in the base year, in currency per year.
         """
         base = self.base_PEC
         if self.omc_basis == "TCI":
             return {name: self.omc_share[name] * self.f_tci[name] * cost for name, cost in base.items()}
         return {name: self.omc_share[name] * cost for name, cost in base.items()}
+
+    def first_year_om_costs(self):
+        """Deprecated name of :meth:`base_year_om_costs`."""
+        warnings.warn(
+            "first_year_om_costs() is renamed to base_year_om_costs(); the old name will be removed.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.base_year_om_costs()
 
     def levelized_om_costs(self):
         r"""
@@ -3628,7 +3641,7 @@ class EconomicAnalysis:
         float
             Levelized operating and maintenance cost in currency per year.
         """
-        return self.compute_celf() * sum(self.first_year_om_costs().values())
+        return self.compute_celf() * sum(self.base_year_om_costs().values())
 
     def compute_c(self, exergy_analysis=None):
         r"""
@@ -3785,7 +3798,7 @@ class EconomicAnalysis:
         base = self.base_PEC
         crf = self.compute_crf()
         celf = self.compute_celf()
-        om = self.first_year_om_costs()
+        om = self.base_year_om_costs()
         costs = {}
         for name, cost in base.items():
             Z_CC = self.f_tci[name] * cost * crf / self.tau

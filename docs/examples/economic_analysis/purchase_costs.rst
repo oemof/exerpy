@@ -258,7 +258,9 @@ chooses a correlation per component or takes the default for its class:
   model does not provide, the size is given by hand as ``value``.
 - **Outside the range.** A size below or above the range of a correlation is extrapolated from the
   nearest bound with a scaling exponent (``outside="scale"``, the default) or, above the range,
-  split into identical units in parallel (``outside="parallel"``), as for the fan.
+  split into identical units in parallel (``outside="parallel"``), as for the fan. An extrapolated
+  cost comes with a warning that names the correlation, the size and the bound, here for the
+  compressor, the small motor and the pump.
 - **The heat exchangers** take a plate correlation and the air-cooled fin-fan correlation, which is
   based on the bare-tube area, each with the coefficients of step 3.
 
@@ -333,7 +335,7 @@ Any of the sets can provide the cost rates for an exergoeconomic analysis; the c
 
 With the combined costs the product of the plant, the heat taken up by the water, costs 186.86
 EUR/GJ, compared with 40.35 EUR/GJ for the levelized electricity, and the evaporator has the largest
-cost rate of exergy destruction, 75.84 EUR/h at an exergoeconomic factor of 10.4 %. The results are
+cost rate of exergy destruction, 470.64 EUR/h at an exergoeconomic factor of 1.8 %. The results are
 read as in :ref:`the previous example <examples_heatpump_exergoeconomic_label>`; since they rest on
 placeholder costs, they illustrate the procedure only.
 

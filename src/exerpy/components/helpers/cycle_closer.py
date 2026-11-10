@@ -2,6 +2,8 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
+from exerpy.components.heat_exchanger.base import HeatExchanger
 from exerpy.logger import logger
 
 
@@ -14,6 +16,61 @@ class CycleCloser(Component):
     def __init__(self, **kwargs):
         r"""Initialize CycleCloser component with given parameters."""
         super().__init__(**kwargs)
+        self.closed_cycle = True
+
+    def is_closed_cycle(self, components):
+        """
+        Check that no stream enters the cycle of the closer from outside.
+
+        The fluid is followed downstream from the outlet of the closer. A heat exchanger passes each
+        inlet on to the outlet on the same connector, every other component to all of its outlets. The
+        cycle is open if a component on it takes in a stream that is not part of the cycle but passes
+        on into it. A walk that does not come back to the closer counts as closed.
+
+        Parameters
+        ----------
+        components : dict
+            All components of the plant, by name.
+
+        Returns
+        -------
+        bool
+            False if a stream from outside the cycle enters it.
+        """
+
+        def material(streams):
+            return {key: conn for key, conn in streams.items() if conn and conn.get("kind", "material") == "material"}
+
+        def downstream(comp, connector):
+            # The outlets that the fluid entering on this connector leaves by
+            if connector not in material(comp.inl):
+                return []
+            outlets = material(comp.outl)
+            if isinstance(comp, HeatExchanger):
+                return [outlets[connector]] if connector in outlets else []
+            return list(outlets.values())
+
+        reached = {}
+        todo = list(material(self.outl).values())
+        while todo:
+            conn = todo.pop()
+            if id(conn) in reached:
+                continue
+            reached[id(conn)] = conn
+            target = components.get(conn.get("target_component"))
+            if target is not None and target is not self:
+                todo += downstream(target, conn.get("target_connector"))
+
+        if not any(id(conn) in reached for conn in self.inl.values()):
+            return True
+        for conn in reached.values():
+            comp = components.get(conn.get("target_component"))
+            if comp is None or comp is self:
+                continue
+            for connector, inlet in material(comp.inl).items():
+                if id(inlet) not in reached and any(id(out) in reached for out in downstream(comp, connector)):
+                    return False
+        return True
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -68,8 +125,21 @@ class CycleCloser(Component):
             \frac{\dot{C}^\mathrm{PH}_\mathrm{in}}{\dot{E}^\mathrm{PH}_\mathrm{in}}
             = \frac{\dot{C}^\mathrm{PH}_\mathrm{out}}{\dot{E}^\mathrm{PH}_\mathrm{out}}
 
-        Chemical exergy is not considered here: the composition cannot change across a cycle closer,
-        so the cost balance of the components around it already carries it.
+        The composition of a closed cycle does not change, so its chemical exergy is neither fuel nor
+        product of any component, and the rules around the cycle leave the level of its cost open. The
+        cycle closer sets it to zero:
+
+        .. math::
+
+            \dot{C}^\mathrm{CH}_\mathrm{out} = 0
+
+        When a stream enters the cycle from outside (see :meth:`is_closed_cycle`), such as make-up
+        water, that stream sets the chemical cost, and it passes the closer unchanged:
+
+        .. math::
+
+            \frac{\dot{C}^\mathrm{CH}_\mathrm{in}}{\dot{E}^\mathrm{CH}_\mathrm{in}}
+            = \frac{\dot{C}^\mathrm{CH}_\mathrm{out}}{\dot{E}^\mathrm{CH}_\mathrm{out}}
 
         Parameters
         ----------
@@ -85,7 +155,6 @@ class CycleCloser(Component):
             Data structure for storing equation labels.
         chemical_exergy_enabled : bool
             Flag indicating whether chemical exergy auxiliary equations should be added.
-            This flag is ignored for CycleCloser.
         split_physical_exergy : bool, optional
             If True, the physical exergy of a material stream is split into a thermal and a
             mechanical share, each with its own cost variable. If False, the stream carries a
@@ -105,12 +174,7 @@ class CycleCloser(Component):
         # Cost equality equations of the physical exergy. The coefficients are written on the exergy
         # flow of the stream, not on its specific exergy, as the F-principle requires.
         for label in ["M", "T"] if split_physical_exergy else ["PH"]:
-            A[counter, self.inl[0]["CostVar_index"][label]] = (
-                (1 / self.inl[0][f"E_{label}"]) if self.inl[0][f"e_{label}"] != 0 else 1
-            )
-            A[counter, self.outl[0]["CostVar_index"][label]] = (
-                (-1 / self.outl[0][f"E_{label}"]) if self.outl[0][f"e_{label}"] != 0 else -1
-            )
+            set_equal_specific_cost(A, counter, self.inl[0], self.outl[0], label)
             equations[counter] = {
                 "kind": "aux_equality",
                 "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
@@ -120,18 +184,19 @@ class CycleCloser(Component):
             counter += 1
 
         if chemical_exergy_enabled:
-            # Chemical cost equality equation:
-            A[counter, self.inl[0]["CostVar_index"]["CH"]] = (
-                (1 / self.inl[0]["E_CH"]) if self.inl[0]["e_CH"] != 0 else 1
-            )
-            A[counter, self.outl[0]["CostVar_index"]["CH"]] = (
-                (-1 / self.outl[0]["E_CH"]) if self.outl[0]["e_CH"] != 0 else -1
-            )
-            equations[counter] = {
-                "kind": "aux_equality",
-                "objects": [self.name, self.inl[0]["name"], self.outl[0]["name"]],
-                "property": "c_CH",
-            }
+            inlet, outlet = self.inl[0], self.outl[0]
+            if self.closed_cycle or not inlet.get("E_CH") or not outlet.get("E_CH"):
+                # Nothing else sets the chemical cost of a closed cycle; without chemical exergy there is none.
+                A[counter, outlet["CostVar_index"]["CH"]] = 1
+                equations[counter] = {"kind": "aux_zero", "objects": [self.name, outlet["name"]], "property": "C_CH"}
+            else:
+                A[counter, inlet["CostVar_index"]["CH"]] = 1 / inlet["E_CH"]
+                A[counter, outlet["CostVar_index"]["CH"]] = -1 / outlet["E_CH"]
+                equations[counter] = {
+                    "kind": "aux_equality",
+                    "objects": [self.name, inlet["name"], outlet["name"]],
+                    "property": "c_CH",
+                }
             b[counter] = 0
 
             counter += 1

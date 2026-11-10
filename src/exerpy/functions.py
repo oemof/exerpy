@@ -6,51 +6,60 @@ import CoolProp.CoolProp as CP
 
 from exerpy import __datapath__
 from exerpy.logger import logger
+from exerpy.units import SI_UNITS
 
 
 def mass_to_molar_fractions(mass_fractions):
     """
     Convert mass fractions to molar fractions.
 
-    Parameters:
-    - mass_fractions: Dictionary with component names as keys and mass fractions as values.
+    Species with a zero mass fraction are left out. A stream of a single species gets the molar
+    fraction 1 without its molar mass.
 
-    Returns:
-    - molar_fractions: Dictionary with component names as keys and molar fractions as values.
+    Parameters
+    ----------
+    mass_fractions : dict
+        Mass fractions by species name. The names have to be known to CoolProp.
+
+    Returns
+    -------
+    dict
+        Molar fractions by species name.
+
+    Raises
+    ------
+    ValueError
+        If CoolProp has no molar mass for a species with a nonzero mass fraction.
     """
-    molar_fractions = {}
+    species = {comp: fraction for comp, fraction in mass_fractions.items() if fraction}
 
-    if len(mass_fractions.values()) == 1:
-        molar_fractions = {comp: 1.0 for comp in mass_fractions}
+    if not species:
+        raise ValueError("The mass composition is empty, so the molar fractions cannot be computed.")
+    if len(species) == 1:
+        return {comp: 1.0 for comp in species}
 
-    else:
-        molar_masses = {}
+    molar_masses = {}
+    unknown = []
+    for comp in species:
+        try:
+            molar_masses[comp] = CP.PropsSI("M", comp)
+        except Exception:
+            unknown.append(comp)
 
-        # Step 1: Get the molar masses for each component
-        for fraction in mass_fractions:
-            try:
-                molar_masses[fraction] = CP.PropsSI("M", fraction)
-            except Exception:
-                #  print(f"Warning: Could not retrieve molar mass for {fraction} ({fraction}). Error: {e}")
-                continue  # Skip this fraction if there's an issue
+    if unknown:
+        raise ValueError(
+            f"CoolProp has no molar mass for {', '.join(unknown)} in the mass composition {mass_fractions}. "
+            "Name all species of the composition as CoolProp does."
+        )
+    if not molar_masses:
+        raise ValueError(f"No valid molar masses were retrieved for substances {list(mass_fractions.keys())}")
 
-        # Step 2: Check if we have valid molar masses
-        if not molar_masses:
-            raise ValueError(f"No valid molar masses were retrieved for substances {list(mass_fractions.keys())}")
+    total_moles = sum(species[comp] / molar_masses[comp] for comp in molar_masses)
+    molar_fractions = {comp: (species[comp] / molar_masses[comp]) / total_moles for comp in molar_masses}
 
-        else:
-
-            # Step 3: Calculate total moles in the mixture
-            total_moles = sum(mass_fractions[comp] / molar_masses[comp] for comp in molar_masses)
-
-            # Step 4: Calculate molar fractions
-            for component in molar_masses:
-                molar_fractions[component] = (mass_fractions[component] / molar_masses[component]) / total_moles
-
-            # Step 5: Check if molar fractions sum to approximately 1
-            molar_sum = sum(molar_fractions.values())
-            if abs(molar_sum - 1.0) > 1e-6:
-                raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
+    molar_sum = sum(molar_fractions.values())
+    if abs(molar_sum - 1.0) > 1e-6:
+        raise ValueError(f"Error: Molar fractions do not sum to 1. Sum is {molar_sum}")
 
     return molar_fractions
 
@@ -95,164 +104,122 @@ def molar_to_mass_fractions(molar_fractions):
     return mass_fractions
 
 
+def _library_entry(substance, chem_ex_data):
+    """Return the entry of a substance in the chemical exergy library, or None if it has no value."""
+    try:
+        aliases = CP.get_aliases(substance)
+    except ValueError:
+        aliases = [substance]
+    for alias in aliases:
+        entry = chem_ex_data.get(alias.upper())
+        if entry is not None:
+            return None if entry[4] == "NaN" else entry
+    return None
+
+
 def calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib):
-    """
-    Calculate the chemical exergy of a stream based on the molar fractions and chemical exergy data. There are three cases:
-    - Case A: Handle pure substance.
-    - Case B: If water condenses, handle the liquid and gas phases separately.
-    - Case C: If water doesn't condense or if water is not present, handle the mixture using the standard approach (ideal mixture).
+    r"""
+    Calculate the specific chemical exergy of a stream.
 
-    Parameters:
-    - stream_data: Dictionary containing 'mass_composition' of the stream.
-    - Tamb: Ambient temperature in Celsius.
-    - pamb: Ambient pressure in bar.
+    A pure substance gets the value of its reference phase. A pure substance without a value in the
+    library gets 0, which is only valid if it does not react. A mixture is an ideal gas mixture. If
+    water condenses at the ambient state, the liquid water forms a separate phase
+    (Bejan et al., 1996, p. 138):
 
-    Returns:
-    - eCH: Chemical exergy in kJ/kg.
+    .. math::
+
+        \bar{e}^\mathrm{CH} = x_\mathrm{g} \left( \sum_k y_k \bar{e}^\mathrm{CH}_k
+        + \bar{R} T_0 \sum_k y_k \ln y_k \right)
+        + x_\mathrm{H_2O,l} \, \bar{e}^\mathrm{CH}_\mathrm{H_2O,l}
+
+    with the molar fraction of the gas phase :math:`x_\mathrm{g}` and the molar fractions
+    :math:`y_k` within the gas phase.
+
+    Parameters
+    ----------
+    stream_data : dict
+        ``molar_composition`` or ``mass_composition`` of the stream.
+    Tamb : float
+        Ambient temperature in K.
+    pamb : float
+        Ambient pressure in Pa.
+    chemExLib : str
+        Name of the chemical exergy library, e.g. ``'Ahrendts'``.
+
+    Returns
+    -------
+    float
+        Specific chemical exergy in J/kg.
+
+    Raises
+    ------
+    ValueError
+        If the library has no value for a substance of a mixture.
     """
-    logger.info(
-        f"Starting chemical exergy of stream of composition {stream_data} calculation with Tamb={Tamb}, pamb={pamb}"
-    )
+    logger.info(f"Calculating the chemical exergy of {stream_data} at Tamb={Tamb} K and pamb={pamb} Pa")
 
     try:
-        # Check if molar fractions already exist
         if "molar_composition" in stream_data:
             molar_fractions = stream_data["molar_composition"]
         else:
-            # If not, convert mass composition to molar fractions
             molar_fractions = mass_to_molar_fractions(stream_data["mass_composition"])
         try:
-            # Load chemical exergy data
             chem_ex_file = os.path.join(__datapath__, f"{chemExLib}.json")
             with open(chem_ex_file) as file:
-                chem_ex_data = json.load(file)  # data in J/kmol
+                chem_ex_data = json.load(file)  # in J/mol
         except FileNotFoundError:
             error_msg = f"Chemical exergy data file '{chemExLib}.json' not found. Please ensure the file exists or set chemExLib to 'Ahrendts'."
             logger.error(error_msg)
             raise FileNotFoundError(error_msg)
 
-        R = 8.314  # Universal gas constant in J/(molK)
-        aliases_water = CP.get_aliases("H2O")
-
-        # Handle pure substance (Case A)
+        R = 8.314  # in J/(mol K)
         molar_fractions = {key: value for key, value in molar_fractions.items() if value > 1e-6}
+
         if len(molar_fractions) == 1:
-            logger.info("Handling pure substance case (Case A).")
-            substance = next(iter(molar_fractions))  # Get the single key
+            substance = next(iter(molar_fractions))
+            entry = _library_entry(substance, chem_ex_data)
+            if entry is None:
+                logger.warning(
+                    f"{chemExLib} has no chemical exergy for {substance}. It is set to 0, which is only valid "
+                    f"if {substance} does not react."
+                )
+                return 0.0
+            eCH = entry[entry[4]] / CP.PropsSI("M", substance)
+            logger.info(f"Chemical exergy of pure {substance}: {eCH} J/kg")
+            return eCH
 
-            try:
-                aliases = CP.get_aliases(substance)
+        eCH_gas = {}  # in J/mol
+        for substance in molar_fractions:
+            entry = _library_entry(substance, chem_ex_data)
+            if entry is None or entry[3] == "NaN":
+                error_msg = f"{chemExLib} has no chemical exergy for {substance} in the gas phase."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            eCH_gas[substance] = entry[3]
 
-                if set(aliases) & set(aliases_water):
-                    eCH = chem_ex_data["WATER"][2] / CP.PropsSI("M", "H2O")  # liquid water, in J/kg
-                    logger.info(f"Pure water detected. Chemical exergy: {eCH} J/kg")
-                else:
-                    for alias in aliases:
-                        if alias.upper() in chem_ex_data:
-                            eCH = chem_ex_data[alias.upper()][3] / CP.PropsSI("M", substance)  # in J/kg
-                            logger.info(f"Found exergy data for {substance}. Chemical exergy: {eCH} J/kg")
-                            break
-                    else:
-                        logger.error(f"No matching alias found for {substance}")
-                        raise KeyError(f"No matching alias found for {substance}")
+        molar_mass = sum(x * CP.PropsSI("M", substance) for substance, x in molar_fractions.items())  # in kg/mol
 
-            except Exception:
-                eCH = 0  # If no aliases found, set chemical exergy to 0
-                logger.warning(f"No CoolProp aliases found for {substance}. Setting chemical exergy to 0 J/kg.")
+        gas_fractions = dict(molar_fractions)
+        x_gas = 1
+        eCH_liquid_mol = 0
+        aliases_water = CP.get_aliases("H2O")
+        water = next((substance for substance in molar_fractions if substance in aliases_water), None)
+        if water is not None:
+            pH2O_sat = CP.PropsSI("P", "T", Tamb, "Q", 1, "Water")
+            if molar_fractions[water] * pamb > pH2O_sat:
+                x_dry = sum(x for substance, x in molar_fractions.items() if substance != water)
+                x_H2O_gas = x_dry / (pamb / pH2O_sat - 1)
+                x_H2O_liquid = molar_fractions[water] - x_H2O_gas
+                x_gas = 1 - x_H2O_liquid
+                gas_fractions[water] = x_H2O_gas
+                eCH_liquid_mol = x_H2O_liquid * chem_ex_data["WATER"][2]
+                logger.info(f"Water condenses: {x_H2O_liquid} mol of liquid per mol of mixture")
 
-        # Handle mixtures (Case B or C)
-        else:
-            logger.info("Handling mixture case (Case B or C).")
-            total_molar_mass = 0  # To compute the molar mass of the mixture
-            eCH_gas_mol = 0  # Molar chemical exergy of the gas phase if condensation
-            eCH_liquid_mol = 0  # Molar chemical exergy of the liquid phase if condensation
-            molar_fractions_gas = {}  # Molar fractions within the gas phase if condensation
-            entropy_mixing = 0  # Entropy of mixing of ideal mixtures
-
-            # Calculate the total molar mass of the mixture
-            for substance, fraction in molar_fractions.items():
-                molar_mass = CP.PropsSI("M", substance)  # Molar mass in kg/mol
-                total_molar_mass += fraction * molar_mass  # Weighted sum for molar mass in kg/mol
-            logger.info(f"Total molar mass of the mixture: {total_molar_mass} kg/mol")
-
-            water_present = any(alias in molar_fractions for alias in aliases_water)
-
-            if water_present:
-                water_alias = next(alias for alias in aliases_water if alias in molar_fractions)
-                pH2O_sat = CP.PropsSI("P", "T", Tamb, "Q", 1, "Water")  # Saturation pressure of water in bar
-                pH2O = molar_fractions[water_alias] * pamb  # Partial pressure of water
-
-                if pH2O > pH2O_sat:  # Case B: Water condenses
-                    logger.info("Condensation occurs in the mixture.")
-                    x_dry = sum(fraction for comp, fraction in molar_fractions.items() if comp != water_alias)
-                    x_H2O_gas = x_dry / (pamb / pH2O_sat - 1)  # Vaporous water fraction in the total mixture
-                    x_H2O_liquid = molar_fractions[water_alias] - x_H2O_gas  # Liquid water fraction
-                    x_total_gas = 1 - x_H2O_liquid  # Total gas phase fraction
-
-                    eCH_liquid_mol = x_H2O_liquid * (chem_ex_data["WATER"][2])  # Liquid phase contribution, in J/mol
-
-                    for substance, fraction in molar_fractions.items():
-                        if substance == water_alias:
-                            molar_fractions_gas[substance] = x_H2O_gas / x_total_gas
-                        else:
-                            molar_fractions_gas[substance] = molar_fractions[substance] / x_total_gas
-
-                    for substance, fraction in molar_fractions_gas.items():
-                        aliases = CP.get_aliases(substance)
-                        for alias in aliases:
-                            if alias.upper() in chem_ex_data:
-                                eCH_gas_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy is in J/mol
-                                break
-                        else:
-                            logger.error(f"No matching alias found for {substance}")
-                            raise KeyError(f"No matching alias found for {substance}")
-
-                        if fraction > 0:  # Avoid log(0)
-                            entropy_mixing += fraction * math.log(fraction)
-
-                    eCH_gas_mol += R * Tamb * entropy_mixing
-                    eCH_mol = eCH_gas_mol + eCH_liquid_mol
-                    logger.info(f"Condensed phase chemical exergy: {eCH_mol} J/kmol")
-
-                else:  # Case C: Water doesn't condense
-                    logger.info("Water does not condense.")
-                    eCH_mol = 0
-                    for substance, fraction in molar_fractions.items():
-                        aliases = CP.get_aliases(substance)
-                        for alias in aliases:
-                            if alias.upper() in chem_ex_data:
-                                eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
-                                break
-                        else:
-                            logger.error(f"No matching alias found for {substance}")
-                            raise KeyError(f"No matching alias found for {substance}")
-
-                        if fraction > 0:  # Avoid log(0)
-                            entropy_mixing += fraction * math.log(fraction)
-
-                    eCH_mol += R * Tamb * entropy_mixing
-
-            else:  # Case C: No water present
-                logger.info("No water present in the mixture.")
-                eCH_mol = 0
-                for substance, fraction in molar_fractions.items():
-                    aliases = CP.get_aliases(substance)
-                    for alias in aliases:
-                        if alias.upper() in chem_ex_data:
-                            eCH_mol += fraction * (chem_ex_data[alias.upper()][3])  # Exergy in J/kmol
-                            break
-                    else:
-                        logger.error(f"No matching alias found for {substance}")
-                        raise KeyError(f"No matching alias found for {substance}")
-
-                    if fraction > 0:  # Avoid log(0)
-                        entropy_mixing += fraction * math.log(fraction)
-
-                eCH_mol += R * Tamb * entropy_mixing
-
-            eCH = eCH_mol / total_molar_mass  # Divide molar exergy by molar mass of mixture
-            logger.info(f"Chemical exergy: {eCH} kJ/kg")
-
+        y = {substance: x / x_gas for substance, x in gas_fractions.items()}
+        eCH_gas_mol = sum(y[substance] * eCH_gas[substance] for substance in y)
+        eCH_gas_mol += R * Tamb * sum(y_k * math.log(y_k) for y_k in y.values() if y_k > 0)
+        eCH = (x_gas * eCH_gas_mol + eCH_liquid_mol) / molar_mass
+        logger.info(f"Chemical exergy of the mixture: {eCH} J/kg")
         return eCH
 
     except Exception as e:
@@ -266,8 +233,8 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
 
     Parameters:
     - my_json: The JSON object containing the components and connections.
-    - Tamb: Ambient temperature in Celsius.
-    - pamb: Ambient pressure in bar.
+    - Tamb: Ambient temperature in K.
+    - pamb: Ambient pressure in Pa.
 
     Returns:
     - The modified JSON object with added chemical exergy for each connection.
@@ -290,14 +257,23 @@ def add_chemical_exergy(my_json, Tamb, pamb, chemExLib):
             if molar_composition:
                 stream_data = {"molar_composition": molar_composition}
                 logger.info(f"Using molar composition for connection {conn_name}")
-            else:
+            elif mass_composition:
                 stream_data = {"mass_composition": mass_composition}
                 logger.info(f"Using mass composition for connection {conn_name}")
+            else:
+                # Like a substance without a value in the library.
+                logger.warning(
+                    f"Connection {conn_name} has no composition. Its chemical exergy is set to 0, which is only "
+                    "valid if it does not react."
+                )
+                conn_data["e_CH"] = 0.0
+                conn_data["e_CH_unit"] = SI_UNITS["e_CH"]
+                continue
 
             # Add the chemical exergy value
             conn_data["e_CH"] = calc_chemical_exergy(stream_data, Tamb, pamb, chemExLib)
-            conn_data["e_CH_unit"] = fluid_property_data["e"]["SI_unit"]
-            logger.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} kJ/kg")
+            conn_data["e_CH_unit"] = SI_UNITS["e_CH"]
+            logger.info(f"Added chemical exergy to connection {conn_name}: {conn_data['e_CH']} J/kg")
         else:
             logger.info(
                 f"Skipped chemical exergy calculation for non-material connection {conn_name} ({conn_data['kind']})"
@@ -386,13 +362,12 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                         for c in my_json["connections"].values()
                         if c.get("source_component") == comp_name and c.get("kind") == "material"
                     ]
-                    # Determine which exergy key to use based on the flag.
-                    exergy_key = "e_T" if split_physical_exergy else "e_PH"
-
                     if inlet_conns and outlet_conns:
                         # For simplicity, take the first inlet and first outlet.
                         inlet = inlet_conns[0]
                         outlet = outlet_conns[0]
+                        # The heat is the change of thermal exergy with split, of physical exergy without.
+                        exergy_key = "e_T" if split_physical_exergy else "e_PH"
                         # Calculate the heat exergy difference using the selected key:
                         conn_data["E"] = abs(
                             inlet.get(exergy_key, 0) * inlet.get("m", 0)
@@ -466,319 +441,10 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                 )
                 conn_data["E"] = None
 
-            # Assign the exergy unit (assuming fluid_property_data is defined elsewhere)
-            conn_data["E_unit"] = fluid_property_data["power"]["SI_unit"]
+            conn_data["E_unit"] = SI_UNITS["E"]
 
         except Exception as e:
             logger.error(f"Error calculating total exergy flow for connection {conn_name}: {e}")
             conn_data["E"] = None
 
     return my_json
-
-
-def convert_to_SI(property, value, unit):
-    r"""
-    Convert a value to its SI value.
-
-    Parameters
-    ----------
-    property : str
-        Fluid property to convert.
-
-    value : float
-        Value to convert.
-
-    unit : str
-        Unit of the value.
-
-    Returns
-    -------
-    SI_value : float
-        Specified fluid property in SI value.
-
-    Raises
-    ------
-    ValueError: If the property or unit is invalid or conversion is not possible.
-    """
-    # Check if value is None
-    if value is None:
-        logger.warning(f"Value is None for property '{property}', cannot convert.")
-        return None
-
-    # Check if the property is valid and exists in fluid_property_data
-    if property not in fluid_property_data:
-        logger.warning(f"Unrecognized property: '{property}'. Returning original value {value} {unit}.")
-        return value
-
-    # Check if the unit is valid
-    if unit == "Unknown":
-        logger.warning(f"Unrecognized unit {unit} for property '{property}'. Returning original value {value} {unit}.")
-        return value
-
-    try:
-        # Handle temperature conversions separately
-        if property == "T":
-            if unit not in fluid_property_data["T"]["units"]:
-                raise ValueError(f"Invalid unit '{unit}' for temperature. Unit not found.")
-            converters = fluid_property_data["T"]["units"][unit]
-            return (value + converters[0]) * converters[1]
-
-        # Handle all other property conversions
-        else:
-            if unit not in fluid_property_data[property]["units"]:
-                raise ValueError(f"Invalid unit '{unit}' for property '{property}'. Unit not found.")
-            conversion_factor = fluid_property_data[property]["units"][unit]
-            return value * conversion_factor
-
-    except KeyError as e:
-        raise ValueError(f"Conversion error: {e}")
-    except Exception as e:
-        raise ValueError(f"An error occurred during the unit conversion: {e}")
-
-
-fluid_property_data = {
-    "m": {
-        "text": "mass flow",
-        "SI_unit": "kg / s",
-        "units": {
-            "kg / s": 1,
-            "kg / min": 1 / 60,
-            "kg / h": 1 / 3.6e3,
-            "kg/s": 1,
-            "kg/min": 1 / 60,
-            "kg/h": 1 / 3.6e3,
-            "kg / sec": 1,
-            "kg/sec": 1,
-            "t / h": 1 / 3.6,
-            "g / s": 1e-3,
-            "t/h": 1 / 3.6,
-            "g/s": 1e-3,
-            "g / sec": 1e-3,
-            "g/sec": 1e-3,
-        },
-        "latex_eq": r"0 = \dot{m} - \dot{m}_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "n": {
-        "text": "molar flow",
-        "SI_unit": "mol / s",
-        "units": {
-            "mol / s": 1,
-            "mol / min": 1 / 60,
-            "mol / h": 1 / 3.6e3,
-            "mol/s": 1,
-            "mol/min": 1 / 60,
-            "mol/h": 1 / 3.6e3,
-            "kmol / s": 1e3,
-            "kmol / min": 1 / 60e3,
-            "kmol / h": 1 / 3.6e6,
-            "kmol/s": 1e3,
-            "kmol/min": 1 / 60e3,
-            "kmol/h": 1 / 3.6e6,
-            "mol / sec": 1,
-            "mol/sec": 1,
-            "kmol / sec": 1e3,
-            "kmol/sec": 1e3,
-        },
-        "latex_eq": r"0 = \dot{n} - \dot{n}_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "v": {
-        "text": "volumetric flow",
-        "SI_unit": "m3 / s",
-        "units": {
-            "m3 / s": 1,
-            "m3 / min": 1 / 60,
-            "m3 / h": 1 / 3.6e3,
-            "l / s": 1 / 1e3,
-            "l / min": 1 / 60e3,
-            "l / h": 1 / 3.6e6,
-            "cum/sec": 1,
-            "cum/min": 1 / 60,
-            "cum/hr": 1 / 3.6e3,
-            "l/sec": 1 / 1e3,
-            "l/min": 1 / 60e3,
-            "l/hr": 1 / 3.6e6,
-            "cuft/sec": 0.028316846592,
-            "cuft/min": 0.028316846592 / 60,
-            "cuft/hr": 0.028316846592 / 3.6e3,
-        },
-        "latex_eq": (r"0 = \dot{m} \cdot v \left(p,h\right)- \dot{V}_\mathrm{spec}"),
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "p": {
-        "text": "pressure",
-        "SI_unit": "Pa",
-        "units": {"Pa": 1, "kPa": 1e3, "psi": 6.8948e3, "bar": 1e5, "atm": 1.01325e5, "MPa": 1e6},
-        "latex_eq": r"0 = p - p_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "h": {
-        "text": "enthalpy",
-        "SI_unit": "J / kg",
-        "SI_unit_molar:": "J / mol",
-        "units": {
-            "J / kg": 1,
-            "kJ / kg": 1e3,
-            "MJ / kg": 1e6,
-            "J/kg": 1,
-            "kJ/kg": 1e3,
-            "MJ/kg": 1e6,
-            "cal / kg": 4.184,
-            "kcal / kg": 4.184e3,
-            "cal/kg": 4.184,
-            "kcal/kg": 4.184e3,
-            "Wh / kg": 3.6e3,
-            "kWh / kg": 3.6e6,
-            "Wh/kg": 3.6e3,
-            "kWh kg": 3.6e6,
-            "J / mol": 1,
-            "kJ / mol": 1e3,
-            "MJ / mol": 1e6,
-            "J/mol": 1,
-            "kJ/mol": 1e3,
-            "MJ/mol": 1e6,
-            "J / kmol": 1e-3,
-            "kJ / kmol": 1,
-            "MJ / kmol": 1e3,
-            "J/kmol": 1e-3,
-            "kJ/kmol": 1,
-            "MJ/kmol": 1e3,
-        },
-        "latex_eq": r"0 = h - h_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "e": {
-        "text": "exergy",
-        "SI_unit": "J / kg",
-        "SI_unit_molar:": "J / mol",
-        "units": {
-            "J / kg": 1,
-            "kJ / kg": 1e3,
-            "MJ / kg": 1e6,
-            "J/kg": 1,
-            "kJ/kg": 1e3,
-            "MJ/kg": 1e6,
-            "cal / kg": 4.184,
-            "kcal / kg": 4.184e3,
-            "cal/kg": 4.184,
-            "kcal/kg": 4.184e3,
-            "Wh / kg": 3.6e3,
-            "kWh / kg": 3.6e6,
-            "Wh/kg": 3.6e3,
-            "kWh kg": 3.6e6,
-            "J / mol": 1,
-            "kJ / mol": 1e3,
-            "MJ / mol": 1e6,
-            "J/mol": 1,
-            "kJ/mol": 1e3,
-            "MJ/mol": 1e6,
-            "J / kmol": 1e-3,
-            "kJ / kmol": 1,
-            "MJ / kmol": 1e3,
-            "J/kmol": 1e-3,
-            "kJ/kmol": 1,
-            "MJ/kmol": 1e3,
-        },
-        "latex_eq": r"0 = h - h_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "T": {
-        "text": "temperature",
-        "SI_unit": "K",
-        "units": {"K": [0, 1], "R": [0, 5 / 9], "C": [273.15, 1], "F": [459.67, 5 / 9]},
-        "latex_eq": r"0 = T \left(p, h \right) - T_\mathrm{spec}",
-        "documentation": {"float_fmt": "{:,.1f}"},
-    },
-    "Td_bp": {
-        "text": "temperature difference to boiling point",
-        "SI_unit": "K",
-        "units": {"K": 1, "R": 5 / 9, "C": 1, "F": 5 / 9},
-        "latex_eq": r"0 = \Delta T_\mathrm{spec}- T_\mathrm{sat}\left(p\right)",
-        "documentation": {"float_fmt": "{:,.1f}"},
-    },
-    "vol": {
-        "text": "specific volume",
-        "SI_unit": "m3 / kg",
-        "units": {"m3 / kg": 1, "l / kg": 1e-3},
-        "latex_eq": (r"0 = v\left(p,h\right) \cdot \dot{m} - \dot{V}_\mathrm{spec}"),
-        "documentation": {"float_fmt": "{:,.3f}"},
-    },
-    "x": {
-        "text": "vapor mass fraction",
-        "SI_unit": "-",
-        "units": {"1": 1, "-": 1, "%": 1e-2, "ppm": 1e-6},
-        "latex_eq": r"0 = h - h\left(p, x_\mathrm{spec}\right)",
-        "documentation": {"float_fmt": "{:,.2f}"},
-    },
-    "s": {
-        "text": "entropy",
-        "SI_unit": "J / kgK",
-        "SI_unit_molar:": "J / molK",
-        "units": {
-            "J / kgK": 1,
-            "kJ / kgK": 1e3,
-            "MJ / kgK": 1e6,
-            "J/kgK": 1,
-            "kJ/kgK": 1e3,
-            "MJ/kgK": 1e6,
-            "J / kg-K": 1,
-            "kJ / kg-K": 1e3,
-            "MJ / kg-K": 1e6,
-            "J/kg-K": 1,
-            "kJ/kg-K": 1e3,
-            "MJ/kg-K": 1e6,
-            "J / molK": 1,
-            "kJ / molK": 1e3,
-            "MJ / molK": 1e6,
-            "J/molK": 1,
-            "kJ/molK": 1e3,
-            "MJ/molK": 1e6,
-            "J / mol-K": 1,
-            "kJ / mol-K": 1e3,
-            "MJ / mol-K": 1e6,
-            "J/mol-K": 1,
-            "kJ/mol-K": 1e3,
-            "MJ/mol-K": 1e6,
-            "J / kmolK": 1e-3,
-            "kJ / kmolK": 1,
-            "MJ / kmolK": 1e3,
-            "J/kmolK": 1e-3,
-            "kJ/kmolK": 1,
-            "MJ/kmolK": 1e3,
-            "J / kmol-K": 1e-3,
-            "kJ / kmol-K": 1,
-            "MJ / kmol-K": 1e3,
-            "J/kmol-K": 1e-3,
-            "kJ/kmol-K": 1,
-            "MJ/kmol-K": 1e3,
-        },
-        "latex_eq": r"0 = s_\mathrm{spec} - s\left(p, h \right)",
-        "documentation": {"float_fmt": "{:,.2f}"},
-    },
-    "power": {
-        "text": "power",
-        "SI_unit": "W",
-        "units": {"W": 1, "kW": 1e3, "MW": 1e6},
-    },
-    "heat": {
-        "text": "heat",
-        "SI_unit": "W",
-        "units": {"W": 1, "kW": 1e3, "MW": 1e6},
-    },
-    "kA": {
-        "text": "kA",
-        "SI_unit": "W / K",
-        "units": {"W / K": 1, "kW / K": 1e3, "MW / K": 1e6, "W/K": 1, "kW/K": 1e3, "MW/K": 1e6},
-    },
-    "A": {
-        "text": "area",
-        "SI_unit": "m2",
-        "units": {"m2": 1, "cm2": 1e-4, "mm2": 1e-6, "m²": 1, "cm²": 1e-4, "mm²": 1e-6},
-    },
-    "VM": {
-        "text": "volume flow",
-        "SI_unit": "m3 / s",
-        "units": {"m3 / s": 1, "l / s": 1e-3, "l/s": 1e-3, "m³/s": 1, "l/min": 1 / 60e3, "l/h": 1 / 3.6e6},
-    },
-}

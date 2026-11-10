@@ -1,5 +1,6 @@
 """Purchased equipment costs from the correlations of OpenPyTEA."""
 
+import json
 import os
 import runpy
 
@@ -137,9 +138,14 @@ class TestHeatExchangers:
         assert design["kA_source"] == "simulation"
         assert design["kA"] == pytest.approx(design["Q"] / design["dT_lm"], rel=0.02)
 
-    def test_a_capacity_exported_in_kilowatts_per_kelvin_is_recognised(self):
+    def test_a_capacity_exported_in_kilowatts_per_kelvin_is_recognised(self, tmp_path):
         """Older EBSILON exports state kA in kW/K under a W/K label; the heat flow tells."""
-        ean = ExergyAnalysis.from_json(HEATPUMP_EBSILON)
+        with open(HEATPUMP_EBSILON) as f:
+            data = json.load(f)
+        data["components"]["HeatExchanger"]["COND"]["kA"] /= 1e3
+        older_export = tmp_path / "hp_ebs_kA_in_kW.json"
+        older_export.write_text(json.dumps(data))
+        ean = ExergyAnalysis.from_json(str(older_export))
         cond = ean.components["COND"]
         assert cond.kA < 1000
         design = costing.heat_exchanger(cond)
@@ -213,6 +219,12 @@ class TestHeatExchangers:
         groups.add("ammonia-water (absorption)")
         for cell in costing.U_CELLS:
             assert set(cell["sources"]) <= set(costing.U_SOURCES)
+            assert {costing._HEAT_TRANSFER["source_origins"][s] for s in cell["sources"]} <= {
+                "measured",
+                "calculated",
+                "manufacturer",
+                "handbook",
+            }
             assert {cell["hot_fluid"], cell["cold_fluid"]} <= groups
             assert cell["exchanger_type"] in costing.EXCHANGER_TYPES
             assert cell["range"][0] <= cell["U"] <= cell["range"][1]
@@ -345,7 +357,7 @@ class TestWithOpenPyTEA:
         assert estimate["quantity"] == "power"
         assert estimate["fit"]["status"] == "in range"
 
-    def test_a_size_below_the_range_is_scaled_from_the_lower_bound(self, heat_pump):
+    def test_a_size_below_the_range_is_scaled_from_the_lower_bound(self, heat_pump, caplog):
         from openpytea.equipment import CostCorrelationDB
 
         pump = heat_pump.components["PUMP"]
@@ -355,6 +367,7 @@ class TestWithOpenPyTEA:
         assert estimate["bound"] == 1.0
         assert estimate["PEC"] == pytest.approx(at_bound * (estimate["size"] / 1.0) ** costing.EXPONENT)
         assert estimate["units"] == 1
+        assert "below the range of the correlation 'centrifugal_pump_turton_2001'" in caplog.text
         with pytest.raises(ValueError, match="below lower bound"):
             costing.estimate(pump, "centrifugal_pump_turton_2001", outside="parallel")
 

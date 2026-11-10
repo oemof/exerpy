@@ -206,3 +206,8 @@ the :code:`Simulation` menu on the left. Select the :code:`Stream` tab on the
 right and click the :code:`Property Sets` button. Move :code:`EXERGYMS` from
 :code:`Available property sets` to :code:`Selected property sets` and confirm.
 Afterwards, run the simulation and save it.
+
+The split of the physical exergy into its thermal and mechanical parts
+(:code:`split_physical_exergy=True`) needs no further setup. ExerPy adds a
+property analysis for each stream to the model in memory and runs the
+simulation once while it reads the model. The model file stays unchanged.

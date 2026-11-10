@@ -1,5 +1,7 @@
 import json
+import math
 import os
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -11,14 +13,26 @@ from exerpy.logger import logger
 SCALING_EXPONENT = 0.6
 # Keys of a purchased equipment cost scaled from a reference component.
 SCALING_KEYS = {"PEC_ref", "size_ref", "size", "size_by", "exponent", "exchanger_type", "U"}
+# Keys an exergoeconomic analysis adds to a connection, in currency/J and currency/s.
+COST_KEYS = {
+    "CostVar_index",
+    "C_loss_share",
+    *(f"{c}_{label}" for c in "cC" for label in ("T", "M", "PH", "CH", "TOT")),
+}
 
 from .components.component import component_registry
+from .components.component import set_equal_specific_cost
 from .components.helpers.cycle_closer import CycleCloser
 from .components.helpers.power_bus import PowerBus
+from .components.nodes.mixer import Mixer
 from .components.nodes.splitter import Splitter
 from .components.nodes.storage import Storage
 from .functions import add_chemical_exergy
 from .functions import add_total_exergy_flow
+from .units import add_units
+from .units import convert_cost
+from .units import from_SI
+from .units import to_SI
 
 
 class ExergyAnalysis:
@@ -160,7 +174,9 @@ class ExergyAnalysis:
         adds to the product or to the loss, and the stream on the other side of the same service is
         subtracted: the water entering a heat pump is an output of the product formed by the heated
         water, and the cooling water entering a condenser an output of the loss formed by the warm
-        cooling water.
+        cooling water. The exergy of a heat stream exchanged with a stream that leaves below the ambient
+        temperature flows against the heat :cite:`Bejan1996`, so its direction is reversed, with a
+        warning.
 
         Parameters
         ----------
@@ -201,9 +217,32 @@ class ExergyAnalysis:
                 raise ValueError(
                     f"Stream '{name}' is attached to the plant on neither side, so it cannot be part of a definition."
                 )
+            if self._heat_exergy_reversed(name):
+                # Below the ambient temperature the exergy of heat flows against the heat.
+                direction = "out" if direction == "in" else "in"
+                logger.warning(
+                    f"Heat stream '{name}' is exchanged with a stream below the ambient temperature, so its "
+                    f"exergy flows against the heat: it is counted as exergy that {'leaves' if direction == 'out' else 'enters'} "
+                    f"the plant."
+                )
             adds = direction == "in" if letter == "F" else direction == "out"
             flows[letter]["inputs" if adds else "outputs"].append(name)
         return flows["F"], flows["P"], flows["L"]
+
+    def _heat_exergy_reversed(self, name):
+        """True for a heat stream whose exergy flows against the heat: the stream it heats or cools leaves below T0."""
+        conn = self.connections.get(name, {})
+        if conn.get("kind") != "heat":
+            return False
+        component = self.components.get(conn.get("target_component")) or self.components.get(
+            conn.get("source_component")
+        )
+        if component is None:
+            return False
+        if hasattr(component, "heat_exergy_reversed"):
+            return component.heat_exergy_reversed(self.Tamb, self.split_physical_exergy)
+        outlets = [c for c in component.outl.values() if c.get("kind", "material") == "material" and "T" in c]
+        return bool(outlets) and outlets[0]["T"] < self.Tamb
 
     def analyse(self, E_F, E_P, E_L=None) -> None:
         """
@@ -241,22 +280,38 @@ class ExergyAnalysis:
                         msg = f"The connection {connection} is not part of the " "plant's connections."
                         raise ValueError(msg)
 
-        # A heat exchanger whose rejected heat is declared a loss (an outlet listed in E_L)
-        # is treated as dissipative, unless its dissipative behavior was set explicitly.
-        loss_conn_names = set()
-        for key in ("inputs", "outputs"):
-            loss_conn_names.update(E_L.get(key, []))
-        for label in loss_conn_names:
-            conn = self.connections.get(label)
-            if conn is None:
+        # Undo what an earlier analyse() call inferred, so that a new E_L starts from the built state.
+        for component in self.components.values():
+            if getattr(component, "_dissipative_inferred", False):
+                component.dissipative = None
+                component._dissipative_inferred = False
+            if not hasattr(component, "_is_dissipative_built"):
+                component._is_dissipative_built = getattr(component, "is_dissipative", False)
+            component.is_dissipative = component._is_dissipative_built
+
+        # A heat exchanger whose product is discharged as a loss (a product outlet that reaches a stream of
+        # E_L through splitters, mixers and dissipative components only, e.g. the cooling water of a
+        # condenser) is treated as dissipative, unless its dissipative behavior was set explicitly. A
+        # fuel-side outlet in E_L, such as the flue gas of an economizer going to the stack, leaves the
+        # exchanger productive.
+        losses = {
+            id(self.connections[name])
+            for key in ("inputs", "outputs")
+            for name in E_L.get(key, [])
+            if name in self.connections
+        }
+        for source in self.components.values():
+            if source.__class__.__name__ != "HeatExchanger" or getattr(source, "dissipative", None) is not None:
                 continue
-            source = self.components.get(conn.get("source_component"))
-            if source is None or source.__class__.__name__ != "HeatExchanger":
-                continue
-            if getattr(source, "dissipative", None) is not None:
-                continue
-            source.dissipative = True
-            logger.info(f"HeatExchanger {source.name} marked dissipative: outlet '{label}' is listed in E_L.")
+            discharged = [
+                idx
+                for idx in source._product_outlets(self.Tamb)
+                if idx in source.outl and self._is_discharged(source.outl[idx], losses, set())
+            ]
+            if discharged:
+                source.dissipative = True
+                source._dissipative_inferred = True
+                logger.info(f"HeatExchanger {source.name} marked dissipative: its product is discharged as a loss.")
 
         # Run component balances first: a component may write exergy back onto its
         # connections, which must happen before summing the system E_F/E_P/E_L below.
@@ -269,36 +324,25 @@ class ExergyAnalysis:
             if component.__class__.__name__ in ("Valve", "HeatExchanger") and np.isnan(component.E_P):
                 component.is_dissipative = True
 
-        # Calculate total fuel exergy (E_F) by summing up all specified input connections
-        if "inputs" in E_F:
-            self.E_F += sum(
-                self.connections[conn]["E"] for conn in E_F["inputs"] if self.connections[conn]["E"] is not None
-            )
+        self._find_auxiliary_streams(E_L)
 
-        if "outputs" in E_F:
-            self.E_F -= sum(
-                self.connections[conn]["E"] for conn in E_F["outputs"] if self.connections[conn]["E"] is not None
-            )
+        # Sum the exergy of the listed streams; a listed stream without a value would silently change the totals.
+        def listed(flows, label):
+            total = 0.0
+            for key, sign in (("inputs", 1), ("outputs", -1)):
+                for conn in flows.get(key, []):
+                    E = self.connections[conn].get("E")
+                    if E is None or np.isnan(E):
+                        raise ValueError(
+                            f"Stream '{conn}' is listed in {label} but has no exergy value (E = {E}). Check the "
+                            "stream or the component it belongs to."
+                        )
+                    total += sign * E
+            return total
 
-        # Calculate total product exergy (E_P) by summing up all specified input and output connections
-        if "inputs" in E_P:
-            self.E_P += sum(
-                self.connections[conn]["E"] for conn in E_P["inputs"] if self.connections[conn]["E"] is not None
-            )
-        if "outputs" in E_P:
-            self.E_P -= sum(
-                self.connections[conn]["E"] for conn in E_P["outputs"] if self.connections[conn]["E"] is not None
-            )
-
-        # Calculate total loss exergy (E_L) by summing up all specified input and output connections
-        if "inputs" in E_L:
-            self.E_L += sum(
-                self.connections[conn]["E"] for conn in E_L["inputs"] if self.connections[conn]["E"] is not None
-            )
-        if "outputs" in E_L:
-            self.E_L -= sum(
-                self.connections[conn]["E"] for conn in E_L["outputs"] if self.connections[conn]["E"] is not None
-            )
+        self.E_F += listed(E_F, "E_F")
+        self.E_P += listed(E_P, "E_P")
+        self.E_L += listed(E_L, "E_L")
 
         # Calculate overall exergy efficiency epsilon = E_P / E_F
         # E_F == 0 should throw an error because it does not make sense
@@ -331,11 +375,11 @@ class ExergyAnalysis:
             component.y = component.E_D / self.E_F if self.E_F else np.nan
             component.y_star = component.E_D / self.E_D if self.E_D and component.E_D is not None else np.nan
             # Sum component destruction if available
-            if component.E_D is not np.nan:
+            if component.E_D is not None and not np.isnan(component.E_D):
                 total_component_E_D += component.E_D
 
         # Check if the sum of all component exergy destructions matches the overall system exergy destruction
-        if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5):
+        if not np.isclose(total_component_E_D, self.E_D, rtol=1e-5, atol=1e-9 * abs(self.E_F)):
             msg = (
                 f"Sum of component exergy destructions ({total_component_E_D:.2f} W) "
                 f"does not match overall system exergy destruction ({self.E_D:.2f} W)."
@@ -353,7 +397,7 @@ class ExergyAnalysis:
             logger.info("Exergy destruction check passed: Sum of component E_D matches overall E_D.")
 
     @classmethod
-    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_tespy(cls, model: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from a tespy network or
         a tespy network export structure.
@@ -363,11 +407,13 @@ class ExergyAnalysis:
         model : str | tespy.networks.network.Network
             Path to the tespy Network export or the actual Network instance.
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. All exergies are computed at it.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. All exergies are computed at it.
         chemExLib : str, optional
             Name of the library for chemical exergy tables.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -398,15 +444,15 @@ class ExergyAnalysis:
                 )
 
         data = to_exerpy(model, Tamb, pamb)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb, pamb, chemExLib, split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         instance = cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
         instance._nw = model
         return instance
 
     @classmethod
-    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True):
+    def from_aspen(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, validate=True):
         """
         Create an instance of the ExergyAnalysis class from an Aspen model file.
 
@@ -415,13 +461,18 @@ class ExergyAnalysis:
         path : str
             Path to the Aspen file (.bkp format).
         Tamb : float, optional
-            Ambient temperature for analysis, default is None.
+            Ambient temperature in K. Defaults to the reference temperature REF_TEMP of the model. A value
+            passed here replaces it and the model is run again, so all exergies are computed at it. The
+            model file stays unchanged.
         pamb : float, optional
-            Ambient pressure for analysis, default is None.
+            Ambient pressure in Pa. Defaults to the reference pressure REF_PRES of the model, and replaces
+            it like ``Tamb``.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
             If True, separates physical exergy into thermal and mechanical components.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -436,25 +487,22 @@ class ExergyAnalysis:
 
         if file_extension == ".bkp":
             logger.info("Running Aspen parsing and generating JSON data.")
-            data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy)
+            data = aspen_parser.run_aspen(path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
             logger.info("Parsing completed successfully.")
 
         else:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Aspen (.bkp) file.")
 
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
-            required_component_fields=["name", "type"],
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate, required_component_fields=["name", "type"]
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_ebsilon(cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None):
+    def from_ebsilon(
+        cls, path, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=True, profile=None, validate=True
+    ):
         """
         Create an instance of the ExergyAnalysis class from an Ebsilon model file.
 
@@ -463,9 +511,15 @@ class ExergyAnalysis:
         path : str
             Path to the Ebsilon file (.ebs format).
         Tamb : float, optional
-            Ambient temperature in K. Overrides the reference state of the model.
+            Ambient temperature in K. Defaults to the reference temperature of the model, set by a
+            measuring point. A value passed here overrides it and all exergies are computed at it; if it
+            differs from the model, the physical exergies are computed from the fluid data of the streams
+            instead of taken from Ebsilon. Only the reference state changes, not the simulation. If the
+            measuring point also sets an inlet temperature of the plant, change it in Ebsilon to simulate
+            the plant at another ambient temperature.
         pamb : float, optional
-            Ambient pressure in Pa. Overrides the reference state of the model.
+            Ambient pressure in Pa. Defaults to the reference pressure of the model, and overrides it
+            like ``Tamb``.
         chemExLib : str, optional
             Name of the chemical exergy library (if any).
         split_physical_exergy : bool, optional
@@ -474,6 +528,8 @@ class ExergyAnalysis:
             Name or id of the profile (operating point) to simulate, e.g. a part load case.
             Defaults to the profile the model was saved with. Use
             :func:`exerpy.parser.from_ebsilon.ebsilon_parser.get_ebsilon_profiles` to list them.
+        validate : bool, default=True
+            Check the parsed model against the input schema of :mod:`exerpy.schema`.
 
         Returns
         -------
@@ -497,31 +553,43 @@ class ExergyAnalysis:
             # If the file format is not supported
             raise ValueError(f"Unsupported file format: {file_extension}. Please provide " "an Ebsilon (.ebs) file.")
 
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
             data,
-            Tamb=Tamb,
-            pamb=pamb,
-            chemExLib=chemExLib,
-            split_physical_exergy=split_physical_exergy,
+            Tamb,
+            pamb,
+            chemExLib,
+            split_physical_exergy,
+            validate,
             required_component_fields=["name", "type", "type_index"],
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
     @classmethod
-    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None):
+    def from_json(cls, json_path: str, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, validate=True):
         """
         Create an ExergyAnalysis instance from a JSON file.
+
+        A value given with a unit, as ``"T": 15.0, "T_unit": "degC"``, is converted to SI; a value
+        without a unit is taken as SI, see :mod:`exerpy.units`.
 
         Parameters
         ----------
         json_path : str
             Path to JSON file containing component and connection data.
         Tamb : float, optional
-            Ambient temperature in K. If None, extracted from JSON.
+            Ambient temperature in K. If None, taken from ``ambient_conditions`` of the JSON. The
+            exergies in the file were computed at that state, so a value passed here must agree with it;
+            it is needed only if the file has none.
         pamb : float, optional
-            Ambient pressure in Pa. If None, extracted from JSON.
+            Ambient pressure in Pa, like ``Tamb``.
         chemExLib : str, optional
             Name of chemical exergy library to use. Default is None.
+        split_physical_exergy : bool, optional
+            Split physical exergy into thermal and mechanical parts. If None, read
+            from the JSON settings or detected from the data.
+        validate : bool, default=True
+            Check the file against the input schema of :mod:`exerpy.schema` before
+            the analysis is set up. All problems found are reported at once.
 
         Returns
         -------
@@ -533,13 +601,17 @@ class ExergyAnalysis:
         FileNotFoundError
             If JSON file does not exist.
         ValueError
-            If JSON structure is invalid or missing required data.
+            If JSON structure is invalid or missing required data, or if ``Tamb`` or ``pamb``
+            differ from the ambient state of the file. For a unit that is
+            unknown or of the wrong kind, and with ``validate=True`` for any problem, this is
+            an :class:`exerpy.schema.InputValidationError`, whose ``issues`` attribute lists
+            each problem with its location.
         JSONDecodeError
             If JSON file is malformed.
         """
         data = _load_json(json_path)
-        data, Tamb, pamb, chemExLib, split_physical_exergy = _process_json(
-            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        data, Tamb, pamb, chemExLib, split_physical_exergy = _prepare(
+            data, Tamb, pamb, chemExLib, split_physical_exergy, validate
         )
         return cls(data["components"], data["connections"], Tamb, pamb, chemExLib, split_physical_exergy)
 
@@ -1065,14 +1137,19 @@ class ExergyAnalysis:
         print(f"Exergetic Loss: {exergetic_loss_percent:.2f}%")
         print(f"Exergetic Product (epsilon): {epsilon_total:.2f}%")
 
-    def export_to_json(self, output_path):
+    def export_to_json(self, output_path, units=None):
         """
         Export the model to a JSON file.
+
+        Every value is written with its unit, in SI unless ``units`` asks for another one.
 
         Parameters
         ----------
         output_path : str
             Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a key in, e.g. ``{"T": "degC", "p": "bar", "E_D": "kW"}``; the keys are
+            those of :data:`exerpy.units.SI_UNITS`. :meth:`from_json` reads the file back in SI.
 
         Returns
         -------
@@ -1086,6 +1163,8 @@ class ExergyAnalysis:
         NaN values are converted to null for valid JSON output.
         """
         data = self._serialize()
+        if units:
+            data = from_SI(data, units)
         with open(output_path, "w") as json_file:
             json.dump(data, json_file, indent=4)
             logger.info(f"Model exported to JSON file: {output_path}.")
@@ -1104,7 +1183,11 @@ class ExergyAnalysis:
         """
         export = {}
         export["components"] = self._component_data
-        export["connections"] = self._connection_data
+        # The costs of an exergoeconomic analysis are written by its own export.
+        export["connections"] = {
+            name: {key: value for key, value in conn.items() if key not in COST_KEYS}
+            for name, conn in self._connection_data.items()
+        }
         export["ambient_conditions"] = {"Tamb": self.Tamb, "Tamb_unit": "K", "pamb": self.pamb, "pamb_unit": "Pa"}
         export["settings"] = {"split_physical_exergy": self.split_physical_exergy, "chemExLib": self.chemExLib}
 
@@ -1130,7 +1213,7 @@ class ExergyAnalysis:
             "epsilon": _nan_to_none(getattr(self, "epsilon", None)),
         }
 
-        return export
+        return add_units(export)
 
     def _resolve_heat_connection_names(self, ex_flow):
         """
@@ -1216,6 +1299,43 @@ class ExergyAnalysis:
                     f"Component '{name}' destroys more exergy (E_D = {E_D:.2f} W) than the "
                     f"whole system ({self.E_D:.2f} W); the exergy balance does not close."
                 )
+
+    def _find_auxiliary_streams(self, E_L):
+        """Mark the auxiliary fluid of every dissipative heat exchanger, the side that is discharged as a loss.
+
+        A side is the auxiliary fluid, e.g. the cooling water, if every path from its outlet ends in a
+        loss stream of ``E_L`` and passes only splitters, mixers and dissipative components on the way.
+        A side that reaches any other component is used further and is a main working fluid. If not
+        exactly one side is discharged, ``auxiliary_side`` is None and the cost equations decide by the
+        exergy change of the streams.
+        """
+        losses = {id(self.connections[name]) for name in E_L.get("inputs", []) if name in self.connections}
+        for component in self.components.values():
+            component.auxiliary_side = None
+            if component.__class__.__name__ != "HeatExchanger" or not getattr(component, "is_dissipative", False):
+                continue
+            discharged = [side for side in (0, 1) if self._is_discharged(component.outl[side], losses, set())]
+            if len(discharged) == 1:
+                component.auxiliary_side = discharged[0]
+
+    def _is_discharged(self, conn, losses, seen):
+        """True if every path from connection ``conn`` ends in a loss stream through passive components only."""
+        if id(conn) in losses:
+            return True
+        target = self.components.get(conn.get("target_component"))
+        if target is None or id(conn) in seen:
+            return False
+        # Only the streams on the current path count as seen, so a split and merged stream is followed
+        # on every branch while a loop still ends.
+        seen = seen | {id(conn)}
+        passive = target.__class__.__name__ in ("Splitter", "Mixer") or getattr(target, "is_dissipative", False)
+        if not passive:
+            return False
+        outlets = [c for c in target.outl.values() if c.get("kind", "material") == "material"]
+        if target.__class__.__name__ == "HeatExchanger":
+            # A heat exchanger keeps the stream on its side.
+            outlets = [target.outl[conn["target_connector"]]] if conn.get("target_connector") in target.outl else []
+        return bool(outlets) and all(self._is_discharged(out, losses, seen) for out in outlets)
 
     def _check_unaccounted_system_conns(self):
         """
@@ -1357,7 +1477,42 @@ def _construct_components(component_data, connection_data, Tamb):
             # Store the component in the dictionary
             components[component_name] = component
 
+    # The headers on either side of parallel branches count each branch stream that often.
+    for component in components.values():
+        if isinstance(component, Mixer):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.inl.items()}
+        elif isinstance(component, Splitter):
+            component.branches = {k: _stream_branches(c, components) for k, c in component.outl.items()}
+        else:
+            continue
+        given = getattr(component, "num_branches", None)
+        if given not in (None, 1) and given not in component.branches.values():
+            logger.warning(
+                f"num_branches = {given} of {component.name} is not used: a header counts a stream of a "
+                "ParabolicTrough as often as the num_branches of the trough, and no stream of this header "
+                f"comes from a trough with {given} branches."
+            )
+
     return components  # Return the dictionary of created components
+
+
+def _stream_branches(conn, components):
+    """Return how often a stream exists in the plant.
+
+    A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
+    streams then carry the mass flow and the cost of a single branch, while the heat it takes
+    in and its investment cost belong to all of them. The other streams of the headers on either
+    side exist once. Every balance that a branch stream enters has to count it that often, or the
+    field counts as one branch.
+    """
+    if conn.get("kind", "material") != "material":
+        return 1
+    for end in ("source_component", "target_component"):
+        comp = components.get(conn.get(end))
+        branches = getattr(comp, "beta", 1) or 1
+        if branches != 1 and hasattr(comp, "_fluid_streams"):
+            return branches
+    return 1
 
 
 def _no_negative_zero(df, digits=3):
@@ -1407,6 +1562,24 @@ def _load_json(json_path):
         return json.load(file)
 
 
+def _prepare(data, Tamb, pamb, chemExLib, split_physical_exergy, validate, **kwargs):
+    """Check the structure of the input, convert it to SI units, check its values and process it."""
+    from . import schema
+
+    if validate:
+        schema.validate_structure(
+            data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy
+        )
+    data, problems = to_SI(data)
+    if problems:
+        raise schema.InputValidationError([schema.Issue("error", path, message) for path, message in problems])
+    if validate:
+        schema.validate_values(data, Tamb=Tamb, pamb=pamb)
+    return _process_json(
+        data, Tamb=Tamb, pamb=pamb, chemExLib=chemExLib, split_physical_exergy=split_physical_exergy, **kwargs
+    )
+
+
 def _process_json(
     data, Tamb=None, pamb=None, chemExLib=None, split_physical_exergy=None, required_component_fields=None
 ):
@@ -1418,9 +1591,9 @@ def _process_json(
     data : dict
         Dictionary containing system data with components, connections and ambient conditions
     Tamb : float, optional
-        Ambient temperature in K, overrides the value in data if provided
+        Ambient temperature in K. Used if the data have none, and must agree with theirs otherwise
     pamb : float, optional
-        Ambient pressure in Pa, overrides the value in data if provided
+        Ambient pressure in Pa, like Tamb
     chemExLib : dict, optional
         Chemical exergy library for reference values
     split_physical_exergy : bool, default=True
@@ -1434,7 +1607,8 @@ def _process_json(
     Raises
     ------
     ValueError
-        If required sections or fields are missing, or if data structure is invalid
+        If required sections or fields are missing, if data structure is invalid, or if Tamb or pamb
+        differ from the ambient state the exergies in the data were computed at
     """
     # Validate required sections
     if required_component_fields is None:
@@ -1474,9 +1648,21 @@ def _process_json(
             if conn_data.get("kind") == "material" and "mass_composition" not in conn_data:
                 raise ValueError(f"Material stream '{conn_name}' missing mass_composition")
 
-    # Extract or use provided ambient conditions
-    Tamb = Tamb or data["ambient_conditions"].get("Tamb")
-    pamb = pamb or data["ambient_conditions"].get("pamb")
+    # The stored exergies hold only at the stored ambient state
+    stored = data["ambient_conditions"]
+    states = [("Tamb", Tamb, stored.get("Tamb"), "K"), ("pamb", pamb, stored.get("pamb"), "Pa")]
+    if any(
+        value is not None and kept is not None and not math.isclose(value, kept, rel_tol=1e-6)
+        for _, value, kept, _ in states
+    ):
+        at = " and ".join(f"{name} = {kept:g} {unit}" for name, _, kept, unit in states if kept is not None)
+        passed = " and ".join(f"{name} = {value:g} {unit}" for name, value, _, unit in states if value is not None)
+        raise ValueError(
+            f"The exergies in the data were computed at {at}, not at the passed {passed}. Export the data again at "
+            "the new ambient state, or leave out Tamb and pamb."
+        )
+    Tamb = stored.get("Tamb") if Tamb is None else Tamb
+    pamb = stored.get("pamb") if pamb is None else pamb
 
     if Tamb is None or pamb is None:
         raise ValueError("Ambient conditions (Tamb, pamb) must be provided either in JSON or as parameters")
@@ -1574,6 +1760,9 @@ class ExergoeconomicAnalysis:
         self.exergy_analysis = exergy_analysis_instance
         self.connections = exergy_analysis_instance.connections
         self.components = exergy_analysis_instance.components
+        for comp in self.components.values():
+            if isinstance(comp, CycleCloser):
+                comp.closed_cycle = comp.is_closed_cycle(self.components)
         self.chemical_exergy_enabled = exergy_analysis_instance.chemical_exergy_enabled
         self.split_physical_exergy = exergy_analysis_instance.split_physical_exergy
         if not self.split_physical_exergy:
@@ -1593,22 +1782,12 @@ class ExergoeconomicAnalysis:
 
     @property
     def _branch_scales(self) -> dict:
-        """Return how often each stream exists in the plant.
-
-        A solar collector may stand in for ``num_branches`` identical parallel branches. Its own
-        streams then carry the mass flow and the cost of a single branch, while the heat it takes
-        in and its investment cost belong to all of them. The streams of the headers on either side
-        carry the whole field. Every cost balance that a branch stream enters has to count it that
-        often, or the cost of the field is the cost of one branch.
-        """
+        """Return how often each stream exists in the plant, by name, where that is not once."""
         scales = {}
-        for comp in self.components.values():
-            branches = getattr(comp, "beta", 1) or 1
-            if branches == 1 or not hasattr(comp, "_fluid_streams"):
-                continue
-            for conn in list(comp.inl.values()) + list(comp.outl.values()):
-                if conn is not None and conn.get("kind", "material") == "material":
-                    scales[conn["name"]] = branches
+        for name, conn in self.connections.items():
+            branches = _stream_branches(conn, self.components)
+            if branches != 1:
+                scales[name] = branches
         return scales
 
     @property
@@ -1649,6 +1828,19 @@ class ExergoeconomicAnalysis:
         col_number = 0
         valid_components = {comp.name for comp in self.components.values()}
         dissipative_columns = {}  # Track dissipative column per component to avoid duplicates
+
+        # Below T0 the exergy of heat, and with it its cost, flows against the heat.
+        self._reversed_heat = {
+            name
+            for name, conn in self.connections.items()
+            if conn.get("kind") == "heat" and self.exergy_analysis._heat_exergy_reversed(name)
+        }
+        for name in sorted(self._reversed_heat):
+            source, target = self._exergy_ends(self.connections[name])
+            logger.warning(
+                f"The exergy of heat stream '{name}' flows against the heat, as below the ambient temperature, so "
+                f"its cost does too: it leaves {self._side(source)} and enters {self._side(target)}."
+            )
 
         # Process each connection (stream) which is part of the system (has a valid source or target)
         for name, conn in self.connections.items():
@@ -1699,6 +1891,16 @@ class ExergoeconomicAnalysis:
         # Store the total number of cost variables for later use.
         self.num_variables = col_number
 
+    def _exergy_ends(self, conn):
+        """Source and target component of the exergy a connection carries, swapped for heat flowing against it."""
+        if conn.get("name") in getattr(self, "_reversed_heat", ()):
+            return conn.get("target_component"), conn.get("source_component")
+        return conn.get("source_component"), conn.get("target_component")
+
+    def _side(self, name):
+        """A component name for messages, or the surroundings."""
+        return f"'{name}'" if name in self.components else "the surroundings"
+
     def assign_user_costs(self, Exe_Eco_Costs):
         """
         Assign component and connection costs from user input dictionary.
@@ -1709,11 +1911,18 @@ class ExergoeconomicAnalysis:
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
             Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            A material stream may also have a cost per exergy form, "<connection_name>_c_T",
+            "_c_M" and "_c_CH", or "_c_PH" for the thermal and the mechanical exergy together
+            (without the split: "_c_PH" and "_c_CH"). A form without a cost of its own takes "_c".
+            Another unit in the currency of the analysis may be given next to a value, as
+            ``"<connection_name>_c_unit": "EUR / MWh"`` or ``"<component_name>_Z_unit": "EUR / s"``.
 
         Raises
         ------
         ValueError
-            If a component cost is missing or if a required input connection cost is not provided.
+            If a component cost is missing or if a required input connection cost is not provided,
+            if a cost per exergy form does not fit the split of the physical exergy, or if a unit is
+            unknown, of the wrong kind or in another currency.
 
         Notes
         -----
@@ -1736,7 +1945,7 @@ class ExergoeconomicAnalysis:
                     )
                 continue
             if cost_key in Exe_Eco_Costs:
-                comp.Z_costs = Exe_Eco_Costs[cost_key] / 3600  # Convert currency/h to currency/s
+                comp.Z_costs = self._user_cost(Exe_Eco_Costs, cost_key, "h") / 3600  # currency/h to currency/s
             else:
                 raise ValueError(f"Cost for component '{comp_name}' is mandatory but not provided in Exe_Eco_Costs.")
 
@@ -1751,33 +1960,47 @@ class ExergoeconomicAnalysis:
                 continue
 
             cost_key = f"{conn_name}_c"
+            form_costs = self._form_costs(Exe_Eco_Costs, conn_name) if kind == "material" else {}
+            missing = [f"'{conn_name}_c_{label}'" for label in self.cost_labels if label not in form_costs]
+            has_cost = cost_key in Exe_Eco_Costs or (kind == "material" and not missing)
 
             # Check if the connection is an input to the system: source is missing or not a registered
             # component (e.g. TESPy Source/Sink), while target is a valid component in the system.
-            source = conn.get("source_component")
-            target = conn.get("target_component")
+            source, target = self._exergy_ends(conn)
             is_input = (source is None or source not in valid_component_names) and (target in valid_component_names)
+            if has_cost and kind == "heat" and conn_name in getattr(self, "_reversed_heat", ()) and not is_input:
+                logger.warning(
+                    f"The cost given for heat stream '{conn_name}' is not used: its exergy leaves "
+                    f"{self._side(source)}, which prices it."
+                )
 
             # For input connections (except for power connections) a cost is mandatory.
-            if is_input and kind != "power" and cost_key not in Exe_Eco_Costs:
+            if is_input and kind != "power" and not has_cost:
+                alternative = f" or {', '.join(missing)}" if form_costs else ""
                 raise ValueError(
-                    f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs."
+                    f"Cost for input connection '{conn_name}' is mandatory but not provided in Exe_Eco_Costs: "
+                    f"give '{cost_key}'{alternative}."
                 )
 
             # Assign cost if provided.
-            if cost_key in Exe_Eco_Costs:
+            if has_cost:
                 # Convert cost from currency/GJ to currency/J.
-                c_TOT = Exe_Eco_Costs[cost_key] * 1e-9
+                c_TOT = self._user_cost(Exe_Eco_Costs, cost_key, "GJ") * 1e-9 if cost_key in Exe_Eco_Costs else None
                 conn["c_TOT"] = c_TOT
 
                 if kind == "material":
-                    # Compute C_TOT based on exergy terms and mass flow.
-                    conn["C_TOT"] = c_TOT * conn.get("E", 0)
-
-                    # Assign cost breakdown for material streams.
+                    # Assign cost breakdown for material streams, a form without its own cost takes c_TOT.
                     for label in self.cost_labels:
-                        conn[f"c_{label}"] = c_TOT
-                        conn[f"C_{label}"] = c_TOT * conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
+                        conn[f"c_{label}"] = form_costs.get(label, c_TOT)
+                        E_label = conn.get(self._EXERGY_OF_LABEL[label], 0) * conn.get("m", 0)
+                        conn[f"C_{label}"] = conn[f"c_{label}"] * E_label
+
+                    if form_costs:
+                        conn["C_TOT"] = sum(conn[f"C_{label}"] for label in self.cost_labels)
+                        conn["c_TOT"] = conn["C_TOT"] / conn["E"] if conn.get("E") else (c_TOT or 0.0)
+                    else:
+                        # Compute C_TOT based on exergy terms and mass flow.
+                        conn["C_TOT"] = c_TOT * conn.get("E", 0)
 
                 elif kind in {"heat", "power"}:
                     # Ensure energy flow "E" is present before computing cost.
@@ -1786,6 +2009,40 @@ class ExergoeconomicAnalysis:
 
                     # Assign only the total cost for heat and power streams.
                     conn["C_TOT"] = c_TOT * conn["E"]
+
+    def _user_cost(self, costs, key, per):
+        """The cost ``costs[key]`` in currency per ``per``, converted from its unit if one is given."""
+        unit = costs.get(f"{key}_unit")
+        if unit is None:
+            return costs[key]
+        try:
+            return convert_cost(costs[key], unit, f"{self.currency} / {per}", self.currency)
+        except ValueError as exc:
+            raise ValueError(f"'{key}_unit': {exc}") from None
+
+    def _form_costs(self, costs, conn_name):
+        """Specific costs in currency/J given for single exergy forms of a stream, by cost label."""
+        given = {
+            label: self._user_cost(costs, f"{conn_name}_c_{label}", "GJ") * 1e-9
+            for label in ("T", "M", "PH", "CH")
+            if f"{conn_name}_c_{label}" in costs
+        }
+        if self.split_physical_exergy and "PH" in given:
+            if "T" in given or "M" in given:
+                raise ValueError(
+                    f"'{conn_name}_c_PH' stands for '{conn_name}_c_T' and '{conn_name}_c_M' together, "
+                    f"give either of them."
+                )
+            given["T"] = given["M"] = given.pop("PH")
+        elif not self.split_physical_exergy and ("T" in given or "M" in given):
+            raise ValueError(
+                f"The physical exergy is not split, so stream '{conn_name}' has no thermal and mechanical "
+                f"cost. Give '{conn_name}_c_PH' instead."
+            )
+        if "CH" in given and not self.chemical_exergy_enabled:
+            logger.warning(f"'{conn_name}_c_CH' is ignored, since the chemical exergy is not part of the analysis.")
+            del given["CH"]
+        return given
 
     def construct_matrix(self):
         """
@@ -1814,6 +2071,11 @@ class ExergoeconomicAnalysis:
         self._b = np.zeros(self.num_variables)
         counter = 0
 
+        # Rows of an earlier build are stale: a component that is dissipative now has no cost balance row.
+        for comp in self.components.values():
+            if hasattr(comp, "exergy_cost_line"):
+                del comp.exergy_cost_line
+
         # Filter out CycleCloser instances, keeping the component objects.
         valid_components = [comp for comp in self.components.values() if not isinstance(comp, CycleCloser)]
         # Create a set of valid component names for cost balance comparisons.
@@ -1831,15 +2093,18 @@ class ExergoeconomicAnalysis:
                 comp.exergy_cost_line = counter
                 for conn in self.connections.values():
                     scale = self._branch_scales.get(conn.get("name"), 1)
+                    source, target = self._exergy_ends(conn)
                     # Check if the connection is linked to a valid component.
                     # If the connection's target is the component, it is an inlet (add +1).
-                    if conn.get("target_component") == comp.name:
+                    if target == comp.name:
                         for _key, col in conn["CostVar_index"].items():
                             self._A[counter, col] = scale  # Incoming costs
                     # If the connection's source is the component, it is an outlet (subtract -1).
-                    elif conn.get("source_component") == comp.name:
-                        for _key, col in conn["CostVar_index"].items():
-                            self._A[counter, col] = -scale  # Outgoing costs
+                    elif source == comp.name:
+                        for key, col in conn["CostVar_index"].items():
+                            # The C_diff column of a dissipative target is not a cost of this stream.
+                            if key != "dissipative":
+                                self._A[counter, col] = -scale  # Outgoing costs
                     self.equations[counter] = {"kind": "cost_balance", "object": [comp.name], "property": "Z_costs"}
 
                 self._b[counter] = -getattr(comp, "Z_costs", 1)
@@ -1854,9 +2119,8 @@ class ExergoeconomicAnalysis:
         for name, conn in self.connections.items():
             # A connection is treated as an inlet if its source_component is missing or not part of the system
             # and its target_component is among the valid components.
-            if (conn.get("source_component") is None or conn.get("source_component") not in self.components) and (
-                conn.get("target_component") in valid_component_names
-            ):
+            source, target = self._exergy_ends(conn)
+            if (source is None or source not in self.components) and (target in valid_component_names):
                 kind = conn.get("kind", "material")
                 if kind == "material":
                     for label in self.cost_labels:
@@ -1904,13 +2168,12 @@ class ExergoeconomicAnalysis:
 
         # Only add auxiliary equations if there is more than one power connection.
         if len(power_conns) > 1:
-            # Choose the first connection as reference.
-            ref = power_conns[0]
-            ref_idx = ref["CostVar_index"]["exergy"]
-            for conn in power_conns[1:]:
-                cur_idx = conn["CostVar_index"]["exergy"]
-                self._A[counter, ref_idx] = 1 / ref["E"] if ref["E"] != 0 else 1
-                self._A[counter, cur_idx] = -1 / conn["E"] if conn["E"] != 0 else -1
+            # Choose the first connection with exergy as reference.
+            ref = next((conn for conn in power_conns if conn["E"] != 0), power_conns[0])
+            for conn in power_conns:
+                if conn is ref:
+                    continue
+                set_equal_specific_cost(self._A, counter, ref, conn, "exergy")
                 self._b[counter] = 0
                 self.equations[counter] = {
                     "kind": "aux_power_eq",
@@ -2064,7 +2327,8 @@ class ExergoeconomicAnalysis:
                     conn["c_TOT"] = conn["C_TOT"] / total_E if total_E != 0 else 0.0
                 elif kind in {"heat", "power"}:
                     conn["C_TOT"] = C_solution[conn["CostVar_index"]["exergy"]]
-                    conn["c_TOT"] = conn["C_TOT"] / conn.get("E", 1)
+                    E = conn.get("E", 1)
+                    conn["c_TOT"] = conn["C_TOT"] / E if E != 0 else 0.0
 
         # Step 5: Assign C_P, C_F, C_D, and f values to components
         for comp in self.exergy_analysis.components.values():
@@ -2076,40 +2340,26 @@ class ExergoeconomicAnalysis:
         # Check cost balances before loss attribution (Step 6) modifies C_TOT values
         self.check_cost_balance()
 
-        # Step 6: Distribute the cost of loss streams to the product streams.
-        # For each loss stream (provided in E_L_dict), its C_TOT is distributed among the product streams (in E_P_dict)
-        # in proportion to their exergy (E). After the distribution the loss stream's C_TOT is set to zero.
-        loss_streams = self.E_L_dict.get("inputs", [])
-        product_streams = self.E_P_dict.get("inputs", [])
-        for loss_name in loss_streams:
-            loss_conn = self.connections.get(loss_name)
-            if loss_conn is None:
-                continue
-            loss_cost = loss_conn.get("C_TOT", 0)
-            # If there is no cost assigned to this loss stream, skip it.
-            if not loss_cost:
-                continue
-            # Calculate the total exergy of the product streams.
-            total_E = 0
-            for prod_name in product_streams:
-                prod_conn = self.connections.get(prod_name)
-                if prod_conn is None:
-                    continue
-                total_E += prod_conn.get("E", 0)
-            # Avoid division by zero.
-            if total_E == 0:
-                continue
-            # Distribute the loss cost to each product stream proportionally to its exergy.
-            for prod_name in product_streams:
-                prod_conn = self.connections.get(prod_name)
-                if prod_conn is None:
-                    continue
-                prod_E = prod_conn.get("E", 0)
-                share = loss_cost * (prod_E / total_E)
+        # Step 6: Distribute the cost of loss streams to the product streams, in proportion to their net
+        # exergy (Bejan et al. 1996, Example 8.1). The cost of a loss stream stays in the table for display.
+        # The loss is a net value, so the cost of the loss streams entering the plant (E_L outputs) is
+        # subtracted (SPECO eq. 55). The share each product takes is also kept on its own, so that the
+        # component balances can still be checked afterwards.
+        product_E = self._net_product_exergy()
+        total_E = sum(product_E.values())
+        loss_cost = sum(self.connections.get(name, {}).get("C_TOT", 0) or 0 for name in self.E_L_dict.get("inputs", []))
+        loss_cost -= sum(
+            self.connections.get(name, {}).get("C_TOT", 0) or 0 for name in self.E_L_dict.get("outputs", [])
+        )
+        for conn in self.connections.values():
+            conn["C_loss_share"] = 0.0
+        if loss_cost and total_E:
+            for prod_name, prod_E in product_E.items():
+                prod_conn = self.connections[prod_name]
+                share = loss_cost * prod_E / total_E
                 prod_conn["C_TOT"] = prod_conn.get("C_TOT", 0) + share
+                prod_conn["C_loss_share"] = share
                 prod_conn["c_TOT"] = prod_conn["C_TOT"] / prod_conn.get("E", 1)
-            # The cost of the loss streams are not set to zero to show
-            # them in the table, but they are attributed to the product streams.
 
         # Step 7: Compute system-level cost variables using the E_F and E_P dictionaries.
         # Compute total fuel cost (C_F_total) from fuel streams.
@@ -2155,8 +2405,16 @@ class ExergoeconomicAnalysis:
         C_P_total *= 3600
         Z_total *= 3600
 
-        # Store the system-level costs in the exergy analysis instance.
-        self.system_costs = {"C_F": float(C_F_total), "C_P": float(C_P_total), "Z": float(Z_total)}
+        # Store the system-level costs in the exergy analysis instance. The cost of the exergy destruction
+        # of the system is c_F,tot * E_D,tot, not the sum over the components (Bejan et al. 1996, p. 436).
+        ean = self.exergy_analysis
+        C_D_total = C_F_total / ean.E_F * ean.E_D if ean.E_F else np.nan
+        self.system_costs = {
+            "C_F": float(C_F_total),
+            "C_P": float(C_P_total),
+            "Z": float(Z_total),
+            "C_D": float(C_D_total),
+        }
 
         # Check cost balance and raise error if violated
         if abs(self.system_costs["C_P"] - self.system_costs["C_F"] - self.system_costs["Z"]) > 1e-4:
@@ -2169,8 +2427,11 @@ class ExergoeconomicAnalysis:
 
     def distribute_all_Z_diff(self, C_solution):
         """
-        Distribute every dissipative cost-difference (the C_diff variables) among
-        all components according to their `serving_weight`.
+        Store the share of the dissipative cost differences (the C_diff variables) that the
+        cost balance of each component is charged with.
+
+        The share is read from the coefficients of the C_diff columns in the cost balance row of
+        the component and stored as its ``Z_diss``, zero for a component without such a row.
 
         Parameters
         ----------
@@ -2179,13 +2440,12 @@ class ExergoeconomicAnalysis:
         """
         # find all indices of variables named "dissipative_*"
         diss_indices = [int(idx) for idx, name in self.variables.items() if name.startswith("dissipative_")]
-        if not diss_indices:
-            return
-        total_C_diff = sum(C_solution[i] for i in diss_indices)
-        # assign to each component that got a serving_weight
         for comp in self.exergy_analysis.components.values():
-            if hasattr(comp, "serving_weight"):
-                comp.Z_diss = comp.serving_weight * total_C_diff
+            row = getattr(comp, "exergy_cost_line", None)
+            if row is not None and self.equations.get(row, {}).get("object") == [comp.name]:
+                comp.Z_diss = sum(self._A[row, i] * C_solution[i] for i in diss_indices)
+            else:
+                comp.Z_diss = 0.0
 
         # Store each dissipative component's own C_diff for balance checking
         for idx in diss_indices:
@@ -2194,6 +2454,62 @@ class ExergoeconomicAnalysis:
             comp = self.exergy_analysis.components.get(comp_name)
             if comp is not None:
                 comp.C_diff = C_solution[idx]
+
+    def _net_product_exergy(self):
+        """Net exergy of each product stream: its exergy less the subtracted product streams paired with it.
+
+        A stream subtracted in E_P, such as the feedwater of a boiler, is paired with the product stream
+        it turns into downstream, such as the steam. Products without a partner, such as power, count
+        with their exergy. If a subtracted stream reaches no product or more than one, the products count
+        with their gross exergy and a warning names the stream.
+        """
+        products = [name for name in self.E_P_dict.get("inputs", []) if name in self.connections]
+        net = {name: self.connections[name].get("E", 0) or 0 for name in products}
+        for name in self.E_P_dict.get("outputs", []):
+            reached = self._downstream_products(name, set(products))
+            if len(reached) != 1:
+                logger.warning(
+                    f"The product stream '{name}' subtracted in E_P leads to {len(reached)} product streams, so the "
+                    "loss cost is split by the gross exergy of the products."
+                )
+                return {p: self.connections[p].get("E", 0) or 0 for p in products}
+            net[reached.pop()] -= self.connections[name].get("E", 0) or 0
+        if any(value <= 0 for value in net.values()):
+            logger.warning("A product has no positive net exergy, so the loss cost is split by the gross exergy.")
+            return {p: self.connections[p].get("E", 0) or 0 for p in products}
+        return net
+
+    def _downstream_products(self, start, products):
+        """Product streams reached from connection ``start`` along the material streams it flows into."""
+        conns = self.connections
+        reached, seen = set(), set()
+        queue = [conns[start]]
+        while queue:
+            conn = queue.pop()
+            comp_name = conn.get("target_component")
+            if comp_name is None or (comp_name, conn.get("target_connector")) in seen:
+                continue
+            seen.add((comp_name, conn.get("target_connector")))
+            outlets = [
+                c
+                for c in conns.values()
+                if c.get("source_component") == comp_name and c.get("kind", "material") == "material"
+            ]
+            inlets = [
+                c
+                for c in conns.values()
+                if c.get("target_component") == comp_name and c.get("kind", "material") == "material"
+            ]
+            # In a unit with two streams side by side, such as a heat exchanger, a stream stays on its side.
+            if len(inlets) > 1 and len(outlets) > 1:
+                same_side = [c for c in outlets if c.get("source_connector") == conn.get("target_connector")]
+                outlets = same_side or outlets
+            for out in outlets:
+                if out["name"] in products:
+                    reached.add(out["name"])
+                else:
+                    queue.append(out)
+        return reached
 
     def check_cost_balance(self, tol=1e-6):
         """
@@ -2233,12 +2549,13 @@ class ExergoeconomicAnalysis:
                     if self.chemical_exergy_enabled:
                         cost += conn.get("C_CH", 0) or 0
                 else:
-                    # For heat/power streams, use C_TOT directly (no loss attribution applies)
-                    cost = conn.get("C_TOT", 0) or 0
+                    # For heat/power streams C_TOT, without the share of the loss cost added after the solve
+                    cost = (conn.get("C_TOT", 0) or 0) - (conn.get("C_loss_share", 0) or 0)
                 scale = self._branch_scales.get(conn.get("name"), 1)
-                if conn.get("target_component") == name:
+                source, target = self._exergy_ends(conn)
+                if target == name:
                     inlet_sum += scale * cost
-                if conn.get("source_component") == name:
+                if source == name:
                     outlet_sum += scale * cost
             comp.C_in = inlet_sum
             comp.C_out = outlet_sum
@@ -2270,7 +2587,8 @@ class ExergoeconomicAnalysis:
         Exe_Eco_Costs : dict
             Dictionary containing cost assignments for components and connections.
             Format for components: "<component_name>_Z": cost_value [currency/h]
-            Format for connections: "<connection_name>_c": cost_value [currency/GJ]
+            Format for connections: "<connection_name>_c": cost_value [currency/GJ], or a cost per
+            exergy form of a material stream, see :meth:`assign_user_costs`.
         allow_singular : bool, optional
             If True, use least-squares solver as fallback when the matrix is singular.
             The solution may not be physically consistent. Default is False.
@@ -2286,6 +2604,56 @@ class ExergoeconomicAnalysis:
         self.assign_user_costs(Exe_Eco_Costs)
         self.solve_exergoeconomic_analysis(allow_singular=allow_singular)
         logger.info("Exergoeconomic analysis completed successfully.")
+
+    def export_to_json(self, output_path, units=None):
+        """
+        Export the model with its exergy and cost results to a JSON file.
+
+        Every value is written with its unit: the costs in currency/h, the specific costs in
+        currency/GJ and the other values in SI, unless ``units`` asks for another one.
+
+        Parameters
+        ----------
+        output_path : str
+            Path where the JSON file will be saved.
+        units : dict, optional
+            Unit to write a value other than a cost in, see :meth:`ExergyAnalysis.export_to_json`.
+        """
+        rate, specific = f"{self.currency} / h", f"{self.currency} / GJ"
+        data = self.exergy_analysis._serialize()
+        for name, conn in data["connections"].items():
+            for label in ("T", "M", "PH", "CH", "TOT"):
+                for key, factor, unit in ((f"C_{label}", 3600, rate), (f"c_{label}", 1e9, specific)):
+                    if self.connections[name].get(key) is not None:
+                        conn[key] = _nan_to_none(float(self.connections[name][key]) * factor)
+                        conn[f"{key}_unit"] = unit
+        component_costs = (
+            ("C_F", "C_F", 3600, rate),
+            ("C_P", "C_P", 3600, rate),
+            ("C_D", "C_D", 3600, rate),
+            ("Z", "Z_costs", 3600, rate),
+            ("Z_diss", "Z_diss", 3600, rate),
+            ("c_F", "c_F", 1e9, specific),
+            ("c_P", "c_P", 1e9, specific),
+            ("r", "r", 1, "dimensionless"),
+            ("f", "f", 1, "dimensionless"),
+        )
+        for comps in data["components"].values():
+            for name, comp_data in comps.items():
+                results = {}
+                for key, attribute, factor, unit in component_costs:
+                    value = getattr(self.components[name], attribute, None)
+                    results[key] = None if value is None else _nan_to_none(float(value) * factor)
+                    results[f"{key}_unit"] = unit
+                comp_data["exergoeconomic_results"] = results
+        data["system_costs"] = {}
+        for key, value in self.system_costs.items():
+            data["system_costs"].update({key: _nan_to_none(value), f"{key}_unit": rate})
+        if units:
+            data = from_SI(data, units)
+        with open(output_path, "w") as json_file:
+            json.dump(data, json_file, indent=4)
+            logger.info(f"Model and exergoeconomic results exported to JSON file: {output_path}.")
 
     def print_equations(self):
         """
@@ -2474,6 +2842,7 @@ class ExergoeconomicAnalysis:
         C_P_list = []
         C_D_list = []
         Z_cost_list = []
+        Z_diss_list = []
         r_list = []
         f_list = []
 
@@ -2487,6 +2856,7 @@ class ExergoeconomicAnalysis:
                     C_P_list.append(getattr(comp, "C_P", 0) * 3600)
                     C_D_list.append(getattr(comp, "C_D", 0) * 3600)
                     Z_cost_list.append(getattr(comp, "Z_costs", 0) * 3600)
+                    Z_diss_list.append(getattr(comp, "Z_diss", 0) * 3600)
                     f_list.append(getattr(comp, "f", 0) * 100)
                     r_list.append(getattr(comp, "r", 0) * 100)
                 else:
@@ -2494,6 +2864,7 @@ class ExergoeconomicAnalysis:
                     C_P_list.append(np.nan)
                     C_D_list.append(np.nan)
                     Z_cost_list.append(np.nan)
+                    Z_diss_list.append(np.nan)
                     f_list.append(np.nan)
                     r_list.append(np.nan)
             else:
@@ -2502,6 +2873,7 @@ class ExergoeconomicAnalysis:
                 C_P_list.append(np.nan)
                 C_D_list.append(np.nan)
                 Z_cost_list.append(np.nan)
+                Z_diss_list.append(np.nan)
                 f_list.append(np.nan)
                 r_list.append(np.nan)
 
@@ -2510,6 +2882,8 @@ class ExergoeconomicAnalysis:
         df_comp[f"C_P [{self.currency}/h]"] = C_P_list
         df_comp[f"C_D [{self.currency}/h]"] = C_D_list
         df_comp[f"Z [{self.currency}/h]"] = Z_cost_list
+        df_comp[f"Z_diss [{self.currency}/h]"] = Z_diss_list
+        # Z_diss is already in C_D+Z of the dissipative component, so it is not counted here again.
         df_comp[f"C_D+Z [{self.currency}/h]"] = df_comp[f"C_D [{self.currency}/h]"] + df_comp[f"Z [{self.currency}/h]"]
         df_comp["f [%]"] = f_list
         df_comp["r [%]"] = r_list
@@ -2541,8 +2915,9 @@ class ExergoeconomicAnalysis:
             ((df_comp.loc["TOT", f"c_P [{self.currency}/GJ]"] - c_F_tot) / c_F_tot) * 100 if c_F_tot else np.nan
         )
 
-        # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf
-        df_comp["r [%]"] = df_comp["r [%]"].where(df_comp["r [%]"].abs() <= 1e8, np.inf)
+        # Replace extremely large r [%] values (numerical artifacts from near-zero c_F) with inf; undefined r stays NaN
+        r = df_comp["r [%]"]
+        df_comp["r [%]"] = r.where((r.abs() <= 1e8) | r.isna(), np.inf)
 
         # -------------------------
         # Add cost columns to material connections.
@@ -2636,9 +3011,9 @@ class ExergoeconomicAnalysis:
         df_mat2 = df_mat[[c for c in mat2_cols if c in df_mat.columns]].copy()
 
         # Remove any columns that contain only NaN values from df_mat1, df_mat2, and df_non_mat.
-        df_mat1.dropna(axis=1, how="all", inplace=True)
-        df_mat2.dropna(axis=1, how="all", inplace=True)
-        df_non_mat.dropna(axis=1, how="all", inplace=True)
+        df_mat1 = df_mat1.dropna(axis=1, how="all")
+        df_mat2 = df_mat2.dropna(axis=1, how="all")
+        df_non_mat = df_non_mat.dropna(axis=1, how="all")
 
         # -------------------------
         # Print the four tables if requested.
@@ -2715,7 +3090,11 @@ class ExergoeconomicAnalysis:
         component is dominated by investment (*f* close to 100 %) or by exergy
         destruction (*f* close to 0 %).  A low *f* suggests that improving
         component efficiency would be more effective, while a high *f* suggests
-        that reducing investment cost is the priority.
+        that reducing investment cost is the priority. The cost a component is
+        charged for the dissipative components it serves, ``Z_diss``, is part of
+        its *r* and ``c_P``, but not of *f* and ``C_D+Z``: it is
+        neither its investment nor its exergy destruction, and ``C_D+Z`` of the
+        dissipative component already contains it.
         """
         # Get full results without printing
         df_comp, _, _, _ = self.exergoeconomic_results(print_results=False)
@@ -2743,6 +3122,7 @@ class ExergoeconomicAnalysis:
             "Component",
             f"C_D [{self.currency}/h]",
             f"Z [{self.currency}/h]",
+            f"Z_diss [{self.currency}/h]",
             f"C_D+Z [{self.currency}/h]",
             "f [%]",
             "r [%]",
@@ -2772,6 +3152,7 @@ class ExergoeconomicAnalysis:
             name = row["Component"]
             c_d = row[f"C_D [{self.currency}/h]"]
             z = row[f"Z [{self.currency}/h]"]
+            z_diss = row[f"Z_diss [{self.currency}/h]"]
             f_val = row["f [%]"]
 
             if f_val < 25:
@@ -2785,7 +3166,7 @@ class ExergoeconomicAnalysis:
                 suggestion = "consider trade-off between efficiency and cost"
 
             print(
-                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f} {self.currency}/h, "
+                f"  {i + 1}. {name}: C_D={c_d:.2f}, Z={z:.2f}, Z_diss={z_diss:.2f} {self.currency}/h, "
                 f"f={f_val:.1f}% -> {driver} -> {suggestion}"
             )
 
@@ -2884,7 +3265,8 @@ class EconomicAnalysis:
     fuel_costs : dict, optional
         Specific cost of every stream entering the plant, as
         ``{"<connection>": {"c": value, "r_n": rate, "basis": "exergy" | "energy"}}``. ``c`` is in
-        currency per GJ at the price level of the base year, ``r_n`` is the nominal escalation
+        currency per GJ at the price level of the base year, or in the unit ``c_unit`` in the same
+        currency, e.g. ``"EUR / MWh"``; ``r_n`` is the nominal escalation
         rate of that cost per year and defaults to that of the operating and maintenance cost,
         and ``basis`` says whether ``c`` is per unit of exergy (the default) or per unit of energy.
         A cost on the energy basis is converted with the flows of the stream, which are read from the
@@ -3004,6 +3386,11 @@ class EconomicAnalysis:
                 raise ValueError(
                     f"The cost basis of stream '{name}' is neither 'exergy' nor 'energy': {spec['basis']}."
                 )
+            if spec.get("c_unit") is not None:
+                try:
+                    spec["c"] = convert_cost(spec["c"], spec.pop("c_unit"), f"{currency} / GJ", currency)
+                except ValueError as exc:
+                    raise ValueError(f"The cost unit of stream '{name}': {exc}") from None
 
     @staticmethod
     def _scaled_cost(name, spec, exergy_analysis=None):
@@ -3374,11 +3761,14 @@ class EconomicAnalysis:
         """
         return self.TCI * self.compute_crf()
 
-    def first_year_om_costs(self):
+    def base_year_om_costs(self):
         r"""
-        Compute the operating and maintenance cost of the first year, per component.
+        Compute the operating and maintenance cost per component in money of the base year.
 
-        The share is taken of the purchased equipment cost or of the total capital investment,
+        This is the cost at the start of the first year of operation, :math:`P_0` in
+        :cite:`Bejan1996` (eq. 7.34); the payment for the first year is :math:`(1 + r_n)` times it,
+        which the levelization accounts for. The share is taken of the purchased equipment cost or of
+        the total capital investment,
         whichever ``omc_basis`` names. The two differ by the installation factor, so a share meant
         for one basis understates or overstates the cost badly when applied to the other:
 
@@ -3392,12 +3782,21 @@ class EconomicAnalysis:
         Returns
         -------
         dict
-            The first-year operating and maintenance cost of every component, in currency per year.
+            The operating and maintenance cost of every component in the base year, in currency per year.
         """
         base = self.base_PEC
         if self.omc_basis == "TCI":
             return {name: self.omc_share[name] * self.f_tci[name] * cost for name, cost in base.items()}
         return {name: self.omc_share[name] * cost for name, cost in base.items()}
+
+    def first_year_om_costs(self):
+        """Deprecated name of :meth:`base_year_om_costs`."""
+        warnings.warn(
+            "first_year_om_costs() is renamed to base_year_om_costs(); the old name will be removed.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.base_year_om_costs()
 
     def levelized_om_costs(self):
         r"""
@@ -3412,7 +3811,7 @@ class EconomicAnalysis:
         float
             Levelized operating and maintenance cost in currency per year.
         """
-        return self.compute_celf() * sum(self.first_year_om_costs().values())
+        return self.compute_celf() * sum(self.base_year_om_costs().values())
 
     def compute_c(self, exergy_analysis=None):
         r"""
@@ -3569,7 +3968,7 @@ class EconomicAnalysis:
         base = self.base_PEC
         crf = self.compute_crf()
         celf = self.compute_celf()
-        om = self.first_year_om_costs()
+        om = self.base_year_om_costs()
         costs = {}
         for name, cost in base.items():
             Z_CC = self.f_tci[name] * cost * crf / self.tau

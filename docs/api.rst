@@ -93,7 +93,7 @@ This module requires the user to provide the following inputs:
 
 - **Parsing method**: The appropriate method (:code:`from_aspen`, :code:`from_ebsilon` or :code:`from_tespy`) based on the simulation tool used.
 
-- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`) if they are not defined within the simulation.
+- **Ambient Conditions (optional)**: Ambient temperature (:code:`Tamb`) and pressure (:code:`pamb`). By default, the reference state of the simulation model is used. Values passed here replace it, and all exergies are computed at them.
 
 - **Chemical Exergy Library (optional)**: The library used for calculating chemical exergy. Currently only the Ahrendts model is supported.
 
@@ -176,8 +176,9 @@ The parsing process involves the following key steps:
     file for subsequent analysis.
 
 It is possible to provide a JSON file containing the connection and component data
-in the appropriate structure and format. This file must include information on the physical
-exergy values (mechanical and thermal), as ExerPy does not calculate them itself.
+in the format described in :ref:`JSON format <json_format_label>`. This file must include
+information on the physical exergy values (mechanical and thermal), as ExerPy does not calculate
+them itself.
 In this case, the method :code:`from_json` should be used to load the data. The chemical
 exergy calculation is then performed based on the provided data and the
 Ahrendts reference environment.
@@ -276,6 +277,9 @@ The results include the following key parameters:
 
 These values are provided both for each component and for the entire system.
 
+:code:`ean.export_to_json("results.json")` saves the model and these results, every value with its
+unit. See :ref:`JSON format <json_format_label>` for the format and for exporting in other units.
+
 
 *******************
 3. Component Sizing
@@ -368,8 +372,7 @@ to determine cost rates and specific costs for every connection and component.
 
     With :code:`split_physical_exergy=True` a material stream carries a cost rate for its thermal
     (:code:`C^T`) and one for its mechanical exergy (:code:`C^M`). With :code:`False` it carries a
-    single cost rate for its physical exergy (:code:`C^PH`) instead, which is what Aspen Plus models
-    have to use. The split resolves the fuel and the product of a component more finely, so the two
+    single cost rate for its physical exergy (:code:`C^PH`) instead. The split resolves the fuel and the product of a component more finely, so the two
     settings do not give the same specific costs. Below the ambient temperature the split is needed to charge
     the cold exergy of a stream to the product of the component producing it; without it such a
     component either keeps the cold exergy in its outlet stream or turns dissipative, and a warning
@@ -390,7 +393,12 @@ The exergoeconomic analysis requires the following inputs:
   - **Component investment costs**: :code:`"<component_name>_Z"` in currency/h (mandatory for all
     components except CycleCloser, PowerBus and Splitter)
   - **Input stream costs**: :code:`"<connection_name>_c"` in currency/GJ (mandatory for all streams
-    entering the system boundary)
+    entering the system boundary). A material stream can also have a cost per exergy form,
+    :code:`"<connection_name>_c_T"`, :code:`"_c_M"`, :code:`"_c_PH"` or :code:`"_c_CH"`, see
+    :ref:`Cost input format <exergoeconomic_cost_input_label>`.
+
+  Another unit in the same currency can be given next to a value, e.g.
+  :code:`"10_c_unit": "EUR / MWh"`.
 
   Both can be typed in, as below, or obtained from the economic analysis with
   :meth:`~exerpy.analyses.EconomicAnalysis.compute_costs`.
@@ -425,12 +433,16 @@ The results include:
 
 - **Component results**: Cost of fuel (:code:`C_F`), cost of product (:code:`C_P`),
   cost of exergy destruction (:code:`C_D`), investment cost rate (:code:`Z`),
+  share of the cost of the dissipative components charged to the component (:code:`Z_diss`),
   total cost (:code:`C_D+Z`), exergoeconomic factor (:code:`f`), and
   relative cost difference (:code:`r`)
 - **Material connection costs**: Thermal (:code:`C_T`), mechanical (:code:`C_M`),
   chemical (:code:`C_CH`), and total (:code:`C_TOT`) cost rates with their specific costs
 - **Non-material connection costs**: Total cost rate (:code:`C_TOT`) and specific cost (:code:`c_TOT`)
   for power and heat streams
+
+:code:`eco.export_to_json("costs.json")` saves the model with the costs of every stream and
+component, each with its unit.
 
 Additionally, the :code:`evaluate_results` method identifies the components with the highest
 cost improvement potential:
@@ -452,4 +464,6 @@ API References
     api/costing.rst
     api/functions.rst
     api/parser.rst
+    api/schema.rst
+    api/units.rst
     api/visualization.rst

@@ -1,5 +1,6 @@
 import functools
 from collections.abc import Callable
+from enum import IntEnum
 from typing import Any
 from typing import TypeVar
 from typing import cast
@@ -78,9 +79,19 @@ class EpGasTableStub:
     epGasTableFromSuperiorModel = 0
 
 
-class EpCalculationResultStatus2Stub:
-    """Stub class for EpCalculationResultStatus2 when Ebsilon is not available."""
+class EpCalculationResultStatus2Stub(IntEnum):
+    """Stub class for EpCalculationResultStatus2 when Ebsilon is not available, with the same values."""
 
-    epCalculationResultStatus2OK = 0
-    epCalculationResultStatus2Warning = 1
-    epCalculationResultStatus2Error = 2
+    epCalculationResultStatus2Successful = 0
+    epCalculationResultStatus2SuccessfulWithComments = 1
+    epCalculationResultStatus2SuccessfulWithWarnings = 2
+    epCalculationResultStatus2FailedWithErrors = 3
+    epCalculationResultStatus2NotPossible = 4
+    epCalculationResultStatus2FatalError = 5
+    epCalculationResultStatus2MaximumOfIterationsReached = 6
+    epCalculationResultStatus2MaximumOfIterationsReachedWithWarnings = 7
+    epCalculationResultStatus2MaximalCalculationTimeExceeded = 8
+    epCalculationResultStatus2MaximumOfIterationsReachedWithErrors = 9
+    epCalculationResultStatus2LicenseError = 10
+    epCalculationResultStatus2AlreadyInSimulationError = 11
+    epCalculationResultStatus2InternalError = 12

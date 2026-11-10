@@ -87,6 +87,9 @@ def test_validate_simulators_connection_data(testcase, caplog):
     # and sometimes there seem to be NaN values in the dataframes, those are
     # removed as well
     diff_to_sim2 = ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
+    # exergies near the ambient state are close to zero, so differences below 1 J/kg are round-off
+    exergies = [column for column in columns if column.startswith("e_")]
+    diff_to_sim2[exergies] = diff_to_sim2[exergies].mask((df_sim1 - df_sim2)[exergies].abs() < 1.0, 0)
     assert (diff_to_sim2 < 2e-2).all().all()
 
 
@@ -109,10 +112,10 @@ def test_exergy_analysis_results(exergy_analysis):
     exergy_analysis.analyse(fuel, product, loss)
 
     # Check the calculated values with a tolerance of 100
-    assert pytest.approx(exergy_analysis.E_F, abs=100) == 85081016
-    assert pytest.approx(exergy_analysis.E_P, abs=100) == 42753645
-    assert pytest.approx(exergy_analysis.E_D, abs=100) == 39466737
-    assert pytest.approx(exergy_analysis.E_L, abs=100) == 2860633
+    assert pytest.approx(exergy_analysis.E_F, abs=100) == 85106352
+    assert pytest.approx(exergy_analysis.E_P, abs=100) == 42753648
+    assert pytest.approx(exergy_analysis.E_D, abs=100) == 39508815
+    assert pytest.approx(exergy_analysis.E_L, abs=100) == 2843889
 
 
 @pytest.fixture

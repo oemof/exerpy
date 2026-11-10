@@ -1,4 +1,3 @@
-import os
 import pathlib
 import runpy
 
@@ -9,15 +8,15 @@ import pytest
 from exerpy import ExergyAnalysis
 from exerpy.analyses import _load_json
 
-path = os.path.join(os.path.dirname(__file__), "..", "examples")
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 # Only the examples of the exergy analysis are validated against the other simulators; the
 # optimization examples have no reference results of their own.
-examples = sorted(pathlib.Path(path).glob("exergy_analysis/**/*tespy.py"))
+examples = sorted((REPO_ROOT / "examples").glob("exergy_analysis/**/*tespy.py"))
 
 # Maximum acceptable relative deviation between the tespy results and the
 # results of the other simulators. The observed deviations are all around or
 # below 1 %, see the validation notebooks next to the example scripts.
-RELATIVE_TOLERANCE = 0.02
+RELATIVE_TOLERANCE = 0.0105
 
 
 def _relative_differences(path1, path2):
@@ -52,20 +51,32 @@ def _relative_differences(path1, path2):
     # inf means that sim2 has 0 value, comparison does not make sense there
     # and sometimes there seem to be NaN values in the dataframes, those are
     # removed as well
-    return ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
+    diff = ((df_sim1 - df_sim2) / df_sim2).abs().replace(np.inf, 0).fillna(0)
+    # exergies near the ambient state are close to zero, so differences below 1 J/kg are round-off
+    exergies = [column for column in columns if column.startswith("e_")]
+    diff[exergies] = diff[exergies].mask((df_sim1 - df_sim2)[exergies].abs() < 1.0, 0)
+    return diff
 
 
 @pytest.mark.parametrize("script", examples, ids=lambda script: script.stem)
-def test_tespy_model_execution(script):
-    runpy.run_path(script)
+def test_tespy_model_execution(script, tmp_path, monkeypatch, values_without_unit):
+    # The scripts write their results to paths relative to the repository root,
+    # so mirror that folder structure inside tmp_path and run from there.
+    relative_dir = script.parent.relative_to(REPO_ROOT)
+    (tmp_path / relative_dir).mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
 
-    tespy_json = script.with_suffix(".json")
-    assert tespy_json.is_file(), f"Expected the script {script.name} to export its results to " f"{tespy_json.name}."
+    runpy.run_path(str(script))
 
+    tespy_json = tmp_path / relative_dir / script.with_suffix(".json").name
+    assert tespy_json.is_file(), f"Expected the script {script.name} to export its results to {tespy_json.name}."
+    assert values_without_unit(_load_json(str(tespy_json))) == []
+
+    # The reference results of the other simulators stay in the repository.
     reference_jsons = [
         reference
         for suffix in ("_ebs.json", "_aspen.json")
-        if (reference := tespy_json.with_name(tespy_json.name.replace("_tespy.json", suffix))).is_file()
+        if (reference := script.with_name(script.stem.replace("_tespy", "") + suffix)).is_file()
     ]
     assert reference_jsons, f"No reference results of other simulators found next to {script.name}."
 

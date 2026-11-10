@@ -2,6 +2,7 @@
 
 import logging
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -92,9 +93,9 @@ class TestCostRates:
     def test_a_share_of_om_cost_per_component(self):
         shares = {"COMP": 0.03, "COND": 0.01, "EVA": 0.02, "VAL": 0.0}
         eco = _economic(omc_share=shares)
-        first_year = eco.first_year_om_costs()
+        base_year = eco.base_year_om_costs()
         for name, share in shares.items():
-            assert first_year[name] == pytest.approx(share * PEC[name])
+            assert base_year[name] == pytest.approx(share * PEC[name])
 
     def test_an_installation_factor_per_component(self):
         """A component with a higher f_TCI carries a proportionally higher investment cost rate."""
@@ -476,7 +477,7 @@ class TestCostIndexAndOmBasis:
             PEC={"C": 100000.0}, i_eff=0.10, n=20, tau=7500, f_tci=4.16, omc_share=0.03, omc_basis=basis
         )
         expected = 0.03 * 100000.0 * (4.16 if basis == "TCI" else 1.0)
-        assert eco.first_year_om_costs()["C"] == pytest.approx(expected)
+        assert eco.base_year_om_costs()["C"] == pytest.approx(expected)
 
     def test_the_two_bases_differ_by_the_installation_factor(self):
         """A share meant for the total investment is badly wrong on the equipment cost."""
@@ -509,7 +510,7 @@ class TestCostIndexAndOmBasis:
         )
         eco = EconomicAnalysis.from_json(str(path))
         assert eco.omc_basis == "TCI"
-        assert eco.first_year_om_costs()["C"] == pytest.approx(0.03 * 4.16 * 100000.0)
+        assert eco.base_year_om_costs()["C"] == pytest.approx(0.03 * 4.16 * 100000.0)
 
 
 class TestLevelizedFuelCost:
@@ -629,3 +630,9 @@ class TestScaledCost:
     def test_the_scaled_costs_are_printed(self, capsys):
         EconomicAnalysis(PEC={"COND": {**self.REFERENCE, "size": 120.0}}, **PARAMETERS).economic_results()
         assert "Costs scaled from a reference component" in capsys.readouterr().out
+
+
+def test_first_year_om_costs_is_a_deprecated_alias():
+    eco = SimpleNamespace(base_year_om_costs=lambda: {"C": 1.0})
+    with pytest.warns(DeprecationWarning, match="base_year_om_costs"):
+        assert EconomicAnalysis.first_year_om_costs(eco) == {"C": 1.0}

@@ -16,12 +16,16 @@ import json
 from unittest.mock import Mock
 from unittest.mock import patch
 
+import CoolProp.CoolProp as CP
 import pytest
 
 from exerpy.parser.from_ebsilon import __ebsilon_path__
+from exerpy.parser.from_ebsilon.ebsilon_config import composition_params
 from exerpy.parser.from_ebsilon.ebsilon_config import connector_mapping
 from exerpy.parser.from_ebsilon.ebsilon_config import grouped_components
+from exerpy.parser.from_ebsilon.ebsilon_config import two_phase_fluids_mapping
 from exerpy.parser.from_ebsilon.ebsilon_parser import EbsilonModelParser
+from exerpy.parser.from_ebsilon.ebsilon_parser import _mass_composition
 from exerpy.parser.from_ebsilon.ebsilon_parser import run_ebsilon
 
 
@@ -235,10 +239,67 @@ def test_simulate_model(parser):
     mock_calc_errors = Mock()
     mock_calc_errors.Count = 0
     parser.model = Mock()
+    parser.model.SimulateNew.return_value = 0
     parser.model.CalculationErrors = mock_calc_errors
 
     parser.simulate_model()
     parser.model.SimulateNew.assert_called_once()
+
+
+def _solver_error(level, code=None, obj=None, description=""):
+    """Mock of an Ebsilon solver message (an item of ``CalculationErrors``)."""
+    error = Mock(Level=level, Code=code, HasCode=code is not None, HasObject=obj is not None, Description=description)
+    if obj is not None:
+        error.Object.Name = obj
+    return error
+
+
+@pytest.fixture
+def offline_parser():
+    """Parser with a mocked model whose calculation status can be set, usable without Ebsilon."""
+    with (
+        patch("exerpy.parser.from_ebsilon.ebsilon_parser.is_ebsilon_available", return_value=True),
+        patch("exerpy.parser.from_ebsilon.utils.__ebsilon_available__", True),
+    ):
+        parser = EbsilonModelParser("dummy_path.ebs")
+        parser.model = Mock()
+
+        def set_calculation(status, errors):
+            parser.model.SimulateNew.return_value = status
+            parser.model.CalculationErrors.Count = len(errors)
+            parser.model.CalculationErrors.Item.side_effect = lambda i: errors[i - 1]
+
+        parser.set_calculation = set_calculation
+        yield parser
+
+
+@pytest.mark.parametrize("status", [3, 4, 5, 6, 9, 12])
+def test_simulate_model_failed_calculation_raises(offline_parser, status):
+    """A failed calculation raises instead of leaving the results of an earlier one to be parsed."""
+    offline_parser.set_calculation(status, [_solver_error(2, code=2204, obj="13")])
+
+    with pytest.raises(RuntimeError, match="object '13'.*not parsed"):
+        offline_parser.simulate_model()
+
+
+@pytest.mark.parametrize("status", [0, 1, 2])
+def test_simulate_model_successful_calculation_logs_messages(offline_parser, status, caplog):
+    """Successful calculations pass; messages without a description are logged with code and object."""
+    offline_parser.set_calculation(
+        status,
+        [
+            _solver_error(1, code=2206, obj="17", description="   0.000000"),
+            _solver_error(0, code=2585, obj="GEN1", description="QAPP cannot be calculated"),
+        ],
+    )
+
+    with caplog.at_level("INFO", logger="exerpy"):
+        offline_parser.simulate_model()
+
+    warnings = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "code 2206" in warnings[0] and "object '17'" in warnings[0]
+    assert any("QAPP cannot be calculated (code 2585, object 'GEN1')" in r.message for r in caplog.records)
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
@@ -316,6 +377,40 @@ def test_parse_connection(parser, mock_pipe):
     connection_data = parser.connections_data[mock_pipe.Name]
     assert "kind" in connection_data
     assert "fluid_type" in connection_data
+
+
+@pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
+@pytest.mark.parametrize("compute_e_PH, e_PH", [(False, 500e3), (True, 1000.0)])
+def test_parse_connection_physical_exergy(parser, mock_pipe, compute_e_PH, e_PH):
+    """
+    Test that e_PH is the exergy of the pipe, or computed at the ambient state if the parser is set so, and that
+    e_M = e_PH - e_T.
+    """
+    parser.Tamb = 288.15
+    parser.pamb = 101325
+    parser.compute_e_PH = compute_e_PH
+    parser.oc = Mock()
+    parser.oc.CastToPipe = Mock(return_value=mock_pipe)
+    mock_pipe.Kind = 1004  # water
+    mock_pipe.FluidType = 4
+    mock_pipe.HasComp = Mock(return_value=False)
+    mock_pipe.E.Dimension = 5  # kJ / kg
+    functions = "exerpy.parser.from_ebsilon.ebsilon_functions"
+
+    with (
+        patch(f"{functions}.calc_ePH", return_value=1000.0) as calc_ePH,
+        patch(f"{functions}.calc_eT", return_value=400.0),
+        patch(f"{functions}.state_reproduced", return_value=True),
+    ):
+        parser.parse_connection(mock_pipe)
+
+    conn = parser.connections_data[mock_pipe.Name]
+    assert conn["e_PH"] == pytest.approx(e_PH)
+    assert conn["e_T"] == 400.0
+    assert conn["e_M"] == pytest.approx(e_PH - 400.0)
+    assert calc_ePH.called is compute_e_PH
+    if compute_e_PH:
+        calc_ePH.assert_called_once_with(parser.app, mock_pipe, 288.15, 101325)
 
 
 @pytest.mark.skipif(__ebsilon_path__ is None, reason="Test skipped due to missing ebsilon dependency.")
@@ -791,6 +886,28 @@ def test_resolve_ambient_conditions_override():
     assert parser.pamb == 101325.0
 
 
+@pytest.mark.parametrize(
+    "pressures, Tamb, pamb, compute",
+    [
+        ([("MP_p", 101325.0)], None, None, False),
+        ([("MP_p", 101325.0)], 288.15, 101325.0, False),
+        ([("MP_p", 101325.0)], 298.15, None, True),
+        ([("MP_p", 101325.0)], None, 1e5, True),
+        ([], None, 101325.0, True),
+    ],
+)
+def test_resolve_ambient_conditions_compute_e_PH(pressures, Tamb, pamb, compute):
+    """
+    Test that the physical exergies are computed at the passed ambient state if it is not the one of the
+    measuring points, at which Ebsilon computes the exergy of the pipes.
+    """
+    parser = _ambient_parser([("MP_T", 288.15)], pressures, Tamb=Tamb, pamb=pamb)
+
+    parser._resolve_ambient_conditions()
+
+    assert parser.compute_e_PH is compute
+
+
 # ---------- Component Mapping Tests ----------
 
 
@@ -924,3 +1041,93 @@ def test_initialize_model_activates_profile():
         parser.initialize_model()
 
     mock_model.ActivateProfile.assert_called_once_with("Part load")
+
+
+def test_mass_composition_drops_gaseous_water():
+    """H2OG and H2OL repeat the gaseous and liquid parts of H2O, so they are dropped."""
+
+    class Pipe:
+        XN2 = Mock(Value=0.75)
+        XO2 = Mock(Value=0.23)
+        XH2O = Mock(Value=0.02)
+        XH2OG = Mock(Value=0.015)
+        XH2OL = Mock(Value=0.005)
+        XCO2 = Mock(Value=0)
+
+    assert _mass_composition(Pipe()) == {"N2": 0.75, "O2": 0.23, "H2O": 0.02}
+
+    del Pipe.XH2O
+    assert _mass_composition(Pipe())["H2OG"] == 0.015
+
+
+def test_mass_composition_names_species():
+    """Species get the names CoolProp knows, and the liquid share of a species is no mass fraction."""
+
+    class Pipe:
+        XCH4 = Mock(Value=0.6)
+        XETH = Mock(Value=0.1)
+        XKR = Mock(Value=0.1)
+        XXE = Mock(Value=0.05)
+        XNO2 = Mock(Value=0.05)
+        XH2O = Mock(Value=0.1)
+        XL_H2O = Mock(Value=0.633)
+        XI = Mock(Value=0.2)
+
+    assert _mass_composition(Pipe()) == {
+        "CH4": 0.6,
+        "Ethane": 0.1,
+        "Krypton": 0.1,
+        "Xenon": 0.05,
+        "NO2": 0.05,
+        "H2O": 0.1,
+    }
+
+
+def test_composition_params_species_names():
+    """Each species has its own name, and all but the listed ones are known to CoolProp."""
+    no_coolprop = {
+        *("1,2-Butadiene", "1,3-Butadiene", "1-Pentene", "2,2-Dimethylbutane", "2,3-Dimethylbutane"),
+        *("3-Methylpentane", "Acetylene", "Ash", "Gaseous ash", "C", "Ca", "CaCO3", "CaO", "CaSO4"),
+        *("cis-Decalin", "CH3SH", "Cl", "CS2", "Ethylcyclohexane", "Ethylcyclopentane", "H", "Bound water"),
+        *("H2OG", "H2OL", "HCN", "Ca(OH)2", "Methylcyclohexane", "Methylcyclopentane", "Mg", "MgCO3", "MgO"),
+        *("N", "NO", "NO2", "O", "Propadiene", "S", "trans-Decalin"),
+    }
+    species = [name for name in composition_params.values() if name is not None]
+    assert len(species) == len(set(species))
+
+    unknown = set()
+    for name in species:
+        try:
+            CP.PropsSI("M", name)
+        except ValueError:
+            unknown.add(name)
+    assert unknown <= no_coolprop
+
+
+@pytest.mark.parametrize(
+    "fmed",
+    [
+        -4,
+        -5,
+        -25,
+        -27,
+        -1008,
+        -1023,
+        -1030,
+        -1031,
+        -1032,
+        -1033,
+        -1034,
+        -1038,
+        -1048,
+        -1085,
+        -1133,
+        -1136,
+        -1138,
+        -1139,
+    ],
+)
+def test_two_phase_fluids_with_chemical_exergy_carry_coolprop_names(fmed):
+    """Pure hydrocarbons and noble gases are named as CoolProp does, so the library finds them."""
+    (name,) = two_phase_fluids_mapping[fmed]
+    CP.PropsSI("M", name)

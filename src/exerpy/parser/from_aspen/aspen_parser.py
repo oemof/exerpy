@@ -1,9 +1,15 @@
+import itertools
 import json
+import math
 import os
 
-from exerpy.functions import convert_to_SI
-from exerpy.functions import fluid_property_data
 from exerpy.logger import logger
+from exerpy.parser import STATE_CHECK_STEP
+from exerpy.parser import state_between
+from exerpy.units import SI_UNITS
+from exerpy.units import add_units
+from exerpy.units import convert
+from exerpy.units import convert_to_SI
 
 from .aspen_config import connector_mappings
 from .aspen_config import grouped_components
@@ -14,16 +20,21 @@ class AspenModelParser:
     A class to parse Aspen Plus models, simulate them, extract data, and write to JSON.
     """
 
-    def __init__(self, model_path, split_physical_exergy=True):
+    def __init__(self, model_path, split_physical_exergy=True, Tamb=None, pamb=None):
         """
         Initializes the parser with the given model path.
 
         Parameters:
             model_path (str): Path to the Aspen Plus model file.
             split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+            Tamb (float): Ambient temperature in K. Replaces REF_TEMP of the model, see
+                :meth:`set_ambient_conditions`.
+            pamb (float): Ambient pressure in Pa. Replaces REF_PRES of the model.
         """
         self.model_path = model_path
         self.split_physical_exergy = split_physical_exergy
+        self.Tamb = Tamb
+        self.pamb = pamb
         self.aspen = None  # Aspen Plus application instance
         self.components_data = {}  # Dictionary to store component data
         self.connections_data = {}  # Dictionary to store connection data
@@ -57,6 +68,8 @@ class AspenModelParser:
         Parses the components and connections from the Aspen model.
         """
         try:
+            self.set_ambient_conditions()
+
             # Parse Tamb and pamb
             self.parse_ambient_conditions()
 
@@ -65,6 +78,10 @@ class AspenModelParser:
 
             # Parse blocks (components)
             self.parse_blocks()
+            self.orient_consumer_power()
+
+            if self.split_physical_exergy:
+                self.split_physical_exergy_of_streams()
 
         except Exception as e:
             logger.error(f"Error while parsing the model: {e}")
@@ -106,7 +123,7 @@ class AspenModelParser:
                 power_node = self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\POWER_OUT")
                 if power_node is not None:
                     raw_power = power_node.Value
-                    connection_data["energy_flow"] = convert_to_SI("power", abs(raw_power), power_node.UnitString)
+                    connection_data["energy_flow"] = convert_to_SI("energy_flow", abs(raw_power), power_node.UnitString)
                     # Store the sign of the raw Aspen value for direction determination
                     # in custom connector assignment functions (e.g., Turbine)
                     connection_data["_aspen_power_sign"] = 1 if raw_power >= 0 else -1
@@ -116,7 +133,7 @@ class AspenModelParser:
                 connection_data["kind"] = "heat"
                 connection_data["energy_flow"] = (
                     convert_to_SI(
-                        "power",
+                        "energy_flow",
                         abs(self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\QCALC").Value),
                         self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\QCALC").UnitString,
                     )
@@ -142,7 +159,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "T_unit": fluid_property_data["T"]["SI_unit"],
+                        "T_unit": SI_UNITS["T"],
                         "p": (
                             convert_to_SI(
                                 "p",
@@ -155,7 +172,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "p_unit": fluid_property_data["p"]["SI_unit"],
+                        "p_unit": SI_UNITS["p"],
                         "h": (
                             convert_to_SI(
                                 "h",
@@ -168,7 +185,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "h_unit": fluid_property_data["h"]["SI_unit"],
+                        "h_unit": SI_UNITS["h"],
                         "s": (
                             convert_to_SI(
                                 "s",
@@ -181,7 +198,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "s_unit": fluid_property_data["s"]["SI_unit"],
+                        "s_unit": SI_UNITS["s"],
                         "m": (
                             convert_to_SI(
                                 "m",
@@ -194,7 +211,7 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "m_unit": fluid_property_data["m"]["SI_unit"],
+                        "m_unit": SI_UNITS["m"],
                         "v": (
                             convert_to_SI(
                                 "v",
@@ -207,17 +224,17 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "v_unit": fluid_property_data["v"]["SI_unit"],
+                        "v_unit": SI_UNITS["v"],
                         # Vapour mass fraction; Aspen states it for mixtures as well.
                         "x": (
                             self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA").Value
                             if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\MASSVFRA") is not None
                             else None
                         ),
-                        "x_unit": fluid_property_data["x"]["SI_unit"],
+                        "x_unit": SI_UNITS["x"],
                         "energy_flow": (
                             convert_to_SI(
-                                "power",
+                                "energy_flow",
                                 abs(
                                     self.aspen.Tree.FindNode(
                                         rf"\Data\Streams\{stream_name}\Output\HMX_FLOW\MIXED"
@@ -231,10 +248,10 @@ class AspenModelParser:
                             is not None
                             else None
                         ),
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                         "e_PH": (
                             convert_to_SI(
-                                "e",
+                                "e_PH",
                                 self.aspen.Tree.FindNode(
                                     rf"\Data\Streams\{stream_name}\Output\STRM_UPP\EXERGYMS\MIXED\TOTAL"
                                 ).Value,
@@ -248,7 +265,7 @@ class AspenModelParser:
                             is not None
                             else (logger.warning(f"e_PH node not found for stream {stream_name}"), None)[1]
                         ),
-                        "e_PH_unit": fluid_property_data["e"]["SI_unit"],
+                        "e_PH_unit": SI_UNITS["e_PH"],
                         "n": (
                             convert_to_SI(
                                 "n",
@@ -258,7 +275,7 @@ class AspenModelParser:
                             if self.aspen.Tree.FindNode(rf"\Data\Streams\{stream_name}\Output\TOT_FLOW") is not None
                             else None
                         ),
-                        "n_unit": fluid_property_data["n"]["SI_unit"],
+                        "n_unit": SI_UNITS["n"],
                         "mass_composition": {},
                         "molar_composition": {},
                     }
@@ -288,6 +305,145 @@ class AspenModelParser:
 
             # Store connection data
             self.connections_data[stream_name] = connection_data
+
+    def split_physical_exergy_of_streams(self):
+        """
+        Splits the physical exergy of the material streams into a thermal part e_T and a mechanical part e_M.
+
+        A Generic property analysis per stream flashes the stream's composition with the stream's property method
+        at the ambient temperature T0 and the stream's pressure p. Then e_T = h - h(T0, p) - T0 * (s - s(T0, p))
+        and e_M = e_PH - e_T. The analysis also evaluates the stream just below and above its own temperature, to
+        check that these properties reproduce the stream's h and s. The analyses exist in memory only and take one
+        run of the Aspen engine; the model file stays unchanged.
+        """
+        streams = [name for name, conn in self.connections_data.items() if conn["kind"] == "material"]
+        if not streams:
+            return
+        try:
+            analyses = self.add_ambient_temperature_analyses(streams)
+            self.aspen.SuppressDialogs = 1
+            self.aspen.Engine.Run2()
+        except Exception as e:
+            logger.warning(f"The physical exergy of the streams could not be split: {e}")
+            return
+
+        for stream, (analysis, rows) in analyses.items():
+            conn = self.connections_data[stream]
+            (T_A, h_A, s_A), *own_state = self.analysis_states(analysis, stream, rows)
+            if None in (conn["h"], conn["s"], h_A, s_A):
+                logger.warning(f"No thermal and mechanical exergy for stream {stream}.")
+                continue
+            if T_A is not None and abs(T_A - self.Tamb) > 1e-3:
+                logger.warning(f"Aspen evaluated stream {stream} at {T_A} K instead of Tamb = {self.Tamb} K.")
+                continue
+            if own_state and not state_between(conn["h"], conn["s"], *(state[1:] for state in own_state)):
+                logger.warning(
+                    f"The thermal and mechanical exergy of stream {stream} may be wrong: the property data used for "
+                    f"the split do not reproduce the stream's enthalpy and entropy."
+                )
+            conn["e_T"] = conn["h"] - h_A - self.Tamb * (conn["s"] - s_A)
+            conn["e_T_unit"] = SI_UNITS["e_T"]
+            if conn["e_PH"] is not None:
+                conn["e_M"] = conn["e_PH"] - conn["e_T"]
+                conn["e_M_unit"] = SI_UNITS["e_M"]
+
+    def add_ambient_temperature_analyses(self, streams):
+        """
+        Adds a prop-set with h and s and, for each stream, a Generic analysis at the stream's pressure and at T0
+        and the stream's temperature minus and plus :data:`exerpy.parser.STATE_CHECK_STEP`.
+
+        Returns:
+            dict: Name of the analysis and its number of temperatures for each stream.
+        """
+        tree = self.aspen.Tree
+        prop_sets = tree.FindNode(r"\Data\Properties\Prop-Sets")
+        prop_set = self.free_names(prop_sets, "EXPYHS", 1)[0]
+        prop_sets.Elements.Add(prop_set)
+        units = tree.FindNode(rf"\Data\Properties\Prop-Sets\{prop_set}\Input\UNITS")
+        for i, prop in enumerate(("HMX", "SMX")):
+            units.Elements.InsertRow(0, i)
+            units.Elements.SetLabel(0, i, False, prop)
+        self.set_rows(rf"\Data\Properties\Prop-Sets\{prop_set}\Input\PHASE", ["T"])
+
+        folder = tree.FindNode(r"\Data\Properties\Analysis")
+        ref_temp = tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_TEMP")
+        analyses = {}
+        for stream, name in zip(streams, self.free_names(folder, "EXPY", len(streams)), strict=True):
+            folder.Elements.Add(f"{name}!GENERIC")
+            base = rf"\Data\Properties\Analysis\{name}\Input"
+            tree.FindNode(base + r"\OPT_COMP").Value = "STREAM"
+            tree.FindNode(base + r"\SID").Value = stream
+            self.set_rows(base + r"\VARNAME", ["TEMP"])
+            # the temperature list takes the input unit of REF_TEMP; the results are checked against Tamb
+            temperatures = [ref_temp.Value]
+            T = self.connections_data[stream]["T"]
+            if T is not None:
+                temperatures += [
+                    convert(T + step, SI_UNITS["T"], ref_temp.UnitString)
+                    for step in (-STATE_CHECK_STEP, STATE_CHECK_STEP)
+                ]
+            self.set_rows(base + r"\LIST\#0", temperatures)
+            pres = tree.FindNode(base + r"\PRES")
+            p_out = tree.FindNode(rf"\Data\Streams\{stream}\Output\PRES_OUT\MIXED")
+            if pres.UnitString == p_out.UnitString:
+                pres.Value = p_out.Value
+            else:
+                pres.Value = convert(self.connections_data[stream]["p"], SI_UNITS["p"], pres.UnitString)
+            self.set_rows(base + r"\PROPERTIES", [prop_set])
+            analyses[stream] = (name, len(temperatures))
+        return analyses
+
+    def analysis_states(self, analysis, stream, rows):
+        """
+        Reads the temperature and h and s per kg of the first ``rows`` rows of the analysis of a stream.
+
+        Returns:
+            list: (T in K, h in J/kg, s in J/kgK) of each row; a value without a result in Aspen is None.
+        """
+        tree = self.aspen.Tree
+        out = rf"\Data\Properties\Analysis\{analysis}\Output\PROP_DATA"
+        mw = tree.FindNode(rf"\Data\Streams\{stream}\Output\MW")
+        molar_mass = mw.Value * 1e-3 if mw is not None and mw.Value else None
+        states = []
+        for row in range(1, rows + 1):
+            temp = tree.FindNode(out + rf"\TEMP\{row}")
+            T = None if temp is None or temp.Value is None else convert_to_SI("T", temp.Value, temp.UnitString)
+            h, s = (
+                self.per_kg(out + rf"\{prop}\TOTAL\{row}", key, molar_mass)
+                for prop, key in (("HMX", "h"), ("SMX", "s"))
+            )
+            states.append((T, h, s))
+        return states
+
+    def per_kg(self, path, key, molar_mass):
+        """
+        Reads a value per kg or per mol and returns it in the SI unit of ``key``, per kg.
+
+        Parameters:
+            molar_mass (float): Molar mass in kg/mol, to convert a value per mol.
+        """
+        node = self.aspen.Tree.FindNode(path)
+        if node is None or node.Value is None:
+            return None
+        try:
+            return convert_to_SI(key, node.Value, node.UnitString)
+        except ValueError:
+            if molar_mass is None:
+                return None
+            return convert(node.Value, node.UnitString, SI_UNITS[key].replace("kg", "mol")) / molar_mass
+
+    def set_rows(self, path, values):
+        """Inserts rows with ``values`` into the list at ``path``."""
+        elements = self.aspen.Tree.FindNode(path).Elements
+        for i, value in enumerate(values):
+            elements.InsertRow(0, i)
+            elements.Item(i).Value = value
+
+    @staticmethod
+    def free_names(folder, stem, count):
+        """Returns ``count`` IDs ``stem1``, ``stem2``, ... that no element of ``folder`` uses yet."""
+        taken = {element.Name for element in folder.Elements}
+        return list(itertools.islice((f"{stem}{k}" for k in itertools.count(1) if f"{stem}{k}" not in taken), count))
 
     def parse_blocks(self):
         """
@@ -326,24 +482,24 @@ class AspenModelParser:
                 ),
                 "Q": (
                     convert_to_SI(
-                        "heat",
+                        "Q",
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET").Value,
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET").UnitString,
                     )
                     if self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QNET") is not None
                     else None
                 ),
-                "Q_unit": fluid_property_data["heat"]["SI_unit"],
+                "Q_unit": SI_UNITS["Q"],
                 "P": (
                     convert_to_SI(
-                        "power",
+                        "P",
                         abs(self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER").Value),
                         self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER").UnitString,
                     )
                     if self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\BRAKE_POWER") is not None
                     else None
                 ),
-                "P_unit": fluid_property_data["power"]["SI_unit"],
+                "P_unit": SI_UNITS["P"],
             }
 
             # Override component type based on model_type
@@ -361,77 +517,21 @@ class AspenModelParser:
                     factor_node = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Input\FACTOR")
                     factor = factor_node.Value if factor_node is not None else None
                     if factor is not None:
-                        if factor < 1:
+                        if self.mult_block_type(block_name, factor) == "Generator":
                             component_data.update({"eta_el": factor, "type": "Generator"})
-                        elif factor > 1:
-                            elec_power_node = self.aspen.Tree.FindNode(
-                                rf"\Data\Blocks\{block_name}\Ports\WS(OUT)"
-                            ).Elements(0)
-                            elec_power_name = elec_power_node.Name
-                            if elec_power_name in self.connections_data:
-                                elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
-                            else:
-                                logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                elec_power = None
-                            brake_power_node = self.aspen.Tree.FindNode(
-                                rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
-                            ).Elements(0)
-                            brake_power_name = brake_power_node.Name
-                            if brake_power_name in self.connections_data:
-                                brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
-                            else:
-                                logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                brake_power = None
+                        else:
                             component_data.update(
                                 {
                                     "eta_el": 1 / factor,
                                     "multiplier factor": factor,
+                                    "multiplier factor_unit": "dimensionless",
                                     "type": "Motor",
-                                    "P_el": elec_power,
-                                    "P_el_unit": fluid_property_data["power"]["SI_unit"],
-                                    "P_mech": brake_power,
-                                    "P_mech_unit": fluid_property_data["power"]["SI_unit"],
+                                    "P_el": self.port_power(block_name, "WS(OUT)"),
+                                    "P_el_unit": SI_UNITS["P"],
+                                    "P_mech": self.port_power(block_name, "WS(IN)"),
+                                    "P_mech_unit": SI_UNITS["P"],
                                 }
                             )
-                        else:  # factor == 1
-                            choice = (
-                                input(
-                                    f"Multiplier Block '{block_name}' has factor = 1. Enter 'G' if it is a Generator or 'M' for Motor: "
-                                )
-                                .strip()
-                                .upper()
-                            )
-                            if choice == "M":
-                                elec_power_node = self.aspen.Tree.FindNode(
-                                    rf"\Data\Blocks\{block_name}\Ports\WS(OUT)"
-                                ).Elements(0)
-                                elec_power_name = elec_power_node.Name
-                                if elec_power_name in self.connections_data:
-                                    elec_power = abs(self.connections_data[elec_power_name]["energy_flow"])
-                                else:
-                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                    elec_power = None
-                                brake_power_node = self.aspen.Tree.FindNode(
-                                    rf"\Data\Blocks\{block_name}\Ports\WS(IN)"
-                                ).Elements(0)
-                                brake_power_name = brake_power_node.Name
-                                if brake_power_name in self.connections_data:
-                                    brake_power = abs(self.connections_data[brake_power_name]["energy_flow"])
-                                else:
-                                    logger.warning(f"No WS(IN) ports found for block {block_name}")
-                                    brake_power = None
-                                component_data.update(
-                                    {
-                                        "eta_el": factor,
-                                        "type": "Motor",
-                                        "P_el": elec_power,
-                                        "P_el_unit": fluid_property_data["power"]["SI_unit"],
-                                        "P_mech": brake_power,
-                                        "P_mech_unit": fluid_property_data["power"]["SI_unit"],
-                                    }
-                                )
-                            else:
-                                component_data.update({"eta_el": factor, "type": "Generator"})
 
             # Create a connection for the heat flows of the SimpleHeatExchanger blocks
             if component_type == "Heater":
@@ -446,7 +546,7 @@ class AspenModelParser:
                     "energy_flow": abs(
                         component_data["Q"]
                     ),  # the user defines in the balances if the heat flow is positive or negative
-                    "energy_flow_unit": fluid_property_data["heat"]["SI_unit"],
+                    "energy_flow_unit": SI_UNITS["energy_flow"],
                 }
 
                 # Store the heat connection
@@ -462,7 +562,7 @@ class AspenModelParser:
                 elec_power = (
                     abs(
                         convert_to_SI(
-                            "power",
+                            "P",
                             elec_power_node.Value,
                             elec_power_node.UnitString,
                         )
@@ -474,7 +574,7 @@ class AspenModelParser:
                 brake_power = (
                     abs(
                         convert_to_SI(
-                            "power",
+                            "P",
                             brake_power_node.Value,
                             brake_power_node.UnitString,
                         )
@@ -489,9 +589,9 @@ class AspenModelParser:
                     "name": motor_name,
                     "type": "Motor",
                     "P_el": elec_power,
-                    "P_el_unit": fluid_property_data["power"]["SI_unit"],
+                    "P_el_unit": SI_UNITS["P"],
                     "P_mech": brake_power,
-                    "P_mech_unit": fluid_property_data["power"]["SI_unit"],
+                    "P_mech_unit": SI_UNITS["P"],
                     "eta_el": (eff_driv if eff_driv is not None else None),
                 }
 
@@ -500,16 +600,30 @@ class AspenModelParser:
 
                 # Create a new connection for the motor
                 if elec_power is not None:
-                    electr_connection_name = f"{block_name}_ELEC"
+                    # The work stream of the pump in Aspen is its electric power: it feeds the motor. Without
+                    # one, the electric power comes from outside the model.
+                    work = [
+                        name
+                        for name, conn in self.connections_data.items()
+                        if conn.get("kind") == "power"
+                        and block_name in (conn.get("source_component"), conn.get("target_component"))
+                    ]
+                    electr_connection_name = work[0] if work else f"{block_name}_ELEC"
+                    old = self.connections_data.get(electr_connection_name, {})
+                    other = (
+                        old.get("target_component")
+                        if old.get("source_component") == block_name
+                        else old.get("source_component")
+                    )
                     electr_connection_data = {
                         "name": electr_connection_name,
                         "kind": "power",
-                        "source_component": None,  # Electrical power usually leaves the system
-                        "source_connector": None,  # Electrical power usually leaves the system
+                        "source_component": other if work else None,
+                        "source_connector": None,
                         "target_component": motor_name,
                         "target_connector": 0,
                         "energy_flow": motor_data["P_el"],
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                     }
 
                     mech_connection_name = f"{block_name}_MECH"
@@ -521,7 +635,7 @@ class AspenModelParser:
                         "target_component": block_name,
                         "target_connector": 1,
                         "energy_flow": motor_data["P_mech"],
-                        "energy_flow_unit": fluid_property_data["power"]["SI_unit"],
+                        "energy_flow_unit": SI_UNITS["energy_flow"],
                     }
 
                     # Store the motor connection
@@ -530,6 +644,91 @@ class AspenModelParser:
 
             # Assign connectors
             self.assign_connectors(component_data, block_name)
+
+    def orient_consumer_power(self):
+        """
+        Lets the power of a compressor or pump flow into it.
+
+        Aspen draws the work stream of a compressor from its WS(OUT) port, so the parsed stream leaves the
+        machine, and the stream of a motor block that drives it leaves the motor towards the grid. A machine
+        that consumes power receives it, so such streams are reversed: a stream leaving a compressor or pump
+        now enters it on connector 1, and the stream at the other end of a motor driving it enters the motor
+        on connector 0.
+        """
+        types = {name: data.get("type") for group in self.components_data.values() for name, data in group.items()}
+        consumers = {name for name, kind in types.items() if kind in ("Compressor", "Pump")}
+        driving_motors = set()
+        for conn in self.connections_data.values():
+            if conn.get("kind") != "power" or conn.get("source_component") not in consumers:
+                continue
+            machine, other = conn["source_component"], conn.get("target_component")
+            conn.update(
+                source_component=other,
+                source_connector=0 if types.get(other) == "Motor" else None,
+                target_component=machine,
+                target_connector=1,
+            )
+            if types.get(other) == "Motor":
+                driving_motors.add(other)
+        for conn in self.connections_data.values():
+            motor = conn.get("source_component")
+            if conn.get("kind") != "power" or motor not in driving_motors or conn.get("target_component") in consumers:
+                continue
+            conn.update(
+                source_component=conn.get("target_component"),
+                source_connector=None,
+                target_component=motor,
+                target_connector=0,
+            )
+
+    def mult_block_type(self, block_name, factor):
+        """
+        Decides whether a multiplier block on work streams is a generator or a motor.
+
+        The work stream entering the block comes from its machine. Aspen reports its power as negative if the
+        machine produces it, as a turbine does for a generator, and as positive if the machine consumes it, as a
+        compressor or a pump does for a motor. Without this sign, a factor below 1 means a generator and a
+        factor above 1 a motor.
+
+        Returns:
+            str: "Generator" or "Motor".
+        """
+        port = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\WS(IN)")
+        signs = set()
+        if port is not None:
+            signs = {
+                self.connections_data[element.Name].get("_aspen_power_sign")
+                for element in port.Elements
+                if element.Name in self.connections_data
+            } - {None}
+        if len(signs) == 1:
+            block_type = "Generator" if signs.pop() < 0 else "Motor"
+            if (block_type == "Generator" and factor > 1) or (block_type == "Motor" and factor < 1):
+                logger.warning(
+                    f"Multiplier block {block_name} is a {block_type.lower()} by the sign of its power, but its "
+                    f"factor {factor} gives an efficiency above 1."
+                )
+            return block_type
+        if factor == 1:
+            logger.warning(
+                f"Multiplier block {block_name} has the factor 1 and no inlet work stream with a known power, so "
+                f"it is taken as a generator."
+            )
+        return "Generator" if factor <= 1 else "Motor"
+
+    def port_power(self, block_name, port):
+        """
+        Returns the power of the first work stream at a port of a block, or None if there is none.
+        """
+        port_node = self.aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port}")
+        if port_node is None or port_node.Elements.Count == 0:
+            logger.warning(f"No {port} port found for block {block_name}")
+            return None
+        stream_name = port_node.Elements(0).Name
+        if stream_name not in self.connections_data:
+            logger.warning(f"The work stream {stream_name} at the {port} port of block {block_name} is unknown")
+            return None
+        return abs(self.connections_data[stream_name]["energy_flow"])
 
     def assign_connectors(self, component_data, block_name):
         """
@@ -705,43 +904,67 @@ class AspenModelParser:
 
     def assign_combustion_chamber_connectors(self, block_name, aspen, connections_data):
         """
-        Assign connectors for a combustion chamber (RStoic), based on stream types (air, fuel, etc.).
+        Assign connectors for a combustion chamber (RStoic), one per stream.
+
+        Inlets: oxidant streams (O2 mole fraction above 0.15) first, then fuel streams (CH4 above 0.15),
+        then the other material streams, each group in port order. Outlets: the combustion gas at 0, taken
+        as the material outlet with the largest mass flow since it carries the air, then the further
+        material outlets such as ash or a water decant. Heat and work streams come last on their side, so
+        they never replace a material stream and the combustion chamber rejects them. A heat duty (QCALC)
+        without a heat stream gives a warning, since the exergy of that heat ends up in the exergy
+        destruction of the combustion chamber.
         """
         ports_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports")
         if ports_node is None:
             logger.warning(f"No Ports node found for combustion chamber block: {block_name}")
             return
 
-        # Iterate over all ports and assign connectors based on port labels
+        inlets, outlets = [], []
         for port in ports_node.Elements:
-            port_label = port.Name
+            if "(IN)" in port.Name:
+                streams = inlets
+            elif "(OUT)" in port.Name:
+                streams = outlets
+            else:
+                continue
+            port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port.Name}")
+            if port_node is not None:
+                streams.extend(element.Name for element in port_node.Elements if element.Name in connections_data)
 
-            # Handle inlet ports
-            if "(IN)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            molar_composition = connections_data[stream_name].get("molar_composition", {})
-                            if molar_composition.get("O2", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 0  # Air inlet
-                                logger.debug(f"Assigned connector 0 to air inlet stream: {stream_name}")
-                            elif molar_composition.get("CH4", 0) > 0.15:
-                                connections_data[stream_name]["target_connector"] = 1  # Fuel inlet
-                                logger.debug(f"Assigned connector 1 to fuel inlet stream: {stream_name}")
-                            else:
-                                logger.warning(f"Stream {stream_name} in {block_name} has ambiguous composition.")
+        def is_material(name):
+            return connections_data[name].get("kind", "material") == "material"
 
-            # Handle outlet ports
-            elif "(OUT)" in port_label:
-                port_node = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Ports\{port_label}")
-                if port_node is not None and port_node.Elements.Count > 0:
-                    for element in port_node.Elements:
-                        stream_name = element.Name
-                        if stream_name in connections_data:
-                            connections_data[stream_name]["source_connector"] = 0  # Outlet stream
-                            logger.info(f"Assigned connector 0 to outlet stream: {stream_name}")
+        def inlet_rank(name):
+            composition = connections_data[name].get("molar_composition") or {}
+            if not is_material(name):
+                return 3
+            if composition.get("O2", 0) > 0.15:
+                return 0
+            return 1 if composition.get("CH4", 0) > 0.15 else 2
+
+        materials = [name for name in outlets if is_material(name)]
+        gas = max(materials, key=lambda name: connections_data[name].get("m") or 0, default=None)
+        inlets.sort(key=inlet_rank)
+        outlets.sort(key=lambda name: (not is_material(name), name != gas))
+        for idx, name in enumerate(inlets):
+            connections_data[name]["target_connector"] = idx
+        for idx, name in enumerate(outlets):
+            connections_data[name]["source_connector"] = idx
+        logger.debug(f"Combustion chamber {block_name}: inlets {inlets}, outlets {outlets} by connector.")
+
+        duty = aspen.Tree.FindNode(rf"\Data\Blocks\{block_name}\Output\QCALC")
+        heat_streams = [name for name in inlets + outlets if connections_data[name].get("kind") == "heat"]
+        if duty is not None and duty.Value and not heat_streams:
+            Q = convert_to_SI("Q", duty.Value, duty.UnitString)
+            effect = (
+                "is counted as exergy destruction of the combustion chamber"
+                if Q < 0
+                else "is missing from the fuel of the combustion chamber, so its exergy destruction is too low"
+            )
+            logger.warning(
+                f"RStoic block {block_name} has a heat duty of {Q / 1e3:.1f} kW but no heat stream. The exergy of "
+                f"this heat {effect}."
+            )
 
     def assign_generic_connectors(self, block_name, component_type, aspen, connections_data, connector_mappings):
         """
@@ -799,6 +1022,36 @@ class AspenModelParser:
         # Store the component data in the appropriate group
         self.components_data[group][component_name] = component_data
 
+    def set_ambient_conditions(self):
+        """
+        Writes the ambient state passed to the parser to REF_TEMP and REF_PRES and runs the model again, so that
+        Aspen computes the exergies of the streams at it. Nothing happens if no value is passed or the model holds
+        the passed values already. The change exists in memory only; the model file stays unchanged.
+
+        Raises:
+            ValueError: If the model has no REF_TEMP or REF_PRES node for a passed value.
+        """
+        changed = False
+        for key, value, path in (
+            ("Tamb", self.Tamb, r"\Data\Setup\Sim-Options\Input\REF_TEMP"),
+            ("pamb", self.pamb, r"\Data\Setup\Sim-Options\Input\REF_PRES"),
+        ):
+            if value is None:
+                continue
+            node = self.aspen.Tree.FindNode(path)
+            if node is None:
+                raise ValueError(f"The Aspen model has no node {path} to set {key} = {value} {SI_UNITS[key]}.")
+            if node.Value is not None and math.isclose(
+                convert_to_SI(key, node.Value, node.UnitString), value, rel_tol=1e-6
+            ):
+                continue
+            node.Value = convert(value, SI_UNITS[key], node.UnitString)
+            changed = True
+        if changed:
+            logger.info("Running the model again at the ambient state passed to the parser.")
+            self.aspen.SuppressDialogs = 1
+            self.aspen.Engine.Run2()
+
     def parse_ambient_conditions(self):
         """
         Parses the ambient conditions from the Aspen model and stores them as class attributes.
@@ -807,7 +1060,7 @@ class AspenModelParser:
         try:
             # Parse ambient temperature (Tamb)
             temp_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_TEMP")
-            self.Tamb = convert_to_SI("T", temp_node.Value, temp_node.UnitString) if temp_node is not None else None
+            self.Tamb = convert_to_SI("Tamb", temp_node.Value, temp_node.UnitString) if temp_node is not None else None
 
             if self.Tamb is None:
                 raise ValueError(
@@ -816,7 +1069,7 @@ class AspenModelParser:
 
             # Parse ambient pressure (pamb)
             pres_node = self.aspen.Tree.FindNode(r"\Data\Setup\Sim-Options\Input\REF_PRES")
-            self.pamb = convert_to_SI("p", pres_node.Value, pres_node.UnitString) if pres_node is not None else None
+            self.pamb = convert_to_SI("pamb", pres_node.Value, pres_node.UnitString) if pres_node is not None else None
 
             if self.pamb is None:
                 raise ValueError(
@@ -842,15 +1095,17 @@ class AspenModelParser:
         }
         ambient_conditions = {
             "Tamb": self.Tamb,
-            "Tamb_unit": fluid_property_data["T"]["SI_unit"],
+            "Tamb_unit": SI_UNITS["Tamb"],
             "pamb": self.pamb,
-            "pamb_unit": fluid_property_data["p"]["SI_unit"],
+            "pamb_unit": SI_UNITS["pamb"],
         }
-        return {
-            "components": sorted_components,
-            "connections": sorted_connections,
-            "ambient_conditions": ambient_conditions,
-        }
+        return add_units(
+            {
+                "components": sorted_components,
+                "connections": sorted_connections,
+                "ambient_conditions": ambient_conditions,
+            }
+        )
 
     def write_to_json(self, output_path):
         """
@@ -870,7 +1125,7 @@ class AspenModelParser:
             raise
 
 
-def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
+def run_aspen(model_path, output_dir=None, split_physical_exergy=True, Tamb=None, pamb=None):
     """
     Main function to process the Aspen model and return parsed data.
     Optionally writes the parsed data to a JSON file.
@@ -879,16 +1134,21 @@ def run_aspen(model_path, output_dir=None, split_physical_exergy=True):
         model_path (str): Path to the Aspen model file.
         output_dir (str): Optional path where the parsed data should be saved as a JSON file.
         split_physical_exergy (bool): Flag to split physical exergy into thermal and mechanical components.
+        Tamb (float): Ambient temperature in K. Defaults to REF_TEMP of the model. A value passed here
+            replaces REF_TEMP and the model is run again, so all exergies are computed at it. The model
+            file stays unchanged.
+        pamb (float): Ambient pressure in Pa, like ``Tamb`` for REF_PRES.
 
     Returns:
-        dict: Parsed data in dictionary format.
+        dict: Parsed data in dictionary format. Its ``ambient_conditions`` hold the ambient state
+        the exergies were computed at.
     """
     if not os.path.exists(model_path):
         error_msg = f"Model file not found at: {model_path}"
         logger.error(error_msg)
         raise FileNotFoundError(error_msg)
 
-    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy)
+    parser = AspenModelParser(model_path, split_physical_exergy=split_physical_exergy, Tamb=Tamb, pamb=pamb)
 
     try:
         parser.initialize_model()

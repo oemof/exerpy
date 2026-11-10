@@ -1,8 +1,11 @@
 import numpy as np
+from msgspec import UNSET
+from msgspec import UnsetType
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
 from exerpy.logger import logger
+from exerpy.quantities import Branches
 
 
 @component_registry
@@ -31,12 +34,17 @@ class Splitter(Component):
 
     """
 
+    class Input(Component.Input, kw_only=True):
+        num_branches: Branches | None | UnsetType = UNSET
+
     def __init__(self, **kwargs):
         r"""Initialize splitter component with given parameters."""
         super().__init__(**kwargs)
-        # Number of identical parallel branches each modelled outlet represents (1 for an
-        # ordinary splitter; >1 when one branch stands in for a field of parallel branches).
-        self.num_branches = kwargs.get("num_branches", 1) or 1
+        # How often each outlet exists, by connector: the number of parallel branches it stands for,
+        # set by the analysis. An outlet not listed exists once.
+        self.branches = {}
+        # Only kept to warn if it is not used, see the analysis.
+        self.num_branches = kwargs.get("num_branches")
 
     def calc_exergy_balance(self, T0: float, p0: float, split_physical_exergy) -> None:
         r"""
@@ -61,11 +69,12 @@ class Splitter(Component):
         # Ensure that the component has at least two inlets and one outlet.
         if len(self.inl) < 1 or len(self.outl) < 2:
             raise ValueError("Splitter requires at least one inlet and two outlets.")
-        outlet_list = list(self.outl.values())
         inlet_list = list(self.inl.values())
         E_in = sum(inlet.get("m", 0) * inlet.get("e_PH") for inlet in inlet_list)
-        # Each modelled outlet represents num_branches identical parallel branches.
-        E_out = self.num_branches * sum(outlet.get("m", 0) * outlet.get("e_PH") for outlet in outlet_list)
+        # An outlet that stands for several parallel branches counts that often.
+        E_out = sum(
+            self.branches.get(k, 1) * outlet.get("m", 0) * outlet.get("e_PH") for k, outlet in self.outl.items()
+        )
         self.E_P = np.nan
         self.E_F = np.nan
         self.E_D = E_in - E_out

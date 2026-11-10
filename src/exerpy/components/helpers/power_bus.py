@@ -2,6 +2,7 @@ import numpy as np
 
 from exerpy.components.component import Component
 from exerpy.components.component import component_registry
+from exerpy.components.component import set_equal_specific_cost
 from exerpy.logger import logger
 
 
@@ -67,12 +68,15 @@ class PowerBus(Component):
             = \frac{\dot{C}^\mathrm{TOT}_{\mathrm{out},j}}{\dot{E}^\mathrm{TOT}_{\mathrm{out},j}}
 
         **Several inlets and several outlets.** The bus writes its cost balance and, on top of it,
-        prices every outlet alike, against the first of them as a reference:
+        prices every outlet alike, against the first of them that carries power:
 
         .. math::
 
             \frac{\dot{C}^\mathrm{TOT}_\mathrm{ref}}{\dot{E}^\mathrm{TOT}_\mathrm{ref}}
             = \frac{\dot{C}^\mathrm{TOT}_{\mathrm{out},j}}{\dot{E}^\mathrm{TOT}_{\mathrm{out},j}}
+
+        In both cases an outlet without power carries no cost,
+        :math:`\dot{C}^\mathrm{TOT}_{\mathrm{out},j} = 0`.
 
         **No outlet.** Nothing is written.
 
@@ -137,8 +141,7 @@ class PowerBus(Component):
             # connectors as the model does, so take the connection itself.
             inlet = next(iter(self.inl.values()))
             for out in list(self.outl.values())[:]:
-                A[counter, inlet["CostVar_index"]["exergy"]] = (1 / inlet["E"]) if inlet["E"] != 0 else 1
-                A[counter, out["CostVar_index"]["exergy"]] = (-1 / out["E"]) if out["E"] != 0 else -1
+                set_equal_specific_cost(A, counter, inlet, out, "exergy")
                 equations[counter] = {
                     "kind": "aux_power_eq",
                     "objects": [self.name, inlet["name"], out["name"]],
@@ -169,10 +172,11 @@ class PowerBus(Component):
 
             # Equalize specific costs of all outlets: c_ref = c_out_i
             outlet_list = list(self.outl.values())
-            ref_out = outlet_list[0]
-            for out in outlet_list[1:]:
-                A[counter, ref_out["CostVar_index"]["exergy"]] = (1 / ref_out["E"]) if ref_out["E"] != 0 else 1
-                A[counter, out["CostVar_index"]["exergy"]] = (-1 / out["E"]) if out["E"] != 0 else -1
+            ref_out = next((out for out in outlet_list if out["E"] != 0), outlet_list[0])
+            for out in outlet_list:
+                if out is ref_out:
+                    continue
+                set_equal_specific_cost(A, counter, ref_out, out, "exergy", ref_is_outlet=True)
                 equations[counter] = {
                     "kind": "aux_power_eq",
                     "objects": [self.name, ref_out["name"], out["name"]],

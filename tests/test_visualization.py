@@ -15,15 +15,19 @@ _CCPP_JSON = os.path.join(os.path.dirname(__file__), "../examples/exergy_analysi
 _TERMINAL_LABELS = {"E_F (Fuel)", "E_P (Product)", "E_D (Destruction)", "E_L (Loss)", "E_L net"}
 
 
-@pytest.fixture(scope="module")
-def ccpp():
-    ean = ExergyAnalysis.from_json(_CCPP_JSON)
+def _ccpp(**kwargs):
+    ean = ExergyAnalysis.from_json(_CCPP_JSON, **kwargs)
     ean.analyse(
         E_F={"inputs": ["1", "3"], "outputs": []},
         E_P={"inputs": ["e15", "h1"], "outputs": []},
         E_L={"inputs": ["8", "15"], "outputs": ["14"]},
     )
     return ean
+
+
+@pytest.fixture(scope="module")
+def ccpp():
+    return _ccpp()
 
 
 def _flows(nodes, links):
@@ -41,19 +45,26 @@ class TestSankeyCcpp:
         # 26 components - 1 collapsed CycleCloser + 4 terminals + 1 E_L net helper
         nodes, links = SankeyBuilder(ccpp, mode=1).build()
         assert len(nodes) == 30
-        assert len(links) == 64
+        assert len(links) == 65
 
     def test_mode_2_splits_material_links(self, ccpp):
         nodes, links = SankeyBuilder(ccpp, mode=2).build()
         assert len(nodes) == 30
-        assert len(links) > 64
+        assert len(links) > 65
         sub_labels = {lk["label"].split("[")[1].split("]")[0] for lk in links if "[" in lk["label"]}
         assert "E_PH" in sub_labels
         assert "E_CH" in sub_labels
 
-    def test_mode_3_requires_split_physical_exergy(self, ccpp):
+    def test_mode_3_splits_thermal_and_mechanical_exergy(self, ccpp):
+        nodes, links = SankeyBuilder(ccpp, mode=3).build()
+        assert len(nodes) == 30
+        sub_labels = {lk["label"].split("[")[1].split("]")[0] for lk in links if "[" in lk["label"]}
+        assert {"E_T", "E_M", "E_CH"} <= sub_labels
+        assert "E_PH" not in sub_labels
+
+    def test_mode_3_requires_split_physical_exergy(self):
         with pytest.raises(ValueError):
-            SankeyBuilder(ccpp, mode=3)
+            SankeyBuilder(_ccpp(split_physical_exergy=False), mode=3)
 
     def test_all_link_values_positive(self, ccpp):
         _, links = SankeyBuilder(ccpp, mode=1).build()
@@ -107,7 +118,7 @@ class TestSankeyCcpp:
         assert not set(members) & ids
         # 5 members merge into 1 node; internal links disappear
         assert len(nodes) == 26
-        assert len(links) < 64
+        assert len(links) < 65
 
     def test_node_colors_override(self, ccpp):
         nodes, _ = SankeyBuilder(ccpp, node_colors={"CC": "#C62828"}).build()
@@ -120,7 +131,7 @@ class TestSankeyCcpp:
         trace = fig.data[0]
         assert trace.type == "sankey"
         assert len(trace.node.label) == 30
-        assert len(trace.link.value) == 64
+        assert len(trace.link.value) == 65
 
 
 class TestSankeyEdgeCases:

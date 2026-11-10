@@ -362,13 +362,12 @@ def add_total_exergy_flow(my_json, split_physical_exergy):
                         for c in my_json["connections"].values()
                         if c.get("source_component") == comp_name and c.get("kind") == "material"
                     ]
-                    # Determine which exergy key to use based on the flag.
-                    exergy_key = "e_T" if split_physical_exergy else "e_PH"
-
                     if inlet_conns and outlet_conns:
                         # For simplicity, take the first inlet and first outlet.
                         inlet = inlet_conns[0]
                         outlet = outlet_conns[0]
+                        # The heat is the change of thermal exergy with split, of physical exergy without.
+                        exergy_key = "e_T" if split_physical_exergy else "e_PH"
                         # Calculate the heat exergy difference using the selected key:
                         conn_data["E"] = abs(
                             inlet.get(exergy_key, 0) * inlet.get("m", 0)

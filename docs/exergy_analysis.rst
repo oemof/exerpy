@@ -131,38 +131,12 @@ standard chemical exergies :math:`\bar{e}^\mathrm{CH}_k` of its components :cite
     \bar{e}^\mathrm{CH} = \sum_k x_k\,\bar{e}^\mathrm{CH}_k + \bar{R}\,T_0 \sum_k x_k \ln x_k
 
 ExerPy takes :math:`\bar{e}^\mathrm{CH}_k` from the reference environment of Ahrendts
-:cite:`Ahrendts1980`. Of the hydrocarbons, only methane and ethane come from these data. For the others,
-the standard chemical exergy of a compound :math:`i` follows from its formation from the elements :math:`k`
-(Baehr and Kabelac, eq. 5.157) :cite:`Baehr2016`:
-
-.. math::
-
-    \bar{e}^\mathrm{CH}_i = \bar{g}_i + \sum_k \nu_k \left(\bar{e}^\mathrm{CH}_k - \bar{g}_k\right)
-    = \Delta_\mathrm{f}\bar{g}_i + \sum_k \nu_k\,\bar{e}^\mathrm{CH}_k
-
-Here :math:`\bar{g}` is the molar Gibbs function at 298.15 K and standard pressure, :math:`\nu_k` the
-number of moles of element :math:`k` per mole of :math:`i`, and
-:math:`\Delta_\mathrm{f}\bar{g}_i = \bar{g}_i - \sum_k \nu_k\,\bar{g}_k` the Gibbs function of formation.
-For a hydrocarbon :math:`\mathrm{C}_a\mathrm{H}_b` this gives
-
-.. math::
-
-    \bar{e}^\mathrm{CH}_{\mathrm{C}_a\mathrm{H}_b} = \Delta_\mathrm{f}\bar{g}_{\mathrm{C}_a\mathrm{H}_b}
-    + a\,\bar{e}^\mathrm{CH}_\mathrm{C} + \frac{b}{2}\,\bar{e}^\mathrm{CH}_\mathrm{H_2}
-
-with the standard chemical exergies of graphite, 404.589 kJ/mol, and hydrogen, 235.249 kJ/mol, in the
-environment of Ahrendts (Bejan et al., Table C.2, model I) :cite:`Bejan1996`. The element exergies that
-Baehr and Kabelac list next to eq. 5.157 (Table 5.8) belong to the environment of Diederichsen instead, so
-they are not used, and all values of the library refer to the same environment :cite:`Baehr2016`. Applying the same equation to
-CO2 and H2O and eliminating the element exergies gives the complete oxidation form of Bejan et al.
-(eq. 3.17b) :cite:`Bejan1996`.
-
-The Gibbs functions of propane, n-butane and ethylene are taken from Table 10.6 of Baehr and Kabelac
-:cite:`Baehr2016`. Isobutane, n-pentane, isopentane, n-hexane, n-heptane, n-octane, propylene, 1-butene,
-isobutene, cyclopentane, cyclohexane, benzene and toluene are missing there or listed only as liquids. For
-them, the ideal-gas Gibbs functions of formation are taken from Table 2-179 of Perry's handbook
-:cite:`Poling2008`. With the data of Baehr and Kabelac, the equation reproduces the values of Ahrendts for
-methane and ethane within 0.01 %.
+:cite:`Ahrendts1980`; for the substances listed by Bejan et al. (Table C.2, model I), these are the values
+given there :cite:`Bejan1996`. A pure substance takes the value of its phase at 25 °C, e.g. liquid for
+water, methanol and ethanol. If water condenses from a gas mixture at the ambient state, the liquid water
+forms a separate phase (Bejan et al., p. 138) :cite:`Bejan1996`. A substance without a value in the
+library gets a chemical exergy of 0 as a pure substance, with a warning, and raises an error in a
+mixture.
 
 Component-level exergy balance
 ===============================
@@ -213,8 +187,11 @@ temperature :math:`T` is given, ExerPy values the heat at it,
   the water and steam gain, and the component warns.
 - A **simple heat exchanger** may take ``T_hot``, the temperature of the source of the heat it takes
   in, which then gives its fuel, or ``T_cold``, the temperature of the consumer of the heat it gives
-  off, which then gives its product. Without them, the heat is valued at the exergy change of the
-  stream itself, so the loss of the heat transfer to or from the outside lies outside the component.
+  off, which then gives its product. Without them, the heat is valued at the change of the exergy of
+  the stream itself, so the loss of the heat transfer to or from the outside lies outside the
+  component. With split physical exergy that is the change of thermal exergy, and the friction of
+  the stream is exergy destruction of the component. Without the split it is the change of physical
+  exergy: the friction is then part of the exergy of the heat, and the component warns.
   The option applies to streams above the ambient temperature; a source has to be hotter than the
   stream, and a consumer colder.
 

@@ -131,7 +131,7 @@ the whole plant. The cost part of that table is:
 
     "AC", "798.73", "855.72", "56.54", "56.99", "113.53"
     "APH", "385.36", "397.62", "59.20", "12.26", "71.46"
-    "CC", "1218.46", "1222.86", "367.25", "4.40", "371.65"
+    "CC", "1218.46", "1222.86", "360.53", "4.40", "364.93"
     "EV", "347.54", "359.01", "105.20", "11.48", "116.68"
     "EXP", "1557.39", "1605.55", "74.43", "48.16", "122.59"
     "GEN", "806.82", "806.82", "0.00", "0.00", "0.00"
@@ -144,7 +144,7 @@ the whole plant. The cost part of that table is:
 
     "AC", "2102.2", "7.471", "8.613", "50.199", "15.296"
     "APH", "2558.6", "6.427", "7.835", "17.157", "21.909"
-    "CC", "25351.9", "4.024", "5.781", "1.184", "43.661"
+    "CC", "25351.9", "3.950", "5.631", "1.206", "42.536"
     "EV", "4587.7", "6.370", "9.437", "9.835", "48.149"
     "EXP", "2996.2", "6.900", "7.471", "39.287", "8.266"
     "GEN", "0.0", "7.471", "7.471", "0.000", "0.000"
@@ -155,7 +155,7 @@ the whole plant. The cost part of that table is:
 8.583 USD/GJ. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
 dominates the total cost rate of a component. Following Bejan et al. :cite:`Bejan1996`, a low
 :math:`f` points to improving the efficiency of the component, even at a higher investment, and a
-high :math:`f` to reducing its investment, even at some loss of efficiency. Here the combustion chamber has the largest cost rate of exergy destruction, 367.25 USD/h,
+high :math:`f` to reducing its investment, even at some loss of efficiency. Here the combustion chamber has the largest cost rate of exergy destruction, 360.53 USD/h,
 at :math:`f = 1.2` %, so its total cost rate is almost entirely the cost of its exergy destruction.
 The compressor and the gas turbine have :math:`f` between 39 and 50 %, so the investment accounts for a
 large share of their total cost rate.

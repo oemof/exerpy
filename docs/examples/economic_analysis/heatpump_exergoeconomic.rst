@@ -97,7 +97,7 @@ Every component goes through the same five steps. They are shown here for the co
 3. **Spread the investment over the lifetime.** The capital recovery factor turns the investment
    into equal annual carrying charges,
    :math:`\mathrm{CRF} = i_\mathrm{eff} (1 + i_\mathrm{eff})^n / ((1 + i_\mathrm{eff})^n - 1)`.
-4. **Levelize the operating and maintenance cost.** Its first-year value is a share of the
+4. **Levelize the operating and maintenance cost.** Its value in the base year is a share of the
    equipment cost and escalates at :math:`r_\mathrm{n}` per year; the constant-escalation
    levelization factor turns it into an equal annual amount,
    :math:`\mathrm{CELF} = k (1 - k^n) / (1 - k) \cdot \mathrm{CRF}` with
@@ -113,7 +113,7 @@ Every component goes through the same five steps. They are shown here for the co
     "1. at the base year 2025", ":math:`\times\, I_{2025}/I_{2021} = 143/112`", "383 036", "EUR"
     "2. total capital investment", ":math:`\times\, f_\mathrm{TCI} = 4.2`", "1 608 750", "EUR"
     "3. carrying charges", ":math:`\times\, \mathrm{CRF} = 0.1339`", "215 377", "EUR/a"
-    "4. O&M cost, first year", ":math:`0.03 \times 383\,036`", "11 491", "EUR/a"
+    "4. O&M cost, base year", ":math:`0.03 \times 383\,036`", "11 491", "EUR/a"
     "4. O&M cost, levelized", ":math:`\times\, \mathrm{CELF} = 1.4558`", "16 729", "EUR/a"
     "5. :math:`\dot{Z}^\mathrm{CC}`", ":math:`215\,377 \,/\, 6000`", "35.90", "EUR/h"
     "5. :math:`\dot{Z}^\mathrm{OM}`", ":math:`16\,729 \,/\, 6000`", "2.79", "EUR/h"
@@ -201,26 +201,29 @@ reported instead of silently changing the result.
     :end-before: [display_results]
 
 .. csv-table:: The five components with the highest cost rate
-    :header: "Component", ":math:`\dot{C}_\mathrm{D}` [EUR/h]", ":math:`\dot{Z}` [EUR/h]", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` [EUR/h]", ":math:`f` [%]", ":math:`c_\mathrm{F}` [EUR/GJ]", ":math:`c_\mathrm{P}` [EUR/GJ]"
-    :widths: 14 16 14 20 10 14 14
+    :header: "Component", ":math:`\dot{C}_\mathrm{D}` [EUR/h]", ":math:`\dot{Z}` [EUR/h]", ":math:`\dot{Z}_\mathrm{diss}` [EUR/h]", ":math:`\dot{C}_\mathrm{D}+\dot{Z}` [EUR/h]", ":math:`f` [%]", ":math:`c_\mathrm{F}` [EUR/GJ]", ":math:`c_\mathrm{P}` [EUR/GJ]"
+    :widths: 12 14 12 14 18 9 13 13
 
-    "EVA", "233.67", "27.39", "261.06", "10.5", "100.31", "n/a"
-    "COMP", "20.79", "38.68", "59.48", "65.0", "45.91", "109.21"
-    "COND", "35.97", "21.91", "57.88", "37.9", "109.21", "190.68"
-    "VAL", "56.85", "0.43", "57.28", "0.7", "109.21", "n/a"
-    "FAN", "17.13", "3.74", "20.87", "17.9", "45.39", "99.59"
+    "EVA", "424.49", "27.39", "0.00", "451.88", "6.1", "182.23", "n/a"
+    "COMP", "20.87", "38.68", "115.76", "59.55", "65.0", "46.07", "109.45"
+    "COND", "36.05", "21.91", "84.17", "57.96", "37.8", "109.46", "191.04"
+    "VAL", "56.98", "0.43", "133.05", "57.41", "0.7", "109.45", "1767.23"
+    "FAN", "17.14", "3.74", "96.48", "20.87", "17.9", "45.39", "99.67"
 
 **How to read the table.** The components are ranked by :math:`\dot{C}_\mathrm{D} + \dot{Z}`, the
-cost rate of their exergy destruction and of their equipment together. The exergoeconomic factor :math:`f = (\dot{Z} + \dot{Z}_\mathrm{diss}) / (\dot{Z} + \dot{Z}_\mathrm{diss} + \dot{C}_\mathrm{D})` tells which part
+cost rate of their exergy destruction and of their equipment together. The exergoeconomic factor :math:`f = \dot{Z} / (\dot{Z} + \dot{C}_\mathrm{D})` tells which part
 dominates the total cost rate of a component. Following Bejan et al. :cite:`Bejan1996`, a low
 :math:`f` points to improving the efficiency of the component, even at a higher investment, and a
 high :math:`f` to reducing its investment, even at some loss of efficiency. With the placeholder costs of this example, the evaporator has
-:math:`f = 10.5` %, so its total cost rate is mostly the cost of its exergy destruction, and the
-compressor has :math:`f = 65.0` %, so its total cost rate is mostly investment. The evaporator and
-the valve are dissipative components: the evaporator passes heat from air at the ambient temperature
-to the working fluid below it. Neither has a product or a :math:`c_\mathrm{P}`, and their cost is
-passed on to the components they serve. There it appears as :math:`\dot{Z}_\mathrm{diss}` and counts in the
-total cost rate and in :math:`f` of these components.
+:math:`f = 6.1` %, so its total cost rate is mostly the cost of its exergy destruction, and the
+compressor has :math:`f = 65.0` %, so its total cost rate is mostly investment. The evaporator is a
+dissipative component: it passes heat from air at the ambient temperature to the working fluid below
+it. It has no product or :math:`c_\mathrm{P}`, and its cost is passed on to the components it serves.
+There it appears as :math:`\dot{Z}_\mathrm{diss}`, which raises their :math:`c_\mathrm{P}` but is not
+part of their :math:`\dot{C}_\mathrm{D} + \dot{Z}` and :math:`f`, since the evaporator's own
+:math:`\dot{C}_\mathrm{D} + \dot{Z}` already contains it. The valve is one of the components served:
+with split physical exergy its product is the thermal exergy of the working fluid it cools below the
+ambient temperature.
 
 The product of the plant, the heat taken up by the water from stream 21 to stream 23, costs
 192.28 EUR/GJ. With other cost inputs, every number in this section

@@ -234,8 +234,10 @@ The equations
       - the rules of a component that mixes streams, for the shares its cost balance does not cover
     * - ``dis_equality``, ``dis_balance``
       - written by dissipative components
-      - the cost of the destroyed exergy, :math:`\dot{C}_\mathrm{diff}`, which is charged to the
-        productive components in proportion to their exergy destruction
+      - the main working fluid keeps its specific cost, the auxiliary fluid, such as cooling water,
+        leaves without cost, and the cost of the destroyed exergy and of the auxiliary fluid,
+        :math:`\dot{C}_\mathrm{diff}`, is charged to the productive components in proportion to their
+        exergy destruction :cite:`lazzaretto2006speco`
 
 The system is square by construction. A component with a cost balance writes one auxiliary row per
 cost variable of its outlets, less one, since its cost balance determines the last one; a dissipative
@@ -258,14 +260,14 @@ rows equals the number of cost variables. For the CGAM process with chemical exe
       - 3
       - 3
     * - dissipative component
-      - 1
-      - 1
+      - 0
+      - 0
     * - **cost variables and rows**
-      - **40**
-      - **28**
+      - **39**
+      - **27**
     * - of which cost balances, boundary rows, auxiliary rows
-      - 6, 9, 25
-      - 6, 6, 16
+      - 7, 9, 23
+      - 7, 6, 14
 
 The variables and the rows of a run can be listed by name:
 
@@ -287,7 +289,11 @@ and then
 3. computes :math:`\dot{C}_\mathrm{F}`, :math:`\dot{C}_\mathrm{P}`, :math:`\dot{C}_\mathrm{D}`,
    :math:`r` and :math:`f` of every component;
 4. checks the cost balance of every component and warns where one is not closed;
-5. charges the cost of the loss streams to the product streams, in proportion to their exergy;
+5. charges the cost of the loss streams to the product streams, in proportion to their net exergy
+   (Bejan et al., Example 8.1) :cite:`Bejan1996`. A stream subtracted in ``E_P``, such as the
+   feedwater of a boiler, is paired with the product stream it turns into downstream, such as the
+   steam. If it reaches no product stream or more than one, the gross exergy of the products is used
+   and a warning names the stream;
 6. checks the cost balance of the whole plant,
    :math:`\dot{C}_\mathrm{P,tot} = \dot{C}_\mathrm{F,tot} + \sum \dot{Z}`, and raises an error where
    it is not closed.
@@ -299,8 +305,8 @@ With ``split_physical_exergy=True``, the thermal and the mechanical exergy of a 
 separately; without it, the physical exergy is costed as a whole.
 
 - **Variables:** a material stream has :math:`\dot{C}^\mathrm{T}` and :math:`\dot{C}^\mathrm{M}`
-  instead of :math:`\dot{C}^\mathrm{PH}`, so the system has one variable more per stream, 40 instead
-  of 28 for the CGAM process.
+  instead of :math:`\dot{C}^\mathrm{PH}`, so the system has one variable more per stream, 39 instead
+  of 27 for the CGAM process.
 - **Rules:** with the split, a component writes a rule for each share. A heat exchanger, for
   example, follows the F principle for the thermal exergy its hot stream gives off, while the
   mechanical exergy passes at its own specific cost. Without the split, the rules for the mechanical
@@ -470,7 +476,10 @@ unit, e.g. :code:`"10_c_CH_unit"`.
   and the :code:`Splitter`. These pass their streams on without a cost balance of their own, so a
   cost given for one of them could not be charged to any stream and is rejected.
 - All material and power/heat streams entering the system boundary must have a :code:`_c` cost.
-  A material stream can have a cost for each of its exergy forms instead.
+  A material stream can have a cost for each of its exergy forms instead. For heat, what counts is
+  the direction of its exergy, which below the ambient temperature is against the heat: heat that
+  cools a stream below it (a chiller) needs a cost, heat taken in by such a stream (an evaporator)
+  is priced by the component and needs none.
 
 **Examples:**
 
@@ -502,7 +511,9 @@ improvement. The column :code:`Z` holds the given cost rate of a component and :
 of the cost of the dissipative components charged to it. :code:`C_D+Z` and :code:`f` leave
 :code:`Z_diss` out, since :code:`C_D+Z` of the dissipative component already contains it. In the row
 :code:`TOT`, :code:`Z` is the sum of the given cost rates only, since the charged shares stay inside the
-plant.
+plant, and :code:`C_D` is :math:`c_\mathrm{F,tot}\,\dot{E}_\mathrm{D,tot}`, not the sum of the column,
+since the cost of the exergy destruction of the plant cannot be found by adding the costs of the
+components :cite:`Bejan1996`.
 
 The :code:`evaluate_results()` method accepts the following :code:`sort_by` options:
 :code:`"C_D+Z"` (default), :code:`"C_D"`, :code:`"Z"`, :code:`"r"`, :code:`"f"`.
@@ -541,9 +552,8 @@ as follows:
 
 - *Equations with no variables* are rows that stayed empty: the system has fewer equations than
   cost variables. Look for warnings of the components at the start of the run, such as "not
-  implemented in exergoeconomics" for a case a component does not cover (a stream crossing the
-  ambient temperature inside a simple heat exchanger, for example) or "No auxiliary equations
-  provided". A power stream entering the plant without a cost, in a plant that exports no power,
+  implemented" for a case a component does not cover or "No auxiliary equations provided". A power
+  stream entering the plant without a cost, in a plant that exports no power,
   leaves a row empty as well; give it a :code:`"<name>_c"`.
 - *Variables never used* are cost variables no row contains: a stream between components that have
   no cost balance, for example.

@@ -1,5 +1,19 @@
-v0.2.2 (unreleased)
+v0.2.2 (10.11.2026)
 +++++++++++++++++++
+
+New Features
+############
+- The specific cost of a stream entering the plant can now be given for each exergy form, e.g.
+  ``"<stream>_c_CH"``. A form without its own value takes ``"<stream>_c"``
+  :cite:`lazzaretto2006speco` (closes #76).
+- The cost of the loss streams is charged to the product streams in proportion to their net exergy
+  (Bejan et al., Example 8.1) :cite:`Bejan1996`. A stream subtracted in ``E_P``, such as the feedwater
+  of a boiler, is paired with the product stream it turns into downstream. Where that is not possible,
+  the gross exergy is used as before and a warning names the stream.
+- The cost of the exergy destruction of the whole plant, :math:`c_\mathrm{F,tot}\,\dot{E}_\mathrm{D,tot}`,
+  is part of ``system_costs`` and of the JSON export.
+- A cost correlation used outside its range gives a warning that names the correlation, the size and
+  the bound the cost is extrapolated from.
 
 Bug Fixes
 #########
@@ -7,20 +21,186 @@ Bug Fixes
   high, since the exergy of the gas phase was not weighted with its molar fraction. The flue gases
   of the CCPP and CGAM examples had a chemical exergy that was 5 to 7 % too high. The exergy
   destruction of the combustion chamber was therefore too low and the exergy loss of the stack too
-  high. The overall exergetic efficiency does not change (closes #63).
+  high. The overall exergetic efficiency does not change (closes #63). The flue gas of the JSON
+  example stored the old value, which is updated as well.
 - In the Ahrendts library, the chemical exergy of liquid and gaseous methanol was swapped and
   deuterium had the value of oxygen. Deuterium has no value now.
 - A pure substance gets the chemical exergy of its reference phase, e.g. liquid for methanol and
   ethanol. Before, it got the value of the gas, except for water.
 - A pure substance without a value in the library gets a chemical exergy of 0 and a warning that
   says so. A mixture with such a substance raises a ``ValueError`` that names it. Before, a library
-  entry without a value, such as propane, raised a ``TypeError`` in a mixture.
+  entry without a value, such as krypton, raised a ``TypeError`` in a mixture. A stream without a
+  composition, e.g. an EBSILON binary mixture, also gets 0 and a warning that names it.
 - The docstrings of :func:`~exerpy.functions.calc_chemical_exergy` and
   :func:`~exerpy.functions.add_chemical_exergy` give the units of the ambient state in K and Pa and
   of the result in J/kg.
+- The fuel cost of a mixer or a deaerator was wrong. With split physical exergy it did not contain the
+  thermal exergy of its fuel streams. Without the split the exergy left in the outlet was valued at the
+  cost of the outlet instead of the inlet, so the fuel cost depended on the investment cost of the
+  component :cite:`lazzaretto2006speco`. Their c_F, c_P, C_D, r and f were wrong. Stream costs were not
+  affected (closes #64).
+- A dissipative heat exchanger or valve passed the full cost of an exergy form to an outlet without
+  exergy of that form, e.g. the mechanical exergy of a stream leaving at the ambient pressure. This
+  cost now stays in the cost difference of the dissipative component, which is charged to the other
+  components. The valve treats the chemical exergy in the same way. In the heat pump example the costs
+  of all components change, the cost of the product does not (closes #65).
+- The share of the cost of dissipative components that is charged to a component is now shown in the
+  new column Z_diss of the component results and in the JSON export, read directly from the cost
+  matrix. It is part of the cost balance of the component and thus of its c_P and r
+  :cite:`lazzaretto2006speco`. It is not part of f, which compares the investment of the component
+  with the cost of its exergy destruction :cite:`Bejan1996`, nor of C_D+Z, since C_D+Z of the
+  dissipative component already contains it. A stream that enters a dissipative component no longer
+  relieves its source component of this cost in the cost matrix (closes #66).
+- With split physical exergy, the exergy balance of the combustion chamber took the increase of
+  physical exergy as product, its cost balance the increase of thermal exergy. Both now take the
+  increase of thermal exergy as product and the decrease of chemical and mechanical exergy as fuel
+  :cite:`lazzaretto2006speco`, summed over all inlets and outlets. The exergetic efficiency of the
+  combustion chamber changes slightly, its exergy destruction does not (closes #67).
+- An ambient state passed to ``from_aspen`` or ``from_ebsilon`` reached the components but not the
+  exergies of the streams. Aspen now runs the model again at the passed state. EBSILON computes the
+  physical exergy at it if it differs from the measuring points of the model. ``from_json`` raises a
+  ``ValueError`` if the passed state differs from the one the exergies in the file were computed at
+  (closes #68).
+- The conversion of mass into molar fractions dropped species unknown to CoolProp without a warning.
+  It now raises a ``ValueError`` that names them. The EBSILON parser maps its composition parameters
+  and its pure fluids to CoolProp names, e.g. ETH to Ethane, and no longer writes parameters that are
+  no mass fractions, such as the liquid share of water L_H2O (closes #69).
+- When a stream had no exergy of one form, e.g. no mechanical exergy at the ambient pressure, the
+  auxiliary cost equations of most components set a cost rate equal to a specific cost or fixed the
+  cost of an inlet, which made the cost matrix singular. Such a stream now carries no cost of that
+  form :cite:`lazzaretto2006speco`. A branch without mass flow no longer divides by zero (closes #71).
+- In a closed cycle with chemical exergy the cost of the chemical exergy of the working fluid was
+  undetermined, so the cost matrix was singular or ill-conditioned. The cycle closer now sets it to
+  zero. If a stream enters the cycle from outside, e.g. make-up water, its cost carries through the
+  cycle instead (closes #72).
+- The auxiliary cost equations of the combustion chamber used only its first two inlets. They now use
+  all inlets, an inlet without chemical exergy no longer makes the cost matrix singular, and a missing
+  chemical exergy raises a clear error. An ash outlet is now taken into account: the ash is heated
+  with the gas, so the increase of its physical exergy is product, while its chemical exergy is
+  subtracted from the fuel. Its chemical exergy keeps the specific cost of the fuel, and the increase
+  of its physical exergy costs as much per unit as that of the gas :cite:`lazzaretto2006speco`. The
+  Aspen parser gives every stream of an RStoic block its own
+  connector, so a second outlet no longer replaces the combustion gas, and it warns if an RStoic
+  block has a heat duty but no heat stream (closes #73).
+- A simple heat exchanger releasing heat above the ambient temperature had a negative product cost
+  with split physical exergy and left out the investment cost without the split. Its product cost is
+  now the cost of the heat. Below the ambient temperature its fuel multiplied two mass flows
+  (closes #74).
+- A collecting header with parallel branches counted every inlet, including its main inlet, as often as
+  there are branches in the exergy balance, but only once in the cost balance. The mixer and the
+  splitter now count a stream of a parabolic trough as often as the trough's ``num_branches`` and every
+  other stream once (closes #75).
+- With split physical exergy, the exergy balance of a mixer or a deaerator used the physical exergy,
+  while its cost balance already used the thermal exergy and put the decrease of mechanical exergy into
+  the fuel. Both now do the latter :cite:`lazzaretto2006speco`. Inlets of different composition put
+  the decrease of their chemical exergy into the fuel as well, so the exergy destroyed by mixing is
+  part of the exergy destruction. With the outlet exactly at the ambient temperature, the exergy that
+  still leaves at the outlet is no longer counted as destruction, and the mixer no longer gives an
+  exergy destruction of NaN there. An inlet now belongs to the fuel or the product by the sign of the
+  change of its specific exergy, as SPECO requires :cite:`lazzaretto2006speco`, and no longer by its
+  temperature, so steams of different pressures no longer give a negative product. The cost of the
+  fuel follows the same streams and forms, also without the split and with the outlet at the ambient
+  temperature. The vent of a deaerator and further outlets of a mixer are part of the balance and
+  leave at the specific cost of the main outlet. In the examples, fuel and product of the deaerator
+  and the mixer of the CCPP change by less than 0.01 kW.
+- A simple heat exchanger taking in heat above the ambient temperature counted its investment cost in
+  the cost of its fuel, so that r was close to zero. The cost of its fuel is now the cost of the heat.
+- A simple heat exchanger without a heat stream wrote one auxiliary cost equation too many when it
+  released heat, which made the cost matrix fail. It now leaves the outlet to its cost balance, and it
+  warns that the heat then has no cost.
+- A simple heat exchanger cooling a stream across the ambient temperature without split physical
+  exergy could have a negative exergy destruction. Without the split it now uses the physical exergy
+  only, as chosen: the heat carries the net change of physical exergy, and a warning explains that the
+  warm and the cold exergy cannot be told apart. Without the split, a simple heat exchanger with a
+  pressure drop warns that the exergy lost by the pressure drop is counted in the exergy of the heat,
+  not as exergy destruction.
+- A dissipative heat exchanger gave the auxiliary fluid, such as the cooling water, the specific cost
+  it entered with, so it left with more cost than it brought. The auxiliary fluid now leaves without
+  cost, so its cost is part of the cost of the dissipative component, while the main working fluid
+  keeps its specific cost :cite:`lazzaretto2006speco`. The auxiliary fluid is found from the plant: it
+  is the side whose outlet reaches a loss stream of ``E_L`` through splitters, mixers and dissipative
+  components only, on every branch. Where that does not decide, a stream that gains exergy is taken as
+  the auxiliary fluid. A heat exchanger whose product reaches ``E_L`` this way, e.g. cooling water that
+  joins other waste water in a mixer before it is discharged, is now dissipative as well, and not
+  only when the product outlet itself is listed in ``E_L`` :cite:`Bejan1996`. The cost of the fuel of a dissipative heat exchanger contains every cost its streams leave
+  behind, the chemical cost of the auxiliary fluid included, so that its C_D + Z is its cost
+  difference. In the heat pump example the air leaving the evaporator now has no cost. The cost of the
+  product does not change, the costs of the components change by less than 0.5 %.
+- A simple heat exchanger heating a stream from below to above the ambient temperature with split
+  physical exergy had a negative exergy destruction. Its product is now the thermal exergy of the
+  outlet, and the cold exergy of the inlet is destroyed, as when a stream is cooled across the ambient
+  temperature :cite:`Bejan1996`.
+- A turbine whose outlet leaves slightly warmer than its inlet, such as a hydraulic turbine, and a
+  compressor or pump with inlet and outlet exactly at the ambient temperature had no fuel and product.
+  They now keep their definition. The cost part of the turbine uses the same outlet as its exergy part,
+  and turbomachines no longer fail when their fuel or product cannot be defined.
+- The steam generator looked for its heat only among its inlets and took the drain from outlet 2,
+  while the EBSILON parser maps the heat to connector 2 and the drain to outlet 3. It now finds the heat
+  by its kind and the drain as the material outlet besides the two steam outlets, and a missing drain
+  is allowed.
+- The exergy balance of a flash tank used only the thermal exergy with split physical exergy, so its
+  exergy destruction could be negative, while its cost balance used all exergy forms. Both now take
+  the thermal exergy of the inlet as fuel and that of the outlets as product, and the decrease of
+  mechanical and chemical exergy as fuel. A storage now counts the chemical exergy in its exergy
+  balance, as it did in its cost balance.
+- A valve below the ambient temperature whose liquid warms on throttling had a negative product. It
+  is now dissipative :cite:`lazzaretto2006speco`.
+- A heat exchanger with a stream at a third connector, such as a cascaded drain mapped from EBSILON,
+  left that stream out of its balance. It now raises an error that names the connector.
+- With split physical exergy, the parabolic trough wrote its fuel, which includes the decrease of
+  mechanical exergy of the fluid, onto the solar heat connection. The connection now carries the
+  solar exergy only.
+- The relative cost difference r of a component without a product was shown as infinite. It is now
+  NaN. The exergoeconomic factor of a generator or motor without exergy destruction and investment
+  was 0 instead of NaN, several components divided by zero for r and f, and the motor swapped fuel and
+  product in its exergy balance but not in its costs. These are corrected.
+- A turbine expanding to or below the ambient temperature with split physical exergy wrote no
+  auxiliary cost equations, so the cost matrix was singular. The mechanical exergy now keeps its
+  specific cost, and the thermal exergy of the outlet costs as much per unit as the power
+  :cite:`lazzaretto2006speco`.
+- ``flows_from_roles`` counted the exergy of a heat stream in the direction of the heat. Below the
+  ambient temperature the exergy flows against the heat :cite:`Bejan1996`, so such a heat stream is now
+  reversed, with a warning.
+- The cost of the exergy loss charged to the products left out loss streams listed as ``outputs`` of
+  ``E_L``, so a priced one, such as purchased cooling water, broke the cost balance of the plant. The
+  loss cost is now the net value :cite:`lazzaretto2006speco`. ``check_cost_balance()`` called after
+  ``run()`` no longer shows the loss share of a power or heat product as a residual.
+- A stream listed in ``E_F``, ``E_P`` or ``E_L`` without an exergy value made the totals NaN. It now
+  raises an error that names it. A heat exchanger in a temperature configuration without fuel and
+  product and a parabolic trough below the ambient temperature now give their exergy destruction from
+  the balance instead of NaN.
+- A simple heat exchanger taking in heat below the ambient temperature with split physical exergy
+  counted the pressure drop against its product. The pressure drop is now fuel and destroyed, as for a
+  heat exchanger below the ambient temperature :cite:`Bejan1996`.
+- The cost of a heat stream followed the direction of the heat. Below the ambient temperature the
+  exergy of heat flows against the heat :cite:`Bejan1996`, and its cost now does too, with a warning.
+  Heat taken in by a stream below the ambient temperature, as in an evaporator that cools a room, is
+  the product of the simple heat exchanger, which prices it, so it needs no cost. Heat given off by a
+  stream below the ambient temperature or by a stream cooled across it, as in a chiller, brings the
+  cold exergy and needs a cost like any fuel entering the plant. These cases used to give a negative
+  fuel cost or a singular cost matrix. Without split physical exergy, a stream heated across the
+  ambient temperature now uses the net change of physical exergy as well.
+- The Aspen parser wrote the work stream of a compressor as leaving it, and the electric power of the
+  motor that drives it as leaving the motor. A pump got a second electric inlet next to its own work
+  stream. Power now flows from the grid through the motor into the compressor or pump, and the work
+  stream of a pump is the electric inlet of its motor. The exergoeconomic analysis of the Aspen CCPP
+  model solves.
+- A second call of ``analyse()`` kept the dissipative behaviour inferred from the first one and the
+  rows of the earlier cost matrix. Compressor and pump now give the exergy destruction from the exergy
+  balance when the outlet is colder than the inlet. A heat exchanger warns if its hot side enters
+  colder than its cold side. The check of the overall exergy balance no longer skips a component
+  whose exergy destruction is NaN.
 
 Other Changes
 #############
-- The CCPP and CGAM examples were run again with all three simulators. Their validation notebooks
-  and the result tables of the CGAM exergoeconomic examples in the documentation show the new
-  results. The deviations between the simulators do not change.
+- The examples were run again with all three simulators. Their stored results, the validation
+  notebooks and the results of the exergoeconomic examples in the documentation are up to date. The
+  documentation of the heat pump exergoeconomic example now shows the results with split physical
+  exergy, as its script computes them. The deviations between the simulators do not change.
+- The table of the number of cost equations of the CGAM example in the documentation was out of date
+  and is corrected.
+- ``EconomicAnalysis.first_year_om_costs()`` is renamed to ``base_year_om_costs()``, since it returns
+  the cost at the start of the first year in money of the base year. The old name still works with a
+  ``DeprecationWarning``.
+- The docstrings of the pump and of the heat exchanger without split physical exergy now match the
+  code.

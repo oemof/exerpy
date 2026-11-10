@@ -141,7 +141,7 @@ following BibTeX entry:
          title = {{ExerPy}: Exergy Analysis in Python},
          note = {Supervision: Prof. Dr.-Ing. Fontina Petrakopoulou},
          url = {https://github.com/oemof/exerpy},
-         version = {0.2.1},
+         version = {0.2.2},
          year = {2026}
     }
 
